@@ -1,0 +1,4 @@
+# Where runtime files live, relative to the data directory named by OBLISK_DATA_DIR.
+paths:
+  # Append-only record of every change to an effective setting (who, when, old -> new, why).
+  settings_audit_log: settings-audit.jsonl

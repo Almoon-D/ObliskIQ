@@ -1,0 +1,19 @@
+# ─────────────────────────────── Your settings ───────────────────────────────
+#
+# This is the one file you edit. Anything you write here overrides the expert default of
+# the same name in config/defaults/. Keep a setting out of this file to use the default.
+#
+# After an edit, check it with:   obliskiq config validate
+# See every setting in force:     obliskiq settings show
+#
+# A running bot applies changes at the next cycle boundary, and every change is recorded
+# in the settings audit log.
+
+account:
+  # The currency the account is measured in: budgets, caps and benchmarks are expressed
+  # in it. Other currencies may still be held as working balances.
+  base_currency: EUR
+
+# Where you are tax-resident. It selects config/jurisdictions/<id>.yaml, which decides what
+# may be bought and how gains are taxed. `es` is Spain.
+jurisdiction: es
