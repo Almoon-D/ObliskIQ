@@ -1,0 +1,82 @@
+-- 017 — a dividend yield that was COLLECTED, and an implied vol this repository
+-- SOLVED. Two numbers that until now could only be declared or served.
+--
+-- ── underlying_snapshots.dividend_yield ──
+--
+-- 009 added universe.dividend_yield and argued at length that it must be
+-- DECLARED rather than derived, because "there is no free global dividend feed".
+-- That premise is no longer true: IBKR serves a dividend yield on a plain
+-- snapshot of the underlying, on the same quote the chain collector already
+-- fetches to size its strike band.
+--
+-- The declaration is NOT replaced. universe.yaml stays the statement of which
+-- instruments need a yield, and universe.dividend_yield stays the declared
+-- figure; this column is the COLLECTED one, and they are different facts. The
+-- reason they cannot share a column is point-in-time discipline: `universe` is
+-- current-state, one row per contract, so a collected yield written there would
+-- be read by a grid rebuilt for a past session and would reprice that session
+-- with today's number. Every other dated reading in this schema is stored
+-- per-date for exactly this reason, and `underlying_snapshots` is already the
+-- per-date, per-underlying table with a `source` column on it.
+--
+-- DECIMAL, never percent, matching every other rate in this schema and matching
+-- universe.dividend_yield so the two can be compared without a conversion. This
+-- needs stating because the route serves a percent: the IBKR MCP connector
+-- returned dividend-yield {yield_pct: 0.98} for SPY on 2026-09-09 — 0.98 PERCENT,
+-- i.e. 0.0098 as a decimal — while historical-vol {annual_pct: 0.0956} in the
+-- same response is a FRACTION. The `_pct` suffix does not state a unit on that
+-- route, so the units are read from config rather than inferred from a name.
+--
+-- ── underlying_snapshots.dividend_yield_basis ──
+--
+-- Black-Scholes-Merton wants a CONTINUOUS yield q over the option's life. IBKR
+-- serves a TRAILING figure. For broad ETFs on 90-200 day options that is a
+-- defensible approximation, and it is recorded as one: this column says which
+-- basis the number in the column beside it actually is, so a trailing figure can
+-- never quietly pass as the model's q. 'trailing_12m' is what the route serves
+-- today. A continuous figure, if one is ever sourced, is a different value of
+-- this column and not a silent replacement of the same one.
+--
+-- ── underlying_snapshots.implied_vol_solved ──
+--
+-- A SEPARATE COLUMN from implied_vol, deliberately, and this is the whole point
+-- of it.
+--
+-- implied_vol holds a figure an exchange or a vendor quoted. implied_vol_solved
+-- holds one this repository inverted out of a mid price with Black-Scholes-Merton.
+-- They are not interchangeable, and the failure they must not be allowed to cause
+-- is specific: iv_percentile ranks today's implied vol against its own history, so
+-- a series whose early history is solved and whose recent history is vendor-quoted
+-- has a METHODOLOGY BREAK at the join, and the percentile reports a regime shift
+-- that did not happen.
+--
+-- A single column plus a source tag would have left that break one forgotten
+-- WHERE clause away, in a reader nobody has written yet. Two columns make it
+-- structural: _self_iv_percentile reads implied_vol and only implied_vol, so a
+-- solved value cannot enter the vendor series at all.
+--
+-- ── underlying_snapshots.implied_vol_solved_source ──
+--
+-- How the solve was done, mirroring chain_snapshots.sigma_source and
+-- implied_vol_source. 'solved_bsm_european' is the only value written today, and
+-- the word european in it is load-bearing rather than decorative: BSM prices a
+-- European option, SPY and the sector ETFs are AMERICAN-style, and nothing in
+-- this repository handles early exercise. Near the money at 90-200 DTE the error
+-- is modest, which is a reason to bound where the number is used and label it —
+-- not a reason to let it sit unlabelled in a column that elsewhere holds an
+-- exchange-quoted figure.
+--
+-- No CHECK constraint on either source column, for the reason 006 and 009 both
+-- gave: the set of values is still being discovered, and a constraint written
+-- from today's knowledge turns tomorrow's observation into a crash.
+--
+-- No back-fill on any of the four. A value for a session recorded before the
+-- column existed is not recoverable, and inventing one is exactly the
+-- overstatement these columns exist to end.
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
+ALTER TABLE underlying_snapshots ADD COLUMN dividend_yield REAL;
+ALTER TABLE underlying_snapshots ADD COLUMN dividend_yield_basis TEXT;
+ALTER TABLE underlying_snapshots ADD COLUMN implied_vol_solved REAL;
+ALTER TABLE underlying_snapshots ADD COLUMN implied_vol_solved_source TEXT;

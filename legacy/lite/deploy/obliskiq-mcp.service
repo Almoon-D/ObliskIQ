@@ -1,0 +1,50 @@
+# Systemd unit for the obliskiq-lite MCP server.
+#
+#     systemctl enable --now obliskiq-mcp.service
+#
+# Not a template and not a oneshot, unlike obliskiq-collect@ and
+# obliskiq-compute@. This is the one entrypoint that BINDS A PORT and serves a
+# position ledger and an order-staging surface, so it gets its own unit, its own
+# environment file and its own credentials. The collector and compute units both
+# say they must never be used to run the server; this is the unit they mean.
+[Unit]
+Description=obliskiq-lite MCP server
+Documentation=file:/opt/obliskiq/docs/SERVER.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=obliskiq
+Group=obliskiq
+WorkingDirectory=/opt/obliskiq
+
+# Holds OBLISK_MCP_AUTH_TOKEN, so it is 0600 and not in git. Deliberately NOT
+# the collectors' file: the server needs no IBKR credentials and no API keys —
+# it makes no network requests of its own — and the collectors need no token.
+# Neither should be able to leak through the other's failure.
+EnvironmentFile=/etc/obliskiq/server.env
+
+ExecStart=/opt/obliskiq/.venv/bin/obliskiq-mcp http
+
+# A session that loses its server loses its context, so this comes back
+# immediately rather than waiting for anything.
+Restart=always
+RestartSec=5
+
+# Hardening. The server reads config and one SQLite file and binds a port; it
+# needs nothing else on the machine. PrivateNetwork is the one line it CANNOT
+# borrow from the compute unit — that is the whole difference between them.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/obliskiq
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

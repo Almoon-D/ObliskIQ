@@ -1,0 +1,12 @@
+{
+  "vendor": "marketdata.app",
+  "captured": "2026-08-28",
+  "endpoint": "GET /v1/options/chain/{symbol}/",
+  "note": "chain_SPY_live.json is a VERBATIM live response, captured with params dte=120, side=call, strikeLimit=3. HTTP 203 from the caching tier, x-api-ratelimit-consumed: 3. Nothing in it is synthetic. The other files in this directory ARE synthetic and say so in their own note field: they cover shapes the one live call could not produce (puts, a null implied vol, ragged columns, no_data).",
+  "live_response_headers": {
+    "status": 203,
+    "x-api-ratelimit-limit": "10000",
+    "x-api-ratelimit-consumed": "3",
+    "x-api-version": "0.0.0"
+  }
+}

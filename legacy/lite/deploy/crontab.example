@@ -1,0 +1,56 @@
+# Cron equivalent of the systemd timers, for a VM without systemd.
+#
+# Three differences worth knowing before choosing this over the timers:
+#   * cron does NOT catch up a run the machine slept through. systemd's
+#     Persistent=true does. For a series that cannot be backfilled, that is the
+#     difference between a gap and no gap.
+#   * cron cannot distinguish exit code 2 (degraded) from 0. The wrapper below
+#     writes it to the log so it is at least greppable — and `obliskiq-collect
+#     status` reads the same verdict out of the store, which is the channel that
+#     does not depend on the scheduler at all.
+#   * cron cannot give the computation layer its own network namespace. Under the
+#     timers, obliskiq-compute runs with PrivateNetwork=true and reads a
+#     credential-free compute.env; here it inherits BASH_ENV below and every key
+#     in it. The isolation is a systemd property, and choosing cron gives it up.
+#
+# Install with: crontab -u obliskiq deploy/crontab.example
+
+SHELL=/bin/bash
+PATH=/opt/obliskiq/.venv/bin:/usr/local/bin:/usr/bin:/bin
+# API keys and paths. Same file the systemd unit reads.
+BASH_ENV=/etc/obliskiq/collect.env
+
+# Daily sequence, weekdays after the US close. The sequence leads with `nav`,
+# which records one account NAV observation: /portfolio/{id}/ledger serves only
+# today's figure, so a day not run is an observation the drawdown breaker never
+# gets. src/obliskiq/collect/cli.py DAILY_SEQUENCE is authoritative.
+#
+# 20:15 UTC MATCHES deploy/obliskiq-collect@daily.timer, and the hour is measured
+# rather than chosen — that file carries the readings. This line said 22:30 for
+# as long as the timer said 20:15, which is the far side of the transition where
+# US option prices collapse, so a no-systemd deployment following this file
+# collected a largely unpriced chain every night. Nothing compared the two TIMES;
+# tests/test_deploy_units.py now does, for every job below.
+15 20 * * 1-5 obliskiq-collect daily >> /var/log/obliskiq/collect.log 2>&1; echo "daily exit=$?" >> /var/log/obliskiq/collect.log
+
+# Macro refresh twice a day. The refetch cache makes a redundant run free.
+0 6,14 * * * obliskiq-collect macro >> /var/log/obliskiq/collect.log 2>&1; echo "macro exit=$?" >> /var/log/obliskiq/collect.log
+
+# Universe sync weekly: picks up positions opened outside a session and retires
+# ones that are closed. deploy/obliskiq-collect@universe.timer is the systemd
+# equivalent; it used to exist only here, so the fallback ran more than the
+# default did.
+0 5 * * 6 obliskiq-collect universe >> /var/log/obliskiq/collect.log 2>&1; echo "universe exit=$?" >> /var/log/obliskiq/collect.log
+
+# The computation layer, well after the collectors — 23:30, matching
+# deploy/obliskiq-compute@all.timer. The collectors start at 20:15 and are
+# bounded at two hours, so this cannot start on a store they are still writing;
+# under the old 22:30 collector line it could. Reads the store they filled and
+# touches no network. A sparse grid exits 2 (degraded) rather than 1: most cells
+# are legitimately absent on a young store.
+30 23 * * 1-5 obliskiq-compute all >> /var/log/obliskiq/compute.log 2>&1; echo "compute exit=$?" >> /var/log/obliskiq/compute.log
+
+# The weekly all-gates census, per data.universe_census_frequency. If the count
+# is routinely below the floor, that is a finding about the gates or the sleeve,
+# not something to fix by relaxing a threshold.
+0 6 * * 6 obliskiq-compute census >> /var/log/obliskiq/compute.log 2>&1; echo "census exit=$?" >> /var/log/obliskiq/compute.log

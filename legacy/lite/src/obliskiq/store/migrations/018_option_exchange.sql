@@ -1,0 +1,42 @@
+-- 018 — the venue an option chain was collected from, declared and recorded.
+--
+-- ── Why a column and not an inference ──
+--
+-- The first live run collected a US-listed ASML chain under a universe row
+-- declaring exchange: AEB and currency: EUR, and collected nothing at all for
+-- SAN and TTE while reporting both targets ok. Nothing in the store said so,
+-- because nothing in the store recorded which venue a row came from: `source`
+-- says which ROUTE fetched it (mcp | cp_api | marketdata_app) and stops there.
+--
+-- Those are different facts. A route says who was asked; a venue says what was
+-- answered. A EUR-quoted Amsterdam option and a USD-quoted SMART option on the
+-- NY-registered share are different instruments with different multipliers, and
+-- an implied-vol percentile built across both has a methodology break at the
+-- join — the same argument that gave implied_vol_solved its own column in 017.
+-- Recording the venue is what makes "this row is the European chain" a claim
+-- that can be checked instead of one that is assumed.
+--
+-- ── universe.option_exchange ──
+--
+-- DECLARED, in universe.yaml, beside history_exchange and for the same reason:
+-- the venue an OPTION request must send is not always the listing venue. Live
+-- 2026-09-10, the option exchanges IBKR lists for the European conids are EUREX
+-- and MEFFRV (Banco Santander, BM) and EUREX and MONEP (TotalEnergies, SBF) —
+-- none of which is the share's own exchange, and none of which appears in the
+-- exchange list /iserver/secdef/search returned for the symbol.
+--
+-- NULL means "undeclared", which is not the claim that SMART is right: it means
+-- the collector falls back to the listing venue and then to whatever the chain
+-- itself reports, which is the behaviour every US row has always had.
+--
+-- ── chain_snapshots.option_exchange ──
+--
+-- What was actually sent, per row, so a chain collected from the wrong venue is
+-- visible in the data rather than only in a run log that rotates away. NULL on
+-- every row written before this migration: unreported is a third answer, and
+-- back-filling it from today's universe declaration would state a fact about
+-- those rows that nobody measured.
+
+ALTER TABLE universe ADD COLUMN option_exchange TEXT;
+
+ALTER TABLE chain_snapshots ADD COLUMN option_exchange TEXT;

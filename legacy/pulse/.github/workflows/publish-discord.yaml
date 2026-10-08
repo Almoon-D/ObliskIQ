@@ -1,0 +1,109 @@
+name: Publish to Discord
+
+# Keeps the four Discord messages live around the clock:
+# - each run updates them every 30 s for ~5.5 h (--loop), then starts the
+#   next run itself (handoff) before GitHub's 6 h job limit;
+# - the hourly schedule is only a watchdog: it restarts the chain if it ever
+#   breaks and does nothing while a run is alive;
+# - the message ids live in the Actions cache, so no extra branch is needed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      handoff:
+        description: "Internal: set by a finishing run when it starts its successor"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      alive: ${{ steps.check.outputs.alive }}
+    steps:
+      - name: Check for a run that is already publishing
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HANDOFF: ${{ inputs.handoff }}
+        run: |
+          if [ "$HANDOFF" = "true" ]; then
+            echo "alive=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          others=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow publish-discord.yaml --limit 20 \
+            --json databaseId,status \
+            --jq "[.[] | select(.status != \"completed\" and .databaseId != $GITHUB_RUN_ID)] | length")
+          if [ "$others" -gt 0 ]; then
+            echo "Another run is already publishing; nothing to do."
+            echo "alive=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "alive=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: guard
+    if: needs.guard.outputs.alive != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    concurrency:
+      group: market-pulse-bot-publish
+      cancel-in-progress: false
+    env:
+      MPB_NOTIFICATION_BACKEND: discord
+      MPB_DISCORD_WEBHOOK_URL: ${{ secrets.MPB_DISCORD_WEBHOOK_URL }}
+      MPB_DISPLAY_TIMEZONE: Europe/Madrid
+      MPB_LANGUAGE: es
+    steps:
+      # GitHub only masks the secret as a whole; also mask the token part so
+      # it can never show up in a log if a URL is rebuilt or printed.
+      - name: Mask the webhook token
+        run: echo "::add-mask::${MPB_DISCORD_WEBHOOK_URL##*/}"
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install project
+        run: python -m pip install .
+
+      - name: Restore message state
+        uses: actions/cache/restore@v6
+        with:
+          path: data/state.json
+          key: mpb-state-${{ github.run_id }}
+          restore-keys: mpb-state-
+
+      - name: Publish once
+        continue-on-error: true
+        run: python main.py
+
+      - name: Save message state
+        if: always() && hashFiles('data/state.json') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: data/state.json
+          key: mpb-state-${{ github.run_id }}-${{ github.run_attempt }}-start
+
+      - name: Keep the messages live
+        run: python main.py --loop --interval 30 --incident-interval 90 --max-runtime 19800
+
+      - name: Save message state
+        if: always() && hashFiles('data/state.json') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: data/state.json
+          key: mpb-state-${{ github.run_id }}-${{ github.run_attempt }}-end
+
+      - name: Start the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-discord.yaml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f handoff=true

@@ -1,0 +1,22 @@
+# The daily computation: grid -> rankings -> fx -> commodity, in that order.
+#
+# Fires after the collector sequence has had its whole time limit and room to spare:
+# obliskiq-collect@.service bounds a run with TimeoutStartSec and the daily timer
+# fixes when it starts, so even a run that uses all of it is over well before this
+# fires. A grid built before the chain snapshot lands is a grid missing
+# today's implied vol. Nothing here is irreplaceable, so
+# unlike the collectors a missed run costs a day of freshness rather than a
+# permanent gap — but Persistent=true still catches a machine that slept, since
+# there is no reason to skip work that can simply be done late.
+[Unit]
+Description=obliskiq-lite daily computation
+Documentation=file:/opt/obliskiq/docs/COMPUTE.md
+
+[Timer]
+OnCalendar=Mon..Fri 23:30 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=obliskiq-compute@all.service
+
+[Install]
+WantedBy=timers.target

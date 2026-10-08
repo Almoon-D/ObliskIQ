@@ -1,0 +1,65 @@
+# Systemd template unit for the obliskiq-lite computation layer.
+#
+# One template, instantiated per command:
+#     systemctl enable --now obliskiq-compute@all.timer
+#     systemctl enable --now obliskiq-compute@census.timer
+#
+# A third entrypoint, separate from both the collectors and the MCP server. It
+# reads the store the collectors filled and writes the grid, the rankings and
+# the derived engine state. Like the collectors it must never be used to run the
+# server, which binds a port and holds a position ledger.
+#
+# Exit codes: 0 ok, 1 something failed, 2 a run was degraded. A SPARSE GRID is
+# degraded, not failed: most cells are legitimately absent on a young store, and
+# an operator should be able to tell "still filling up" from "broken".
+[Unit]
+Description=obliskiq-lite computation layer (%i)
+Documentation=file:/opt/obliskiq/docs/COMPUTE.md
+# Ordering only, not a dependency: a grid built on yesterday's bars is worth
+# more than no grid, so a failed collector run must not suppress this one.
+After=obliskiq-collect@daily.service
+
+[Service]
+Type=oneshot
+User=obliskiq
+Group=obliskiq
+WorkingDirectory=/opt/obliskiq
+
+# Its OWN file, not the collectors'. collect.env holds every IBKR credential
+# and API key on the machine, and this unit cannot reach an upstream even if it
+# wanted to — PrivateNetwork below sees to that. Handing it the keys anyway would
+# make the isolation depend on one guard where it can depend on two: a process
+# that cannot connect AND does not hold the credentials.
+EnvironmentFile=/etc/obliskiq/compute.env
+
+ExecStart=/opt/obliskiq/.venv/bin/obliskiq-compute %i
+
+# Nothing here is irreplaceable: every output is derived and can be recomputed
+# from the same store tomorrow. So a failure waits for the next timer rather
+# than retrying against inputs that have not changed.
+Restart=no
+SuccessExitStatus=0 2
+
+# Bounded well below the daily cadence. The whole layer is arithmetic over
+# SQLite; a run that takes minutes means the store has grown past what this
+# machine can hold in memory, which is worth failing loudly about.
+TimeoutStartSec=900
+
+# Hardening. Same as the collectors, plus one line they cannot have:
+# PrivateNetwork. The computation layer touches NO network by design — it reads
+# the store and nothing else — so the kernel can enforce that rather than the
+# code merely promising it. If a future engine reaches for an API, it fails here
+# rather than quietly acquiring a dependency the design forbids.
+PrivateNetwork=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/obliskiq
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

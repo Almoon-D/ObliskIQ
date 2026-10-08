@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "description": "Hand-editable curated list of macro-relevant Polymarket markets for the Asymmetry Hunter Polymarket-divergence component (g). Each market is fetched from the free public Gamma API by slug; 'data_stance' links it to a Phase 1 signal so the Hunter can measure the gap between the crowd's implied probability and our own data-implied stance. Markets with data_stance=null still get daily snapshots + velocity (no divergence vote). yes_means documents what the 'Yes' outcome represents. Add/remove markets freely; the loader skips anything it cannot fetch.",
+  "updated_at": "2026-06-16",
+  "markets": [
+    {
+      "id": "us-recession-2026",
+      "slug": "us-recession-in-2026",
+      "question": "US recession in 2026?",
+      "yes_means": "recession",
+      "data_stance": "recession_regime"
+    },
+    {
+      "id": "fed-cut-next-meeting",
+      "slug": "fed-cuts-rates-at-next-fomc-meeting",
+      "question": "Fed cuts rates at the next FOMC meeting?",
+      "yes_means": "cut",
+      "data_stance": "fed_dovish"
+    },
+    {
+      "id": "fed-50bps-2026",
+      "slug": "fed-cuts-50-plus-bps-in-2026",
+      "question": "Fed cuts 50+ bps cumulatively in 2026?",
+      "yes_means": "easing",
+      "data_stance": "fed_dovish"
+    },
+    {
+      "id": "us-presidential-2028",
+      "slug": "us-presidential-election-winner-2028",
+      "question": "2028 US presidential election outcome",
+      "yes_means": "outcome",
+      "data_stance": null
+    },
+    {
+      "id": "geopolitical-flashpoint-2026",
+      "slug": "major-geopolitical-conflict-escalation-2026",
+      "question": "Major geopolitical conflict escalation in 2026?",
+      "yes_means": "escalation",
+      "data_stance": null
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+# Ported from IBKR-Portmanteau, with the matrix widened and the checks that this
+# project's standing rules depend on made explicit.
+name: CI
+
+# WHY THE TRIGGERS ARE NARROWED, and it is not about cost alone.
+#
+# `on: [push, pull_request]` with no filters ran the whole four-version matrix
+# TWICE for every commit on a branch with an open PR: once for the push and once
+# for the pull_request event, on the identical SHA. Eight jobs where four would
+# do. Worse than the runner minutes is what it does to a reader: two runs of the
+# same workflow on the same commit report independently, so "CI" can show one
+# green and one still queued, and deciding whether the commit passed means
+# knowing which run to trust.
+#
+# `push` is therefore limited to `main`, where there is no PR to cover the
+# commit, and `pull_request` covers everything else. The cost is stated rather
+# than hidden: a branch pushed with no PR open gets no CI until one is opened.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Supersede a run whose commit is no longer the branch's head. Two pushes a
+# minute apart otherwise leave the first matrix running to completion against a
+# SHA nobody will merge.
+#
+# `cancel-in-progress` is deliberately FALSE on main. Cancelling there would let
+# two merges in quick succession leave the first one with no completed result at
+# all — a commit on the default branch whose CI simply never finished, which is
+# indistinguishable from one nobody ran. On a pull request the superseded SHA is
+# not going anywhere, so cancelling it costs nothing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor to current. requires-python is ">=3.11" because the collectors
+        # deploy to a small always-on VM whose system Python is whatever the
+        # distribution ships; the top of the range is tested so that running on
+        # current Python is a proven fact rather than an assumption.
+        # Minor versions float: pinning a patch stops CI picking up security fixes.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Lint and format check
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+
+      - name: Validate config.yaml
+        # The multi-line "|" blocks are indentation-sensitive and are the most
+        # likely thing to have been corrupted by a copy-paste edit.
+        run: python -c "import yaml, sys; yaml.safe_load(open('config.yaml')); print('config.yaml parses')"
+
+      - name: Guarded documents must not restate config
+        # config.yaml owns thresholds; SKILL.md, BUILD-BRIEF.md and README.md
+        # name the key instead of the value.
+        run: python tests/test_skill_config_consistency.py
+
+      - name: Every config key must have a consumer
+        # The inverse rule: a key nothing reads is a decision that looks made
+        # and is not. Runs standalone, before the suite, because a config edit
+        # that orphans a key should fail in seconds.
+        run: python tests/test_no_unread_config_keys.py
+
+      - name: Every universe.yaml key must have a consumer
+        # The same rule, applied to the reference file that had no guard for it.
+        # universe.yaml's loader reads keys by NAME and ignores what it does not
+        # recognise, so a key that never reaches src/ is silence rather than a
+        # warning — which is how ten truncated `untradeable_reason` values and
+        # five keys they invented survived a hand audit.
+        run: python tests/test_no_unread_universe_keys.py
+
+      - name: No template carries a credential
+        # A value committed once is in every clone forever. This is the guard
+        # that keeps the next one out; it needs no dependencies at all.
+        run: python tests/test_no_committed_secrets.py
+
+      - name: The machine states no position this account has held
+        # Rules, not memories: a gate anchored to a ticker or to one day's NAV
+        # stops applying the moment the book changes.
+        run: python tests/test_no_account_history.py
+
+      - name: Tests
+        run: pytest -q

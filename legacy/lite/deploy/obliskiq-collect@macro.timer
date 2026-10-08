@@ -1,0 +1,19 @@
+# Macro on its own timer as well as inside the daily sequence.
+#
+# Macro data IS retrievable retrospectively, so this is a convenience rather than
+# a necessity — it keeps FRED, ECB, CFTC and EIA current through the day
+# without waiting for the evening run. The refetch cache in
+# macro.collection.refetch_after_seconds means a second run inside the window
+# issues no requests at all, so this cannot burn a rate limit.
+[Unit]
+Description=obliskiq-lite macro refresh
+Documentation=file:/opt/obliskiq/docs/COLLECTORS.md
+
+[Timer]
+OnCalendar=*-*-* 06,14:00:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+Unit=obliskiq-collect@macro.service
+
+[Install]
+WantedBy=timers.target

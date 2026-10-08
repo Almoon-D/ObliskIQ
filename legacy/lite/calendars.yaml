@@ -1,0 +1,190 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  obliskiq-lite — exchange trading calendars
+#
+#  Reference data, not gates. config.yaml owns
+#  tenor.mandatory_close_trading_days; this file owns which days are trading days
+#  so that "ten trading days before expiry" lands on a real session.
+#
+#  Loaded via calendars.path in config.yaml.
+#
+#  WHY THIS FILE EXISTS. Counting back ten weekdays from a December expiry and
+#  landing on Christmas Day produces a mandatory close date the market cannot
+#  honour, and IBKR force-liquidates a non-compliant position at market. The
+#  close date is set at entry and written to the ledger, so it has to be right
+#  when it is written, not when it arrives.
+#
+#  A venue with no declared holiday list resolves to `default` (weekends only),
+#  and EVERY date computed that way carries calendar='weekends_only' in its
+#  result. An undeclared venue is visibly undeclared rather than silently
+#  assumed to trade through Good Friday.
+#
+#  Only the venues where this account can actually hold an option carry a full
+#  list: US equity and ETF options, Eurex, MEFF, and Euronext. Adding a venue is
+#  a data edit here, never a code change.
+#
+#  UNVERIFIED against the exchanges' published schedules, and declared only for
+#  2026-2027: a date computed beyond the declared years reports that its calendar
+#  does not cover it. A correction belongs here and in
+#  references/ibkr-playbook.md.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Saturday and Sunday, as Python's date.weekday(): Monday is 0.
+weekend_days: [5, 6]
+
+default: weekends_only
+
+# Exchange code (as it appears in universe.exchange) -> calendar id.
+mapping:
+  ARCA:   XNYS
+  NYSE:   XNYS
+  NASDAQ: XNYS
+  CBOE:   XNYS
+  AMEX:   XNYS
+  BATS:   XNYS
+  EUREX:  XEUR
+  IBIS:   XEUR
+  MEFFRV: XMAD
+  BM:     XMAD
+  SBF:    XPAR
+  AEB:    XAMS
+  ICEEU:  XLON
+  LSE:    XLON
+  LSEETF: XLON
+  # Canada. TSE is where XIU lists and CDE is where its options trade; both keep
+  # the Canadian statutory calendar, so both resolve to the same list.
+  TSE:    XTSE
+  CDE:    XTSE
+
+calendars:
+
+  # A calendar with no holidays declared. Weekends only. Anything resolving here
+  # says so in its result.
+  weekends_only:
+    description: weekends only; no holiday list declared for this venue
+    holidays: []
+
+  XNYS:
+    description: NYSE / Nasdaq / Cboe — US equity and listed-option sessions
+    holidays:
+      # 2026
+      - 2026-01-01   # New Year's Day
+      - 2026-01-19   # Martin Luther King Jr. Day
+      - 2026-02-16   # Washington's Birthday
+      - 2026-04-03   # Good Friday
+      - 2026-05-25   # Memorial Day
+      - 2026-06-19   # Juneteenth
+      - 2026-07-03   # Independence Day observed (4 July falls on a Saturday)
+      - 2026-09-07   # Labor Day
+      - 2026-11-26   # Thanksgiving
+      - 2026-12-25   # Christmas Day
+      # 2027
+      - 2027-01-01
+      - 2027-01-18
+      - 2027-02-15
+      - 2027-03-26   # Good Friday
+      - 2027-05-31
+      - 2027-06-18   # Juneteenth observed (19 June falls on a Saturday)
+      - 2027-07-05   # Independence Day observed (4 July falls on a Sunday)
+      - 2027-09-06
+      - 2027-11-25
+      - 2027-12-24   # Christmas observed (25 December falls on a Saturday)
+
+  XEUR:
+    description: Eurex / Xetra
+    holidays:
+      - 2026-01-01
+      - 2026-04-03   # Good Friday
+      - 2026-04-06   # Easter Monday
+      - 2026-05-01   # Labour Day
+      - 2026-12-24
+      - 2026-12-25
+      - 2026-12-31
+      - 2027-01-01
+      - 2027-03-26
+      - 2027-03-29
+      - 2027-12-24
+      - 2027-12-31
+
+  XMAD:
+    description: BME / MEFF — Madrid
+    holidays:
+      - 2026-01-01
+      - 2026-04-03
+      - 2026-04-06
+      - 2026-05-01
+      - 2026-12-25
+      - 2027-01-01
+      - 2027-03-26
+      - 2027-03-29
+
+  XPAR:
+    description: Euronext Paris
+    holidays:
+      - 2026-01-01
+      - 2026-04-03
+      - 2026-04-06
+      - 2026-05-01
+      - 2026-12-25
+      - 2027-01-01
+      - 2027-03-26
+      - 2027-03-29
+
+  XTSE:
+    description: TSX / Bourse de Montreal — Canadian equity and listed-option sessions
+    holidays:
+      # 2026. Remembrance Day is NOT here: the TSX trades through 11 November,
+      # unlike the Canadian bond market, and a holiday declared that the venue
+      # does not keep moves a mandatory close date the wrong way.
+      - 2026-01-01   # New Year's Day
+      - 2026-02-16   # Family Day
+      - 2026-04-03   # Good Friday
+      - 2026-05-18   # Victoria Day
+      - 2026-07-01   # Canada Day
+      - 2026-08-03   # Civic Holiday
+      - 2026-09-07   # Labour Day
+      - 2026-10-12   # Thanksgiving
+      - 2026-12-25   # Christmas Day
+      - 2026-12-28   # Boxing Day observed (26 December falls on a Saturday)
+      # 2027
+      - 2027-01-01
+      - 2027-02-15
+      - 2027-03-26   # Good Friday
+      - 2027-05-24   # Victoria Day
+      - 2027-07-01
+      - 2027-08-02
+      - 2027-09-06
+      - 2027-10-11
+      - 2027-12-27   # Christmas observed (25 December falls on a Saturday)
+      - 2027-12-28   # Boxing Day observed
+
+  XAMS:
+    description: Euronext Amsterdam
+    holidays:
+      - 2026-01-01
+      - 2026-04-03
+      - 2026-04-06
+      - 2026-05-01
+      - 2026-12-25
+      - 2027-01-01
+      - 2027-03-26
+      - 2027-03-29
+
+  XLON:
+    description: London Stock Exchange / ICE Futures Europe
+    holidays:
+      - 2026-01-01
+      - 2026-04-03
+      - 2026-04-06
+      - 2026-05-04   # Early May bank holiday
+      - 2026-05-25   # Spring bank holiday
+      - 2026-08-31   # Summer bank holiday
+      - 2026-12-25
+      - 2026-12-28   # Boxing Day substitute
+      - 2027-01-01
+      - 2027-03-26
+      - 2027-03-29
+      - 2027-05-03
+      - 2027-05-31
+      - 2027-08-30
+      - 2027-12-27
+      - 2027-12-28

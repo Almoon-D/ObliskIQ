@@ -1,0 +1,1490 @@
+# obliskiq-lite — constraints
+# These are the gates. Every script and the skill itself read from here.
+
+account:
+  base_currency: EUR
+
+  # Converting a contract's premium into base currency, so the sleeve ceiling
+  # compares like with like. Without the conversion the gate compares a premium
+  # quoted in the contract's currency against a ceiling derived from NAV in
+  # base, so a live check refused a contract that fitted the sleeve: the gate
+  # was tighter or looser than intended by whatever the exchange rate happened
+  # to be.
+  #
+  # SERIES CONVENTION, and getting it backwards inverts every conversion: these
+  # are ECB reference rates in UNITS OF THAT CURRENCY PER EURO, the same
+  # convention universe.yaml's per-market fx_series already uses. So a premium in
+  # currency X becomes base by DIVIDING by this rate.
+  #
+  # A currency with no series here leaves the gate UNTESTED rather than assuming
+  # parity. Assuming 1.0 would silently admit a contract the sleeve cannot afford,
+  # which is the one direction this gate must never fail in.
+  fx_series_by_currency:
+    USD: EURUSD
+    GBP: EURGBP
+    JPY: EURJPY
+    CHF: EURCHF
+    KRW: EURKRW
+    HKD: EURHKD
+    CNY: EURCNY
+    ILS: EURILS
+    BRL: EURBRL
+    AUD: EURAUD
+    CAD: EURCAD
+    INR: EURINR
+
+# ─────────────────────────────  OPTION SLEEVE (5%)  ─────────────────────────────
+option_sleeve:
+  # A hard cap on CURRENT NAV. The basis is not a config choice: every caller
+  # of PenaltyLedger.status passes the NAV of the day, so the budget falls when
+  # NAV falls. tests/test_validation_real_data.py asserts exactly that.
+  budget_pct: 0.05
+  # The penalty is a continuous balance, never a binary lock: a loss adds this
+  # multiple of itself and realised gains work it back down. There is no second
+  # model to select between.
+  loss_penalty_multiple: 2.0          # loss x this is added to penalty_balance
+  recovery_basis: realised_gains      # NEVER nav — nav measures beta, not skill
+  # A realised equity gain reduces the penalty 1:1 only on these exits.
+  # trailing_stop is here because the equity discipline PREFERS it for winners —
+  # SKILL.md: "protects gains without capping upside, which is why it is used and
+  # mandatory scaling out is not" — and without it the mandate's own recommended
+  # way to realise a gain could not clear the penalty. A trailing stop only arms
+  # once a position is profitable, so a trailing_stop exit is a realised gain by
+  # construction; a losing one reduces nothing either way, so the channel does not
+  # leak. override gains still never count.
+  qualifying_exit_reasons: [target, time_window, trailing_stop]
+  min_payoff_ratio: 3.0               # at a realistic named target price
+
+  # This is the ONLY anti-fragmentation rule now. It used to share the job with
+  # min_premium_pct_of_budget (a 25%-of-budget floor), which was retired: a
+  # sleeve holding one position at a fiftieth of budget and another at four
+  # fifths, with the rest unused, is allowed by design, and measuring the floor
+  # against AVAILABLE budget made it shrink as the pool drained — permitting
+  # ever-smaller positions, the opposite of what a floor is for. Concentration
+  # beats diversification here because splitting does not reduce the penalty, it
+  # raises the probability of paying it, and a cap on how many run at once says
+  # that directly.
+  max_concurrent_positions: 5
+
+  # Absolute floor on a POSITION's premium, in account.base_currency. A position
+  # is refused only when COSTS DOMINATE it. Derived from published IBKR option
+  # commission rates rather than picked as a round number:
+  #
+  #   US equity/ETF options carry a USD 1.00 per-ORDER minimum, plus exchange
+  #   and regulatory fees of a few cents on a 1-lot. A maker rebate can offset
+  #   the commission on one side, but it cannot be relied on, so the worst case
+  #   for a 1-lot round trip is about
+  #       2 x 1.05 = USD 2.10  ~=  EUR 1.80 near parity.
+  #   Eurex single-stock options are dearer at EUR 1.50 per contract (IBKR
+  #   published Fixed rate, documentation-derived and UNVERIFIED), so the worst
+  #   case across the venues preference_order reaches is
+  #       2 x 1.50 = EUR 3.00 per round trip.
+  #
+  #   liquidity.max_spread_pct is this mandate's declared outer limit on
+  #   execution friction as a share of mid. Commission is friction of the same
+  #   kind, so the floor sits where round-trip commission ALONE reaches that
+  #   limit:
+  #       EUR 3.00 / 0.15 = EUR 20.
+  #
+  # Below EUR 20 of premium, commission costs more than the widest spread the
+  # gates would ever accept. Above it, it does not.
+  min_premium_base_currency: 20.0
+
+tenor:
+  # The catalyst sets the tenor. These are defaults for undated theses only.
+  entry_dte_min: 90                   # = hold_days_min + expiry_buffer, NOT 70
+  entry_dte_max: 200                  # the top of the entry window, derived from a
+                                      # 190-day maximum hold plus an expiry buffer.
+                                      # The window is what the gate enforces; the
+                                      # hold figure behind it is read by nothing,
+                                      # so it is a derivation, not a key.
+  catalyst_buffer_days: 30            # expiry >= catalyst_date + this
+  mandatory_close_trading_days: 10    # before expiry, regardless of moneyness
+  hold_days_min: 70
+  require_theta_budget_check: true
+
+zombie_test:
+  # All conditions must hold, on two consecutive sessions. Drawdown % is NOT a trigger.
+  max_delta: 0.15
+  max_dte: 45
+  max_prob_target: 0.10               # N(d2) at the 3:1 target
+  max_prob_ratio_vs_entry: 0.50       # P_t < 0.5 * P_0
+  min_recoverable_pct_of_premium: 0.15
+  consecutive_sessions_required: 2    # kills single-day false positives
+  prob_vol_source: strike_smile_iv    # NOT atm_iv — embeds skew, corrects fat-tail bias
+  book_penalty_at: detection          # detection | close — detection kills the perverse incentive
+
+# ─────────────────────────────  EQUITY SLEEVE (95%)  ────────────────────────────
+positions:
+  min_size_pct_nav: 0.05              # of NAV at purchase date
+  max_initial_size_pct_nav: 0.25      # initial only — winners are never trimmed to fit
+  max_sector_pct_nav: 0.40            # tightened from 0.60 — now binds
+  max_country_pct_nav: 0.80           # confirmed by user
+  max_single_foreign_currency_pct: 0.80
+  rebalance_winners: false            # let compounding run
+  min_size_applies_to_closing: false
+  # No holding-period bounds here. A time-window exit on the equity sleeve was
+  # considered and rejected: it caps upside on a compounding winner and
+  # contradicts rebalance_winners above. The option sleeve's tenor window lives
+  # under `tenor`, which is where the gate reads it from.
+  external_data_stale_days: 30        # beyond this, non-IBKR holdings are stale and
+                                      # cap utilisation is reported UNRELIABLE, never
+                                      # as a number known to be wrong
+
+equity_risk:
+  stop_type: volatility_scaled        # NEVER fixed_pct — noise on high-IV names
+  stop_atr_multiple: 2.5              # k * ATR(20) below entry
+  trailing_stop_enabled: true         # protects gains without capping upside
+  trailing_stop_atr_multiple: 3.0     # from the trailing high, and the reason
+                                      # mandatory scaling out was rejected: it
+                                      # protects the gain without capping it
+  allow_averaging_down: false         # requires a formal re-underwrite with a NEW catalyst
+  pre_earnings_rule: flag_and_size    # hold | flag_and_size | force_reduce
+  pre_earnings_range_decile_trigger: 0.90   # if entry sits above this, require a decision
+
+portfolio_circuit_breaker:
+  monthly_drawdown_pct: 0.15          # freeze new equity buys beyond this
+  action: freeze_new_buys_and_audit   # existing positions keep their own exit rules
+  window_days: 30                     # what "a rolling month" counts as, in calendar
+                                      # days. Calendar rather than trading days on
+                                      # purpose: a drawdown is a fact about the
+                                      # account over elapsed time, not over sessions.
+  min_observations: 2                 # below this there is no drawdown to measure and
+                                      # the breaker reports n/a rather than "fine"
+
+# ─────────────────────────────  FX AND INFLATION  ───────────────────────────────
+fx_inflation:
+  require_physical_hedging: false     # measure and rank in EUR-real; do NOT hedge with derivatives
+  rank_on: base_currency_real         # local_nominal is display-only, never ranked
+  require_four_way_decomposition: true    # local nom -> local real -> EUR nom -> EUR real
+  high_inflation_cpi_yoy: 0.10        # flag threshold
+  high_depreciation_3y_annualised: 0.10   # vs base currency
+  flagged_market_rule: eur_real_only  # flagged markets ranked on EUR-real figures only
+  # The carry-illusion test is unconditional — get_fx_real_returns runs it on
+  # every yield it is given — and covered interest parity is its only method.
+  # Neither was ever a choice, so neither is a key.
+  depreciation_window_years: 3        # the trailing window high_depreciation_3y_annualised
+                                      # is measured over
+  carry_illusion_tolerance: 0.01      # a hedged-equivalent yield landing within
+                                      # this of the base rate IS the base rate.
+                                      # The differential is an approximation, so
+                                      # an exact equality test would never fire.
+
+# ─────────────────────────────  SHARED GATES  ───────────────────────────────────
+screen:
+  # The quartile boundaries behind "cheap" and "extended" in SKILL.md. Both are
+  # applied to the 52-week IV percentile, and both are gates rather than
+  # descriptions: the census counts contracts clearing cheap_iv_percentile_max
+  # alongside every other gate.
+  cheap_iv_percentile_max: 0.25
+  extended_iv_percentile_min: 0.75
+
+liquidity:
+  max_spread_pct: 0.15                # of mid
+  spread_waiver_min_open_interest: 5000   # deep book: work a limit at mid instead
+  min_open_interest: 500
+  require_session_volume: true
+
+# Hygiene on the volatility smile, applied BEFORE any implied vol is read off
+# it. Distinct from `liquidity` in purpose and deliberately not in value: the
+# liquidity gates ask whether a contract can be TRADED, these ask whether its
+# implied vol is INFORMATION. The spread, open-interest and volume tests are
+# the same question in both cases, so they reuse the liquidity keys rather than
+# growing a second copy that would eventually drift; only what has no home
+# elsewhere is declared here.
+#
+# This matters because zombie_test.prob_vol_source is strike_smile_iv: a single
+# bad implied vol on an illiquid strike propagates into N(d2) and out into an
+# exit decision.
+smile:
+  # The delta band. Outside it a quote carries almost no volatility information
+  # — a 0.02-delta wing is a lottery ticket whose implied vol is a rounding
+  # artefact, and a 0.98-delta strike is intrinsic value wearing a vol number.
+  min_abs_delta: 0.05
+  max_abs_delta: 0.95
+
+  # Butterfly convexity, checked in IV space rather than price space. A
+  # twenty-strike daily snapshot does not support fitting an arbitrage-free
+  # surface — the same reason the smile interpolates linearly instead of
+  # modelling — so this is the practical proxy: a strike whose implied vol sits
+  # this far off the chord of its two neighbours is a bad print, not a smile.
+  butterfly_max_iv_deviation: 0.10
+
+  # Below this many surviving strikes there is no smile, only points. The
+  # caller is told the position is unmeasurable; it is never handed a laxer
+  # smile computed a second way.
+  min_points: 2
+
+  # The |delta| the grid's skew leaf reads each leg of its risk reversal at.
+  # DELTA and not a moneyness: a fixed +/-10% band means something different on a
+  # 15-vol name and a 90-vol one, while a delta is the market's own measure of
+  # how far out a strike is and travels between them unchanged. 0.25 is the
+  # conventional 25-delta risk reversal.
+  #
+  # The band has to BRACKET this on both sides or the leaf reports n/a with the
+  # deltas it could actually reach. Taking the nearest listed strike instead
+  # would publish a 45-delta reading under a 25-delta name, which is the silent
+  # substitution the whole grid refuses everywhere else.
+  #
+  # It sits inside min/max_abs_delta above by construction: a target outside the
+  # hygiene band names strikes hygiene has already dropped.
+  skew_delta: 0.25
+
+  # WHICH EXPIRY PAIR DEFINES THE IMPLIED TERM SLOPE.
+  #
+  # The grid publishes one ATM implied vol off a surface the collectors buy up
+  # to collectors.chain.max_expiries_per_underlying expiries of, and "vol is
+  # high" and "vol is high AND inverted" are opposite trades. The slope is what
+  # tells them apart, and it needs a rule for which two expiries it is measured
+  # between.
+  #
+  # A FIXED DTE PAIR IS NOT AVAILABLE and the reason is stronger than "listed
+  # expiries are what they are". The chain collector only buys expiries inside
+  # tenor.entry_dte_min-entry_dte_max, so a front month is not merely unlisted
+  # on some names — it was never collected on any of them. Both targets
+  # therefore have to sit inside that band, and a test asserts they do: outside
+  # it this leaf would be n/a on every cell for ever with nothing saying why.
+  #
+  # Each leg is the nearest LISTED expiry to its target, and a leg further than
+  # max_target_deviation_days from its target is not a leg — the cell says n/a
+  # with the DTEs it could reach rather than publishing a 95-vs-110 slope under
+  # the name of a 90-vs-180 one. The alternatives rejected were front-listed
+  # versus last-listed and front versus Nth listed: both are always available,
+  # and both let the measured tenor pair drift with the listing cycle, so a
+  # slope compared across two sessions would be comparing two different
+  # questions. docs/DECISIONS.md carries the argument.
+  term_structure:
+    front_target_dte: 95
+    back_target_dte: 180
+    max_target_deviation_days: 35
+
+    # Below this many days apart, two expiries are not a term structure. The
+    # value carries the rule get_grid_cell(history=N) needs: a slope between 28
+    # and 91 days and one between 28 and 35 days are not comparable, so the
+    # window label carries both actual DTEs and this floor stops the second
+    # shape being published at all. A name with one listed expiry in band
+    # resolves both targets to the same expiry and gets n/a with the reason —
+    # never a slope against itself.
+    min_separation_days: 45
+
+instruments:
+  prohibited:
+    - futures_contracts               # undefined loss; violates the no-leverage mandate
+    - futures_options                 # see futures_options_note — practical, not structural
+    - short_options                   # any written premium, covered or not
+    - leveraged_etps                  # embedded leverage; daily reset decays badly over 90-200d
+    - inverse_etps
+
+  permitted_clarification: |
+    A futures-TRACKING ETF or ETC (USO, and similar) is NOT a futures contract.
+    Maximum loss is the position value. These remain permitted, subject to the
+    contango/roll rule in the commodities block. Only the contract itself is banned.
+
+  futures_options_note: |
+    A never-exercise rule DOES convert a long FOP to defined risk, exactly as the
+    mandatory-close rule does for US ETF options. The prohibition is practical,
+    not structural:
+      - Contract notionals are far too large. CL = 1,000 bbl (~$82k notional),
+        GC = 100 oz (~$404k). A single option on these approaches or exceeds the
+        entire 5% sleeve.
+      - Long-dated (90-200 DTE) FOP liquidity is thin; most would fail the
+        open-interest and spread gates anyway.
+      - Requires separate CME market-data subscriptions.
+      - Every expressible macro view is already available via ETF options,
+        producer equities or physical ETCs at workable size.
+    Set allow_futures_options: true only if the sleeve grows enough for notional
+    to stop binding. The never-exercise rule below would then apply.
+  allow_futures_options: false
+  futures_options_mandatory_close_trading_days: 15   # wider than equity: gap risk is worse
+
+  # Shares per contract, used to turn a per-share premium into what the sleeve
+  # actually pays. 100 is the US equity and ETF option convention and the only
+  # one this mandate reaches; a venue that differs overrides it per instrument.
+  default_option_multiplier: 100
+
+  futures_data_use: allowed           # search_futures for term structure is a DATA call,
+                                      # never a position. Do not strip this tool.
+
+  # Leveraged and inverse ETPs are rejected AT INGESTION, not at recommendation
+  # time: an instrument that never enters the universe cannot be recommended by
+  # a future code path that forgot to check. Matched case-insensitively against
+  # the instrument's resolved DESCRIPTION, never against its ticker — 'BULL' is a
+  # substring of plenty of innocent names, and a ticker carries no such promise.
+  leveraged_inverse_markers:
+    - "2X"
+    - "3X"
+    - "-1X"
+    - "ULTRA"
+    - "ULTRASHORT"
+    - "ULTRAPRO"
+    - "LEVERAGED"
+    - "INVERSE"
+    - "DAILY BULL"
+    - "DAILY BEAR"
+    - "SHORT DAILY"
+    - "DOUBLE LONG"
+    - "DOUBLE SHORT"
+
+  preference_order:                   # structural PRIIPs avoidance, in order
+    - single_stock_options
+    - eu_ucits_eurex_options
+    - us_etf_options                  # last resort; mandatory close applies
+
+discipline:
+  entry_order_type: limit_only
+  entry_top_decile_requires_catalyst: true
+  # What "the top decile" means, as a fraction of the long-run range in
+  # data.weekly_window_years. Deliberately NOT a reuse of
+  # equity_risk.pre_earnings_range_decile_trigger: that one decides whether a
+  # dated binary needs an explicit reduce/hedge decision, this one decides
+  # whether an ENTRY needs a catalyst. They carry the same value today and are
+  # different rules; sharing a key would make neither movable on its own.
+  # Enforced server-side by server/guards.py::check_entry, not by judgment.
+  entry_top_decile_pctile: 0.90
+  exit_reasons_allowed: [invalidation, target, time_window, zombie,
+                         mandatory_close, stop, trailing_stop, override]
+  exit_on_price_movement_alone: false
+  # The thesis freeze is not a flag. thesis_text and invalidation_trigger are
+  # frozen at entry by the SQL trigger trg_position_thesis_frozen; edits append
+  # to reunderwrite_log and no tool can turn that off.
+
+data:
+  daily_window_years: 2
+  weekly_window_years: 5
+  rv_tenors_days: [10, 30, 90]
+  correlation_windows_days: [30, 90, 250]
+  technical_window_days: 90
+  atr_period: 20
+  min_substitute_aum_eur: 50000000
+  # valuation_source_mode WAS HERE, and is deliberately gone. It offered
+  # none | edgar_us_only | paid, and no code ever read it: there is no
+  # valuation indicator among the fifteen families, no column to hold one,
+  # and no fundamentals fetcher. Setting it to edgar_us_only would have done
+  # exactly nothing while looking like a decision — a worse failure than the
+  # absence it papered over. Valuation is out of scope; the mandate ranks on
+  # price, volatility, drawdown and breadth, all sourceable globally.
+  # The cleanliness phase confirmed the omission and removed the key.
+  # See docs/DECISIONS.md.
+  iv_percentile_source: vendor        # vendor | self | both
+  # Which implied vol indicator 7 reads when BOTH a vendor quote and one this
+  # repository solved exist for the same session.
+  #   vendor      — the exchange-quoted figure wins. The default, because a
+  #                 solved number is an inversion of a mid price through a
+  #                 European model applied to an American option, and a quote is
+  #                 not.
+  #   solved      — the solved figure wins.
+  #   chain_first — whatever the chain yields wins, solved or not. This was the
+  #                 IMPLICIT behaviour before the solve existed and is kept only
+  #                 so the old ordering stays expressible.
+  atm_iv_prefer: vendor               # vendor | solved | chain_first
+  iv_self_source_min_sessions: 252
+  strike_bounds_sigma: 2.0            # spot * exp(+/- k*sigma*sqrt(T/252))
+  trading_days_per_year: 252          # the 252 in the line above, and the
+                                      # annualisation basis for realised vol.
+                                      # T there is in TRADING days, so T/252 is a
+                                      # year fraction; converting calendar DTE at
+                                      # 252/365 makes it identical to
+                                      # dte_calendar / numerics.bsm.day_count_basis.
+                                      # Feeding CALENDAR days straight into /252
+                                      # inflates the variance by 365/252 and the
+                                      # band width by sqrt of that, about 1.20x.
+  strike_bounds_rv_tenor_days: 30     # which rv_tenors_days entry sets the band
+  # Garman-Klass reads ln(close/open) as the session's directional move and
+  # SUBTRACTS its square. Where a venue publishes no opening auction print and
+  # serves the previous close in its place, that term becomes the whole
+  # close-to-close return and the estimator is computing a different formula
+  # rather than a worse number — so above this share of bars in the window whose
+  # open is EXACTLY the previous close, the Garman-Klass leaves report n/a with
+  # the measured share. Parkinson needs no open and is computed regardless.
+  # Not zero: an instrument can genuinely open unchanged on a quiet session, and
+  # a ceiling of zero would refuse a real series for one coincidence. Not high
+  # either: a venue that restates does it on nearly every bar, so anything a
+  # tenth of the window would not catch is a venue this test is not for.
+  garman_klass_max_restated_open_share: 0.10
+  sigma_default: 0.35                 # LAST-RESORT strike-bound sigma only. Never a
+                                      # substitute for a measured vol anywhere else:
+                                      # a snapshot that used it says so, per row.
+  universe_census_frequency: weekly   # logs how many contracts clear every gate
+  etf_top2_concentration_flag: 0.40   # top two holdings as a share of the fund.
+                                      # Above this, the cell is a two-stock read
+                                      # and not a country read, and the coverage
+                                      # note says so.
+  # Which market_data_status values count as a LIVE quote. Everything else the
+  # route reports — FROZEN, DELAYED, FROZEN_DELAYED, anything not yet seen — is
+  # INDICATIVE, and a NULL is UNREPORTED, which is a third thing again: 006
+  # records that NULL means "the route said nothing", never "realtime". Three
+  # states rather than two, because the vendor route writes NULL by design and
+  # collapsing it into FROZEN would invent the fact the column exists to record.
+  # A list rather than a constant in code so a newly observed value is a config
+  # edit, not a release.
+  market_data_status_live: [REALTIME]
+
+  grid_staleness_days: 5              # the DAILY-BAR freshness window. Every
+                                      # other input has its own, under
+                                      # grid.freshness_days: a chain collected
+                                      # weekly and a macro series published
+                                      # monthly cannot share one number, and
+                                      # sharing it is what made every cell in a
+                                      # market x sector inherit one bar's verdict.
+  grid_ranking_top_n: 20              # rows per ranked view. The session reads
+                                      # rankings, not 1,650 raw cells.
+  iv_percentile_window_weeks: 52      # grid indicator 8's window
+
+# ─────────────────────────────  THE GRID  ───────────────────────────────────────
+grid:
+  benchmark_market: us                # the global risk benchmark correlations are
+                                      # measured against, on its NATIVE index
+  correlation_shift_sd: 1.0           # flag a pair beyond this many SD from its
+                                      # OWN norm. A single global threshold would
+                                      # see only the always-correlated pairs.
+  correlation_norm_window_years: 2    # the window that norm is measured over.
+                                      # Capped by what the backfill actually
+                                      # fetches (data.daily_window_years of daily
+                                      # bars), which is why it is not longer: a
+                                      # norm window beyond the bars collected is a
+                                      # window with no data in it. Widening both
+                                      # together is a collector change, in
+                                      # ROADMAP.md.
+
+  # The norm is built from NON-OVERLAPPING correlations, and this is how many of
+  # them it takes before their standard deviation is a dispersion rather than an
+  # arithmetic accident.
+  #
+  # Rolling correlations sampled every session share almost all their data — two
+  # consecutive 250-day readings differ by one observation — so a series of them
+  # is smooth by construction and its sample sd measures that smoothness, not the
+  # spread of the underlying quantity. Dividing by it gives a z-score inflated by
+  # roughly the overlap. The norm therefore steps by the window, and what is left
+  # is the count below.
+  #
+  # What that admits, against a 2-year norm window of about 504 sessions: 16
+  # independent 30-day readings, 5 at 90 days, 2 at 250 days. The 250-day shift
+  # is consequently n/a and says so — which is the honest reading of a two-year
+  # history, not a gap in collection.
+  correlation_norm_min_independent: 4
+
+  # The SAME rule, one family over, and the reason it needs its own key.
+  #
+  # A realised-vol percentile ranks today's reading against every rolling reading
+  # in data.daily_window_years. Sampled every session, two consecutive readings
+  # share all but one of their bars, so the count reported beside the number
+  # overstated the evidence behind it by roughly thirty times: on a full store
+  # about 470 readings rest on the sixteen independent windows the history
+  # actually contains. The objection is weaker than for the correlation norm — a
+  # rank is not a standard deviation, and every cell carries the same overlap, so
+  # the ordering barely moves — but n_obs is a claim about evidence and window
+  # honesty is the one thing this build does not compromise on. All three
+  # estimators step by the tenor: two percentiles built on different sampling
+  # would be the estimator confusion PR 7 exists to prevent.
+  #
+  # It could not reuse the floor these percentiles used to share with turnover
+  # under grid.min_observations: that one is 21 against a ceiling of 16
+  # independent readings, so it would refuse every cell for ever, and turnover
+  # still needs it. It is not correlation_norm_min_independent either: that
+  # number is documented as what a standard deviation of correlations needs, and
+  # one key governing two families is a fact with two owners.
+  #
+  # What this value admits, against a 2-year daily window of about 504 sessions
+  # and the 30-day reference tenor: sixteen independent readings, so a cell needs
+  # roughly a year of collected bars before its percentile computes and keeps
+  # headroom above the floor once it does. Below it the cell reports n/a with the
+  # count, which on a store holding sixty bars is the honest answer — sixty bars
+  # never contained a two-year percentile, whatever the overlap made the count
+  # look like.
+  realised_vol_percentile_min_independent: 8
+
+  # FRESHNESS IS PER INPUT, not per cell. A market x sector cell is forty-odd leaves
+  # fed by four different stores, and until now one daily-bar reading was
+  # stamped on all of them: a policy-rate cell went stale because an equity bar
+  # was old, and a months-old vendor IV percentile read 'ok' because the bars
+  # were fresh. Each family is now measured against the store it actually reads.
+  #
+  # The numbers differ because the collection cadences differ. Bars arrive every
+  # session. A chain arrives when the chain collector runs. Macro series publish
+  # on their own calendars, monthly at the slowest, and a monthly series is not
+  # stale at three weeks — it is simply monthly.
+  freshness_days:
+    daily_bars: 5                     # matches data.grid_staleness_days, which
+                                      # remains the bar figure so this split
+                                      # re-tunes nothing on its own
+    option_chain: 5
+    underlying_snapshot: 5
+    macro: 45                         # the slowest declared series is monthly;
+                                      # below its own publication interval a
+                                      # freshness window flags every cell every
+                                      # day and means nothing
+
+  min_coverage_pct: 0.20              # below this share of COLLECTIBLE cells a grid
+                                      # build is DEGRADED rather than ok. The
+                                      # denominator excludes structurally
+                                      # inapplicable cells — no instrument mapped, no
+                                      # reachable option chain, no declared macro
+                                      # series — because nothing a collector does will
+                                      # ever fill them. Counting them made the floor
+                                      # unreachable: coverage was capped near 9.6%
+                                      # against this 20%, so every build reported
+                                      # DEGRADED and the flag said nothing on the day
+                                      # collection really failed. The gap those cells
+                                      # represent is still reported, as the ambition
+                                      # ratio, which is what it actually is.
+
+  # A ranked view orders the cells of ONE indicator family, and the four views
+  # print identically whatever they ordered. `widest_iv_hv` ranks the cells with
+  # a reachable option chain, which is a small fraction of the grid, while
+  # `most_extended` ranks every cell with bars — and nothing in the table said
+  # so, so a two-row ordering read exactly like a hundred-row one.
+  #
+  # Below this many ranked cells the view is LABELLED with its own denominator,
+  # not suppressed. Suppression was the rejected alternative: it deletes the only
+  # implied-vol signal the store holds in order to avoid admitting the signal is
+  # thin, which is the opposite of the rule that a cell says n/a with its sample
+  # count. Every ranked row also carries `reachable` and `ranked_over`, so the
+  # label is a summary of numbers the reader can check, not a substitute for
+  # them.
+  min_cells_for_ranked_view: 5
+
+  min_observations:                   # refuse to compute rather than compute on
+                                      # too little. A percentile over nine points
+                                      # is not a percentile, and a cell that says
+                                      # n/a with a count is worth more than a
+                                      # number nobody can defend.
+    returns: 2
+    correlation: 21
+    percentile: 26
+    # Sessions carrying volume before turnover compares a recent average to a
+    # longer one. This entry was called `realised_vol` and was read by the
+    # realised-vol percentiles AND by turnover; the percentiles now floor on
+    # grid.realised_vol_percentile_min_independent, which counts a different
+    # thing, so what was left was a key named for a family that no longer reads
+    # it. Renamed rather than kept: a key whose name says one family and whose
+    # only reader is another is a decision nobody can check. The VALUE is
+    # unchanged, so nothing moves — turnover already took the larger of this and
+    # data.technical_window_days.
+    turnover: 21
+    # No regression floor here: the only regression run is the commodity proxy
+    # beta, whose floor is commodities.proxies.min_observations_months.
+
+census:
+  min_viable_contracts: 3             # below this the census REPORTS it. Either
+                                      # the gates are miscalibrated or the sleeve
+                                      # is too small; neither is fixed by quietly
+                                      # relaxing a threshold.
+
+calendars:
+  path: calendars.yaml
+  default: weekends_only              # a venue with no declared holiday list gets
+                                      # weekends only, and every date computed on
+                                      # it says so — an undeclared calendar is
+                                      # visibly undeclared, never assumed.
+
+# ─────────────────────────────  COMMODITIES  ────────────────────────────────────
+commodities:
+  buckets:                            # never one bucket — drivers are unrelated
+    - energy                          # oil, natgas, refined products
+    - precious_monetary               # gold, silver — real rates and DXY, not the cycle
+    - industrial_metals               # copper, aluminium, nickel
+    - agri_inputs                     # nitrogen (tracks natural gas via Haber-Bosch),
+                                      # phosphate, potash
+    - grains_oilseeds                 # corn, wheat, soybeans, rice
+    - softs                           # coffee, cocoa, sugar, cotton
+    - strategic_niche                 # lithium, uranium, rare earths, industrial gases
+
+  agri_linkage:
+    track_fertiliser_to_crop_lag: true
+    lag_months: [6, 18]               # expensive fertiliser -> under-application ->
+                                      # weaker yields -> higher crop prices
+    driver_root: NG                   # the futures root whose declared history_series
+                                      # carries the input cost. Named, not inferred
+                                      # from a description: a mapping the code guessed
+                                      # would be a mapping nobody could audit.
+  nitrogen_input_driver: natural_gas  # gas is ~70-80% of ammonia cost
+
+  history:
+    monthly_window_years: 20          # 5y percentiles are MISLEADING on commodities —
+                                      # oil cycles run 10-20y; uranium had a 15y bear market
+    weekly_window_years: 5            # as per the rest of the grid
+    seasonal_adjustment: true         # compare to the SAME WEEK in prior years,
+                                      # not to a rolling window
+    seasonal_sensitive:
+      [natural_gas, heating_oil, gasoline, grains_oilseeds, softs, agri_inputs]
+
+  regional_spreads:                   # differentials isolate physical dislocation
+    - brent_wti                       # transatlantic / export dynamics
+    - ttf_henry_hub                   # European industrial competitiveness
+    - lme_comex_copper                # tariff and warehouse dislocations
+    - iron_ore_rebar                  # Chinese construction proxy
+    - gasoline_diesel_cracks
+
+  term_structure:
+    # Which roots are tracked is declared per row in universe.yaml
+    # (futures_roots.tracked), and how often the collector runs is the
+    # scheduler's business — see deploy/crontab.example. A live check also
+    # falsified the premise that curve shape must be snapshotted daily or lost:
+    # search_futures takes include_expired=true, so a missed day is
+    # reconstructable. See references/ibkr-playbook.md.
+    contango_max_annualised_for_futures_wrapper: 0.05
+    # Above this, a futures-tracking wrapper bleeds roll over a 90-200 day hold.
+    # Switch to producer equity or a physically-backed ETC instead.
+    backwardation_is_directional: true    # supportive of long exposure, NOT a dislocation flag
+
+  cot:
+    extreme_percentile: 0.95          # 5-year, both tails
+    percentile_window_years: 5        # the window that percentile is taken over.
+                                      # It travels with every figure: a 5-year
+                                      # percentile is NOT cycle position.
+    use: conditioning_not_trigger     # crowding makes moves violent; it does not time them
+    require_price_confirmation: true  # needs a separate trigger to act
+
+    # The CHANGE beside the level, and why a level alone is not a positioning
+    # read. A percentile says how crowded the book is and nothing about which way
+    # the crowd is moving, so a position still being built and one being dumped
+    # arrive as the same number — and they are opposite trades. An unwind already
+    # underway is the crowding leaving, which IS the move; a crowd still forming
+    # is the condition a move happens from.
+    #
+    # Two windows, not one. CFTC reports weekly, so four weeks is four reports —
+    # short enough to catch an unwind that started this month — and thirteen is a
+    # quarter, long enough that one violent week cannot set the sign. Either
+    # alone gets one of the two cases wrong: the short window calls every wobble
+    # a turn, the long one averages a fresh unwind away inside a quarter of
+    # building.
+    #
+    # WEEKS, because the series is weekly and release-aligned Tuesday to Friday.
+    # A window in days would span a different number of reports depending on
+    # which weekday the grid happened to be built on.
+    #
+    # Measured on the net non-commercial SHARE OF OPEN INTEREST that migration
+    # 015 established, never on the contract count, and never across a units
+    # change — the units check MacroSeries.units_known_at feeds refuses that
+    # window outright, for the level and the change alike.
+    change_windows_weeks: [4, 13]
+
+    # Weekly readings the window must actually contain before a change is
+    # reported. A delta over two readings is a difference, not a trend: two
+    # endpoints can straddle a publication gap, a revision or one release-week
+    # spike and say nothing about direction, so three is the fewest that can show
+    # one. It is also what guards a STALE store: the older endpoint is anchored
+    # at or before the window's start, so if the newest report is itself a month
+    # old the two ends collapse towards each other and the count — not the dates
+    # — is what catches it. Not higher: the four-week window holds four or five
+    # readings when every report arrived, so a floor of five would refuse it for
+    # one missed release. Below this the cell is n/a with the count, like every
+    # other floor in this build.
+    change_min_observations: 3
+
+  proxies:
+    require_commodity_beta: true      # regress proxy returns on the commodity
+    min_r2: 0.30                      # below this the proxy is flagged unreliable
+    min_observations_months: 24       # a beta on eight months is noise wearing a
+                                      # coefficient. Below this the regression is
+                                      # not run at all.
+    recompute_frequency: monthly
+
+  inventory:
+    # Deviation from the SEASONAL band — the same week in prior years — not from
+    # a rolling window. Crude builds every spring whatever the regime, and a
+    # rolling comparison reads that as a signal.
+    seasonal_window_years: 5
+    seasonal_week_halfwidth: 1        # weeks either side of the reference week
+                                      # folded into the band, so a shifted
+                                      # holiday week does not empty it
+    min_band_observations: 3          # PRIOR-YEAR readings the band needs before a
+                                      # deviation from it is reported. A standard
+                                      # deviation over two points is arithmetic, not
+                                      # dispersion, and the seasonal filter is narrow
+                                      # by design: one week either side of one week,
+                                      # per year of window. Below this the read is
+                                      # n/a with the count, like every other floor
+                                      # in this build.
+
+  preferred_wrapper_order:            # PRIIPs-aware; EU ETCs carry KIDs
+    - eu_listed_physical_etc
+    - producer_equity
+    - futures_tracking_wrapper        # last resort, and only if near backwardation
+
+# Order staging has no keys here, deliberately. This server exposes no
+# order-staging tool: staging runs through the IBKR MCP connector, under a rule
+# SKILL.md states unconditionally — show the full order table, take one explicit
+# confirmation, and alerts and watchlists need none. A flag here could switch
+# that confirmation off while enforcing nothing, which is worse than absent.
+
+# ─────────────────────────  ENGINEERING PARAMETERS  ─────────────────────────────
+# Not investment gates. These exist so that no threshold, window, floor or cap
+# is ever written as a literal in Python. Changing behaviour means changing this
+# file, not the code.
+
+# The MCP server, obliskiq-lite-mcp. Host, port and auth token come from the
+# environment, never from here: they differ per deployment and the token is a
+# secret. What lives here is the wire behaviour that must not be a literal in
+# Python.
+server:
+  # No tool ever returns an unbounded table. A grid of ~1,650 cells and a chain
+  # of several hundred strikes both exceed what is useful in one response, and a
+  # truncated answer that says it was truncated beats a complete one nobody reads.
+  max_rows_per_response: 200
+
+  # A read against an as-of older than this is labelled stale in the response.
+  # The store keeps every day's grid, so asking for an old one is legitimate —
+  # being handed one without being told is not.
+  stale_after_days: 3
+
+  collectors:
+    # run_collectors spawns the STANDALONE collector entrypoint as a child
+    # process. It never imports the collectors: they hold IBKR credentials, a
+    # chain pull runs for minutes, and CLAUDE.md requires them to stay separate
+    # from the server process.
+    enabled: true
+    executable: obliskiq-collect      # resolved on PATH, alongside the server
+    timeout_seconds: 7200             # matches TimeoutStartSec on the collector unit
+    allowed_tasks: [universe, backfill, chain, curve, macro, daily]
+
+runtime:
+  logging:
+    # The format (json | text) is a per-deployment choice and comes from
+    # OBLISK_LOG_FORMAT, or --log-format; see .env.template.
+    utc_timestamps: true
+  sqlite:
+    journal_mode: WAL                 # concurrent collector writes + server reads
+    synchronous: NORMAL
+    foreign_keys: true
+    busy_timeout_ms: 10000
+
+http:
+  timeout_seconds: 15.0
+  retries: 3
+  base_delay_seconds: 0.4
+  max_delay_seconds: 8.0
+  jitter_seconds: 0.4
+  retry_status_codes: [429, 500, 502, 503, 504]
+  # A Retry-After the SERVER asked for, capped separately and much higher than
+  # max_delay_seconds. Clamping an explicit 429 wait to the ordinary backoff
+  # ceiling means retrying long before the upstream said to, which is how a rate
+  # limit becomes a longer ban. This is still a ceiling rather than blind
+  # obedience: a mistaken or hostile header must not park a collector for hours.
+  retry_after_max_seconds: 120.0
+
+# Every number the Black-Scholes / greeks / implied-vol engine needs.
+numerics:
+  bsm:
+    day_count_basis: 365.0            # calendar days per year for tau
+    min_tau_years: 0.0027397          # one calendar day; below this BSM is meaningless
+    min_sigma: 0.005
+    max_sigma: 4.0
+    min_price: 0.0001                 # floor for spot and strike, avoids log(0)
+    vega_per_point_divisor: 100.0     # vega quoted per 1 volatility point
+    theta_per_day_divisor: 365.0      # theta quoted per calendar day
+
+  implied_vol:
+    # The solver returns a convergence mask. A non-converged sigma is never
+    # presented as an implied volatility.
+    seed_method: brenner_subrahmanyam # brenner_subrahmanyam | fixed
+    seed_fixed_sigma: 0.35            # used only when seed_method is fixed, or when
+                                      # the Brenner-Subrahmanyam seed is unusable
+    seed_min_sigma: 0.02
+    seed_max_sigma: 2.5
+    max_newton_iterations: 24
+    max_bisection_iterations: 100
+    price_abs_tolerance: 0.00005
+    price_rel_tolerance: 0.0001       # tolerance is relative to price: an absolute
+                                      # tolerance is meaningless across a five-cent
+                                      # contract and a five-hundred-unit one
+    min_vega: 0.00001                 # below this Newton is unusable; fall to bisection
+    min_vega_for_reported_iv: 0.001   # a solved sigma is only reported when a one-point
+                                      # vol move shifts the price by at least this much.
+                                      # Far out of the money a near-zero price is consistent
+                                      # with a wide band of sigmas, and the solver would
+                                      # otherwise report whichever it landed on as data.
+    reject_below_intrinsic: true      # a price under discounted intrinsic has no
+                                      # implied volatility, it has a data error
+    reject_above_upper_bound: true    # likewise above the no-arbitrage upper bound
+    # ── solving an ATM implied vol the vendor did not serve ──
+    #
+    # COMPUTE-layer only. The recorded decision against solving IV in the COLLECT
+    # layer stands and is not overturned: a collector holds neither a rate at each
+    # contract's maturity nor a dividend yield. This layer holds both.
+    solve:
+      enabled: true
+      # Where the European approximation is tolerable. BSM prices a European
+      # option; SPY and the sector ETFs are AMERICAN-style and nothing in this
+      # repository handles early exercise. Near the money and well before expiry
+      # the early-exercise premium is small; deep in the money and close to it,
+      # it is not. These bound the solve to the region where the number is worth
+      # writing down, rather than solving everything and labelling the result.
+      min_dte: 90
+      max_dte: 200
+      # Strikes within this fraction of spot are solved. Beyond it a chain goes
+      # to bid 0.00 / ask 0.01, where a near-zero price is consistent with a wide
+      # band of sigmas and the solve returns failures the grid never reads.
+      moneyness_band: 0.15
+      # Past this fraction of NON-CONVERGED contracts the run reports degraded,
+      # mirroring option_vendor.max_null_iv_fraction for the vendor's own nulls.
+      # Non-convergence is NULL and counted, never clamped.
+      max_non_converged_fraction: 0.20
+
+# The risk-free rate is a per-currency lookup, never a hardcoded default. If the
+# source fails, the caller is told so rather than handed a plausible number.
+macro:
+  risk_free_rate:
+    series_by_currency:
+      EUR: ECBESTRVOLWGTTRMDMNRT      # FRED mirror of the ECB €STR
+      USD: DTB3                       # 3-month Treasury bill, secondary market
+      GBP: IUDSOIA
+      # CAD is here because canada collects an option chain, and iv_solve FAILS
+      # an underlying whose currency has no rate rather than discounting it at a
+      # number nobody chose. It is the only entry in this map that is MONTHLY,
+      # and that is a sourcing limit rather than a choice: asked on 2026-09-14
+      # with this build's own key, FRED serves no daily Canadian short rate.
+      # INTGSTCAM193N stops in 2017-04, IRSTCB01CAM156N in 2023-12, and
+      # IR3TCD01CAM156N does not exist; IRSTCI01CAM156N and IR3TIB01CAM156N are
+      # the two live candidates and both are monthly to 2026-06. The vintage is
+      # not hidden by using it — risk_free_rate_as_of returns the rate with its
+      # own reference_date and stale=True — so the discount rate a canada solve
+      # used is readable off the answer. See docs/DECISIONS.md.
+      CAD: IRSTCI01CAM156N
+    units: percent
+    cache_ttl_seconds: 86400
+    failure_cooldown_seconds: 900
+    on_failure: error                 # error | last_known — NEVER a literal fallback
+
+  collection:
+    default_window_years: 10          # how far back a series is pulled on first run
+    refetch_after_seconds: 21600      # 6h. A repeat run inside this window issues no
+                                      # request, so re-running a collector in one day
+                                      # does not re-hit a rate limit.
+    max_observations_per_series: 30000
+    # Pacing is not set here. Every collector loop, macro included, is paced by
+    # collectors.request_spacing_seconds through TargetRetryPolicy.
+
+  commodity_history:
+    # BUILD-BRIEF asks for commodity long history "at monthly frequency over 20
+    # years" because a 5-year percentile is misleading on a 10-20 year cycle. The
+    # window is what carries that; the frequency is a separate choice.
+    #
+    #   native  — pull each series at ITS OWN frequency (WTI/Brent/Henry Hub are
+    #             daily, PCOPPUSDM/PALLFNFINDEXM are monthly) and let the monthly
+    #             view be derived downstream. 20y of daily is ~5k rows, and an
+    #             aggregation done here could not be audited or re-based later.
+    #   monthly — ask FRED to aggregate before sending. One key, both paths tested.
+    frequency: native                 # native | monthly
+    aggregation_method: avg           # used only when frequency is monthly
+
+  sources:
+    # release_date_policy is explicit per source because aligning a print to its
+    # reference period builds look-ahead bias into every percentile derived from
+    # it. There is no silent release_date = reference_date anywhere.
+    #   from_api            — the source states when it first published
+    #   reference_plus_lag  — a published, fixed schedule (CFTC, EIA)
+    #   same_as_reference   — legitimate ONLY for a series released on its own
+    #                         reference date, i.e. a daily market observation
+    #   unknown             — release_date stays NULL rather than being invented
+    fred:
+      enabled: true
+      release_date_policy: from_api   # ALFRED output_type=4 = initial release only,
+                                      # so realtime_start IS the first publication
+      release_lag_days: 0
+      # FRED's own ceiling on how many VINTAGE DATES one output_type=4 request
+      # may span, quoted back verbatim in its 400: "This exceeds the maximum
+      # number of vintage dates allowed for this file type". A vintage is a
+      # release, so a DAILY series over macro.collection.default_window_years
+      # blows through it — DGS10 over ten years is 2,472 — and the fetcher splits
+      # the real-time window into chunks that fit, sized from each series' own
+      # declared frequency. Verified live; see references/macro-playbook.md.
+      # It lives here rather than as a constant because it is FRED's number to
+      # change, and the day they do, this is the one line that moves.
+      max_vintages_per_call: 2000
+    # oecd WAS HERE. The only OECD series was OECD_CLI, deleted with it — nothing
+    # in src/ read it, no market declared it, and it never returned a row in its
+    # life. A source with no series left is a decision that looks made and is
+    # not; git carries the block. The SDMX decoder stays, because the ECB below
+    # speaks the same format family. See docs/DECISIONS.md.
+    ecb:
+      enabled: true
+      release_date_policy: unknown
+      release_lag_days: 0
+    cftc:
+      enabled: true
+      release_date_policy: reference_plus_lag
+      release_lag_days: 3             # Tuesday positions, published the Friday after
+    eia:
+      enabled: true
+      release_date_policy: reference_plus_lag
+      release_lag_days: 3             # week ending Friday, published the Wednesday after
+    # Both national offices below exist because of the release date and nothing
+    # else. Measured 2026-09-15: every free route to a Japanese, Korean,
+    # Australian, Indian, Israeli or Brazilian CPI serves the VALUE and no
+    # publication date per observation — Israel's CBS carries none at all,
+    # Japan's e-Stat carries one UPDATED_DATE for a whole table across thirty
+    # years of history. A release date that is the same for every row is not a
+    # release date. These two carry a real one per observation, which is the only
+    # reason they are here and the reason nothing else is.
+    ons:
+      enabled: true
+      release_date_policy: from_api   # every month carries its own updateDate. It
+                                      # is a LAST-updated stamp, which can only be
+                                      # later than first publication and so can
+                                      # only delay knowledge, never advance it.
+      release_lag_days: 0
+    statcan:
+      enabled: true
+      release_date_policy: from_api   # WDS states releaseTime per data point
+      release_lag_days: 0
+
+  series:
+    # Every series pulled, with its NATIVE frequency recorded. The fetchers never
+    # send a frequency or aggregation parameter (the one exception is
+    # commodity_history above, when explicitly set to monthly), so what comes back
+    # is what the source publishes.
+
+    # ── FRED, US core ──
+    - {id: DFF,          source: fred, frequency: daily,   group: us_core}
+    - {id: SOFR,         source: fred, frequency: daily,   group: us_core}
+    # The DISCOUNT RATES. Both are named by risk_free_rate.series_by_currency and
+    # neither was collected, so cached_risk_free_rate returned None for USD and
+    # EUR on a fully-collected store — 53 of 53 targets ok, and the two series the
+    # pricer actually needs absent from all of them. Nothing failed and nothing
+    # said so: every option gate that needs a rate reported itself untested, which
+    # reads as a young store rather than as a series nobody pulls.
+    # tests/test_macro_series.py now pins that every configured rate series is
+    # declared here, so this cannot come apart again.
+    - {id: DTB3,         source: fred, frequency: daily,   group: us_core}
+    - {id: DGS2,         source: fred, frequency: daily,   group: us_core}
+    - {id: DGS10,        source: fred, frequency: daily,   group: us_core}
+    - {id: CPIAUCSL,     source: fred, frequency: monthly, group: us_core}
+
+    # ── FRED, international. FRED redistributes the OECD series, which is what
+    #    makes them cross-country comparable without pulling each national source.
+    #    IRLTLT01CNM156N (China) was here and FRED no longer serves it — the id
+    #    answers `The series does not exist`, and nothing in FRED replaces it, so
+    #    china declares no long_rate_series. IRLTLT01INM156N fails the same way
+    #    and india declares none either; both re-measured 2026-09-14. Every id
+    #    below is live, and the count is not restated here because universe.yaml
+    #    owns which markets read them.
+    - {id: IRLTLT01DEM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01ESM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01GBM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01JPM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01KRM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01AUM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01EZM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01ILM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01FRM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01ITM156N, source: fred, frequency: monthly, group: international}
+    - {id: IRLTLT01CAM156N, source: fred, frequency: monthly, group: international}
+
+    # ── CPI. Grid indicator 12 needs a LOCAL inflation rate per market, and the
+    #    four-way FX decomposition needs it to get from local nominal to local
+    #    real.
+    #
+    #    The thirteen OECD CPALTT01* ids that were here are GONE. Measured
+    #    2026-09-15 against FRED with this build's own key, they stop between
+    #    2022-04 (japan) and 2025-04 (china, brazil) — while CPIAUCSL on the same
+    #    host, the same key and the same second serves the current month, and
+    #    within the same FRED release the OECD CCRETT01* REER family serves to
+    #    2026-07. A partial-family freeze, not a network path: see
+    #    references/macro-playbook.md.
+    #
+    #    The euro-area replacement is Eurostat's HICP INDEX as FRED redistributes
+    #    it. Eurostat's own dissemination API is frozen at 2025-12 on every unit,
+    #    and so is the ECB's ICP flow in both its ANR and INX forms; FRED serves
+    #    the same statistic current. The eurozone row is the CHANGING-composition
+    #    aggregate, which is what the ECB's U2 it replaces was — not EA19 or EA20,
+    #    both of which fix a membership that has changed twice.
+    #
+    #    These are index LEVELS, so the market declares cpi_is_yoy: false and the
+    #    rate is computed downstream. value_vintage: latest is not optional for
+    #    them: Eurostat rebased to 2025=100 during 2026, so the initial-release
+    #    column holds two bases and a year-on-year ratio across the join reads as
+    #    a 22% deflation. See the FredFetcher docstring.
+    - {id: CP0000EZCCM086NEST, source: fred, frequency: monthly, group: cpi,
+       value_vintage: latest}
+    - {id: CP0000DEM086NEST,   source: fred, frequency: monthly, group: cpi,
+       value_vintage: latest}
+    - {id: CP0000ESM086NEST,   source: fred, frequency: monthly, group: cpi,
+       value_vintage: latest}
+    - {id: CP0000FRM086NEST,   source: fred, frequency: monthly, group: cpi,
+       value_vintage: latest}
+    - {id: CP0000ITM086NEST,   source: fred, frequency: monthly, group: cpi,
+       value_vintage: latest}
+    # The UK left the HICP: CP0000GBM086NEST stops 2020-11. This is the ONS's own
+    # published annual rate, already a year-on-year percentage, so no ratio is
+    # taken and no rebase can reach it. key is the route under www.ons.gov.uk.
+    - {id: UK_CPI_YOY, source: ons, frequency: monthly, group: cpi,
+       key: "economy/inflationandpriceindices/timeseries/d7g7/mm23"}
+    # Statistics Canada vector 41690973, CPI all-items Canada. An index level.
+    - {id: CA_CPI, source: statcan, frequency: monthly, group: cpi, key: "41690973"}
+
+    # ── FRED, short / policy rates outside the US and the euro area. Grid
+    #    indicator 12 wants a policy rate and a REAL policy rate; where no series
+    #    exists the cell is n/a with a reason, never a neighbouring country's
+    #    rate. UNVERIFIED.
+    - {id: ECBESTRVOLWGTTRMDMNRT, source: fred, frequency: daily, group: policy_rate}
+    - {id: IUDSOIA,         source: fred, frequency: daily,   group: policy_rate}
+    - {id: IRSTCI01JPM156N, source: fred, frequency: monthly, group: policy_rate}
+    - {id: IRSTCI01KRM156N, source: fred, frequency: monthly, group: policy_rate}
+    - {id: IRSTCI01AUM156N, source: fred, frequency: monthly, group: policy_rate}
+    - {id: IRSTCI01ILM156N, source: fred, frequency: monthly, group: policy_rate}
+    - {id: IRSTCI01BRM156N, source: fred, frequency: monthly, group: policy_rate}
+    - {id: IRSTCI01CAM156N, source: fred, frequency: monthly, group: policy_rate}
+    - {id: IRSTCI01INM156N, source: fred, frequency: monthly, group: policy_rate}
+
+    # ── FRED, commodity long history. Windowed by
+    #    commodities.history.monthly_window_years, not by collection.default_window_years.
+    - {id: DCOILWTICO,    source: fred, frequency: daily,   group: commodity_history}
+    - {id: DCOILBRENTEU,  source: fred, frequency: daily,   group: commodity_history}
+    - {id: DHHNGSP,       source: fred, frequency: daily,   group: commodity_history}
+    - {id: PCOPPUSDM,     source: fred, frequency: monthly, group: commodity_history}
+
+    # ── ECB Data Portal. key is flowRef/seriesKey. Free, no key. UNVERIFIED.
+    # The ecb source defaults to release_date_policy: unknown, which is right for
+    # a publisher that serves no release date — but a NULL release date makes a
+    # series INVISIBLE to MacroSeries.known_at, and these three were therefore
+    # collected in full and read by nothing. Measured 2026-09-11: ECB_DFR held
+    # 3,652 rows current to that day, and eurozone, germany and spain reported
+    # "policy rate series ECB_DFR is declared but absent from the store".
+    #
+    # Each override below is the publisher's own rule, not an estimate.
+    - {id: ESTR,      source: ecb, frequency: daily,   group: euro,
+       key: "EST/B.EU000A2X2A25.WT",
+       # ECB publishes €STR at 08:00 CET on each TARGET business day for the
+       # PREVIOUS business day's transactions. One day is the rule, not a guess.
+       release_date_policy: reference_plus_lag, release_lag_days: 1}
+    - {id: ECB_DFR,   source: ecb, frequency: daily,   group: euro,
+       # A policy rate LEVEL in force on a date is public on that date — the
+       # Governing Council announces it in advance. same_as_reference is the
+       # conservative reading: it was known at least by then.
+       key: "FM/D.U2.EUR.4F.KR.DFR.LEV", release_date_policy: same_as_reference}
+    # HICP_YOY WAS HERE, on ICP/M.U2.N.000000.4.ANR, keeping the ecb source's
+    # `unknown` deliberately because no fixed lag is Eurostat's rule. It is gone
+    # for a second reason that overtook the first: measured 2026-09-15, that flow
+    # and its .INX sibling both stop at 2025-12, for U2 and for DE, FR, IT and ES,
+    # while the ECB's own policy rate and FX reference rates on the same host
+    # serve the same day. eurozone now reads Eurostat via FRED, which carries a
+    # release date as well as a current print.
+    - {id: EURUSD,    source: ecb, frequency: daily,   group: euro,
+       key: "EXR/D.USD.EUR.SP00.A", release_date_policy: same_as_reference}
+
+    # ── ECB reference rates, one per tracked market currency. Quoted as UNITS OF
+    #    FOREIGN CURRENCY PER EURO, so a rising series is the euro strengthening
+    #    and the foreign currency depreciating. The four-way decomposition and
+    #    grid indicator 11 both key off these; without them, "base currency" has
+    #    no meaning for any market outside the euro area and the whole ranking
+    #    discipline collapses back into local nominal. Free, no key. UNVERIFIED.
+    #
+    #    release_date_policy is declared PER SERIES here, overriding ecb's own
+    #    `unknown`. A source-wide setting has to cover everything ECB serves, and
+    #    ECB serves both these daily reference rates and slower statistics. The
+    #    reference rates are published on the day they describe — the case this
+    #    file already names as the only legitimate one for same_as_reference —
+    #    whereas HICP carries no first-publication date. Leaving them `unknown`
+    #    left release_date NULL, and `known_at` excludes NULL rather than
+    #    guessing, so every non-base conversion taken with an as_of returned None
+    #    and every non-EUR price-ceiling gate went UNTESTED. Nothing is invented:
+    #    the daily rate genuinely is public on its reference date.
+    - {id: EURGBP, source: ecb, frequency: daily, group: fx, key: "EXR/D.GBP.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURJPY, source: ecb, frequency: daily, group: fx, key: "EXR/D.JPY.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURKRW, source: ecb, frequency: daily, group: fx, key: "EXR/D.KRW.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURHKD, source: ecb, frequency: daily, group: fx, key: "EXR/D.HKD.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURCNY, source: ecb, frequency: daily, group: fx, key: "EXR/D.CNY.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURILS, source: ecb, frequency: daily, group: fx, key: "EXR/D.ILS.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURBRL, source: ecb, frequency: daily, group: fx, key: "EXR/D.BRL.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURAUD, source: ecb, frequency: daily, group: fx, key: "EXR/D.AUD.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURCAD, source: ecb, frequency: daily, group: fx, key: "EXR/D.CAD.EUR.SP00.A", release_date_policy: same_as_reference}
+    - {id: EURINR, source: ecb, frequency: daily, group: fx, key: "EXR/D.INR.EUR.SP00.A", release_date_policy: same_as_reference}
+
+    # ── CFTC Commitments of Traders, Socrata. Weekly. The only flow/positioning
+    #    measure in the whole grid; everything else is price-derived.
+    - {id: COT_WTI,    source: cftc, frequency: weekly, group: positioning,
+       key: "067651"}
+    - {id: COT_GOLD,   source: cftc, frequency: weekly, group: positioning,
+       key: "088691"}
+    - {id: COT_COPPER, source: cftc, frequency: weekly, group: positioning,
+       key: "085692"}
+    - {id: COT_SP500,  source: cftc, frequency: weekly, group: positioning,
+       key: "13874A"}
+
+    # ── EIA v2. Crude and product inventories, production, SPR.
+    - {id: WCESTUS1, source: eia, frequency: weekly, group: energy_inventory,
+       key: "petroleum/stoc/wstk"}
+
+# ─────────────────────────  COLLECTORS (unattended)  ────────────────────────────
+# The collectors run on a scheduler on a small always-on VM with no chat session
+# and no human present. Everything about how hard they push an API, how they
+# recover, and when they give up lives here.
+collectors:
+  # The route an unattended run collects on, and the tag written to every row's
+  # `source` column, so collection can be migrated wholesale if a CP OAuth
+  # session turns out to invalidate the MCP session for the same account.
+  # `obliskiq-collect --source` overrides it for one run; omitted, this is what
+  # it resolves to. cp_api is the only value it accepts, and the reason is NOT
+  # that the MCP tools are confined to a chat session — IBKR's Custom Connector
+  # answers a headless container, verified 2026-09-03. It is that the connector
+  # takes an OAuth 2.0 bearer token this build cannot yet mint, so there is still
+  # no unattended route to it. Rows tagged `mcp` therefore reach the store
+  # through `--source mcp-capture`, which replays a capture taken by hand.
+  # Anything else here is refused at startup rather than ignored. See
+  # docs/DECISIONS.md, and `obliskiq-collect connector` for the live position.
+  source: cp_api
+
+  # A collector_runs or collector_sequences row still saying 'running' after
+  # this long was left by a process that was killed: the next run reaps it to
+  # 'interrupted'. The test is AGE and not liveness deliberately — a PID is
+  # reused and means nothing across the reboot that is the likeliest reason a
+  # run died in the first place. So the window sits above the longest run this
+  # package can perform (the collector unit's own TimeoutStartSec is 7200, which
+  # the daily sequence's own per-step budgets sum below) and below the daily
+  # cadence it performs it at. Generous rather than tight: the cost of getting it
+  # wrong is mislabelling a run that is still working.
+  run_stale_after_seconds: 14400      # 4h
+
+  # How far back `obliskiq-collect status` reads by default. Long enough that a
+  # weekend away is inside the window, which is the case the report exists for.
+  status_report_days: 7
+
+  daily:
+    # The wall-clock budget each step of `obliskiq-collect daily` gets, in
+    # seconds. This is the sequence bounding ITSELF, which is a different thing
+    # from the unit bounding the process: `TimeoutStartSec` expiring is a SIGTERM
+    # the per-step try/except in collect/cli.py cannot see, and `Restart=on-failure`
+    # then re-runs the WHOLE sequence — re-spending marketdata.app credits on
+    # every restart. A step that outruns its budget here is abandoned, recorded
+    # `interrupted`, and the steps AFTER it still run.
+    #
+    # The split is a priority ordering, not an even share, and it is the same
+    # ranking DAILY_SEQUENCE states: a budget that let `backfill` eat the window
+    # `chain` needs would have the priority exactly backwards, because the three
+    # European chains are the only series here that no amount of money recovers.
+    # So `chain` gets the largest slice, sized above the 57 minutes 24 targets
+    # took on 2026-09-11, and every recoverable step is capped below it.
+    #
+    # THE SUM IS THE CONSTRAINT. These add to 7020 against the unit's
+    # TimeoutStartSec of 7200, so the sequence reaches its own deadline before
+    # systemd reaches its one; tests/test_deploy_units.py fails if that stops
+    # being true. Raising one of these means lowering another or raising the
+    # unit, which is the trade being made visible.
+    step_deadline_seconds:
+      nav: 120                        # one call to /portfolio/{id}/ledger
+      backfill: 1200                  # recoverable at any time, so it yields first
+      chain: 3600                     # irreplaceable; 57m measured, the rest is margin
+      curve: 600                      # reconstructable rung by rung
+      vendor-chain: 900               # re-buyable, and the only step that bills
+      macro: 600                      # catchable up tomorrow for free
+
+  # Per-TARGET retry, on top of the per-request retry in http.*. One dead
+  # underlying degrades a run; it never kills it.
+  target_retries: 2
+  target_backoff_seconds: 2.0
+  target_backoff_max_seconds: 30.0
+  request_spacing_seconds: 0.25       # pacing guard between calls in a loop
+
+  universe:
+    path: universe.yaml
+    require_seeded: true              # a collector on an empty universe fails
+                                      # loudly and names the remedy, rather than
+                                      # reporting a successful run over nothing
+    portfolio_union: true             # fold live account holdings into the universe
+    portfolio_sec_types: [STK, ETF, FUT, IND]
+    # Anything else in the account — an existing option position, a structured
+    # note — is NOT an underlying root and must never be treated as one.
+    portfolio_stale_days: 7           # a portfolio_sync row unseen for this long
+                                      # stops being collected. Declared rows never
+                                      # expire.
+    # Record the account NAV while the account is already open for the portfolio
+    # union. The weekly census computes its affordability ceiling from the latest
+    # observation and REFUSES without one, and this sync runs an hour before it.
+    # The weekday `nav` step records one too: this is the weekly floor, not the
+    # only writer.
+    record_nav: true
+
+  chain:
+    # Rungs are tried in order. A snapshot is never lost for want of history, and
+    # every row records which rung set its bounds.
+    #   realised_30d — data.strike_bounds_rv_tenor_days of daily bars (preferred)
+    #   realised_10d — the shorter tenor below, annualised
+    #   vendor_iv    — the snapshot's own implied vol
+    #   default      — data.sigma_default, time-scaled by the expiry's real tau
+    sigma_ladder: [realised_30d, realised_10d, vendor_iv, default]
+    realised_fallback_tenor_days: 10  # must be one of data.rv_tenors_days
+    max_expiries_per_underlying: 4    # the tenor window holds 2-4; this is the cap
+    max_strikes_per_expiry: 60
+    # Pacing and market-data-line guard. A fallback rung means the band is wider
+    # and less trustworthy, so it must not also be the run that asks for the most
+    # strikes on a heavy underlying.
+    max_strikes_per_expiry_on_fallback: 24
+    warn_on_fallback: true            # a fallback on anything not flagged as a new
+                                      # listing sets the run status to degraded
+    new_listing_grace_days: 400       # below this since listed_on, a fallback is
+                                      # expected rather than a warning
+    bars_freshness_days: 5            # daily bars staler than this fail the
+                                      # sequence check before the chain runs
+
+  curve:
+    max_expiries_per_root: 12
+    min_expiries_for_roll: 2          # a single listed expiry has no curve shape
+
+  backfill:
+    # Weekly comes back in one call. Daily needs chunking, and the per-call cap is
+    # PROBED rather than assumed — ibkr.cp_api.history.max_bars_per_request is
+    # documented and unverified. The observed figure is remembered in
+    # collector_state so it is learned once, not every run.
+    probe_daily_cap: true
+    probe_request_days: 400
+    daily_chunk_days: 365             # used until a probe narrows it
+    max_chunks_per_contract: 12       # runaway guard, not a window
+    watermark_overlap_days: 5         # re-request a short overlap so a partial
+                                      # final bar is corrected, without re-fetching
+                                      # history already held
+
+    # A refused history request is asked again for HALF the span, down to this
+    # floor, rather than failing the target outright. Measured 2026-09-15:
+    # BOVA11 — which measures brazil/broad — refuses 730d and 365d and serves
+    # 181 bars for 182d, with the exchange on the request and with it omitted
+    # alike. Without the step-down that instrument collected NOTHING and the
+    # nightly run reported `partial` for it every time. A refusal at the floor
+    # still fails: this widens what can be collected, it does not hide a target
+    # that cannot be.
+    span_stepdown_min_days: 30
+    monthly_roots_only: true          # commodity monthly history covers the
+                                      # commodity universe, not every contract
+
+  macro:
+    stop_after_consecutive_failures: 5  # a dead upstream stops the loop rather
+                                        # than working through 50 series to fail
+                                        # 50 times
+
+# ─────────────────────  OPTION CHAINS FROM A THIRD-PARTY VENDOR  ────────────────
+# marketdata.app. This exists because the founding premise was half wrong: option
+# chain history IS retrievable retrospectively for US-listed names, at 1 credit
+# per 1000 option symbols, so a year of it costs on the order of a hundred
+# credits rather than being permanently lost. It is NOT true of the three
+# European listings (ASML, SAN, TTE), which stay on the IBKR route, where the
+# original collect-daily-or-lose-it argument holds exactly as written.
+option_vendor:
+  enabled: true
+
+  # Which markets this route serves. Declared rather than inferred from currency:
+  # a USD-denominated instrument listed in Europe is not a US option, and a
+  # mapping the code guessed would be a mapping nobody could audit.
+  serves_listing_exchanges: [ARCA, NASDAQ, NYSE, BATS, AMEX, CBOE]
+
+  # CREDIT PRICING, and the two tiers are NOT the same order of magnitude.
+  # Observed live 2026-08-28: a 3-contract request on the live/cached tier
+  # consumed 3 credits -- that tier bills PER OPTION SYMBOL returned. The
+  # documented 1-credit-per-1000-symbols applies to HISTORICAL pulls only, and
+  # is still unverified (see references/marketdata-playbook.md).
+  #
+  # So the daily run, which collects TODAY through the live tier, is the
+  # expensive one: a single liquid name over a 90-200 DTE window at OI >= 500 is
+  # hundreds of option symbols, hence hundreds of credits. The backfill, if the
+  # historical pricing holds, is nearly free by comparison.
+  #
+  # A run stops cleanly at this ceiling rather than spending the day's allowance
+  # and then failing on every remaining session. Resumable: the fetch log records
+  # what was collected, so the next run continues from there. Sized for one
+  # liquid name per run on the live tier; raise it once the historical price is
+  # confirmed and the backfill is what is actually running.
+  max_credits_per_run: 400
+
+  # What a response with no x-api-ratelimit-consumed header is charged. NEVER
+  # zero: recording an unreadable header as free silently switches the ceiling
+  # off, and a budget guard that disables itself when its input goes missing is
+  # worse than no guard at all. Deliberately pessimistic.
+  assumed_credits_when_unreported: 100
+
+  # Sessions the backfill reaches back over. 252 is one trading year, which is
+  # also data.iv_self_source_min_sessions — the point at which the IV percentile
+  # stops depending on a vendor figure and becomes self-computed.
+  backfill_sessions: 252
+
+  # Beyond this share of rows arriving with no implied vol, the run is DEGRADED.
+  # A null iv is written as null and counted, never solved from mid here: solving
+  # needs a rate at the contract's own maturity and a dividend yield, neither of
+  # which the collector holds, and inventing either puts a fabricated number in
+  # the one column this route exists to fill.
+  max_null_iv_fraction: 0.20
+
+  # A PAST session is settled once collected and is never re-bought -- its
+  # end-of-day chain will not change. This window applies only to the CURRENT
+  # session, where a pull before the close is a mid-session partial that must not
+  # be frozen as the day's EOD row. An errored call is always retryable.
+  refetch_after_seconds: 43200        # 12h
+
+  # marketdata.app permits ONE IP per account and answers a changed address with
+  # HTTP 403 and "please wait 5 minutes" (references/marketdata-playbook.md).
+  # 403 is not retryable, so every US target used to rediscover the block
+  # independently, on every run, forever -- twelve refusals a night that one
+  # reading already settled. The block outlives the process, so remembering it
+  # has to as well: it is written into collector_state, which survives because
+  # the collectors are Type=oneshot and share nothing but the store.
+  #
+  # Longer than the five minutes the message quotes, because the cost of waiting
+  # too long is one skipped run reported as degraded, and the cost of waiting too
+  # little is another block on top of the first.
+  ip_block_cooldown_seconds: 900      # 15m
+
+ibkr:
+  cp_api:
+    base_path: /v1/api
+    request_timeout_seconds: 20.0
+    # OAuth 1.0a self-service. The gateway and IB Gateway are out of scope: both
+    # need an interactive local session and cannot run unattended.
+    oauth:
+      realm: limited_poa
+      signature_method_rsa: RSA-SHA256    # request_token / live_session_token
+      signature_method_hmac: HMAC-SHA256  # every call once a live session token exists
+      live_session_token_ttl_seconds: 82800   # ~23h; IBKR issues 24h
+      live_session_token_refresh_margin_seconds: 1800
+      dh_prime_bits_min: 1024
+      nonce_bytes: 16
+    session:
+      ssodh_init_on_connect: true
+      tickle_interval_seconds: 45
+      tickle_failure_grace: 3
+    marketdata:
+      # MEASURED, not documented: this route answers HTTP 429
+      # {"error":"Exceed number of conids"} above this count in ONE request.
+      # Walked on QQQ option conids 2026-09-10 — 50 ok, 100 ok, 150 / 200 / 233
+      # all refused — so the boundary is >=100 and <150, and 100 is both the
+      # measured-good value and IBKR's documented market-data line limit.
+      #
+      # It was 200, and QQQ was the one target that reached it: QQQ is the only
+      # underlying whose volatility-scaled band actually hits
+      # collectors.chain.max_strikes_per_expiry, which at both rights is 120
+      # conids for a single expiry and went out as one request. Every other
+      # target's band resolves to fewer, which is why QQQ alone lost its chain
+      # to a 429 in three consecutive live runs while SPY — a LARGER collected
+      # chain — succeeded throughout.
+      max_conids_per_snapshot: 100
+      # The first snapshot call for an unsubscribed conid returns a skeleton; the
+      # fields populate on a subsequent call. Poll, do not treat the first as data.
+      #
+      # THE BUDGET IS MEASURED, not chosen. Timed 2026-09-15 on cp_api against
+      # cold option conids: a batch asked for the full field set settled at
+      # 7.03s, the same basket primed first settled at 4.78s, and a
+      # price-fields-only basket settled at 4.78s. The old budget of four
+      # retries covered about four seconds and therefore missed all three — so
+      # even with a correct settle predicate the poll gave up before any price
+      # existed. Ten covers the slowest reading with margin, and the cost of the
+      # margin is bounded: it is only ever spent on a batch that never quotes.
+      # See references/ibkr-playbook.md for the per-attempt trail.
+      snapshot_settle_retries: 10
+      snapshot_settle_delay_seconds: 1.0
+      # UNITS. IBKR has been observed returning implied vol both as a bare decimal
+      # and as a percent-suffixed string, and safe_float used to drop the latter
+      # to None — no error, no row, no trace, which is worse than being wrong.
+      #   auto     — a '%' suffix means percent; otherwise use the fallback below
+      #   decimal  — always a decimal (0.3142)
+      #   percent  — always percent (31.42)
+      # There is deliberately NO magnitude heuristic: guessing units from the size
+      # of the number turns a real 200% IV into 2% and nobody notices.
+      implied_vol_units: auto           # auto | decimal | percent
+      implied_vol_units_fallback: decimal
+      # A decoded value beyond these is a unit error, not a quote. Stored as NULL
+      # with a warning rather than written as data.
+      implied_vol_max_plausible: 5.0
+      # Implied vol has no negative branch, so the floor is a SENTINEL check rather
+      # than a unit check. Verified live 2026-08-23: IBKR returned
+      # option-midpoint-iv {dailyIv: -1.0, isValid: false} on a liquid SPY contract
+      # while implied-vol carried a valid 0.1462 for the same strike. -1.0 is inside
+      # any plausible MAGNITUDE, so a ceiling alone lets the sentinel through and it
+      # is stored as an implied vol of -1.0. Delta keeps a magnitude test only: it is
+      # legitimately signed.
+      implied_vol_min_plausible: 0.0
+      delta_max_plausible: 1.0
+      # UNITS, again, and for the same reason: a field name does not state one.
+      # Measured on the MCP connector 2026-09-09, in a SINGLE response for SPY:
+      # dividend-yield {yield_pct: 0.98} is a PERCENT (0.98%), while
+      # historical-vol {annual_pct: 0.0956} in the same payload is a FRACTION.
+      # The `_pct` suffix means nothing on that route, so this is read rather
+      # than inferred. cp_api's own convention is UNVERIFIED — see
+      # references/ibkr-playbook.md — and `auto` keeps the same '%'-suffix rule
+      # implied_vol_units uses, with no magnitude heuristic, for the same reason:
+      # guessing from the size of the number turns a 5% payer into 0.05%.
+      dividend_yield_units: auto        # auto | decimal | percent
+      dividend_yield_units_fallback: percent
+      # A decoded yield beyond this is a unit error, not a payout. 0.25 as a
+      # decimal is a 25% yield: above any broad ETF and already deep into the
+      # territory where the number is a percent that was not converted.
+      dividend_yield_max_plausible: 0.25
+      # Fields kept for the UNDERLYING, once per session, alongside the chain.
+      # The chain collector already fetches this quote to size its strike band;
+      # discarding it is what leaves indicator 8 with no history to build on.
+      #
+      # implied_vol_percentile is deliberately NULL. IBKR serves an
+      # implied-volatility-percentile through the MCP connector, but no CP Web API
+      # field id for it has been verified, and guessing one would write some other
+      # quantity into a percentile column where nobody would ever see it. While it
+      # is null the column stays NULL and the grid says which source is missing.
+      # Finding the id is an open item in ROADMAP.md; setting it here is then
+      # a one-line change.
+      #
+      # Meanwhile the reading is not lost. The record_iv_percentile server tool
+      # takes the MCP figure from a session that has the connector and writes it
+      # to underlying_snapshots with source='mcp'. That is a per-session bridge,
+      # not collection: a day with no session is still a day with no vendor
+      # percentile, and the grid says so rather than inventing one.
+      underlying_snapshot_fields:
+        last: "31"
+        bid: "84"
+        ask: "86"
+        volume: "87"
+        implied_vol: "7283"
+        historical_vol_30d: "7284"      # UNVERIFIED
+        implied_vol_percentile: null    # UNVERIFIED — see references/ibkr-playbook.md
+        # The dividend yield the pricer needs. cp_api OWNS this column: the MCP
+        # connector serves the same figure but cannot run unattended, so a column
+        # it owned could only be refreshed by a human in a chat session, which
+        # CLAUDE.md forbids for collection. The connector is the CROSS-CHECK.
+        # null until a field id is verified on a live cp_api snapshot: dropped
+        # from the request and the column stays NULL rather than holding a guess.
+        dividend_yield: null            # UNVERIFIED — see references/ibkr-playbook.md
+        # IBKR's market-data availability code (realtime / delayed / frozen).
+        # [CP ✓ 2026-09-10] 6509 is confirmed on a live cp_api snapshot: SPY and
+        # XLP both returned "DP" and ASML "DPB" — a letter code, which is why the
+        # decoder treats it as text rather than putting it through safe_float.
+        market_data_status: "6509"
+      snapshot_fields:
+        last: "31"
+        bid: "84"
+        ask: "86"
+        volume: "87"
+        open_interest: "7089"
+        implied_vol: "7283"
+        delta: "7308"
+        gamma: "7309"
+        vega: "7310"
+        theta: "7311"
+        market_data_status: "6509"      # [CP ✓ 2026-09-10] — as above
+    portfolio:
+      max_position_pages: 100         # runaway guard on the positions pager, not a
+                                      # limit on portfolio size
+
+    secdef:
+      # Exact ticker match wins over the API's own ordering; the first row is a
+      # fallback only. Ported behaviour from IBKR-Portmanteau.
+      exact_ticker_match_first: true
+      accept_first_on_no_exact_match: true
+    history:
+      max_bars_per_request: 1000      # probe live; documented cap, unverified
+
+  # The IBKR Custom Connector: a remote MCP endpoint, reached over HTTPS rather
+  # than from inside a chat session. `obliskiq-collect connector` walks its RFC
+  # 9728 discovery documents and reports what its authorization server accepts.
+  # It sends no credentials and registers nothing, so it is safe to run anywhere.
+  #
+  # This is a DIAGNOSTIC, not a collection route. The connector authenticates with
+  # an OAuth 2.0 bearer token and this build cannot yet mint one; until it can,
+  # `collectors.source` is unchanged and rows collected through the connector
+  # reach the store as `mcp`, via a capture. See docs/DECISIONS.md.
+  connector:
+    # Four small GETs against a CDN. Deliberately shorter than a market-data
+    # call's timeout: a discovery document that is slow is a discovery document
+    # that is not being served.
+    discovery_timeout_seconds: 10.0
+    # Grants that need no browser at any point. `client_credentials` is the only
+    # one: `authorization_code` needs a human at IBKR's login screen even when
+    # `refresh_token` keeps it alive afterwards, so it is NOT listed here.
+    headless_grant_types: [client_credentials]
+    # What a bars-and-snapshots collector would ask for. Read-only on purpose:
+    # `mcp.write` places orders, and nothing unattended in this package should
+    # ever hold a credential that can.
+    required_scopes: [mcp.read]
