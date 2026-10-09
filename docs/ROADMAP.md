@@ -92,6 +92,15 @@ check (`Calendars.tradability` and `common_windows`, not `venue_status`); Sessio
 READ and deliverable 2 (`smile.yaml` and `liquidity.yaml` exist; `last_tradable_session` and
 `session_before`).
 
+**Review.** Port checks (calendars, store, quant and costs) and two adversarial test rounds
+(the `Calendars` facade, the cost model) found and fixed: naive instants, unmultiplied option
+legs, malformed tax inputs, an unknown tax priced as a number, incident paths that could
+unblock a date-critical order, and manual-file reload and feed acceptance erasing each other.
+Round 1 of the fresh review found three blocking items, fixed in the following push: an
+instrument re-upsert could erase a supersession, the market-data flag decoder read negated flags
+as real-time, and a tax with no notional was priced at zero. Its non-blocking findings are fixed
+or recorded in Follow-ups.
+
 **Process.** The harness assigned the branch `claude/pensive-fermi-ybb3ff`; GitHub steps of
 the end-of-session protocol ran through the GitHub tools instead of `gh`.
 

@@ -368,7 +368,9 @@ Lite's `numerics.bsm`, `numerics.implied_vol` and `numerics.implied_vol.solve`
 value, as `config/defaults/{numerics,smile,liquidity}.yaml`. Left out because nothing consumes
 them yet (Sessions 11 and 12 extend the same files): `solve.enabled`, `smile.skew_delta`,
 `smile.term_structure.*`, `liquidity.spread_waiver_min_open_interest` and `data.*`.
-`market_data_status_live` disappears: the decoded enum defines what is live.
+`market_data_status_live` disappears: the decoded enum defines what is live, and the decoder
+matches the whole raw flag against known spellings, so `NOT_REALTIME` is never live
+(`VERIFY-LIVE(IBKR market-data flag spellings)`).
 
 Inference and cost-model findings of the port check. Legacy fixed its floors and defaults (a
 Newey–West minimum of 3, Spearman and bootstrap minimums of 5, 2000 resamples, one seed, 0.05
