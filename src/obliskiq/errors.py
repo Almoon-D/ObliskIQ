@@ -66,3 +66,11 @@ class IncidentFileError(CalendarError):
 
 class IncidentRejectedError(CalendarError):
     """An incident outside the scope its source is trusted to raise."""
+
+
+class StoreError(ObliskError):
+    """The store cannot open, read or write, and a guess at what it holds would be wrong."""
+
+
+class MigrationError(StoreError):
+    """A migration is edited, missing, out of order, unsafe or failed; the store stays as it was."""

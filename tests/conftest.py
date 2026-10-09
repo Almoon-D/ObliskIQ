@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import os
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -29,6 +29,7 @@ from obliskiq.domain.instrument import Instrument
 from obliskiq.domain.macro import MacroObservation
 from obliskiq.domain.market import Bar, ChainRow, CurvePoint, Snapshot
 from obliskiq.env import variable_names
+from obliskiq.store import Store, open_database
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -112,6 +113,32 @@ def build_calendars(shipped_settings: ObliskConfig) -> Callable[..., Calendars]:
         )
 
     return build
+
+
+@pytest.fixture
+def open_test_store(shipped_settings: ObliskConfig) -> Iterator[Callable[..., Store]]:
+    """Open stores with the shipped pragmas; every one is closed when the test ends."""
+    opened: list[Store] = []
+
+    def open_one(path: Path | str, **overrides: Any) -> Store:
+        pragmas: dict[str, Any] = {
+            "busy_timeout_ms": shipped_settings.store.busy_timeout_ms,
+            "synchronous": shipped_settings.store.synchronous,
+        }
+        pragmas.update(overrides)
+        store = open_database(path, **pragmas)
+        opened.append(store)
+        return store
+
+    yield open_one
+    for store in opened:
+        store.close()
+
+
+@pytest.fixture
+def store(open_test_store: Callable[..., Store], tmp_path: Path) -> Store:
+    """A migrated file database; the file is what makes write-ahead logging real."""
+    return open_test_store(tmp_path / "store.db")
 
 
 @pytest.fixture

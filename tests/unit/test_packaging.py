@@ -83,3 +83,16 @@ def test_neither_artifact_ships_the_legacy_snapshot(built):
 def test_the_sdist_ships_the_sources_and_the_licence(built):
     names = {name.split("/", 1)[1] for name in built["sdist"] if "/" in name}
     assert {"src/obliskiq/py.typed", "pyproject.toml", "LICENSE"} <= names
+
+
+def test_the_wheel_ships_the_migrations_the_store_applies(built):
+    names = built["wheel"]
+    assert "obliskiq/store/migrations/001_core.sql" in names
+    on_disk = sorted(path.name for path in (ROOT / "src/obliskiq/store/migrations").glob("*.sql"))
+    shipped = sorted(Path(n).name for n in names if n.startswith("obliskiq/store/migrations/"))
+    assert shipped == on_disk
+
+
+def test_sql_files_keep_unix_line_endings_in_every_checkout():
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.sql text eol=lf" in attributes

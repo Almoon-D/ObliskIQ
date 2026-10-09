@@ -2,6 +2,8 @@
 paths:
   # Append-only record of every change to an effective setting (who, when, old -> new, why).
   settings_audit_log: settings-audit.jsonl
+  # The SQLite store: instruments, market data, macro series and run records.
+  database: obliskiq.db
   # Manual incidents (halts, exceptional closures) the owner enters; see
   # config/manual-incidents.example.yaml. Read by the calendars; a malformed file blocks every
   # venue until it is fixed.

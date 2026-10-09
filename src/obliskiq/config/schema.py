@@ -12,7 +12,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, model_validator
+from pydantic import AfterValidator, PositiveInt, model_validator
 
 from ..domain.base import CurrencyCode
 from ..domain.calendar import Mic
@@ -67,7 +67,15 @@ class PathsConfig(FrozenModel):
     """Where runtime files live, relative to ``OBLISK_DATA_DIR``."""
 
     settings_audit_log: DataFileName
+    database: DataFileName
     manual_incidents: DataFileName
+
+
+class StoreConfig(FrozenModel):
+    """SQLite settings. Write-ahead logging and foreign keys are fixed in code, not offered."""
+
+    busy_timeout_ms: PositiveInt
+    synchronous: Literal["NORMAL", "FULL", "EXTRA"]
 
 
 class LoggingConfig(FrozenModel):
@@ -84,6 +92,7 @@ class ObliskConfig(FrozenModel):
     jurisdiction: Identifier
     paths: PathsConfig
     logging: LoggingConfig
+    store: StoreConfig
     calendars: CalendarsConfig
     venues: dict[Mic, VenueConfig]
     synthetic_calendars: dict[Mic, SyntheticCalendarConfig]
