@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "portfolio_decisions": [
+    {
+      "ticker": "AAPL",
+      "action": "BUY",
+      "conviction": 8,
+      "size_pct": 45.0,
+      "reasoning": "conviction on the wrong scale, size above 20, no thesis, no triggers, no win_probability/payoff_ratio"
+    }
+  ]
+}

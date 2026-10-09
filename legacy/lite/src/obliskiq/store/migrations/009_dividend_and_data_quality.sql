@@ -1,0 +1,56 @@
+-- 009 — a dividend yield the pricer can use, and a data-quality flag the
+-- readers can see.
+--
+-- Two facts the store could not hold, each of which was being invented
+-- somewhere downstream.
+--
+-- ── universe.dividend_yield ──
+--
+-- Black-Scholes-Merton takes a continuous dividend yield q, and every caller
+-- was passing zero because there was nowhere to read one from. That is not a
+-- neutral default: q enters d1 as (r - q + sigma^2/2)*tau and discounts the
+-- spot by exp(-q*tau), so a payer priced at q=0 gets an N(d2) that is too high
+-- and a delta that is too high. Measured on a payer-like case — spot 60,
+-- strike 66, 150 days, 28% vol, q=5% — N(d2) is overstated by about 15% and
+-- delta by about 0.048. zombie_test.max_prob_ratio_vs_entry compares today's
+-- N(d2) against entry's, so the bias sits directly on the exit gate.
+--
+-- Declared, not derived, in universe.yaml — the same discipline as
+-- top2_concentration. There is no free global dividend feed, and a yield
+-- guessed from a trailing payment is a number nobody could audit later.
+-- dividend_yield_as_of records WHEN the figure was sourced, because a yield is
+-- a fact about a date: an undated one cannot be told from a stale one.
+--
+-- Decimal, not percent, matching every other rate in this schema.
+--
+-- NULL means "nobody has declared one", never "this instrument pays nothing".
+-- The two are different claims and only the second is evidence. Readers
+-- distinguish them and say which they are using.
+--
+-- ── grid.market_data_status ──
+--
+-- 006 gave every snapshot row the market-data state it was captured in, and
+-- until now nothing read it: not compute/, not server/. Meanwhile SKILL.md
+-- requires "Label anything FROZEN or DELAYED as indicative in every table it
+-- appears in" — a rule the skill could not follow, because no tool told it.
+--
+-- This column carries, per grid cell, the worst status among the rows the cell
+-- was computed from, so the label survives from the snapshot that was captured
+-- to the table a human reads. NULL where the cell has no market-data input at
+-- all — a macro cell reads a published series, which has no quote state — or
+-- where the route reported nothing.
+--
+-- Deliberately no CHECK constraint, for the same reason 006 gave: the set of
+-- values IBKR emits is being discovered, and a constraint written from today's
+-- knowledge would turn tomorrow's observation into a crash.
+--
+-- No back-fill on any of the three. A value for a row written before the
+-- column existed is not recoverable, and inventing one is exactly the
+-- overstatement these columns exist to end.
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
+ALTER TABLE universe ADD COLUMN dividend_yield REAL;
+ALTER TABLE universe ADD COLUMN dividend_yield_as_of TEXT;
+
+ALTER TABLE grid ADD COLUMN market_data_status TEXT;

@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "portfolio_decisions": [
+    {
+      "ticker": "005930.KS",
+      "action": "BUY",
+      "conviction": 0.8,
+      "size_pct": 12.0,
+      "thesis": "Memory upcycle is underpriced; HBM share gains compound while consensus still models trough margins.",
+      "invalidation_triggers": [
+        {
+          "trigger_id": "smsn-t1",
+          "type": "price_below",
+          "threshold": 61000,
+          "description": "Breaks accumulation support"
+        },
+        {
+          "trigger_id": "smsn-t2",
+          "type": "date_after",
+          "trigger_date": "2026-09-30",
+          "description": "No HBM qualification win announced by end of Q3"
+        },
+        {
+          "trigger_id": "smsn-t3",
+          "type": "event",
+          "description": "Key customer dual-sources HBM away from Samsung"
+        }
+      ],
+      "win_probability": 0.6,
+      "payoff_ratio": 2.0,
+      "entry_price": 70000,
+      "stop_loss_price": 61000,
+      "target_price": 88000,
+      "reasoning": "Multi-factor: fundamentals inflecting, positioning light, catalyst-rich quarter."
+    },
+    {
+      "ticker": "ASML.AS",
+      "action": "HOLD",
+      "conviction": 0.55,
+      "reasoning": "Thesis intact; orders in line. No reason to adjust."
+    },
+    {
+      "ticker": "VALE",
+      "action": "SELL",
+      "conviction": 0.7,
+      "size_pct": 0.0,
+      "thesis": "Iron ore demand thesis has run its course; China stimulus impulse fading.",
+      "win_probability": 0.58,
+      "payoff_ratio": 1.6,
+      "reasoning": "Exit into strength."
+    }
+  ],
+  "portfolio_summary": {
+    "total_positions": 3,
+    "cash_allocation_pct": 25
+  },
+  "hedging_strategy": "Hold BIL sleeve; no index hedge warranted at current correlation.",
+  "monitoring_checklist": ["HBM qualification news", "ASML bookings", "China credit impulse"]
+}

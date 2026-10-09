@@ -1,0 +1,5 @@
+# Logging. JSON lines on stderr suit a machine running unattended; `text` is easier to read
+# at a terminal. OBLISK_LOG_LEVEL and OBLISK_LOG_FORMAT override these for one process.
+logging:
+  level: INFO      # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  format: json     # json | text

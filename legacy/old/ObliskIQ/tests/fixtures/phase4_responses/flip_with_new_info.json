@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "portfolio_decisions": [
+    {
+      "ticker": "005930.KS",
+      "action": "SELL",
+      "conviction": 0.8,
+      "size_pct": 0.0,
+      "thesis": "Materially new information since the morning run invalidates the entry thesis.",
+      "new_information": "Samsung pre-announced intraday that Q3 HBM shipments will miss guidance by 30% after a key customer qualification failure.",
+      "win_probability": 0.65,
+      "payoff_ratio": 2.0,
+      "reasoning": "Exiting on genuinely new intraday disclosure absent from the morning payload."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+ "note": "SYNTHETIC. The IP-change refusal seen live from this sandbox.",
+ "s": "error",
+ "errmsg": "Access denied. Only one device is permitted. Your IP address has changed, and your account is temporarily blocked for security reasons. Please wait 5 minutes before trying again."
+}

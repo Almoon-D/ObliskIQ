@@ -1,0 +1,23 @@
+{
+ "realtime_start": "2026-08-21",
+ "realtime_end": "2026-08-21",
+ "seriess": [
+  {
+   "id": "CP0000DEM086NEST",
+   "realtime_start": "2026-08-21",
+   "realtime_end": "2026-08-21",
+   "title": "Harmonized Index of Consumer Prices: Total for Germany",
+   "observation_start": "1996-01-01",
+   "observation_end": "2026-07-01",
+   "frequency": "Monthly",
+   "frequency_short": "M",
+   "units": "Index 2025=100",
+   "units_short": "Index 2025=100",
+   "seasonal_adjustment": "Not Seasonally Adjusted",
+   "seasonal_adjustment_short": "NSA",
+   "last_updated": "2026-08-19 07:44:31-05",
+   "popularity": 21,
+   "notes": "The Harmonized Index of Consumer Prices (HICP) gives comparable measures of inflation for the countries and country groups for which it is produced. It is a macroeconomic indicator that measures the change over time of the prices of consumer goods and services acquired by households. For more details, see the source website https://ec.europa.eu/eurostat/web/hicp/information-data.\n\nCopyright, European Union: https://commission.europa.eu/legal-notice_en#copyright-notice"
+  }
+ ]
+}

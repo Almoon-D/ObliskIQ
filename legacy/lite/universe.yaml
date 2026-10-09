@@ -1,0 +1,2771 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  obliskiq-lite — the tracked universe
+#
+#  Reference data, not gates. Every threshold, window and cap lives in
+#  config.yaml; this file says only WHICH instruments the collectors walk.
+#
+#  Seeded into the `universe` and `futures_roots` tables by:
+#      obliskiq-collect universe
+#
+#  Rows declared here have origin='declared' and are never reconciled away.
+#  Live account holdings are folded in separately with origin='portfolio_sync'
+#  and drop out of collection once the position is gone — see
+#  collectors.universe in config.yaml.
+#
+#  MACRO SERIES DO NOT BELONG IN THIS FILE. Cash-yield benchmarks and every other
+#  FRED / ECB / CFTC / EIA series are declared under macro.series in
+#  config.yaml and are keyed by series id, not by contract id. The loader REJECTS
+#  an instrument whose symbol collides with a declared macro series, so €STR or
+#  SOFR can never be handed to the IBKR conid resolver.
+#
+#  UNVERIFIED: every exchange code and every conid here is documentation-derived.
+#  There was no live IBKR access in the sandbox this was written in. What has
+#  since been confirmed or corrected against a live connector session is in
+#  references/ibkr-playbook.md, which is where every further correction goes.
+#
+#  Per-row fields:
+#    symbol            required
+#    conid             optional. When present the resolver uses it verbatim and
+#                      never calls /iserver/secdef/search — the escape hatch for
+#                      dual-listed and ambiguous symbols.
+#    exchange          NATIVE exchange. SMART returns empty for indices and
+#                      futures. It also BREAKS THE TIE when no conid is pinned:
+#                      every listing of a company answers the same bare ticker,
+#                      so the exact-match rule matches all of them and takes the
+#                      API's first choice. A match whose listing venue is this
+#                      one wins; a venue matching nothing falls through, so it
+#                      can only ever sharpen a resolution.
+#    history_exchange  what a HISTORY request should send, which is not always
+#                      the listing venue. Absent means "use `exchange`"; present
+#                      and null means "send no exchange at all". Probed live
+#                      2026-08-29: a TSEJ-listed share returns "No market data
+#                      permissions" with exchange=TSEJ and full daily history
+#                      with the exchange omitted, which inverts the native-
+#                      exchange rule that holds for indices and futures.
+#                      [CP 2026-09-10] SAN and TTE do the same in Madrid and
+#                      Paris — "Chart data unavailable" with the listing venue,
+#                      full daily history with it omitted — so this is a
+#                      property of the endpoint and not of one exchange.
+#    option_exchange   what an OPTION request should send, which is not the
+#                      listing venue either. Absent means "prefer `exchange` if
+#                      the chain lists it, else whatever the chain reports
+#                      first" — the behaviour every US row has always had.
+#                      Present, it is sent VERBATIM and is never overridden by
+#                      the exchange list /iserver/secdef/search returns, because
+#                      that list belongs to whichever listing the search matched
+#                      and may not be this one. A declared venue that serves no
+#                      strike FAILS the target; it never falls back to SMART.
+#    currency, asset_class (STK | ETF | IND | FUT), market, sector
+#    is_native_index   this row is the market's level-and-direction source
+#    priips_restricted no KID, so the CASH instrument is not buyable from an EU
+#                      retail account. Does NOT stop chain collection: listed
+#                      options on it remain tradeable.
+#    tradable          false requires untradeable_reason
+#    options_unavailable_reason
+#                      why NO option chain is reachable for this instrument, in
+#                      words. Required on a grid_measures row that does not set
+#                      collect_chain, and refused on one that does. Grid
+#                      indicators 7, 8 and 9 need a chain, and "no chain today"
+#                      and "no chain ever" are different claims: the first is a
+#                      collection gap and counts against grid.min_coverage_pct,
+#                      the second is structural and is reported as the ambition
+#                      gap instead. The absence of a flag is not an answer to
+#                      which one a cell means, so it is declared.
+#    macro_signal      earns a grid row for regime context without ever becoming
+#                      a candidate
+#    collect_chain     snapshot its option chain daily
+#    collect_bars      backfill and maintain its bar history
+#    listed_on         YYYY-MM-DD, where known. A sigma fallback on a genuinely
+#                      new listing is expected; on anything else it is a warning.
+#    country           cap dimension. `market` groups measurements; `country`
+#                      constrains concentration, and an ADR must not count
+#                      against the wrong one.
+#    bucket            commodity bucket, from commodities.buckets. Orthogonal to
+#                      `sector`: gold is a precious_monetary bucket and a
+#                      materials sector, and pooling the two axes produces
+#                      meaningless correlations.
+#    grid_measures     this row is the measurement instrument for its
+#                      market x sector cell. At most one per cell; the loader
+#                      rejects a second. Defaults true for a native index and
+#                      false for everything else, so a tradeable candidate does
+#                      not silently become a country's proxy.
+#    top2_concentration / hedged / coverage_note
+#                      ETF disclosure, required wherever a fund measures a cell.
+#                      Above data.etf_top2_concentration_flag the output is a
+#                      two-stock analysis and the note must say so.
+#    dividend_yield    continuous dividend yield q, DECIMAL not percent. Feeds
+#                      d1 as (r - q + sigma^2/2)*tau and discounts the spot by
+#                      exp(-q*tau), so a payer declared at zero returns an N(d2)
+#                      and a delta that are both too high — about 15% and 0.048
+#                      on a 5% payer at 150 days — and zombie_test compares
+#                      today's N(d2) against the one recorded at entry.
+#                      DECLARED, NOT COLLECTED: there is no free global dividend
+#                      feed, and a yield inferred from a trailing payment is a
+#                      number nobody could audit later. null means NOBODY HAS
+#                      DECLARED ONE, which is not the same claim as "this
+#                      instrument pays nothing" — check_position_risk says which
+#                      of the two it is using, on every assessment.
+#    dividend_yield_as_of
+#                      YYYY-MM-DD the yield was sourced. Required alongside any
+#                      non-null yield: a yield is a fact about a date, and an
+#                      undated one cannot be told from a stale one.
+#    leveraged / inverse
+#                      rejected AT INGESTION. Never written to the universe, so
+#                      no later code path can recommend one by forgetting to look.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── The grid axes ───────────────────────────────────────────────────────────
+#
+# Declared, not derived. A market x sector cell with no mapped instrument must
+# be an explicit `n/a` with a reason; if the axis were derived from whatever
+# happens to be declared below, that cell would simply never exist and the
+# coverage gap would be invisible.
+#
+# `broad` is the market-level row, measured on the NATIVE INDEX. The other
+# eleven are the standard sector taxonomy. Commodity BUCKETS are a separate
+# axis and live in commodity_state, not here.
+
+sectors:
+  - broad
+  - energy
+  - materials
+  - industrials
+  - consumer_discretionary
+  - consumer_staples
+  - healthcare
+  - financials
+  - technology
+  - communication_services
+  - utilities
+  - real_estate
+
+# Per market: the currency everything local is denominated in, the native index
+# that carries level and direction, and the macro series ids grid indicators
+# 11-13 read. A null series is a declared coverage gap: the cell reports n/a
+# naming the missing series, and never borrows a neighbour's number.
+#
+#   fx_series          ECB reference rate, UNITS OF LOCAL CURRENCY PER EURO.
+#                      Null for the base currency itself.
+#   cpi_is_yoy         true when the series is already a year-on-year rate (the
+#                      ONS annual-rate series); false when it is an index level
+#                      and the rate is computed downstream from two readings a
+#                      year apart. An index that its publisher REBASES must be
+#                      collected with value_vintage: latest, or those two
+#                      readings sit on different bases — see config.yaml's cpi
+#                      block and the FredFetcher docstring.
+#   slope_short_series and slope_label say WHICH slope the cell reports. A
+#                      10y-minus-2y slope and a 10y-minus-policy slope are not
+#                      the same measurement and must never be ranked together
+#                      without saying which is which.
+
+markets:
+  us:
+    currency: USD
+    country: US
+    native_index: SPX
+    # Grid indicator 15 exists only where a futures contract does. Declared per
+    # market rather than inferred, and absent everywhere it does not apply.
+    cot_series: COT_SP500
+    fx_series: EURUSD
+    cpi_series: CPIAUCSL
+    cpi_is_yoy: false
+    policy_rate_series: DFF
+    long_rate_series: DGS10
+    slope_short_series: DGS2
+    slope_label: 10y_minus_2y
+
+  eurozone:
+    currency: EUR
+    country: EU
+    native_index: ESTX50
+    fx_series: null
+    cpi_series: CP0000EZCCM086NEST
+    cpi_is_yoy: false
+    policy_rate_series: ECB_DFR
+    long_rate_series: IRLTLT01EZM156N
+    slope_short_series: ECB_DFR
+    slope_label: 10y_minus_policy
+
+  germany:
+    currency: EUR
+    country: DE
+    native_index: DAX
+    fx_series: null
+    cpi_series: CP0000DEM086NEST
+    cpi_is_yoy: false
+    policy_rate_series: ECB_DFR
+    long_rate_series: IRLTLT01DEM156N
+    slope_short_series: ECB_DFR
+    slope_label: 10y_minus_policy
+
+  spain:
+    currency: EUR
+    country: ES
+    native_index: IBEX35
+    fx_series: null
+    cpi_series: CP0000ESM086NEST
+    cpi_is_yoy: false
+    policy_rate_series: ECB_DFR
+    long_rate_series: IRLTLT01ESM156N
+    slope_short_series: ECB_DFR
+    slope_label: 10y_minus_policy
+
+  france:
+    currency: EUR
+    country: FR
+    # A BROAD-ONLY market, and that is a first-class row rather than a lesser
+    # one: broad momentum, the two range-based realised-vol estimators, the
+    # policy rate and the curve slope are what allocation reads, and germany has
+    # run on exactly this shape since the axis was declared. See
+    # docs/DECISIONS.md.
+    #
+    # CAC is PINNED because the bare ticker is a trap twice over. It resolves
+    # first to CAMDEN NATIONAL CORP, a USD US bank; CACX is this same Amundi fund
+    # quoted in GBP on the London line; and C40 (305372184) is AMUNDI CAC 40 ESG
+    # UCITS, a DIFFERENT INDEX whose currency is right and whose constituents are
+    # the screened subset. All three confirmed live 2026-09-14 on cp_api.
+    native_index: CAC
+    fx_series: null
+    cpi_series: CP0000FRM086NEST
+    cpi_is_yoy: false
+    policy_rate_series: ECB_DFR
+    long_rate_series: IRLTLT01FRM156N
+    slope_short_series: ECB_DFR
+    slope_label: 10y_minus_policy
+
+  italy:
+    currency: EUR
+    country: IT
+    native_index: CSMIB
+    fx_series: null
+    cpi_series: CP0000ITM086NEST
+    cpi_is_yoy: false
+    policy_rate_series: ECB_DFR
+    # IT 10y less the ECB deposit rate, which is a WITHIN-MARKET slope like every
+    # other row in this file. Beside germany's DE 10y less the same rate it is
+    # the two LEGS of a BTP-Bund spread and not the spread: nothing in
+    # indicators.py subtracts one market's leaf from another's, and a
+    # cross-market sovereign-spread family would need its own leaves and its own
+    # reason codes. See ROADMAP.md — a phase of its own, not a side effect of
+    # this one.
+    long_rate_series: IRLTLT01ITM156N
+    slope_short_series: ECB_DFR
+    slope_label: 10y_minus_policy
+
+  uk:
+    currency: GBP
+    country: GB
+    native_index: ISF        # a fund: no FTSE 100 index contract serves. See instruments.
+    fx_series: EURGBP
+    cpi_series: UK_CPI_YOY
+    cpi_is_yoy: true
+    policy_rate_series: IUDSOIA
+    long_rate_series: IRLTLT01GBM156N
+    slope_short_series: IUDSOIA
+    slope_label: 10y_minus_policy
+
+  japan:
+    currency: JPY
+    country: JP
+    native_index: N225
+    fx_series: EURJPY
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01JPM659N stopped at 2022-04 (and its last value is "."). e-Stat
+    # serves a current print and one UPDATED_DATE for the whole table, which
+    # is not a release date per observation; the CPI is published on a
+    # day-of-month rule that reference_plus_lag cannot express.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: IRSTCI01JPM156N
+    long_rate_series: IRLTLT01JPM156N
+    slope_short_series: IRSTCI01JPM156N
+    slope_label: 10y_minus_policy
+
+  korea:
+    currency: KRW
+    country: KR
+    native_index: K200
+    fx_series: EURKRW
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01KRM659N stopped at 2023-11. KOSIS and the Bank of Korea's ECOS
+    # both need an application key this build does not hold, and neither
+    # states a publication date per observation.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: IRSTCI01KRM156N
+    long_rate_series: IRLTLT01KRM156N
+    slope_short_series: IRSTCI01KRM156N
+    slope_label: 10y_minus_policy
+
+  hong_kong:
+    currency: HKD
+    country: HK
+    native_index: HSI
+    fx_series: EURHKD
+    # Hong Kong is outside the OECD CPI family and outside the FRED long-rate
+    # family. Declared null rather than substituted with China's.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: null
+    long_rate_series: null
+    slope_short_series: null
+    slope_label: null
+
+  china:
+    currency: CNY
+    country: CN
+    # GAP CLOSED, on the second attempt and by a different route. The first probe
+    # looked for an index contract and for a Hong Kong listing, found XIN9 is not
+    # a contract, XIN9I an empty series, and iShares FTSE China A50 priced in HKD,
+    # and correctly refused the A50: measuring a CNY market on an HKD fund reports
+    # HKD returns under China's name and hands indicator 11 an EURCNY series that
+    # does not describe them. What it did not look at is SEHKNTL — Shanghai-Hong
+    # Kong Stock Connect northbound — which reaches Shanghai-listed funds at their
+    # own Shanghai quote. See 510300 under instruments, and the currency caveat
+    # recorded there and in docs/DECISIONS.md.
+    native_index: "510300"
+    fx_series: EURCNY
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01CNM659N stopped at 2025-04. No keyless route to an NBS print
+    # carrying a publication date was found. china declares no policy rate
+    # either, so indicator 12 was already inapplicable; this is the FX
+    # decomposition's local real leg, and it reports its own absence.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: null
+    # IRLTLT01CNM156N WAS HERE. It is not a series FRED serves any more:
+    # `fred/series?series_id=IRLTLT01CNM156N` answers `The series does not
+    # exist`, and a search of FRED for a China long rate returns nothing to put
+    # in its place. The other nine IRLTLT01* series are alive and unaffected.
+    # A declared null is an inapplicable cell naming the missing declaration,
+    # which is the honest reading; a dead id left here was a collection failure
+    # every run. See docs/DECISIONS.md and references/macro-playbook.md.
+    long_rate_series: null
+    slope_short_series: null
+    slope_label: null
+
+  india:
+    currency: INR
+    country: IN
+    native_index: NIFTYBEES
+    fx_series: EURINR
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01INM659N stopped at 2025-03. MoSPI's API needs registration and
+    # publishes no per-observation release date.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: IRSTCI01INM156N
+    # IRLTLT01INM156N DOES NOT EXIST. FRED answers HTTP 400 `The series does not
+    # exist` — re-measured 2026-09-14 with this build's own key — which is the
+    # same failure IRLTLT01CNM156N gave in PR 10, and nothing in FRED replaces
+    # it. Declared null, so the cell names the missing declaration rather than
+    # borrowing a neighbour's curve. china is already on the axis on exactly
+    # these terms and brazil on the structurally identical ones.
+    long_rate_series: null
+    slope_short_series: null
+    slope_label: null
+
+  israel:
+    currency: ILS
+    country: IL
+    native_index: KSM.F59    # a fund: no TA-35 index contract exists at IBKR.
+    fx_series: EURILS
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01ILM659N stopped at 2025-03. The CBS index API is live and current
+    # (api.cbs.gov.il/index/data/price?id=120010, measured 2026-09-15) and
+    # carries no date of any kind beside the value — not a release date, not
+    # an update stamp. A value with no publication date is invisible to
+    # known_at, so collecting it would add rows and no reading.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: IRSTCI01ILM156N
+    long_rate_series: IRLTLT01ILM156N
+    slope_short_series: IRSTCI01ILM156N
+    slope_label: 10y_minus_policy
+
+  brazil:
+    currency: BRL
+    country: BR
+    native_index: BOVA11     # a fund: no Ibovespa index contract resolves.
+    fx_series: EURBRL
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01BRM659N stopped at 2025-04. IBGE's SIDRA serves the IPCA freely
+    # and states no publication date per observation.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: IRSTCI01BRM156N
+    # No Brazilian long rate in the FRED redistribution. Declared null.
+    long_rate_series: null
+    slope_short_series: null
+    slope_label: null
+
+  australia:
+    currency: AUD
+    country: AU
+    native_index: STW        # a fund: the AS51 contract is on PSE and returns empty.
+    fx_series: EURAUD
+    # No CPI this build can read point-in-time, measured 2026-09-15.
+    # CPALTT01AUQ659N stopped at 2025-01. The ABS SDMX service carries no
+    # per-observation publication date.
+    cpi_series: null
+    cpi_is_yoy: true
+    policy_rate_series: IRSTCI01AUM156N
+    long_rate_series: IRLTLT01AUM156N
+    slope_short_series: IRSTCI01AUM156N
+    slope_label: 10y_minus_policy
+
+  canada:
+    currency: CAD
+    country: CA
+    # The one market on this axis outside the US whose option chain is both
+    # reachable AND priced — measured 2026-09-14, see XIU under instruments. It
+    # is therefore NOT a broad-only row: indicators 7, 8 and 9 reach canada/broad.
+    native_index: XIU
+    fx_series: EURCAD
+    cpi_series: CA_CPI
+    cpi_is_yoy: false
+    policy_rate_series: IRSTCI01CAM156N
+    long_rate_series: IRLTLT01CAM156N
+    slope_short_series: IRSTCI01CAM156N
+    slope_label: 10y_minus_policy
+
+instruments:
+
+  # ── Native index contracts ────────────────────────────────────────────────
+  # These, not US-listed ETF wrappers, are the level and direction source per
+  # market. A USD-listed wrapper embeds a dollar trade in every reading.
+  # Indices are not themselves tradeable instruments.
+  #
+  # PROBED LIVE 2026-08-29 through the IBKR MCP connector. Six of the thirteen
+  # rows this file used to carry did not survive contact — the header's own
+  # "every exchange code and every conid here is documentation-derived" warning
+  # was well founded, and the corrections are recorded in
+  # references/ibkr-playbook.md. Where no index contract resolves, the market is
+  # measured on a NATIVE-CURRENCY, LOCALLY LISTED fund instead. That is not the
+  # "US-listed wrapper" the rule above forbids: the objection to a wrapper is the
+  # dollar trade embedded in it, and a GBP FTSE-100 fund on the London exchange
+  # embeds none.
+
+  - symbol: SPX
+    conid: 416904
+    exchange: CBOE
+    currency: USD
+    asset_class: IND
+    market: us
+    is_native_index: true
+    country: US
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] resolves and serves history.
+
+  - symbol: ESTX50
+    conid: 4356500
+    exchange: EUREX
+    currency: EUR
+    asset_class: IND
+    market: eurozone
+    is_native_index: true
+    country: EU
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] delayed 900. This row used to say SX5E, which is the
+    # index's Bloomberg-style ticker and resolves to nothing at IBKR; the
+    # contract is ESTX50. Nothing measured eurozone/broad until this was fixed.
+
+  - symbol: DAX
+    conid: 825711
+    exchange: EUREX
+    currency: EUR
+    asset_class: IND
+    market: germany
+    is_native_index: true
+    country: DE
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] delayed 900.
+
+  - symbol: IBEX35
+    conid: 1328303
+    exchange: MEFFRV
+    currency: EUR
+    asset_class: IND
+    market: spain
+    is_native_index: true
+    country: ES
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] delayed 900.
+
+  - symbol: N225
+    conid: 14087999
+    exchange: OSE.JPN
+    currency: JPY
+    asset_class: IND
+    market: japan
+    is_native_index: true
+    country: JP
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] delayed 1200. The index serves on its native
+    # exchange; the TSEJ-listed FUNDS below do not — see history_exchange.
+
+  - symbol: TOPIX
+    exchange: OSE.JPN
+    currency: JPY
+    asset_class: IND
+    market: japan
+    is_native_index: true
+    country: JP
+    sector: broad
+    grid_measures: false
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    # N225 measures japan/broad. TOPIX is collected as a breadth cross-check —
+    # a price-weighted index and a capitalisation-weighted one disagreeing is
+    # itself a signal — but only one instrument may measure a cell.
+
+  - symbol: K200
+    conid: 17370939
+    exchange: KSE
+    currency: KRW
+    asset_class: IND
+    market: korea
+    is_native_index: true
+    country: KR
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] delayed 1200.
+
+  - symbol: HSI
+    conid: 1328298
+    exchange: HKFE
+    currency: HKD
+    asset_class: IND
+    market: hong_kong
+    is_native_index: true
+    country: HK
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: index level, not an instrument
+    macro_signal: true
+    collect_bars: true
+    options_unavailable_reason: >-
+      this cell is measured on the index level, and no index option chain is
+      collected anywhere in this repository — option_vendor serves US listing
+      exchanges only, and IBKR chain collection is declared per instrument under
+      collect_chain
+    # [MCP ✓ 2026-08-29] delayed 900.
+
+  # ── Market-level funds where no index contract resolves ───────────────────
+  # Each of these replaces an index row that this file declared and the probe
+  # could not fill. Native currency, local listing: the wrapper objection is the
+  # embedded dollar trade, and none of these carry one. All are measurement
+  # instruments rather than candidates — see untradeable_reason.
+
+  - symbol: "ISF"
+    conid: 13444223
+    exchange: LSEETF
+    currency: GBP
+    asset_class: ETF
+    market: uk
+    country: GB
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only — a UK-domiciled fund, not UCITS-passported here
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares Core FTSE 100, GBP, London-listed. Measures uk/broad because the
+      index does not resolve: universe.yaml declared UKX on ICEEU, which is not a
+      contract, and the real FTSE 100 index (symbol Z, ICEEU) returned "Details
+      currently unavailable" on two attempts. [MCP ✓ 2026-08-29] delayed 900. A
+      fund tracks the index net of fees and can diverge on a distribution date.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # china/broad is measured through SHANGHAI-HONG KONG STOCK CONNECT, which is
+  # what the earlier probe missed. iShares FTSE China A50 (2823, SEHK, conid
+  # 42474926) does serve daily bars and is still REJECTED: it is priced in HKD,
+  # and an HKD fund under China's name decomposes against EURCNY, which does not
+  # describe it. 510300 is the Shanghai listing itself, reached northbound and
+  # quoted at its Shanghai price.
+  #
+  # THE CURRENCY IS THE OPEN POINT AND IT IS DECLARED, NOT ASSUMED. Northbound
+  # trades SETTLE in offshore yuan while the quote is the onshore Shanghai price,
+  # and neither the connector's contract search nor its snapshot returns a
+  # contract currency, so which of CNY and CNH IBKR stamps on this row could not
+  # be observed from the sandbox this was written in. CNY is declared because it
+  # is the currency of the PRICE — which is what fx_series: EURCNY, an ECB
+  # ONSHORE reference rate, actually describes. If a live check returns CNH the
+  # remedy is this one field. See references/ibkr-playbook.md.
+
+  - symbol: "510300"
+    conid: 571433003
+    exchange: SEHKNTL
+    currency: CNY                   # UNVERIFIED — see the note above. CNH is the
+                                    # settlement currency; this is the quote's.
+    asset_class: ETF
+    market: china
+    country: CN
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: >-
+      no PRIIPs KID, and Stock Connect northbound access is not a route this
+      account holds, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Huatai-PineBridge CSI 300, Shanghai-listed, reached through Shanghai-Hong
+      Kong Stock Connect northbound (SEHKNTL). CSI 300 is the mainland A-share
+      large-cap benchmark — onshore domestic shares, NOT the offshore H-share and
+      ADR universe an EM or China internet fund holds, and NOT the FTSE China A50
+      this file rejects for being quoted in HKD. Quoted at its Shanghai price;
+      northbound settles offshore yuan, and that basis is disclosed rather than
+      netted out. [MCP ✓ 2026-09-03] delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "KSM.F59"
+    conid: 366247788
+    exchange: TASE
+    currency: ILS
+    asset_class: ETF
+    market: israel
+    country: IL
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      KSM ETF TA-35, ILS, Tel Aviv-listed. Measures israel/broad because no TA-35
+      index contract exists at IBKR — the only TA35 matches are leveraged ETPs,
+      which this file rejects at ingestion. [MCP ✓ 2026-08-29] delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "BOVA11"
+    conid: 766495610
+    exchange: B3
+    currency: BRL
+    asset_class: ETF
+    market: brazil
+    country: BR
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares Ibovespa, BRL, B3-listed. Measures brazil/broad because no IBOV
+      index contract resolves — the IBOV matches are forecast and prediction-market
+      contracts, not the index. [MCP ✓ 2026-08-29] delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "STW"
+    conid: 14065804
+    exchange: ASX
+    currency: AUD
+    asset_class: ETF
+    market: australia
+    country: AU
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      SPDR S&P/ASX 200, AUD, Sydney-listed. Measures australia/broad because the
+      AS51 contract is listed on PSE, not ASX as this file declared, and returns an
+      EMPTY series. [MCP ✓ 2026-08-29] delayed 1200.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── The axis widening, probed 2026-09-13 and pinned 2026-09-14 ────────────
+  # These four do not replace an index row this file failed to fill: their
+  # markets were not on the axis at all. Every conid below was read back from
+  # /iserver/contract/{conid}/info on cp_api on 2026-09-14 — description,
+  # currency and the valid-exchange list — because on this axis the bare ticker
+  # is the trap, not the venue. history_exchange is null on all four: the bars
+  # were measured with the exchange OMITTED, which is the path the SAN and TTE
+  # rows already take.
+
+  - symbol: "CAC"
+    conid: 11183823
+    exchange: SBF                   # Euronext Paris, the fund's own line.
+    history_exchange: null          # [CP 2026-09-14] 125 daily bars to 2026-09-14
+                                    # with the exchange omitted.
+    currency: EUR
+    asset_class: ETF
+    market: france
+    country: FR
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: a MEASUREMENT instrument only — this row exists to carry france/broad, and the fund itself is not screened as a candidate
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Amundi CAC 40, EUR. [CP 2026-09-14] "AMUNDI CAC 40", EUR, valid exchanges
+      SMART,SBF,CHIXEN,TRQXEN,BATEEN,GETTEX,DXEEN,TGHEEN,EUIBSI,AQEUEN,TRWBEN.
+      THREE near-misses were ruled out on the same run and each would have been
+      wrong in a different way: the bare ticker CAC resolves first to CAMDEN
+      NATIONAL CORP, a USD US bank; CACX is this same fund quoted in GBP in
+      London, which would report sterling returns under France's name; and C40
+      (305372184) is "AMUNDI CAC 40 ESG UCITS E-UE", a DIFFERENT INDEX whose
+      currency is right and whose constituents are the screened subset. The last
+      is the hard one to catch, which is why the conid is pinned.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and /iserver/secdef/search returns
+      NO OPT section for this conid — asked directly on 2026-09-14, the same call
+      that found XIU's chain on CDE — so no chain is reachable on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "CSMIB"
+    conid: 74707801
+    exchange: BVME.ETF              # Borsa Italiana's ETF segment.
+    history_exchange: null          # [CP 2026-09-14] 505 daily bars over 2y with
+                                    # the exchange omitted.
+    currency: EUR
+    asset_class: ETF
+    market: italy
+    country: IT
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: a MEASUREMENT instrument only — this row exists to carry italy/broad, and the fund itself is not screened as a candidate
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares FTSE MIB ACC, EUR. [CP 2026-09-14] "ISHARES FTSE MIB ACC". Chosen
+      over ETFMIB (26703763, "AMUNDI FTSE MIB UCITS ETF") on a reading taken
+      against the bars rather than on the prospectus: over the 504 sessions both
+      series share, the two track each other to a standard deviation of 0.28
+      percentage points a day, and on exactly two of them — 2025-12-09 and
+      2024-12-09 — ETFMIB fell 4.07 and 3.91 points MORE than CSMIB. On
+      2025-12-09 CSMIB rose while ETFMIB fell over three percent. Those are the
+      distributing fund's ex-dividend dates, and a close-to-close realised-vol
+      estimator reads each as a genuine four-percent move. The accumulating share
+      class reinvests inside the NAV and has no such day. ETFMIB remains the
+      fallback if this listing ever stops serving.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and /iserver/secdef/search returns
+      NO OPT section for this conid — asked directly on 2026-09-14, the same call
+      that found XIU's chain on CDE — so no chain is reachable on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "XIU"
+    conid: 74580921
+    exchange: TSE                   # Toronto. valid_exchanges is SMART,TSE only.
+    history_exchange: null          # [CP 2026-09-14] 122 daily bars over 6m with
+                                    # the exchange omitted; SPY returned 122 on
+                                    # the same run, so the count is the route
+                                    # working rather than a short window.
+    option_exchange: CDE            # [CP 2026-09-14] Bourse de Montreal, the ONLY
+                                    # venue the OPT section names for this conid.
+                                    # Sent verbatim and never overridden.
+    currency: CAD
+    asset_class: ETF
+    market: canada
+    country: CA
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: a MEASUREMENT instrument only — no PRIIPs KID for this Canadian-domiciled fund, so the CASH instrument is not buyable from an EU retail account
+    macro_signal: true
+    collect_bars: true
+    collect_chain: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares S&P/TSX 60, CAD, Toronto-listed. [CP 2026-09-14] "ISHARES S&P/TSX
+      60 INDEX ETF". THE ONLY NON-US CHAIN ON THIS AXIS THAT IS BOTH REACHABLE
+      AND PRICED, which is why collect_chain is set here and not on the two
+      Canadian siblings: /iserver/secdef/search returns an OPT section on CDE
+      carrying 14 expiry months, and near-ATM DEC26 calls (95 days out, inside
+      the option.min_dte / max_dte band) return bid, ask and last on all four
+      contracts sampled. XIC (74580634) and ZCN (114089048) carry the same OPT
+      section on CDE with 8 and 11 months; one instrument may measure a cell, and
+      the S&P/TSX 60 is the market-level index of the three. See
+      docs/DECISIONS.md for the cost this takes on, which is the discount rate.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "NIFTYBEES"
+    conid: 396135052
+    exchange: NSE                   # the only venue this conid names.
+    history_exchange: null          # [CP 2026-09-14] 123 daily bars over 6m with
+                                    # the exchange omitted, newest 2026-09-11.
+    currency: INR
+    asset_class: ETF
+    market: india
+    country: IN
+    sector: broad
+    grid_measures: true
+    tradable: false
+    untradeable_reason: a MEASUREMENT instrument only — no PRIIPs KID for this Indian-domiciled fund, so the CASH instrument is not buyable from an EU retail account
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Nippon India ETF Nifty BEES, INR, NSE-listed. [CP 2026-09-14] "NIPPON INDIA
+      ETF NIFTY BEES", INR, valid_exchanges NSE. The 2026-09-13 sweep raised a
+      question this row had to answer before being declared: delayed daily bars
+      are not the same ENTITLEMENT as a snapshot, and NSE market data was never
+      probed during NSE's own hours. It does not bite, and the reason is
+      structural rather than lucky — nothing in a market's broad-cell collection
+      path takes a snapshot. Bars come from marketdata/history, which is
+      measured; only the `chain` step snapshots, and this row collects no chain.
+      SETFNIF50 (201495097) is the same index and was not chosen: one instrument
+      may measure a cell.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and /iserver/secdef/search returns
+      NO OPT section for this conid — asked directly on 2026-09-14, the same call
+      that found XIU's chain on CDE — so no chain is reachable on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── Japan: NEXT FUNDS TOPIX-17 ────────────────────────────────────────────
+  # Eleven of the seventeen TOPIX-17 funds, one per sector on the declared axis.
+  # All resolved and served daily bars on 2026-08-29 [MCP ✓].
+  #
+  # THE TSEJ QUIRK, and it is why every row here carries `history_exchange: null`:
+  # get_price_history on these contracts with an explicit exchange=TSEJ returns
+  # {"error":"No market data permissions"}, while the SAME contract with the
+  # exchange omitted returns full daily history at delayed: 1200. Reproduced on
+  # 1617 and 1621. This INVERTS the native-exchange rule, which holds for indices
+  # and futures. `exchange` stays TSEJ because that is the true listing venue and
+  # is what identifies the contract; `history_exchange: null` is what the history
+  # request sends. See references/ibkr-playbook.md.
+  #
+  # Where TOPIX-17 splits a sector two ways the choice is recorded in the note,
+  # because "Japan industrials" measured on machinery and measured on transport
+  # are not the same series and a reader must be able to see which one this is.
+
+  - symbol: "1618"
+    conid: 50020680
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: energy
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Energy Resources. Oil, gas and coal; Japan is an importer, so this reads as refining and trading margin rather than as upstream crude.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1620"
+    conid: 55275734
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: materials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Raw Materials & Chemicals. Japan's materials weight sits in chemicals; the steel and non-ferrous half is a separate TOPIX-17 fund (1623) and is NOT in this cell.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1624"
+    conid: 55275774
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: industrials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Machinery. Capital goods. Transportation & logistics (1628) and construction (1619) are separate TOPIX-17 sectors and are NOT in this cell — Japan industrials here means machinery.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1622"
+    conid: 55275740
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: consumer_discretionary
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Automobiles & Transportation Equipment. Autos dominate Japanese discretionary; retail trade (1630) is a separate fund and is NOT in this cell.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1617"
+    conid: 55275720
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: consumer_staples
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Foods.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1621"
+    conid: 55275737
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: healthcare
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Pharmaceutical. Pharma only; medical devices sit under precision instruments in 1625.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1631"
+    conid: 55275833
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: financials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Banks. Banks only — insurance and other financials sit in 1632 and are NOT in this cell, so this is a rates-sensitivity read more than a financials one.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1625"
+    conid: 55275776
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: technology
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Electric Appliances & Precision Instruments. Japan's technology sector is hardware and components; there is no software-weighted equivalent.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1626"
+    conid: 55275781
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: communication_services
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 IT & Services, Others. Closer to IT services than to the telecom-and-media mix the same cell holds in other markets; compare across markets with that in mind.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1627"
+    conid: 54987230
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: utilities
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Electric Power & Gas.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "1633"
+    conid: 55275841
+    exchange: TSEJ
+    history_exchange: null
+    currency: JPY
+    asset_class: ETF
+    market: japan
+    country: JP
+    sector: real_estate
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      NF TPX-17 Real Estate.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── Europe: iShares STOXX Europe 600 sector UCITS, the EXV/EXH/EXI series ──
+  # All eleven resolved and served daily bars on Xetra on 2026-08-29 [MCP ✓].
+  #
+  # THESE MEASURE `eurozone`, AND THAT LABEL IS WIDER THAN THE FUNDS' NAMES AND
+  # NARROWER THAN THEIR HOLDINGS. STOXX Europe 600 includes UK, Swiss, Nordic and
+  # other non-euro constituents — roughly a quarter to a third of the index by
+  # weight — so a cell measured here is a EUROPEAN sector read carried on the
+  # eurozone row, not a currency-union one. It is recorded in every coverage_note
+  # below rather than in a commit message, because the reader of a cell is the
+  # person who needs to know. They were NOT put on `germany`: an ISHR STOXX EUR
+  # 600 BANKS fund holds European banks and listing it in Germany does not make
+  # it a read on German ones.
+  #
+  # These are the one case where measurement and tradability are the same
+  # instrument: EUR-denominated, UCITS, PRIIPs-clean, and buyable by this
+  # account. Everywhere else in this file the two steps are separate.
+
+  - symbol: "EXH1"
+    conid: 89005199
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: energy
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Oil & Gas. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXV7"
+    conid: 89005201
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: materials
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Chemicals. Chemicals is the larger half of European materials; the mining and metals half is a separate fund (EXV6, Basic Resources) and is NOT in this cell. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXH4"
+    conid: 89005156
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: industrials
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Industrial Goods & Services. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXV5"
+    conid: 89005153
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: consumer_discretionary
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Automobiles & Parts. Autos, not the whole discretionary complex: retail and travel & leisure are separate funds and are NOT in this cell. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXH3"
+    conid: 89005204
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: consumer_staples
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Food & Beverage. Personal & household goods is a separate fund and is NOT in this cell. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXV4"
+    conid: 89005184
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: healthcare
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Health Care. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXV1"
+    conid: 89005163
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: financials
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Banks. Banks only — insurance (EXH5) and financial services (EXH2) are separate funds and are NOT in this cell, so this is a rates-sensitivity read more than a financials one. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXV3"
+    conid: 89005149
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: technology
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Technology. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXV2"
+    conid: 89005166
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: communication_services
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Telecommunications. Telecoms only; European media sits in a separate fund and is NOT in this cell. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXH9"
+    conid: 89005173
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: utilities
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Utilities. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "EXI5"
+    conid: 89005214
+    exchange: IBIS
+    currency: EUR
+    asset_class: ETF
+    market: eurozone
+    country: EU
+    listing_domicile: DE
+    sector: real_estate
+    grid_measures: true
+    tradable: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares STOXX Europe 600 Real Estate. Measures STOXX Europe 600, which is WIDER than the eurozone: UK, Swiss and Nordic constituents are included, so read this as European rather than single-currency-area.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── Korea: KODEX sector funds on KRX ──────────────────────────────────────
+  # Three of the eleven sectors, and only three: the probe found KODEX funds for
+  # banks, steel, construction, transport, insurance and securities and nothing
+  # for energy, healthcare, technology, staples, utilities or real estate. The
+  # missing cells are left empty rather than filled with the nearest thing.
+  # [MCP ✓ 2026-08-29] — KRX responses carry NO delay flag, unlike every other
+  # non-US venue probed.
+
+  - symbol: "091170"
+    conid: 98798638
+    exchange: KRX
+    currency: KRW
+    asset_class: ETF
+    market: korea
+    country: KR
+    sector: financials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Samsung KODEX Banks. Banks only — the KODEX securities and insurance funds are separate and are NOT in this cell.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "117680"
+    conid: 98794609
+    exchange: KRX
+    currency: KRW
+    asset_class: ETF
+    market: korea
+    country: KR
+    sector: materials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Samsung KODEX Steel. Steel only, which for Korea is most of the sector's volatility but not all of its market value; there is no broad Korean materials fund on this route.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "117700"
+    conid: 98798315
+    exchange: KRX
+    currency: KRW
+    asset_class: ETF
+    market: korea
+    country: KR
+    sector: industrials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Samsung KODEX Construction. Construction and engineering. The KODEX transport fund (140710) also serves data and is the other half of Korean industrials; it is NOT in this cell, because only one instrument may measure a cell.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── Hong Kong ─────────────────────────────────────────────────────────────
+  # One sector. The probe found no Hang Seng sub-index funds beyond the tech one;
+  # the other ten cells stay empty.
+
+  - symbol: "3067"
+    conid: 445194075
+    exchange: SEHK
+    currency: HKD
+    asset_class: ETF
+    market: hong_kong
+    country: HK
+    sector: technology
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares Hang Seng TECH. Thirty large-cap China and Hong Kong technology names. Mainland-weighted, so it is closer to a China tech read than to a Hong Kong domestic one, and it is the most concentrated cell on the grid. [MCP ✓ 2026-08-29].
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── Single-country sector funds: UK, Israel, Brazil, Australia ────────────
+  # What a sector-by-sector sweep of the remaining markets actually turned up.
+  # All resolved and served daily bars on 2026-09-03 [MCP ✓], each on its own
+  # exchange in its own currency — no US-listed wrapper among them.
+  #
+  # It is a thin list, and the thinness is the finding. Outside the US, Europe
+  # and Japan the sector-fund ranges are two or three products deep, so most of
+  # these markets get one or two cells and the rest are declared under
+  # unmapped_cells at the end of this file. What did NOT survive the sweep is
+  # recorded there too, because a sector nobody probed and a sector probed and
+  # found empty are different claims.
+  #
+  # One near-miss worth recording: KSM.F144 "KSM ETF TEL-COMP" reads as a
+  # technology fund and is not one — TEL-COMP is Tel Bond-Composite, a corporate
+  # BOND index. Its bars gave it away, arriving with a close above the day's high
+  # and a range of a few hundredths. It is not in this file.
+
+  - symbol: "IUKP"
+    conid: 43490728
+    exchange: LSEETF
+    currency: GBP
+    asset_class: ETF
+    market: uk
+    country: GB
+    sector: real_estate
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      iShares UK Property, GBP, London-listed. UK equity REITs and property
+      companies. The ONLY single-sector UK fund the sweep found on this route in
+      sterling; the other ten uk cells are declared gaps. [MCP ✓ 2026-09-03]
+      delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "KSM.F77"
+    conid: 366248261
+    exchange: TASE
+    currency: ILS
+    asset_class: ETF
+    market: israel
+    country: IL
+    sector: financials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      KSM ETF Index Israeli Banks, ILS, Tel Aviv-listed. Banks only, and Israeli
+      banking is a five-name oligopoly, so this is the most concentrated cell on
+      the grid after hong_kong/technology — read it as a rates-and-credit view on
+      a handful of institutions. Tachlit lists a duplicate (TCH.F3) which is not
+      declared, because only one instrument may measure a cell.
+      [MCP ✓ 2026-09-03] delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "FIND11"
+    conid: 810312449
+    exchange: B3
+    currency: BRL
+    asset_class: ETF
+    market: brazil
+    country: BR
+    sector: financials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      It Now IFNC, BRL, B3-listed: the Bovespa financials index. Banks, insurers
+      and the exchange operator, so it is wider than japan/financials or
+      korea/financials, which are banks alone. [MCP ✓ 2026-09-03] delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "MATB11"
+    conid: 810313242
+    exchange: B3
+    currency: BRL
+    asset_class: ETF
+    market: brazil
+    country: BR
+    sector: materials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      It Now IMAT, BRL, B3-listed: the Bovespa basic-materials index. Iron ore,
+      pulp and steel, and one iron-ore major has long dominated it, so this is a
+      commodity-price read carried on two or three names rather than a diversified
+      materials sector. [MCP ✓ 2026-09-03] delayed 900.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "OZR"
+    conid: 86743072
+    exchange: ASX
+    currency: AUD
+    asset_class: ETF
+    market: australia
+    country: AU
+    sector: materials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      SPDR S&P/ASX 200 Resources, AUD, Sydney-listed. Miners and energy producers
+      together — Australia's resources index does not split the two — so this cell
+      carries australian ENERGY beta as well, and australia/energy is declared a
+      gap rather than measured here twice. BetaShares lists a near-duplicate (QRE)
+      which is not declared, because only one instrument may measure a cell.
+      [MCP ✓ 2026-09-03] delayed 1200.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "OZF"
+    conid: 86743068
+    exchange: ASX
+    currency: AUD
+    asset_class: ETF
+    market: australia
+    country: AU
+    sector: financials
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      SPDR S&P/ASX 200 Financials, AUD, Sydney-listed. Four banks are most of
+      Australian financials by weight, so this is a mortgage-book and funding-cost
+      read. BetaShares lists a near-duplicate (QFN) which is not declared.
+      [MCP ✓ 2026-09-03] delayed 1200.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "SLF"
+    conid: 45208985
+    exchange: ASX
+    currency: AUD
+    asset_class: ETF
+    market: australia
+    country: AU
+    sector: real_estate
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      SPDR S&P/ASX 200 Listed Property, AUD, Sydney-listed. A-REITs, weighted to
+      retail and industrial landlords. The conid is pinned because SLF is also
+      Sun Life Financial on two North American venues, which is exactly the
+      collision the explicit-conid escape hatch exists for.
+      [MCP ✓ 2026-09-03] delayed 1200.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: "ATEC"
+    conid: 407597432
+    exchange: ASX
+    currency: AUD
+    asset_class: ETF
+    market: australia
+    country: AU
+    sector: technology
+    grid_measures: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for this non-EU-domiciled fund, so it is a MEASUREMENT instrument only
+    macro_signal: true
+    collect_bars: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      BetaShares S&P/ASX Australian Technology, AUD, Sydney-listed. A short list
+      of software and marketplace names rather than a hardware complex, so it is
+      not comparable to japan/technology, which is electronics and components.
+      The conid is pinned because ATEC is also a NASDAQ-listed medical-device
+      company. [MCP ✓ 2026-09-03] delayed 1200.
+    options_unavailable_reason: >-
+      the vendor route serves only the US listing exchanges in
+      option_vendor.serves_listing_exchanges, and IBKR chain collection is
+      declared on the three European listings, so no chain is reachable for this
+      listing on either route
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── US broad ETFs ─────────────────────────────────────────────────────────
+  # priips_restricted: the cash ETF has no KID and cannot be bought from an EU
+  # retail account. Listed OPTIONS on it remain tradeable, which is why
+  # collect_chain stays true — see the note at the top of this file.
+  #
+  # top2_concentration is NULL throughout, deliberately. There is no free global
+  # holdings feed, and a plausible-looking number invented here would flow
+  # straight into the two-stock warning that exists to catch exactly that kind of
+  # fabrication. The coverage note carries what IS known about what each fund
+  # measures. Fill a value in only from a sourced, dated holdings disclosure.
+
+  - symbol: SPY
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: broad
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    # SPX measures us/broad. SPY is here for its option chain, not as a proxy.
+    grid_measures: false
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      US large-cap cash ETF. Tracks the same index as SPX, so it is an execution
+      venue for the view rather than a second measurement of it.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: QQQ
+    exchange: NASDAQ
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: technology
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    # No native US technology index is declared, so this fund measures the cell
+    # and carries the disclosure that goes with a fund standing in for a sector.
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Nasdaq-100, not a technology sector index: it excludes financials by
+      construction and includes large consumer and communication names. Read as a
+      US mega-cap growth proxy, and check its top-two weight before any claim
+      about the technology sector as a whole.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: IWM
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: broad
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    # Small-cap is a size factor, not a sector. SPX measures us/broad.
+    grid_measures: false
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      US small-cap. A size factor rather than a sector or a country, and its
+      spread against SPX is the breadth read, not a market level.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # ── US: the Select Sector SPDRs ───────────────────────────────────────────
+  # Nine of the eleven sectors, filling every US cell the two above do not.
+  # ALL RESOLVED AND SERVED DAILY BARS ON 2026-09-03 [MCP ✓], delayed 900.
+  #
+  # These are NOT the US-listed wrapper the anti-wrapper rule forbids. That rule
+  # is about the currency trade a FOREIGN listing embeds: measuring Korea on a
+  # USD fund reports a dollar return under Korea's name. A USD fund measuring the
+  # USD market embeds nothing, which is why QQQ has always measured us/technology.
+  #
+  # THEY ALL COLLECT CHAINS, and that is the point rather than a side effect.
+  # Before them, exactly two grid cells anywhere had a reachable option chain, so
+  # indicators 7, 8 and 9 — a fifth of the families — ranked over a pair. These
+  # nine multiply that by five. The cost is real and is not hidden: the vendor
+  # route's option_vendor.max_credits_per_run ceiling now spreads over nine more
+  # symbols, so each is collected less often, and until a run reaches one its
+  # cells report no_option_chain — a COLLECTION gap, counted against collection
+  # health, which is the honest status for a chain that is reachable and absent.
+  #
+  # top2_concentration is null throughout for the reason the header gives: there
+  # is no free global holdings feed, and every one of these is capitalisation
+  # weighted with a concentrated top, so the note says the test could not run
+  # rather than implying it passed.
+
+  - symbol: XLB
+    conid: 4215200
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: materials
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Materials Select Sector SPDR. Chemicals dominate the S&P 500 materials
+      sector and one industrial-gas name is habitually its largest holding, so
+      read this closer to chemicals than to mining. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLI
+    conid: 4215227
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: industrials
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Industrial Select Sector SPDR. Aerospace, machinery, rail and the parcel
+      carriers together; unlike japan/industrials, which is machinery alone, this
+      cell is the whole complex. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLY
+    conid: 4215215
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: consumer_discretionary
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Consumer Discretionary Select Sector SPDR. Two mega-caps — one retailer,
+      one carmaker — have long carried an outsized share of this sector, so check
+      the top-two weight before reading it as a consumer view. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLP
+    conid: 4215210
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: consumer_staples
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Consumer Staples Select Sector SPDR. Food, beverage, household products and
+      the big-box staples retailers — wider than eurozone/consumer_staples, which
+      is food and beverage only. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLV
+    conid: 4215205
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: healthcare
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Health Care Select Sector SPDR. Pharma, biotech, devices, insurers and
+      distributors together, which makes it a rates- and policy-sensitive read as
+      much as a drug-pipeline one. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLF
+    conid: 4215220
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: financials
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Financial Select Sector SPDR. Banks, insurers, exchanges and asset managers
+      together — NOT comparable to eurozone/financials, japan/financials or
+      korea/financials, all three of which are banks only. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLC
+    conid: 322317077
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: communication_services
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Communication Services Select Sector SPDR. Two mega-cap platforms dominate
+      the sector by construction, so this is the cell most likely to fail the
+      two-stock test once a holdings disclosure supplies the figure; telecoms are
+      a minority of it. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLU
+    conid: 4215235
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: utilities
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Utilities Select Sector SPDR. Regulated electric and multi-utilities; a
+      long-duration, rates-sensitive read. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLRE
+    conid: 209048377
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: real_estate
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Real Estate Select Sector SPDR. Equity REITs, weighted to towers, data
+      centres and industrial rather than to offices. [MCP ✓ 2026-09-03].
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: EEM
+    conid: 6604766                  # [CP ✓ 2026-09-10] "ISHARES MSCI EMERGING
+                                    # MARKET", STK, USD, ARCA among its valid
+                                    # exchanges, and it lists options.
+                                    # 690179584 — "Micro Ether Euro", an IND on
+                                    # CME in EUR — is what an unpinned row
+                                    # resolved to at 20:05 UTC, because every
+                                    # listing answers the bare ticker and the
+                                    # exact-match rule then takes the API's own
+                                    # first choice. The SAME search ranked this
+                                    # row correctly at 09:48 the same day, so the
+                                    # ranking is time-varying and the pin is what
+                                    # makes the answer deterministic.
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: emerging
+    country: XX
+    sector: broad
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    # `emerging` is not a declared grid market and this fund measures no cell.
+    # It is precisely the ETF-as-country fallacy the grid exists to avoid: the
+    # national indices are measured on their own native contracts.
+    grid_measures: false
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Broad emerging-market equity, heavily weighted to a handful of Asian
+      mega-caps and containing offshore listings rather than domestic shares.
+      Never a substitute for a national index.
+
+  # ── Commodity wrappers and proxies ────────────────────────────────────────
+  # Purity caveats are in references/commodities-universe.md and are repeated in
+  # commodity_proxies below, where the beta and R-squared that test them are
+  # declared. `sector` is the equity taxonomy; `bucket` is the commodity axis.
+  # They are orthogonal, and pooling them produces meaningless correlations.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: XLE
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: energy
+    bucket: energy
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    grid_measures: true
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      US energy majors. Concentrated in two integrated producers, so it reads as
+      a refining-and-integrated complex rather than as crude. Check the top-two
+      weight before treating it as an oil view.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: GDX
+    exchange: ARCA
+    currency: USD
+    asset_class: ETF
+    market: us
+    country: US
+    sector: materials
+    bucket: precious_monetary
+    priips_restricted: true
+    tradable: false
+    untradeable_reason: no PRIIPs KID for the cash ETF; options remain permitted
+    collect_chain: true
+    collect_bars: true
+    # Gold miners are equity beta on top of bullion, not a materials sector.
+    grid_measures: false
+    hedged: false
+    top2_concentration: null
+    coverage_note: >-
+      Gold MINERS. Operating leverage, jurisdiction risk and equity beta sit on
+      top of the bullion price; it is not a gold holding.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: FCX
+    exchange: NYSE
+    currency: USD
+    asset_class: STK
+    market: us
+    country: US
+    sector: materials
+    bucket: industrial_metals
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: ALB
+    exchange: NYSE
+    currency: USD
+    asset_class: STK
+    market: us
+    country: US
+    sector: materials
+    bucket: strategic_niche
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: CCJ
+    exchange: NYSE
+    currency: USD
+    asset_class: STK
+    market: us
+    country: CA
+    sector: energy
+    bucket: strategic_niche
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: NTR
+    exchange: NYSE
+    currency: USD
+    asset_class: STK
+    market: us
+    country: CA
+    sector: materials
+    bucket: agri_inputs
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: MOS
+    exchange: NYSE
+    currency: USD
+    asset_class: STK
+    market: us
+    country: US
+    sector: materials
+    bucket: agri_inputs
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+
+  # Downstream equity expressions for commodities this account cannot hold in any
+  # other form. The futures contract is prohibited and no accessible EU wrapper
+  # exists for the softs or the grains, so these are the only route — and each
+  # one is an equity first and a commodity second, which is what the beta and
+  # R-squared in commodity_proxies are there to measure.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: BARN
+    exchange: EBS
+    history_exchange: null          # [CP ✓ 2026-09-15] THE TSEJ INVERSION AGAIN,
+                                    # in Zurich. marketdata/history with
+                                    # exchange=EBS answers HTTP 500 "Chart data
+                                    # unavailable"; the same conid (5800796) with
+                                    # the exchange omitted serves 250 daily bars
+                                    # over 1y and 499 over 2y. Measured both ways
+                                    # before declaring.
+    currency: CHF
+    asset_class: STK
+    market: switzerland
+    country: CH
+    sector: consumer_staples
+    bucket: softs
+    collect_chain: false
+    collect_bars: true
+    grid_measures: false
+
+  - symbol: LISN
+    exchange: EBS
+    history_exchange: null          # [CP ✓ 2026-09-15] as BARN above: EBS on the
+                                    # request answers HTTP 500, the exchange
+                                    # omitted serves 249 daily bars over 1y and
+                                    # 498 over 2y. conid 14802876.
+    currency: CHF
+    asset_class: STK
+    market: switzerland
+    country: CH
+    sector: consumer_staples
+    bucket: softs
+    collect_chain: false
+    collect_bars: true
+    grid_measures: false
+
+  # JDEP's SERIES IS DEAD, and this row stops collecting rather than pretending.
+  # [CP 2026-09-15] It failed backfill with HTTP 500 "Contract details are not
+  # available", which is NOT the exchange inversion BARN and LISN above answer
+  # to, and the probe says why: /iserver/secdef/search returns this name on
+  # GETTEX now, /info reports valid exchanges SMART,VSE,SWB,GETTEX,EUIBSI with
+  # AEB ABSENT, and the exchange omitted serves 32 bars that STOP ON 2026-04-29.
+  # The Amsterdam listing this row named is gone and there is no venue serving a
+  # current price.
+  #
+  # Declaring history_exchange: null would have made the target "succeed" while
+  # collecting a series that ended months ago — the instrument-level form of the
+  # rule that refuses taiwan: a dead series declared as live is worse than an
+  # honest absence. So collect_bars is false: the nightly run stops failing on it
+  # and nothing downstream is handed a stale series.
+  #
+  # The ROW STAYS because deleting it would quietly delete a declared capability.
+  # JDEP is the only KC (coffee) entry in commodity_proxies below, and the KC
+  # futures root names it in its own untradeable_reason. Coffee therefore has no
+  # LIVE equity proxy on this route, which is a universe decision — find a
+  # replacement roaster, or say coffee has no equity expression — and it wants a
+  # probe of its own rather than a field flipped inside a collector fix. Carried
+  # open in ROADMAP.md.
+  - symbol: JDEP
+    exchange: AEB
+    currency: EUR
+    asset_class: STK
+    market: eurozone
+    country: NL
+    sector: consumer_staples
+    bucket: softs
+    collect_chain: false
+    collect_bars: false             # [CP 2026-09-15] delisted from AEB; the only
+                                    # series any venue serves ends 2026-04-29.
+    grid_measures: false
+
+  - symbol: BG
+    exchange: NYSE
+    currency: USD
+    asset_class: STK
+    market: us
+    country: US
+    sector: consumer_staples
+    bucket: grains_oilseeds
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+
+  # ── EU-listed, PRIIPs-clean ───────────────────────────────────────────────
+  # Preference order in config.yaml puts single-stock options first and
+  # EUREX-listed UCITS options second, precisely to avoid the US ETF route.
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  # All three EU rows pin their conid. The resolver takes the first EXACT ticker
+  # match and /iserver/secdef/search ranks by its own relevance, which for a
+  # dual-listed share is not the same as correctness: ASML resolved to the
+  # NASDAQ NY-registered line (117902840) under a row declaring AEB and EUR, and
+  # collected that listing's US chain for a whole session. SAN and TTE happened
+  # to resolve correctly, on the same ordering that got ASML wrong, so they are
+  # pinned too. references/ibkr-playbook.md carries the readings.
+  - symbol: ASML
+    conid: 117589399                # AEB, "ASML HOLDING NV", NL. [MCP 2026-09-10]
+                                    # 117902840 is the NASDAQ NY-registered line
+                                    # and is what the resolver picked instead.
+    exchange: AEB
+    option_exchange: FTA            # [MCP 2026-08-24] Euronext Amsterdam
+                                    # derivatives. This conid lists EUREX and FTA
+                                    # and IBKR's own current_exchange for it is
+                                    # FTA; the Session 7 capture in
+                                    # tests/fixtures/mcp_capture is that reading.
+    currency: EUR
+    asset_class: STK
+    market: eurozone
+    country: NL
+    sector: technology
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: SAN
+    conid: 30314144                 # BM, "BANCO SANTANDER SA", ES. [MCP 2026-09-10]
+                                    # 12442 is the NYSE sponsored ADR and is what
+                                    # a search can return instead.
+    exchange: BM
+    history_exchange: null          # [CP ✓ 2026-09-10] THE TSEJ INVERSION AGAIN.
+                                    # marketdata/history with exchange=BM answers
+                                    # HTTP 500 "Chart data unavailable"; the SAME
+                                    # conid with the exchange omitted serves daily
+                                    # bars. Measured both ways before declaring.
+    option_exchange: EUREX          # [MCP 2026-09-10] this conid lists EUREX and
+                                    # MEFFRV; EUREX is IBKR's own current_exchange
+                                    # for it.
+    currency: EUR
+    asset_class: STK
+    market: spain
+    country: ES
+    sector: financials
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+  - symbol: TTE
+    conid: 29612193                 # SBF, "TOTALENERGIES SE", FR. [MCP 2026-09-10]
+                                    # 837140579 is the NYSE line.
+    exchange: SBF
+    history_exchange: null          # [CP ✓ 2026-09-10] as SAN above: exchange=SBF
+                                    # answers HTTP 500 "Chart data unavailable",
+                                    # the exchange omitted serves daily bars.
+    option_exchange: MONEP          # [MCP 2026-09-10] this conid lists EUREX and
+                                    # MONEP; MONEP is IBKR's own current_exchange
+                                    # for it, and is the Euronext Paris venue the
+                                    # share itself trades on.
+    currency: EUR
+    asset_class: STK
+    market: eurozone
+    country: FR
+    sector: energy
+    bucket: energy
+    collect_chain: true
+    collect_bars: true
+    grid_measures: false
+    dividend_yield: null            # UNVERIFIED — not sourced. See the header.
+    dividend_yield_as_of: null
+
+
+# ── Cells no instrument measures, and why ───────────────────────────────────
+#
+# EVERY market x sector pair that no row above measures MUST appear here with a
+# reason. The loader refuses a universe where a pair is neither measured nor
+# declared, and refuses a pair claimed twice.
+#
+# That rule is the whole point of this block. The grid used to mark an unmapped
+# cell `inapplicable` by INFERRING it from the absence of a grid_measures row —
+# the one move this design refuses everywhere else, and the same shape as the
+# `options_unavailable_reason` gap that was closed earlier: "nobody looked" and
+# "somebody looked and there is nothing" are different claims, and an absent flag
+# does not distinguish them. A reason written here is a claim a person made and
+# can be held to; a blank is not.
+#
+# These cells are the AMBITION GAP, not a collection failure — no collector run
+# will fill one — so they are excluded from the collection-health denominator and
+# reported as their own ratio. Closing one means finding an instrument, which
+# means a probe, which means this block shrinks.
+#
+#   market    a declared market.
+#   sectors   an explicit list, or the literal `remaining` for every sector of
+#             that market not measured and not claimed by an earlier block.
+#             Explicit blocks are declared BEFORE the market's `remaining` block.
+#   reason    why, in words, in the cell. It reaches the grid verbatim.
+
+unmapped_cells:
+
+  - market: germany
+    sectors: remaining
+    reason: >-
+      no single-country German sector fund resolves on this route. German sector
+      exposure is measured on the eurozone row instead, from the iShares STOXX
+      Europe 600 series, which is a EUROPEAN read rather than a German one — and
+      that is a coarser measurement, not a substitute. A DAX-sector index would be
+      a different index, not a finer one, and none is listed.
+
+  - market: spain
+    sectors: remaining
+    reason: >-
+      no IBEX sector fund exists on this route, and no Spanish single-sector ETF
+      of any provider resolves. Spain keeps its broad cell on IBEX35 and its macro
+      series; European sector exposure is on the eurozone row.
+
+  - market: france
+    sectors: remaining
+    reason: >-
+      no single-country French sector fund resolves on this route, exactly as for
+      germany and spain. French sector exposure is measured on the eurozone row,
+      from the iShares STOXX Europe 600 series, which is a EUROPEAN read rather
+      than a French one — a coarser measurement and not a substitute. A CAC
+      sector index would be a different index, not a finer one, and none is
+      listed.
+
+  - market: italy
+    sectors: remaining
+    reason: >-
+      no FTSE MIB sector fund exists on this route, and no Italian single-sector
+      ETF of any provider resolves. Italy keeps its broad cell on CSMIB and its
+      macro series; European sector exposure is on the eurozone row.
+
+  - market: uk
+    sectors: remaining
+    reason: >-
+      iShares UK Property is the only single-sector fund the sweep found listed in
+      London in sterling. The rest of the LSE sector range — the Invesco XLxS and
+      XLxP series — tracks the US S&P sectors and is denominated against them, so
+      declaring one here would report an AMERICAN sector under Britain's name,
+      which is the wrapper failure this file exists to prevent.
+
+  - market: korea
+    sectors: remaining
+    reason: >-
+      IBKR's KRX ETF coverage on this route is banks, steel, construction and
+      transport, and nothing else. Probed 2026-09-03 and returning NO contract:
+      091160 (KODEX Semiconductor), 091180 (KODEX Autos), 117460 (KODEX Energy &
+      Chemicals), 266420 (KODEX Healthcare), 139260 (TIGER 200 IT). The gap is in
+      what the route serves, not in what Korea lists.
+
+  - market: hong_kong
+    sectors: remaining
+    reason: >-
+      no Hang Seng sub-index fund is listed beyond the TECH one that measures
+      hong_kong/technology. What SEHK does carry in this shape are CHINA sector
+      funds — Global X China Semiconductor (3191) and its siblings — which are
+      mainland reads quoted in HKD: the wrong country for this row and the wrong
+      currency for china's.
+
+  - market: china
+    sectors: remaining
+    reason: >-
+      Stock Connect northbound reaches Shanghai-listed funds, which is how
+      china/broad is measured, but no CSI 300 SECTOR fund resolves on that route.
+      The China sector funds that do resolve are SEHK-listed and quoted in HKD,
+      and an HKD fund under a CNY market's name decomposes against EURCNY, which
+      does not describe it — the same objection that rejects the FTSE China A50.
+
+  - market: israel
+    sectors: remaining
+    reason: >-
+      TASE's two ETF families are broad-market, foreign-index and bond trackers:
+      of roughly 210 KSM funds and 119 Tachlit funds, the only ISRAELI sector
+      index among them is banks, which measures israel/financials. Sector
+      granularity beyond banks is not listed rather than not looked for.
+
+  - market: brazil
+    sectors: remaining
+    reason: >-
+      the It Now index-fund family covers the Bovespa financials and basic
+      materials indices and stops there. B3's remaining listed funds are broad,
+      small-cap, dividend, ESG and fixed-income products, none of which is a
+      sector.
+
+  - market: australia
+    sectors: [energy]
+    reason: >-
+      Australia's resources index does not separate miners from energy producers,
+      so OZR — which measures australia/materials — already carries this sector's
+      constituents. Mapping it here as well would put ONE series in two cells and
+      report their correlation as a finding. Declared a gap rather than measured
+      twice.
+
+  - market: australia
+    sectors: remaining
+    reason: >-
+      the ASX sector-fund range is resources, financials, listed property and
+      technology, all four of which are mapped above. No ASX-listed fund covers
+      the remaining sectors.
+
+  - market: canada
+    sectors: remaining
+    reason: >-
+      the TSX sector range IBKR serves is the iShares S&P/TSX Capped sector
+      family, and it was not swept: canada was declared on its broad cell and its
+      chain, which is what the market axis was widened for. This is a gap nobody
+      has looked into rather than one somebody looked into and found empty, and
+      it is written that way on purpose — the two are different claims and only
+      the first is worth a probe.
+
+  - market: india
+    sectors: remaining
+    reason: >-
+      no NSE sector fund was probed. The Indian ETF range is broad-index, gold and
+      debt-heavy and the sector products that exist are bank and IT trackers, but
+      none of that was measured on this route, so this is an unswept gap rather
+      than an empty one.
+
+# ── Futures roots, for curve_collector ──────────────────────────────────────
+#
+# DATA USE ONLY. A futures contract is a prohibited instrument and is never
+# returned as a tradeable candidate in any code path. The curve drives WRAPPER
+# SELECTION — in contango beyond
+# commodities.term_structure.contango_max_annualised_for_futures_wrapper, a
+# futures-tracking product is rejected in favour of producer equity or a physical
+# ETC — so the term structure is required. See instruments.futures_data_use.
+#
+# Curve SHAPE history is not retrievable retrospectively, exactly as with option
+# chains. Whether backwardation is steepening or flattening carries more
+# information than its level.
+#
+# Native exchange is mandatory: SMART returns empty for futures.
+
+futures_roots:
+  # tradable is false on EVERY root: a futures contract is a prohibited
+  # instrument, full stop. macro_signal is true on every root: the curve is a
+  # regime input whether or not the commodity can be held.
+  #
+  # untradeable_reason distinguishes the two cases that matter. A root with an
+  # accessible wrapper can still be expressed — through a physical ETC or a
+  # producer equity, chosen by the curve. A root without one is a macro signal
+  # and nothing else, and the only expression is the equity proxies declared in
+  # commodity_proxies below.
+  #
+  # OLIVE OIL IS ABSENT ON PURPOSE. No futures market, no ETF, no viable equity
+  # expression: there is nothing to track and nothing to trade, so it earns no
+  # row rather than a row that can never resolve.
+
+  - {root: CL,  exchange: NYMEX, currency: USD, bucket: energy,             seasonal: false, description: WTI crude,
+     tradable: false, macro_signal: true, untradeable_reason: futures contract prohibited; expressible via physical ETC or producer equity,
+     cot_series: COT_WTI, inventory_series: WCESTUS1, history_series: DCOILWTICO}
+  - {root: BZ,  exchange: NYMEX, currency: USD, bucket: energy,             seasonal: false, description: Brent crude,
+     tradable: false, macro_signal: true, untradeable_reason: futures contract prohibited; expressible via physical ETC or producer equity,
+     history_series: DCOILBRENTEU}
+  - {root: NG,  exchange: NYMEX, currency: USD, bucket: energy,             seasonal: true,  description: Henry Hub natural gas,
+     tradable: false, macro_signal: true, untradeable_reason: futures contract prohibited; expressible via producer equity,
+     history_series: DHHNGSP}
+  - {root: HO,  exchange: NYMEX, currency: USD, bucket: energy,             seasonal: true,  description: heating oil,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited; no accessible retail wrapper, macro signal only'}
+  - {root: RB,  exchange: NYMEX, currency: USD, bucket: energy,             seasonal: true,  description: RBOB gasoline,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited; no accessible retail wrapper, macro signal only'}
+  - {root: TTF, exchange: ICEEU, currency: EUR, bucket: energy,             seasonal: true,  description: Dutch TTF natural gas,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited; no accessible retail wrapper, macro signal only'}
+  - {root: GC,  exchange: COMEX, currency: USD, bucket: precious_monetary,  seasonal: false, description: gold,
+     tradable: false, macro_signal: true, untradeable_reason: futures contract prohibited; expressible via EU-listed physical ETC,
+     cot_series: COT_GOLD}
+  - {root: SI,  exchange: COMEX, currency: USD, bucket: precious_monetary,  seasonal: false, description: silver,
+     tradable: false, macro_signal: true, untradeable_reason: futures contract prohibited; expressible via EU-listed physical ETC}
+  - {root: HG,  exchange: COMEX, currency: USD, bucket: industrial_metals,  seasonal: false, description: copper,
+     tradable: false, macro_signal: true, untradeable_reason: futures contract prohibited; expressible via producer equity,
+     cot_series: COT_COPPER, history_series: PCOPPUSDM}
+  - {root: ZC,  exchange: CBOT,  currency: USD, bucket: grains_oilseeds,    seasonal: true,  description: corn,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal, expressed via the fertiliser complex and Bunge'}
+  - {root: ZW,  exchange: CBOT,  currency: USD, bucket: grains_oilseeds,    seasonal: true,  description: wheat,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal, expressed via the fertiliser complex and Bunge'}
+  - {root: ZS,  exchange: CBOT,  currency: USD, bucket: grains_oilseeds,    seasonal: true,  description: soybeans,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal, expressed via the fertiliser complex and Bunge'}
+  - {root: KC,  exchange: NYBOT, currency: USD, bucket: softs,              seasonal: true,  description: coffee,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal, expressed via JDE Peet''s'}
+  - {root: CC,  exchange: NYBOT, currency: USD, bucket: softs,              seasonal: true,  description: cocoa,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal, expressed via Barry Callebaut and Lindt'}
+  - {root: SB,  exchange: NYBOT, currency: USD, bucket: softs,              seasonal: true,  description: sugar,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal only, no viable equity proxy'}
+  - {root: CT,  exchange: NYBOT, currency: USD, bucket: softs,              seasonal: true,  description: cotton,
+     tradable: false, macro_signal: true, untradeable_reason: 'futures contract prohibited and no accessible EU wrapper; macro signal only, no viable equity proxy'}
+
+
+# ── Commodity proxies, and the regression that tests each one ───────────────
+#
+# A producer equity is never a clean commodity exposure. Every proxy declares
+# the reference series it is regressed against, monthly, over
+# commodities.proxies.min_observations_months. Below commodities.proxies.min_r2
+# the proxy is flagged unreliable and MUST NOT be presented as commodity
+# exposure at all — a diversified specialty chemicals company is not lithium.
+#
+#   reference_kind: macro  -> a declared macro.series id
+#                   curve  -> the front-month history in curve_snapshots for a
+#                             tracked root. Self-collected, so it only becomes
+#                             usable as the curve series accumulates.
+#                   none   -> no free reference price exists. The regression is
+#                             not run and the proxy is unreliable BY DECLARATION,
+#                             with the reason carried through to the output.
+
+commodity_proxies:
+  - {symbol: XLE,  root: CL, reference: DCOILWTICO,   reference_kind: macro,
+     note: "US energy majors: integrated and refining margins, not crude alone"}
+  - {symbol: TTE,  root: BZ, reference: DCOILBRENTEU, reference_kind: macro,
+     note: "European integrated major; Brent-linked but carries refining and utility earnings"}
+  - {symbol: FCX,  root: HG, reference: PCOPPUSDM,    reference_kind: macro,
+     note: "materially gold-exposed as well as copper, and high equity beta"}
+  - {symbol: GDX,  root: GC, reference: GC,           reference_kind: curve,
+     note: "gold MINERS: operating leverage and jurisdiction risk on top of bullion"}
+  - {symbol: NTR,  root: NG, reference: DHHNGSP,      reference_kind: macro,
+     note: "nitrogen tracks natural gas via Haber-Bosch; gas is 70-80% of ammonia cost"}
+  - {symbol: MOS,  root: NG, reference: DHHNGSP,      reference_kind: macro,
+     note: "phosphate and potash: an input-cost linkage to gas, weaker than nitrogen's"}
+  - {symbol: BG,   root: ZC, reference: ZC,           reference_kind: curve,
+     note: "an agricultural PROCESSOR: crush margins can widen as crop prices fall"}
+  - {symbol: JDEP, root: KC, reference: KC,           reference_kind: curve,
+     note: "roaster: hedged input costs and brand pricing power damp the pass-through"}
+  - {symbol: BARN, root: CC, reference: CC,           reference_kind: curve,
+     note: "cost-plus contracts pass cocoa through, so the beta is to volumes as much as price"}
+  - {symbol: LISN, root: CC, reference: CC,           reference_kind: curve,
+     note: "premium chocolate: brand pricing power makes this the weaker of the two cocoa proxies"}
+  - {symbol: ALB,  root: null, reference: null,       reference_kind: none,
+     note: "no free lithium carbonate price series exists, and ALB is a diversified specialty chemicals company rather than a lithium pure-play"}
+  - {symbol: CCJ,  root: null, reference: null,       reference_kind: none,
+     note: "spot uranium is thin and the term-contract market that matters is not free; CCJ also carries contracted pricing and equity beta"}

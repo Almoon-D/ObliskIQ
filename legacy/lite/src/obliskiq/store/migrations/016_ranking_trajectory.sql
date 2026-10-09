@@ -1,0 +1,46 @@
+-- 016 — a ranked row carries the trajectory of the cell behind it, not only its
+-- level.
+--
+-- A ranked row states ONE value. "94th percentile" is a level, and a level says
+-- nothing about whether it is still building or already unwinding — which is the
+-- first question anybody asks of it, and the difference between a setup and a
+-- move that has already happened.
+--
+-- The answer was in the store the whole time. The same market x sector cell at
+-- the same as_of already holds returns at five horizons in local and base
+-- currency, realised vol at every configured tenor with the slope between the
+-- ends, the maximum drawdown and the distance from both extremes. Nothing here
+-- computes any of that again: `Rankings._cells_for` already reads every measured
+-- leaf of the ranked cells in ONE query to build the conditions map, and this
+-- column is where a chosen, bounded subset of them comes to rest so that one
+-- `get_grid_rankings` call shows level AND trajectory. Without it a session
+-- needed a `get_grid_cell` call per ranked row, which is the raw-table reading
+-- the four views exist to replace.
+--
+-- CHOSEN and bounded, in `rankings.TRAJECTORY_LEAVES` with a comment saying why
+-- each earns its space. Not every leaf: a cell holds thirty-seven of them and a
+-- row carrying thirty-seven numbers is the raw table again.
+--
+-- JSON, and each leaf carries its own value, status, window and units:
+--
+--   {"return_21d_base": {"value": -0.031, "status": "stale",
+--                        "window": "21d (22 bars)", "units": "decimal"}}
+--
+-- The status and the window are the point, not decoration. A market x sector
+-- cell is fed by four stores on four cadences, so a fresh percentile beside a
+-- stale return is an ordinary and correct row — and a table that cannot say
+-- which is which reads as healthier than the store is. That is exactly what
+-- migration 012 added `status` for one column over; this applies the same rule
+-- to every value that travels beside it.
+--
+-- A leaf the store could not measure is ABSENT from the map. Never zero, and
+-- never a null placeholder: zero is a reading, and absence is not.
+--
+-- Column only, so the primary key and every existing row survive. NULL on a row
+-- written before this migration — unrecorded, which is not the same as a cell
+-- that held none of the leaves, and back-filling one from today's grid would
+-- stamp today's numbers on a table built from an older one.
+
+PRAGMA foreign_keys = ON;
+
+ALTER TABLE grid_rankings ADD COLUMN trajectory TEXT;

@@ -1,0 +1,33 @@
+{
+ "note": "SYNTHETIC. Ragged: three keyed contracts, two ivs. Zipping past the short column would pair a strike with another strike's vol.",
+ "s": "ok",
+ "optionSymbol": [
+  "A261218C00100000",
+  "A261218C00105000",
+  "A261218C00110000"
+ ],
+ "expiration": [
+  1797627600,
+  1797627600,
+  1797627600
+ ],
+ "side": [
+  "call",
+  "call",
+  "call"
+ ],
+ "strike": [
+  100,
+  105,
+  110
+ ],
+ "iv": [
+  0.3,
+  0.28
+ ],
+ "underlyingPrice": [
+  101.0,
+  101.0,
+  101.0
+ ]
+}

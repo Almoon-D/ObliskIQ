@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "portfolio_decisions": [
+    {
+      "ticker": "005930.KS",
+      "action": "SELL",
+      "conviction": 0.8,
+      "size_pct": 0.0,
+      "thesis": "Entry thesis invalidated: price broke the accumulation support that anchored the setup.",
+      "cites_trigger_id": "smsn-t1",
+      "win_probability": 0.62,
+      "payoff_ratio": 1.8,
+      "reasoning": "Trigger smsn-t1 fired (price below 61000); honoring the pre-committed exit."
+    }
+  ]
+}

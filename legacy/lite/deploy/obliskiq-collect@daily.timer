@@ -1,0 +1,76 @@
+# The daily sequence:
+#
+#   nav -> backfill -> freshness check -> chain -> curve -> vendor-chain -> macro
+#
+# Ordered by what a missed day costs, irrecoverable first. `nav` is one call and
+# leads because /portfolio/{account}/ledger serves today's net liquidation value
+# and no other, so a day not recorded is an observation the drawdown breaker
+# never gets. `chain` — the three European listings — runs ahead of
+# `vendor-chain`, which spends money on data that can be re-bought later, so a
+# marketdata.app outage can no longer cost a European snapshot.
+# src/obliskiq/collect/cli.py DAILY_SEQUENCE is authoritative;
+# tests/test_deploy_units.py fails if this comment and it disagree.
+#
+# Timed after the US close and before the Asian open, so the chain and curve
+# snapshots capture a settled book.
+#
+# 20:15 UTC is MEASURED, not chosen [CP 2026-09-11]. A fixed option basket was
+# sampled across the day: with the market open every contract is priced; at 21:08
+# UTC — an hour after the close — 7 of 8 SPY and 7 of 8 QQQ contracts are still
+# priced, quote state frozen; and the Phase 6 run at 23:04 found ~34 of ~4,300.
+# So US option prices survive the close by hours and the collapse happens between
+# 21:08 and 23:04. The previous 22:30 was on the far side of that transition.
+# 20:15 sits at the START of a window at least an hour wide, which is margin
+# rather than luck; RandomizedDelaySec below spreads the firing across 20:15-20:20
+# and stays inside it.
+#
+# AND THE RUN IS AN HOUR LONG, so the hour to choose for is where it ENDS. The
+# chain step walked 24 targets in 57 minutes on 2026-09-11; a run started at 21:12
+# recorded 899 of 4,192 rows priced (21%) because its later targets fell past the
+# decay, while a basket sampled at 21:08 was 87% priced. A 20:15 start finishes
+# near 21:15 and keeps the whole walk inside the window. Moving this later eats
+# the margin from the far end first, and does it silently.
+# references/ibkr-playbook.md has the readings.
+#
+# WHICH IS WHY THE SEQUENCE IS BOUNDED PER STEP and not only as a process.
+# collectors.daily.step_deadline_seconds caps each step so a slow one cannot push
+# the ones behind it past the decay, and so the whole run cannot reach the unit's
+# TimeoutStartSec — where a SIGTERM would take every remaining step with it and
+# Restart=on-failure would re-run the lot. deploy/crontab.example fires this same
+# sequence at this same hour; tests/test_deploy_units.py compares the two times.
+#
+# THE EUROPEAN NAMES ARE SERVED BY THIS HOUR TOO, and that was measured rather
+# than assumed [CP 2026-09-14, Phase 7]. EUREX, FTA and MONEP close at 15:30 UTC,
+# so this run reaches ASML, SAN and TTE 4h45m after their own close. Six hourly
+# ticks on one fixed basket found 16 of 24 near-ATM contracts priced at 20:06 —
+# SAN 8 of 8, TTE 6 of 8, ASML 2 of 8. It is a STEP at the close and then a
+# plateau, not a decay: nothing degrades further between 16:06 and 20:06, and TTE
+# was back to 8 of 8 at 18:06.
+#
+# An earlier comment here recorded ASML at 1 of 8 and TTE at 0 of 8 from a single
+# 21:08 sample and concluded no US-close hour could serve them. Six ticks
+# disagree, and NO SECOND TIMER IS DECLARED. ASML is the one name the close
+# genuinely costs, and docs/DECISIONS.md says why a second unit is the wrong
+# price for it.
+#
+# Adjust OnCalendar to the markets you actually
+# track; the one thing that matters is that it fires EVERY day the markets trade,
+# because option-chain and futures-curve history cannot be retrieved
+# retrospectively from IBKR, so a day missed on the three EUROPEAN listings is
+# gone permanently. US chains run through vendor-chain, where history is
+# retrievable and a missed day is a cost rather than a loss.
+#
+# Persistent=true is load-bearing: if the VM was down when the timer should have
+# fired, the run happens at boot rather than being skipped silently.
+[Unit]
+Description=obliskiq-lite daily collector sequence
+Documentation=file:/opt/obliskiq/docs/COLLECTORS.md
+
+[Timer]
+OnCalendar=Mon..Fri 20:15 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=obliskiq-collect@daily.service
+
+[Install]
+WantedBy=timers.target

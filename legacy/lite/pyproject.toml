@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obliskiq-lite-mcp"
+version = "0.1.0"
+description = "MCP server owning the SQLite store, collectors and computation for the obliskiq-lite volatility-dislocation workflow."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Alvaro de Luna Luque" }]
+keywords = ["mcp", "interactive-brokers", "ibkr", "options", "volatility", "macro"]
+
+dependencies = [
+    "httpx>=0.27,<0.29",
+    # The floor is set by what the server actually uses: streamable_http_app()
+    # with its own lifespan, stateless_http, and ToolAnnotations. 1.2 predates
+    # all three. The ceiling holds at the 1.x tool API.
+    "mcp>=1.10,<2.0",
+    "numpy>=1.26,<3.0",
+    "scipy>=1.11,<2.0",
+    "PyYAML>=6.0,<7.0",
+    "python-dotenv>=1.0,<2.0",
+    "cryptography>=42.0",
+    # Declared rather than relied on through mcp: the server imports Starlette
+    # directly for the bearer middleware and the health route, and calls uvicorn
+    # itself. A transitive pin that moved would break both without warning.
+    "starlette>=0.37",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-asyncio>=0.23", "respx>=0.21", "ruff>=0.6"]
+
+[project.scripts]
+# The collectors are a STANDALONE entrypoint, deliberately separate from the MCP
+# server process: they bind no port, hold no session and need no human, so the
+# same image runs unchanged on a small always-on VM under a systemd timer.
+obliskiq-collect = "obliskiq.collect.cli:main"
+
+# The computation layer is a third entrypoint, separate again: it reads the store
+# the collectors filled, touches no network, and writes the grid and the derived
+# engine state. A grid build can therefore be scheduled beside the collectors
+# without a second set of credentials.
+obliskiq-compute = "obliskiq.compute.cli:main"
+
+# The MCP server, and the only entrypoint that binds a port. It holds the
+# position ledger and can write to it, so it is deliberately NOT
+# runnable from the collector or compute units: different blast radius, its own
+# unit, its own environment file, and an auth token it refuses to start without
+# off loopback.
+obliskiq-mcp = "obliskiq.server.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Almoon-D/ObliskIQ-lite-MCP"
+Source = "https://github.com/Almoon-D/ObliskIQ-lite-MCP"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+obliskiq = ["store/migrations/*.sql", "py.typed"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+# Pre-existing and deliberately standalone: it runs under bare python3 with only
+# PyYAML installed, and its %-formatting and typographic characters are
+# load-bearing for the SKILL.md threshold scan. Neither linted nor reformatted.
+extend-exclude = ["tests/test_skill_config_consistency.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests deliberately assert on several related facts in one statement, and the
+# httpx MockTransport handler signature takes a request every handler ignores.
+"tests/*" = ["ARG001", "PT018"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning:obliskiq.*"]

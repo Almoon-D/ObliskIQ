@@ -1,0 +1,30 @@
+# Secrets and runtime state
+.env
+.env.*
+!.env.example
+data/state.json
+data/state.json.tmp
+data/state.json.corrupt-*
+data/manual_incidents.yaml
+data/cron.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

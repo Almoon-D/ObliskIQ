@@ -1,0 +1,13 @@
+{
+    "resource": "https://api.ibkr.com/v1/api/mcp-public",
+    "authorization_servers": [
+        "https://api.ibkr.com/oauth2"
+    ],
+    "scopes_supported": [
+        "mcp.read",
+        "mcp.write"
+    ],
+    "bearer_methods_supported": [
+        "header"
+    ]
+}

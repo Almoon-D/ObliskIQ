@@ -1,0 +1,20 @@
+# The weekly all-gates census, per data.universe_census_frequency.
+#
+# Counts how many option contracts clear every gate SIMULTANEOUSLY. If that
+# count is routinely below census.min_viable_contracts, either the gates are
+# miscalibrated or the sleeve is too small — and the census reports it rather
+# than relaxing anything. Run it weekly and read the trend, not one week.
+#
+# Saturday, after the week's last chain snapshot has settled.
+[Unit]
+Description=obliskiq-lite weekly option-universe census
+Documentation=file:/opt/obliskiq/docs/COMPUTE.md
+
+[Timer]
+OnCalendar=Sat 06:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+Unit=obliskiq-compute@census.service
+
+[Install]
+WantedBy=timers.target

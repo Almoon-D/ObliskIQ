@@ -1,0 +1,9 @@
+{
+  "session": "2026-09-03",
+  "route": "connector",
+  "note": "Live capture through the IBKR Custom Connector (the remote MCP endpoint at https://api.ibkr.com/v1/api/mcp-public), taken from a headless cloud container with no browser and no human at a terminal. Both underlyings read top-status REALTIME with a VALID implied-vol-underlying; SPY was pre-open in the US and ASML was trading on AEB. Recorded because ASML shows a 0.0 percentile on a VALID current IV, which is the case that separates a genuine 0th-percentile reading from the invalid-IV artefact Session 6 recorded. See references/ibkr-playbook.md.",
+  "underlyings": [
+    {"symbol": "SPY", "conid": 756733, "exchange": "SMART"},
+    {"symbol": "ASML", "conid": 117589399, "exchange": "AEB"}
+  ]
+}

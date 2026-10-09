@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "description": "Hand-editable region/theme config for the Asymmetry Hunter GDELT-pulse component (h). For each region we query the free GDELT 2.0 DOC API (article volume + average tone); Welford running stats turn the latest reading into a volume z-score (spike) and we require negative tone for a geopolitical-stress anomaly. 'asset_map' is the STATIC mapping from an anomalous region to the affected assets and their stance under stress (long = benefits from the stress, short = hurt). Only assets present in both this map and the Hunter's ASSET_SPECS receive a vote; everything else stays neutral (no view).",
+  "updated_at": "2026-06-16",
+  "regions": {
+    "MIDDLE_EAST": {
+      "query": "(Iran OR Israel OR Gaza OR Hormuz OR \"Middle East\")",
+      "theme": "conflict"
+    },
+    "EUROPE": {
+      "query": "(Ukraine OR Russia OR NATO OR \"European Union\")",
+      "theme": "conflict"
+    },
+    "ASIA": {
+      "query": "(Taiwan OR \"South China Sea\" OR \"North Korea\")",
+      "theme": "conflict"
+    },
+    "LATAM": {
+      "query": "(Venezuela OR \"Latin America\") (crisis OR sanctions OR military)",
+      "theme": "politics"
+    }
+  },
+  "asset_map": {
+    "MIDDLE_EAST": {"USO": "long", "GLD": "long", "ITA": "long", "SPY": "short"},
+    "EUROPE": {"EWG": "short", "FXE": "short", "GLD": "long", "ITA": "long", "USO": "long"},
+    "ASIA": {"EWJ": "short", "GLD": "long", "ITA": "long", "SPY": "short"},
+    "LATAM": {"EWZ": "short", "GLD": "long"}
+  }
+}

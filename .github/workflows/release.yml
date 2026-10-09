@@ -1,0 +1,79 @@
+name: Release
+
+# Publishes a GitHub Release when a version change reaches main: the tag v<version> on the
+# pushed commit, with that version's CHANGELOG.md section as notes; versions below 1.0.0
+# are pre-releases. A missing or empty section fails the run. Re-running is safe: an
+# existing release is left alone, and a tag left without its release gets one.
+on:
+  push:
+    branches: [main]
+
+# The only workflow allowed to write: it creates tags and releases.
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    # Pinned: release_notes.py runs on this image's own Python 3.12.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Pinned by commit: this is the one workflow that can write to the repository.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Read the version and its release notes
+        id: meta
+        run: >-
+          python3 .github/scripts/release_notes.py
+          --notes-file "$RUNNER_TEMP/notes.md"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/notes.md"
+
+          # yes / no for a GitHub API path; any failure other than a 404 stops the run.
+          exists() {
+            local output
+            if output=$(gh api "$1" 2>&1 >/dev/null); then
+              echo yes
+            elif grep -q "HTTP 404" <<<"$output"; then
+              echo no
+            else
+              echo "::error::GitHub API call $1 failed: $output" >&2
+              return 1
+            fi
+          }
+
+          flags=(--repo "$REPO" --title "$TAG" --notes-file "$notes")
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          else
+            flags+=(--latest)
+          fi
+
+          release=$(exists "repos/$REPO/releases/tags/$TAG")
+          if [ "$release" = "yes" ]; then
+            echo "Release $TAG already exists; nothing to do."
+            exit 0
+          fi
+
+          tag=$(exists "repos/$REPO/git/ref/tags/$TAG")
+          if [ "$tag" = "yes" ]; then
+            echo "Tag $TAG exists without a release; publishing its release."
+            gh release create "$TAG" --verify-tag "${flags[@]}"
+          else
+            echo "Publishing $TAG on $GITHUB_SHA."
+            gh release create "$TAG" --target "$GITHUB_SHA" "${flags[@]}"
+          fi

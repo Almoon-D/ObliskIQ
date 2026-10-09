@@ -1,0 +1,147 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "obliskiq"
+version = "0.1.0"
+description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.14,<3.15"
+authors = [{ name = "Alvaro de Luna Luque" }]
+keywords = ["interactive-brokers", "ibkr", "portfolio", "risk-parity", "trend-following"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "httpx>=0.28,<0.29",
+    "pydantic>=2.12,<3",
+    "pydantic-settings>=2.11,<3",
+    "PyYAML>=6.0.3,<7",
+]
+
+[project.scripts]
+obliskiq = "obliskiq.cli.app:main"
+
+[project.urls]
+Source = "https://github.com/Almoon-D/ObliskIQ"
+
+[dependency-groups]
+dev = [
+    "hatchling>=1.27",
+    "hypothesis>=6.140",
+    "import-linter>=2.5",
+    "mypy>=2.0",
+    "pre-commit>=4.3",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.2",
+    "pytest-cov>=7.0",
+    "respx>=0.22",
+    "ruff>=0.14",
+    "types-PyYAML>=6.0.12",
+]
+
+[tool.uv]
+python-preference = "only-managed"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/obliskiq"]
+
+[tool.hatch.build.targets.sdist]
+# An explicit list: legacy/ is a read-only snapshot for porting, never part of a
+# distribution, and nothing else is shipped by accident.
+only-include = [
+    "src",
+    "tests",
+    "config",
+    "docs",
+    ".github",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "LICENSE",
+    "Makefile",
+    "README.md",
+    "uv.lock",
+    ".env.example",
+    ".pre-commit-config.yaml",
+    ".python-version",
+]
+exclude = ["/legacy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+extend-exclude = ["legacy"]
+# The release workflow runs this script on its pinned runner's own Python 3.12.
+per-file-target-version = { ".github/scripts/*.py" = "py312" }
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT", "PTH", "ARG", "ERA"]
+
+[tool.ruff.lint.per-file-ignores]
+# Handlers in httpx mock transports take a request the test does not read.
+"tests/**" = ["ARG001"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src"]
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+norecursedirs = [
+    ".*", "*.egg", "*.egg-info", "_darcs", "build", "CVS", "dist", "node_modules", "venv",
+    "{arch}", "__pycache__", "legacy",
+]
+addopts = ["--strict-markers", "--strict-config", "-ra", "--import-mode=importlib"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["obliskiq"]
+branch = true
+omit = ["legacy/*"]
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+skip_covered = true
+# Measured coverage minus one point; it only ever rises. docs/ROADMAP.md records each measurement.
+fail_under = 98.6
+
+[tool.importlinter]
+root_packages = ["obliskiq"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The LLM layer never reaches sizing, gates, orders or the broker"
+type = "forbidden"
+source_modules = ["obliskiq.llm"]
+forbidden_modules = ["obliskiq.decision", "obliskiq.execution", "obliskiq.ibkr"]
+
+[[tool.importlinter.contracts]]
+name = "Compute never reaches the broker, the network or execution"
+type = "forbidden"
+source_modules = ["obliskiq.quant", "obliskiq.grid", "obliskiq.engines"]
+forbidden_modules = ["obliskiq.ibkr", "httpx", "obliskiq.execution"]
+
+[[tool.importlinter.contracts]]
+name = "Nothing imports the legacy snapshot"
+type = "forbidden"
+source_modules = ["obliskiq"]
+forbidden_modules = ["legacy"]

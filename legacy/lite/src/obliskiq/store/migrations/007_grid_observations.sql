@@ -1,0 +1,15 @@
+-- The grid records the window a value was MEASURED over, and until now that was
+-- the window the code ASKED for. Those are not the same thing whenever a floor
+-- admits a shorter sample than the label names: a realised-vol percentile
+-- stamped "5y of 30d readings" can rest on twenty-one overlapping readings, and
+-- correlation_250d is admitted at half its window and still labelled "250d".
+--
+-- n_obs is the count actually behind the number. Nothing derives from it; it
+-- exists so a reader can tell a five-year percentile from a twenty-one-point one
+-- without re-deriving the sample. NULL where a cell has no meaningful count —
+-- an absent cell, or a level read that is not a sample statistic at all.
+--
+-- Deliberately additive: no back-fill, because the count for a row computed
+-- before this column existed is not recoverable, and inventing one would be
+-- exactly the overstatement the column exists to end.
+ALTER TABLE grid ADD COLUMN n_obs INTEGER;

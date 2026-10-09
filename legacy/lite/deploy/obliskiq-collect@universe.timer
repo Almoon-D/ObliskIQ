@@ -1,0 +1,26 @@
+# The weekly universe sync.
+#
+# It resolves universe.yaml and the live account into the store: new instruments
+# declared since last week, conids that moved, and the reconciliation that clears
+# the collection flags on a position the account no longer holds — which is what
+# stops a closed position consuming API budget forever.
+#
+# It is a timer and not only a crontab line because crontab.example carried this
+# job and deploy/ did not, so the documented FALLBACK ran more than the
+# documented default. Cron also cannot catch up a missed run and cannot tell exit
+# 2 from exit 0, which are the two properties this schedule depends on.
+#
+# Saturday, before the compute census at 06:00, so the census counts the universe
+# as it is rather than as it was last week.
+[Unit]
+Description=obliskiq-lite weekly universe sync
+Documentation=file:/opt/obliskiq/docs/COLLECTORS.md
+
+[Timer]
+OnCalendar=Sat 05:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+Unit=obliskiq-collect@universe.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,324 @@
+{
+ "description": {
+  "title": "CPI ANNUAL RATE 00: ALL ITEMS 2015=100",
+  "contact": {
+   "email": "cpi@ons.gov.uk",
+   "name": "Consumer Price Inflation team",
+   "telephone": "Consumer Price Inflation Enquiries: +44 1633 456900. Consumer Price Inflation recorded message (available after 8am on release day): +44 808 196 1267"
+  },
+  "releaseDate": "2026-08-18T23:00:00.000Z",
+  "nextRelease": "16 September 2026",
+  "datasetId": "MM23",
+  "datasetUri": "/economy/inflationandpriceindices/datasets/consumerpriceindices",
+  "cdid": "D7G7",
+  "unit": "%",
+  "preUnit": "",
+  "source": "",
+  "date": "2026 JUL",
+  "number": "2.9",
+  "keyNote": "Change over 12 months  ",
+  "sampleSize": "0"
+ },
+ "months": [
+  {
+   "date": "2024 FEB",
+   "value": "3.4",
+   "label": "2024 FEB",
+   "year": "2024",
+   "month": "February",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-03-20T00:00:00.000Z"
+  },
+  {
+   "date": "2024 MAR",
+   "value": "3.2",
+   "label": "2024 MAR",
+   "year": "2024",
+   "month": "March",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-04-16T23:00:00.000Z"
+  },
+  {
+   "date": "2024 APR",
+   "value": "2.3",
+   "label": "2024 APR",
+   "year": "2024",
+   "month": "April",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-05-21T23:00:00.000Z"
+  },
+  {
+   "date": "2024 MAY",
+   "value": "2.0",
+   "label": "2024 MAY",
+   "year": "2024",
+   "month": "May",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-06-18T23:00:00.000Z"
+  },
+  {
+   "date": "2024 JUN",
+   "value": "2.0",
+   "label": "2024 JUN",
+   "year": "2024",
+   "month": "June",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-07-16T23:00:00.000Z"
+  },
+  {
+   "date": "2024 JUL",
+   "value": "2.2",
+   "label": "2024 JUL",
+   "year": "2024",
+   "month": "July",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-08-13T23:00:00.000Z"
+  },
+  {
+   "date": "2024 AUG",
+   "value": "2.2",
+   "label": "2024 AUG",
+   "year": "2024",
+   "month": "August",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-09-17T23:00:00.000Z"
+  },
+  {
+   "date": "2024 SEP",
+   "value": "1.7",
+   "label": "2024 SEP",
+   "year": "2024",
+   "month": "September",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-10-15T23:00:00.000Z"
+  },
+  {
+   "date": "2024 OCT",
+   "value": "2.3",
+   "label": "2024 OCT",
+   "year": "2024",
+   "month": "October",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-11-20T00:00:00.000Z"
+  },
+  {
+   "date": "2024 NOV",
+   "value": "2.6",
+   "label": "2024 NOV",
+   "year": "2024",
+   "month": "November",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2024-12-18T00:00:00.000Z"
+  },
+  {
+   "date": "2024 DEC",
+   "value": "2.5",
+   "label": "2024 DEC",
+   "year": "2024",
+   "month": "December",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-01-15T00:00:00.000Z"
+  },
+  {
+   "date": "2025 JAN",
+   "value": "3.0",
+   "label": "2025 JAN",
+   "year": "2025",
+   "month": "January",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-02-19T00:00:00.000Z"
+  },
+  {
+   "date": "2025 FEB",
+   "value": "2.8",
+   "label": "2025 FEB",
+   "year": "2025",
+   "month": "February",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-03-26T00:00:00.000Z"
+  },
+  {
+   "date": "2025 MAR",
+   "value": "2.6",
+   "label": "2025 MAR",
+   "year": "2025",
+   "month": "March",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-04-15T23:00:00.000Z"
+  },
+  {
+   "date": "2025 APR",
+   "value": "3.5",
+   "label": "2025 APR",
+   "year": "2025",
+   "month": "April",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-05-20T23:00:00.000Z"
+  },
+  {
+   "date": "2025 MAY",
+   "value": "3.4",
+   "label": "2025 MAY",
+   "year": "2025",
+   "month": "May",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-06-17T23:00:00.000Z"
+  },
+  {
+   "date": "2025 JUN",
+   "value": "3.6",
+   "label": "2025 JUN",
+   "year": "2025",
+   "month": "June",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-07-15T23:00:00.000Z"
+  },
+  {
+   "date": "2025 JUL",
+   "value": "3.8",
+   "label": "2025 JUL",
+   "year": "2025",
+   "month": "July",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-08-19T23:00:00.000Z"
+  },
+  {
+   "date": "2025 AUG",
+   "value": "3.8",
+   "label": "2025 AUG",
+   "year": "2025",
+   "month": "August",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-09-16T23:00:00.000Z"
+  },
+  {
+   "date": "2025 SEP",
+   "value": "3.8",
+   "label": "2025 SEP",
+   "year": "2025",
+   "month": "September",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-10-21T23:00:00.000Z"
+  },
+  {
+   "date": "2025 OCT",
+   "value": "3.6",
+   "label": "2025 OCT",
+   "year": "2025",
+   "month": "October",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-11-19T00:00:00.000Z"
+  },
+  {
+   "date": "2025 NOV",
+   "value": "3.2",
+   "label": "2025 NOV",
+   "year": "2025",
+   "month": "November",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2025-12-17T00:00:00.000Z"
+  },
+  {
+   "date": "2025 DEC",
+   "value": "3.4",
+   "label": "2025 DEC",
+   "year": "2025",
+   "month": "December",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-01-21T00:00:00.000Z"
+  },
+  {
+   "date": "2026 JAN",
+   "value": "3.0",
+   "label": "2026 JAN",
+   "year": "2026",
+   "month": "January",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-02-18T00:00:00.000Z"
+  },
+  {
+   "date": "2026 FEB",
+   "value": "3.0",
+   "label": "2026 FEB",
+   "year": "2026",
+   "month": "February",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-03-20T00:00:00.000Z"
+  },
+  {
+   "date": "2026 MAR",
+   "value": "3.3",
+   "label": "2026 MAR",
+   "year": "2026",
+   "month": "March",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-04-21T23:00:00.000Z"
+  },
+  {
+   "date": "2026 APR",
+   "value": "2.8",
+   "label": "2026 APR",
+   "year": "2026",
+   "month": "April",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-05-19T23:00:00.000Z"
+  },
+  {
+   "date": "2026 MAY",
+   "value": "2.8",
+   "label": "2026 MAY",
+   "year": "2026",
+   "month": "May",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-06-16T23:00:00.000Z"
+  },
+  {
+   "date": "2026 JUN",
+   "value": "2.6",
+   "label": "2026 JUN",
+   "year": "2026",
+   "month": "June",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-07-21T23:00:00.000Z"
+  },
+  {
+   "date": "2026 JUL",
+   "value": "2.9",
+   "label": "2026 JUL",
+   "year": "2026",
+   "month": "July",
+   "quarter": "",
+   "sourceDataset": "MM23",
+   "updateDate": "2026-08-18T23:00:00.000Z"
+  }
+ ]
+}

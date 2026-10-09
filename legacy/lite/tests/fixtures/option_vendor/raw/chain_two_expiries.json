@@ -1,0 +1,82 @@
+{
+ "note": "SYNTHETIC. TWO expiries inside one 90-200 DTE window, both rights at the ATM strike, with deliberately different vol levels per expiry. This is the shape every other fixture lacks, and the shape that hid the ATM bug: averaging across expiries returns a number off the term structure rather than a point on it.",
+ "s": "ok",
+ "optionSymbol": [
+  "SPY261218C00770000",
+  "SPY261218P00770000",
+  "SPY270319C00770000",
+  "SPY270319P00770000"
+ ],
+ "underlying": [
+  "SPY",
+  "SPY",
+  "SPY",
+  "SPY"
+ ],
+ "expiration": [
+  1797627600,
+  1797627600,
+  1805486400,
+  1805486400
+ ],
+ "side": [
+  "call",
+  "put",
+  "call",
+  "put"
+ ],
+ "strike": [
+  770,
+  770,
+  770,
+  770
+ ],
+ "bid": [
+  30.0,
+  28.0,
+  48.0,
+  46.0
+ ],
+ "ask": [
+  30.4,
+  28.4,
+  48.4,
+  46.4
+ ],
+ "last": [
+  30.2,
+  28.2,
+  48.2,
+  46.2
+ ],
+ "openInterest": [
+  1500,
+  1200,
+  900,
+  800
+ ],
+ "volume": [
+  50,
+  40,
+  20,
+  15
+ ],
+ "underlyingPrice": [
+  770.83,
+  770.83,
+  770.83,
+  770.83
+ ],
+ "iv": [
+  0.14,
+  0.16,
+  0.24,
+  0.26
+ ],
+ "delta": [
+  0.55,
+  -0.45,
+  0.58,
+  -0.42
+ ]
+}

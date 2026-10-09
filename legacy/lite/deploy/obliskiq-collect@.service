@@ -1,0 +1,79 @@
+# Systemd template unit for the obliskiq-lite collectors.
+#
+# One template, instantiated per collector command:
+#     systemctl enable --now obliskiq-collect@daily.timer
+#     systemctl enable --now obliskiq-collect@macro.timer
+#
+# The collectors are a STANDALONE entrypoint. This unit must never be used to run
+# the MCP server: the server binds a port and holds a position ledger, and the
+# two have different failure modes and different blast radii.
+#
+# Exit codes: 0 ok, 1 something failed, 2 a run was degraded. A degraded run
+# collected everything but on a weaker input than intended — usually the daily-bar
+# backfill falling behind — so it deserves an alert without being an outage.
+[Unit]
+Description=obliskiq-lite collector (%i)
+Documentation=file:/opt/obliskiq/docs/COLLECTORS.md
+After=network-online.target
+Wants=network-online.target
+
+# Rate limiting lives HERE and not in [Service]: systemd stopped reading these
+# from [Service] in v230 and merely logs "Unknown key name", so the burst the
+# comment below describes was not in force at all. Three attempts inside an hour,
+# which with RestartSec=300 is fifteen minutes of trying before the unit gives up
+# and waits for the next timer. A dead upstream must not be retried all night —
+# on the vendor route that is a bill.
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=obliskiq
+Group=obliskiq
+WorkingDirectory=/opt/obliskiq
+
+# Everything comes from the environment. Nothing here is hardcoded, so the same
+# unit deploys unchanged. The file holds API keys, so it is 0600 and not in git.
+EnvironmentFile=/etc/obliskiq/collect.env
+
+ExecStart=/opt/obliskiq/.venv/bin/obliskiq-collect %i
+
+# A European chain snapshot missed is gone permanently, so a transient failure retries
+# rather than waiting a day for the next timer. Systemd only restarts a oneshot
+# on failure, which is what SuccessExitStatus below is for: a degraded run is a
+# success that needs looking at, not a reason to re-run and spend the API budget
+# again on the same weak inputs.
+Restart=on-failure
+RestartSec=300
+SuccessExitStatus=0 2
+
+# The OUTER bound, and deliberately not the only one. The daily sequence is six
+# steps in ONE process: the chain step alone walked 24 targets in 57 minutes on
+# 2026-09-11, so an hour for all six was a budget the measured run did not fit
+# in. When this expires systemd sends SIGTERM, which is process death and not an
+# exception — the per-step try/except in collect/cli.py cannot see it — and then
+# Restart=on-failure above re-runs the WHOLE sequence, re-spending marketdata.app
+# credits each time.
+#
+# So the sequence bounds itself first. collectors.daily.step_deadline_seconds in
+# config.yaml gives every step its own wall-clock budget, abandons one that
+# outruns it, records it `interrupted` and RUNS THE STEPS AFTER IT. Those budgets
+# sum below this number on purpose, so the sequence always reaches its own
+# deadline before systemd reaches this one; tests/test_deploy_units.py fails if
+# that stops being true.
+TimeoutStartSec=7200
+
+# Hardening. The collectors read config and write one SQLite file; they need
+# nothing else on the machine.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/obliskiq
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

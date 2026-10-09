@@ -218,3 +218,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ── ObliskIQ ──────────────────────────────────────────────────────────────────
+# Runtime state, credentials and keys never enter the repository. /data/ is
+# anchored to the root so the src/obliskiq/data package stays tracked.
+/data/
+*.db*
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+
+# legacy/ is a verbatim snapshot (legacy/MANIFEST.md lists every file). These
+# two legacy paths are templates with empty values, not credentials.
+!/legacy/lite/.env.template
+!/legacy/lite/secrets/

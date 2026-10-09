@@ -1,0 +1,8 @@
+{
+  "session": "2026-08-24",
+  "note": "Live IBKR MCP capture, European market hours. ASML AEB quotes realtime; ASML/FTA options serve IV and open interest but no bid/ask; COMEX gold snapshots return {} entirely. See docs/SESSION-7-LIVE.md.",
+  "underlyings": [
+    {"symbol": "ASML", "conid": 117589399, "exchange": "FTA", "trading_class": "ASL"}
+  ],
+  "futures": {"GC": 17340718}
+}

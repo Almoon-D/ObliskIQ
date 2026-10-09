@@ -1,0 +1,547 @@
+exchanges:
+- name: NYSE
+  mic: XNYS
+  calendar_type: exchange_calendars
+  timezone: America/New_York
+  country_flag: 🇺🇸
+  currency: USD
+  region: America
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -330
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -10
+    end_offset_minutes: 0
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 240
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Nasdaq
+  mic: XNAS
+  calendar_type: exchange_calendars
+  timezone: America/New_York
+  country_flag: 🇺🇸
+  currency: USD
+  region: America
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -330
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -10
+    end_offset_minutes: 0
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 240
+  incident_source:
+    type: structured_feed
+    url: https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts
+    scope: single_stock
+- name: Toronto Stock Ex.
+  mic: XTSE
+  calendar_type: exchange_calendars
+  timezone: America/Toronto
+  country_flag: 🇨🇦
+  currency: CAD
+  region: America
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -150
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -10
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: B3 Bolsa do Brasil
+  mic: BVMF
+  calendar_type: exchange_calendars
+  timezone: America/Sao_Paulo
+  country_flag: 🇧🇷
+  currency: BRL
+  region: America
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -15
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -5
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+  seasonal_close:
+    reference_timezone: America/New_York
+    close_time: '17:00'
+- name: Bolsa de Méjico
+  mic: XMEX
+  calendar_type: exchange_calendars
+  timezone: America/Mexico_City
+  country_flag: 🇲🇽
+  currency: MXN
+  region: America
+  phase_windows: []
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Bolsa de Santiago
+  mic: XSGO
+  calendar_type: exchange_calendars
+  timezone: America/Santiago
+  country_flag: 🇨🇱
+  currency: CLP
+  region: America
+  phase_windows: []
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: London Stock Ex.
+  mic: XLON
+  calendar_type: exchange_calendars
+  timezone: Europe/London
+  country_flag: 🇬🇧
+  currency: GBP
+  region: Europe
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -10
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 5
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 5
+    end_offset_minutes: 10
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Bolsa de Madrid
+  mic: XMAD
+  calendar_type: exchange_calendars
+  timezone: Europe/Madrid
+  country_flag: 🇪🇸
+  currency: EUR
+  region: Europe
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -30
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 5
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 5
+    end_offset_minutes: 15
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Deutsche Börse Xetra
+  mic: XETR
+  calendar_type: exchange_calendars
+  timezone: Europe/Berlin
+  country_flag: 🇩🇪
+  currency: EUR
+  region: Europe
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -5
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 5
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Euronext Paris
+  mic: XPAR
+  calendar_type: exchange_calendars
+  timezone: Europe/Paris
+  country_flag: 🇫🇷
+  currency: EUR
+  region: Europe
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -105
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 5
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 5
+    end_offset_minutes: 10
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Euronext Amsterdam
+  mic: XAMS
+  calendar_type: exchange_calendars
+  timezone: Europe/Amsterdam
+  country_flag: 🇳🇱
+  currency: EUR
+  region: Europe
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -105
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 5
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 5
+    end_offset_minutes: 10
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Euronext Milán
+  mic: XMIL
+  calendar_type: exchange_calendars
+  timezone: Europe/Rome
+  country_flag: 🇮🇹
+  currency: EUR
+  region: Europe
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -90
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 5
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 5
+    end_offset_minutes: 10
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: SIX Swiss Ex.
+  mic: XSWX
+  calendar_type: exchange_calendars
+  timezone: Europe/Zurich
+  country_flag: 🇨🇭
+  currency: CHF
+  region: Europe
+  phase_windows:
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -10
+    end_offset_minutes: 0
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 10
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Tokyo Stock Ex.
+  mic: XTKS
+  calendar_type: exchange_calendars
+  timezone: Asia/Tokyo
+  country_flag: 🇯🇵
+  currency: JPY
+  region: Asia
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -60
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -5
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Hong Kong Ex.
+  mic: XHKG
+  calendar_type: exchange_calendars
+  timezone: Asia/Hong_Kong
+  country_flag: 🇭🇰
+  currency: HKD
+  region: Asia
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -30
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 10
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Shanghai Stock Ex.
+  mic: XSHG
+  calendar_type: exchange_calendars
+  timezone: Asia/Shanghai
+  country_flag: 🇨🇳
+  currency: CNY
+  region: Asia
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -15
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -3
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Shenzhen Stock Ex.
+  mic: XSHE
+  calendar_type: synthetic
+  timezone: Asia/Shanghai
+  country_flag: 🇨🇳
+  currency: CNY
+  region: Asia
+  phase_windows:
+  - phase: opening_auction
+    anchor: session_open
+    start_offset_minutes: -15
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -3
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+  synthetic:
+    open_time: 09:30
+    close_time: '15:00'
+    lunch_start: '11:30'
+    lunch_end: '13:00'
+    trading_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    holidays: []
+- name: BSE India
+  mic: XBOM
+  calendar_type: exchange_calendars
+  timezone: Asia/Kolkata
+  country_flag: 🇮🇳
+  currency: INR
+  region: Asia
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -15
+    end_offset_minutes: 0
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 30
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: NSE India
+  mic: XNSE
+  calendar_type: synthetic
+  timezone: Asia/Kolkata
+  country_flag: 🇮🇳
+  currency: INR
+  region: Asia
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -15
+    end_offset_minutes: 0
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 30
+  incident_source:
+    type: manual
+    scope: market_wide
+  synthetic:
+    open_time: 09:15
+    close_time: '15:30'
+    lunch_start: null
+    lunch_end: null
+    trading_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    holidays: []
+- name: Korea Ex.
+  mic: XKRX
+  calendar_type: exchange_calendars
+  timezone: Asia/Seoul
+  country_flag: 🇰🇷
+  currency: KRW
+  region: Asia
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -30
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -10
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Taiwan Stock Ex.
+  mic: XTAI
+  calendar_type: exchange_calendars
+  timezone: Asia/Taipei
+  country_flag: 🇹🇼
+  currency: TWD
+  region: Asia
+  phase_windows:
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: -5
+    end_offset_minutes: 0
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Singapore Ex.
+  mic: XSES
+  calendar_type: exchange_calendars
+  timezone: Asia/Singapore
+  country_flag: 🇸🇬
+  currency: SGD
+  region: Asia
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -30
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 6
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 6
+    end_offset_minutes: 16
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Australian Securities Ex.
+  mic: XASX
+  calendar_type: exchange_calendars
+  timezone: Australia/Sydney
+  country_flag: 🇦🇺
+  currency: AUD
+  region: Oceania
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -180
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 11
+  - phase: post_market
+    anchor: session_close
+    start_offset_minutes: 11
+    end_offset_minutes: 21
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: Cboe Australia
+  mic: CHIA
+  calendar_type: synthetic
+  timezone: Australia/Sydney
+  country_flag: 🇦🇺
+  currency: AUD
+  region: Oceania
+  phase_windows: []
+  incident_source:
+    type: manual
+    scope: market_wide
+  synthetic:
+    open_time: '10:00'
+    close_time: '16:13'
+    lunch_start: null
+    lunch_end: null
+    trading_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    holidays: []
+- name: New Zealand
+  mic: XNZE
+  calendar_type: exchange_calendars
+  timezone: Pacific/Auckland
+  country_flag: 🇳🇿
+  currency: NZD
+  region: Oceania
+  phase_windows:
+  - phase: pre_market
+    anchor: session_open
+    start_offset_minutes: -90
+    end_offset_minutes: 0
+  - phase: closing_auction
+    anchor: session_close
+    start_offset_minutes: 0
+    end_offset_minutes: 15
+  incident_source:
+    type: manual
+    scope: market_wide
+- name: South Pacific Stock Ex.
+  mic: XSPX
+  calendar_type: synthetic
+  timezone: Pacific/Fiji
+  country_flag: 🇫🇯
+  currency: FJD
+  region: Oceania
+  phase_windows: []
+  incident_source:
+    type: manual
+    scope: market_wide
+  synthetic:
+    open_time: '10:00'
+    close_time: '12:00'
+    lunch_start: null
+    lunch_end: null
+    trading_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    holidays: []
