@@ -1,0 +1,8 @@
+# Whether a contract can be traded. The smile reuses these tests for the same reason the gates
+# use them: the question is the same one.
+liquidity:
+  # Widest bid-ask spread, as a fraction of the mid.
+  max_spread_pct: 0.15
+  min_open_interest: 500
+  # A strike that did not trade in the session is rejected; a missing volume counts as none.
+  require_session_volume: true

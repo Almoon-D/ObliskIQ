@@ -1,0 +1,14 @@
+# Hygiene on the volatility smile, applied before any implied volatility is read off it. The
+# spread, open-interest and session-volume tests reuse config/defaults/liquidity.yaml: the
+# question is the same one the candidate gates ask, and a rule enforced twice is eventually
+# enforced two different ways.
+smile:
+  # The delta band. Outside it a quote carries almost no volatility information: a 0.02-delta
+  # wing is a lottery ticket whose implied volatility is a rounding artefact.
+  min_abs_delta: 0.05
+  max_abs_delta: 0.95
+  # Butterfly convexity, checked in volatility space: a strike whose implied volatility sits
+  # this far off the chord of its two neighbours is a bad print, not a smile.
+  butterfly_max_iv_deviation: 0.10
+  # Below this many surviving strikes there is no smile, only points.
+  min_points: 2
