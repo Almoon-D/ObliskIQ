@@ -23,7 +23,8 @@ from ..config.loader import (
     flatten,
     read_yaml_mapping,
 )
-from ..config.schema import FrozenModel, Identifier, NonEmptyText
+from ..config.schema import FrozenModel, Identifier
+from ..domain.base import NonEmptyText
 
 JURISDICTIONS_DIR = "jurisdictions"
 PROFILE_SUFFIX = ".yaml"

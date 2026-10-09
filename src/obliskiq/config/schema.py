@@ -14,7 +14,8 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict
 
-_CURRENCY_RE = re.compile(r"[A-Z]{3}")
+from ..domain.base import CurrencyCode
+
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
 
 
@@ -24,23 +25,11 @@ class FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 
 
-def _currency_code(value: str) -> str:
-    if not _CURRENCY_RE.fullmatch(value):
-        raise ValueError("must be a three-letter ISO 4217 currency code in capitals, such as EUR")
-    return value
-
-
 def check_identifier(value: str) -> str:
     if not _IDENTIFIER_RE.fullmatch(value):
         raise ValueError(
             "must be a lower-case identifier (letters, digits, underscores), such as es"
         )
-    return value
-
-
-def _non_empty(value: str) -> str:
-    if not value.strip():
-        raise ValueError("must not be empty")
     return value
 
 
@@ -59,9 +48,7 @@ def _file_name_in_data_dir(value: str) -> str:
     return value
 
 
-type CurrencyCode = Annotated[str, AfterValidator(_currency_code)]
 type Identifier = Annotated[str, AfterValidator(check_identifier)]
-type NonEmptyText = Annotated[str, AfterValidator(_non_empty)]
 type DataFileName = Annotated[str, AfterValidator(_file_name_in_data_dir)]
 
 
