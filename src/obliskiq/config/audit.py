@@ -4,12 +4,15 @@ The record of changes to effective settings: one JSON line per changed key with 
 the change, through which channel, when, the old and new values and why. The code that
 applies a settings change appends to it through :meth:`SettingsAuditLog.record`.
 
-The file is append-only: it is opened with ``O_APPEND`` and never rewritten, and an
-exclusive lock covers reading the chain and appending to it, so two writers cannot take
-the same sequence number. Each entry carries a sequence number and the SHA-256 of the
-previous entry, computed over the bytes written; an edited, reordered or removed entry
-breaks the chain and reading the log fails loudly. A chain cannot reveal entries cut from
-the end.
+The file is append-only: it is opened with ``O_APPEND`` and never rewritten. A writer holds
+an exclusive lock while it reads the chain and appends, so two writers cannot take the same
+sequence number; a reader holds a shared lock, so it never sees a half-written line. Each
+entry carries a sequence number and the SHA-256 of the previous entry, taken over the entry
+as written, parsed back and canonically encoded; an edited, reordered or removed entry breaks
+the chain and reading the log fails loudly. A chain cannot reveal entries cut from the end.
+
+Both reading and writing block on the lock, so asynchronous callers run them off the event
+loop.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -77,6 +80,33 @@ def _digest(fields: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _draft(
+    seq: int,
+    change: SettingChange,
+    actor: str,
+    channel: str,
+    reason: str | None,
+    at: datetime,
+    prev_hash: str,
+) -> AuditEntry:
+    """A validated entry without its hash yet."""
+    try:
+        return AuditEntry(
+            seq=seq,
+            at=at.astimezone(UTC),
+            actor=actor,
+            channel=channel,
+            reason=reason,
+            key=change.key,
+            old=change.old,
+            new=change.new,
+            prev_hash=prev_hash,
+            hash="",
+        )
+    except ValidationError as exc:
+        raise SettingsAuditError(f"invalid audit entry for {change.key}: {exc}") from exc
+
+
 class SettingsAuditLog:
     """The log at ``path``. Reading verifies the chain; writing only ever appends."""
 
@@ -95,9 +125,65 @@ class SettingsAuditLog:
     def entries(self) -> tuple[AuditEntry, ...]:
         """Every entry, after checking sequence and hash chain. No file means no entries."""
         try:
-            lines = self._path.read_text(encoding="utf-8").splitlines()
+            descriptor = os.open(self._path, os.O_RDONLY)
         except FileNotFoundError:
             return ()
+        except OSError as exc:
+            raise SettingsAuditError(f"{self._path} cannot be read: {exc}") from exc
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_SH)
+            return self._read_entries()
+        finally:
+            os.close(descriptor)
+
+    def record(
+        self,
+        changes: Iterable[SettingChange],
+        *,
+        actor: str,
+        channel: str,
+        reason: str | None,
+        at: datetime,
+    ) -> tuple[AuditEntry, ...]:
+        """Append one entry per change and flush them to disk before returning them.
+
+        Everything is validated before the file is touched, so a refused record leaves no
+        trace.
+        """
+        if at.tzinfo is None:
+            raise SettingsAuditError("an audit timestamp must be timezone-aware")
+        pending = tuple(changes)
+        for change in pending:
+            _draft(1, change, actor, channel, reason, at, GENESIS_HASH)
+        if not pending:
+            return ()
+        descriptor = self._open_for_append()
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            existing = self._read_entries()
+            previous = existing[-1].hash if existing else GENESIS_HASH
+            written: list[AuditEntry] = []
+            for offset, change in enumerate(pending, start=1):
+                draft = _draft(len(existing) + offset, change, actor, channel, reason, at, previous)
+                # Hash the entry as it will be read back, so the two can never disagree.
+                body = json.loads(draft.model_dump_json(exclude={"hash"}))
+                entry = draft.model_copy(update={"hash": _digest(body)})
+                written.append(entry)
+                previous = entry.hash
+            payload = "".join(entry.model_dump_json() + "\n" for entry in written)
+            _write_all(descriptor, payload.encode("utf-8"))
+            os.fsync(descriptor)
+        except OSError as exc:
+            raise SettingsAuditError(f"{self._path} could not be written: {exc}") from exc
+        finally:
+            os.close(descriptor)
+        return tuple(written)
+
+    def _read_entries(self) -> tuple[AuditEntry, ...]:
+        """Read and verify the chain. The caller holds the file open and locked, so a file
+        that has vanished meanwhile is an error, not an empty log."""
+        try:
+            lines = self._path.read_text(encoding="utf-8").splitlines()
         except OSError as exc:
             raise SettingsAuditError(f"{self._path} cannot be read: {exc}") from exc
         entries: list[AuditEntry] = []
@@ -119,68 +205,6 @@ class SettingsAuditLog:
             entries.append(entry)
             previous = entry.hash
         return tuple(entries)
-
-    def record(
-        self,
-        changes: Iterable[SettingChange],
-        *,
-        actor: str,
-        channel: str,
-        reason: str | None,
-        at: datetime,
-    ) -> tuple[AuditEntry, ...]:
-        """Append one entry per change and flush them to disk before returning them."""
-        if at.tzinfo is None:
-            raise SettingsAuditError("an audit timestamp must be timezone-aware")
-        pending = tuple(changes)
-        if not pending:
-            return ()
-        descriptor = self._open_for_append()
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
-            written = self._entries_after(self.entries(), pending, actor, channel, reason, at)
-            payload = "".join(entry.model_dump_json() + "\n" for entry in written)
-            _write_all(descriptor, payload.encode("utf-8"))
-            os.fsync(descriptor)
-        except OSError as exc:
-            raise SettingsAuditError(f"{self._path} could not be written: {exc}") from exc
-        finally:
-            os.close(descriptor)
-        return written
-
-    @staticmethod
-    def _entries_after(
-        existing: tuple[AuditEntry, ...],
-        changes: tuple[SettingChange, ...],
-        actor: str,
-        channel: str,
-        reason: str | None,
-        at: datetime,
-    ) -> tuple[AuditEntry, ...]:
-        previous = existing[-1].hash if existing else GENESIS_HASH
-        built: list[AuditEntry] = []
-        for offset, change in enumerate(changes, start=1):
-            try:
-                draft = AuditEntry(
-                    seq=len(existing) + offset,
-                    at=at.astimezone(UTC),
-                    actor=actor,
-                    channel=channel,
-                    reason=reason,
-                    key=change.key,
-                    old=change.old,
-                    new=change.new,
-                    prev_hash=previous,
-                    hash="",
-                )
-            except ValidationError as exc:
-                raise SettingsAuditError(f"invalid audit entry for {change.key}: {exc}") from exc
-            # Hash exactly what is written, so reading back can never disagree.
-            body = json.loads(draft.model_dump_json(exclude={"hash"}))
-            entry = draft.model_copy(update={"hash": _digest(body)})
-            built.append(entry)
-            previous = entry.hash
-        return tuple(built)
 
     def _open_for_append(self) -> int:
         try:

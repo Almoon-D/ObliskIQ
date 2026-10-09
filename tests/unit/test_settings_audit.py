@@ -202,10 +202,37 @@ def test_without_a_data_dir_there_is_no_log(config_dir):
         SettingsAuditLog.for_settings(settings, load_environment(env_file=None))
 
 
-def test_a_non_finite_value_is_refused_before_anything_is_written(log):
+def test_a_non_finite_value_is_refused_by_the_model():
     with pytest.raises(ValidationError):
         SettingChange(key="a", old=None, new=float("nan"))
-    assert not log.path.exists()
+
+
+def test_a_refused_record_leaves_no_trace(log):
+    """Validation runs before the data directory or the file is touched."""
+    smuggled = SettingChange.model_construct(key="a", old=None, new=float("nan"))
+    with pytest.raises(SettingsAuditError, match="invalid audit entry for a"):
+        _record(log, smuggled)
+    with pytest.raises(SettingsAuditError, match="invalid audit entry"):
+        log.record(
+            [SettingChange(key="a", old=None, new=1)], actor="", channel="cli", reason=None, at=WHEN
+        )
+    assert not log.path.parent.exists()
+
+
+def test_readers_share_the_lock_and_writers_take_it_alone(log, monkeypatch):
+    import fcntl
+
+    modes: list[int] = []
+    real_flock = fcntl.flock
+
+    def recording_flock(descriptor: int, operation: int) -> None:
+        modes.append(operation)
+        real_flock(descriptor, operation)
+
+    monkeypatch.setattr(fcntl, "flock", recording_flock)
+    _record(log, SettingChange(key="a", old=None, new=1))
+    log.entries()
+    assert modes == [fcntl.LOCK_EX, fcntl.LOCK_SH]
 
 
 def test_floats_round_trip_through_the_chain(log):
