@@ -163,3 +163,18 @@ def test_a_missing_env_file_fails_loudly(config_dir, tmp_path):
     )
     assert status == EXIT_INVALID
     assert f"env file not found: {missing}" in err
+
+
+def test_dev_null_means_no_env_file(config_dir):
+    status, _, _ = _run(
+        "--env-file", "/dev/null", "--config-dir", str(config_dir), "config", "validate"
+    )
+    assert status == EXIT_OK
+
+
+def test_a_directory_is_not_an_env_file(config_dir, tmp_path):
+    status, _, err = _run(
+        "--env-file", str(tmp_path), "--config-dir", str(config_dir), "config", "validate"
+    )
+    assert status == EXIT_INVALID
+    assert "env file not found" in err

@@ -9,12 +9,11 @@ switch plus, at most, a new policy module.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
-from types import MappingProxyType
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import AfterValidator, Field, PlainSerializer, ValidationError
+from pydantic import AfterValidator, BeforeValidator, Field, PlainSerializer, ValidationError
 
 from ..config.loader import (
     ConfigInvalid,
@@ -30,8 +29,30 @@ JURISDICTIONS_DIR = "jurisdictions"
 PROFILE_SUFFIX = ".yaml"
 
 
-def _read_only(value: Mapping[str, str]) -> Mapping[str, str]:
-    return MappingProxyType(dict(value))
+class PolicyIds(Mapping[str, str]):
+    """A profile's policy ids by kind: read-only, and picklable for worker processes."""
+
+    __slots__ = ("_ids",)
+
+    def __init__(self, ids: Mapping[str, str]) -> None:
+        self._ids = dict(ids)
+
+    def __getitem__(self, kind: str) -> str:
+        return self._ids[kind]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._ids)
+
+    def __len__(self) -> int:
+        return len(self._ids)
+
+    def __repr__(self) -> str:
+        return f"PolicyIds({self._ids!r})"
+
+
+def _none_is_empty(value: Any) -> Any:
+    """A bare ``policies:`` header declares no policies."""
+    return {} if value is None else value
 
 
 class JurisdictionProfile(FrozenModel):
@@ -46,7 +67,8 @@ class JurisdictionProfile(FrozenModel):
     name: NonEmptyText
     policies: Annotated[
         Mapping[Identifier, Identifier],
-        AfterValidator(_read_only),
+        BeforeValidator(_none_is_empty),
+        AfterValidator(PolicyIds),
         PlainSerializer(dict, return_type=dict[str, str]),
     ] = Field(default_factory=dict, validate_default=True)
 

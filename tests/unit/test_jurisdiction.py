@@ -201,3 +201,22 @@ def test_a_profiles_policies_cannot_be_changed_after_loading(config_dir):
         profile.policies["eligibility"] = "lenient"  # type: ignore[index]
     assert profile.model_dump()["policies"] == {"eligibility": "strict"}
     assert _registry().resolve(profile).name == "strict"
+
+
+def test_a_profile_survives_pickling_and_deep_copies():
+    """Worker processes receive profiles by pickle."""
+    import copy
+    import pickle
+
+    profile = _profile(eligibility="strict")
+    for clone in (pickle.loads(pickle.dumps(profile)), copy.deepcopy(profile)):
+        assert clone == profile
+        assert _registry().resolve(clone).name == "strict"
+        with pytest.raises(TypeError):
+            clone.policies["eligibility"] = "lenient"  # type: ignore[index]
+    assert repr(profile.policies) == "PolicyIds({'eligibility': 'strict'})"
+
+
+def test_a_bare_policies_header_declares_no_policies(config_dir):
+    _write(config_dir / "jurisdictions" / "es.yaml", "id: es\nname: Spain\npolicies:\n")
+    assert load_profile(config_dir, "es").policies == {}
