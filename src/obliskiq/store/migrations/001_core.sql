@@ -15,12 +15,14 @@
 --     that was not taken on its day cannot be recovered from the broker later; the primary key
 --     makes a re-run replace that day instead of duplicating it.
 --   * source names the route that supplied a row. It is not constrained here: SQLite cannot
---     alter a CHECK, and the domain models validate the vocabulary.
+--     alter a CHECK, and the route vocabulary is not fixed yet; the domain accepts any
+--     non-empty text.
 
 -- ───────────────────────────── instruments ─────────────────────────────
 
 -- An instrument is never deleted. A correction supersedes it: the old row keeps its history
--- and names its replacement, so a read as of an earlier date still finds what was known.
+-- and names its replacement, so a read as of an earlier date sees whether it existed and
+-- whether it had been superseded by then.
 CREATE TABLE instruments (
     conid            INTEGER PRIMARY KEY CHECK (conid > 0),
     symbol           TEXT    NOT NULL CHECK (trim(symbol) <> ''),

@@ -212,7 +212,10 @@ vocabulary: `universe` → `instruments`, `underlying_snapshots` → `snapshots`
 `curve_snapshots` → `curves`, `collector_sequences` → `runs`, `collector_runs` → `run_steps`
 (`run_id` is nullable: a step invoked on its own is not half of a run). `instruments` are
 never deleted; a correction supersedes (`superseded_by`, `superseded_at`), and a read as of an
-earlier date still finds what was known. `bars` are **daily only and keyed by `session_date`**,
+earlier date sees whether an instrument existed and whether it was superseded by then. Its other
+attributes (`kid_status`, `ucits`, `lot_size`, `roles`, `history_exchange`) are overwritten in
+place, so a past `as_of` read returns today's values for them; an attribute history, if a
+later session needs one, is a new table. `bars` are **daily only and keyed by `session_date`**,
 the listing venue's local date: lite keyed them by a UTC timestamp and a frequency, where a
 weekly bar stamped at its period start would leak the days after it and an Asian session's
 UTC date is the previous day. Weekly and monthly series are derived when needed. Dates and
@@ -225,11 +228,26 @@ own flag is kept verbatim beside it in `market_data_raw`, and `quote_delay_secon
 Lite deliberately put no `CHECK` on the raw flag so an unforeseen value could not crash a
 collector on a day that cannot be recollected; the same intent holds here because the decoder
 never emits a value outside the enum (an unrecognised flag becomes a `NULL` status with the raw
-text kept). There is no `CHECK` on route names (`source`): SQLite cannot alter a `CHECK`, and the
-domain models validate the vocabulary. Not carried because nothing serves them yet: vendor IV
-percentiles, bar watermarks, the grid, ledger and census tables; later sessions add what a
-live route supplies by migration. The shape was derived by reading lite's chain, not by
-transcribing it.
+text kept). There is no `CHECK` on route names (`source`): SQLite cannot alter a `CHECK`, and no route
+vocabulary exists yet, so the domain models accept any non-empty text; lite refused unknown
+routes, and the enum that restores that arrives with the routes (Session 3). Not carried
+because nothing serves them yet: vendor IV percentiles, bar watermarks, the grid, ledger and
+census tables, and lite's `macro_fetch_log`, `collector_state`, `futures_roots`,
+`vendor_fetch_log`, `universe_rejections`, `nav_history` and `commodity_proxy_map`; later
+sessions add what a live route supplies by migration. The `universe` columns that describe the
+grid and eligibility (`market`, `sector`, `tradable` with its `untradeable_reason` invariant,
+the unique grid-cell index, `collect_chain`, `collect_bars` and the rest) are not carried: the
+universe is configuration from Session 8, and that session decides where those invariants live.
+The shape was derived by reading lite's chain, not by transcribing it.
+
+Three write and read behaviours differ from lite and are chosen. A snapshot, chain or curve
+upsert replaces the whole row (lite's writers each owned disjoint columns, such as the solved
+implied volatility); a second route or a re-run therefore overwrites the first, and Session 11,
+which adds the solver, adds a column-targeted writer with it. Content `CHECK`s that lite avoided
+(`delta` range, `expiry >= snapshot_date`, `bars.close` and `macro.value` NOT NULL) are kept
+because a row that violates them is wrong, not merely unusual, and a batch containing one rolls
+back whole: a collector reports the day as failed instead of storing it. `limit <= 0` on a read
+raises where lite ignored it.
 
 ### D26 · The migration runner and the connection
 

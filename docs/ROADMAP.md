@@ -60,6 +60,13 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   and lite's `data.*` (Sessions 11 and 12 extend `smile.yaml` and `liquidity.yaml`).
 - Vendor-percentile columns of lite's snapshots and a macro vintage column: added by migration
   with their first live route (Sessions 8, 10, 11).
+- Lite reads and tests with no counterpart yet, to land with their consumers: dividend-yield,
+  NAV, FX-ratio and CPI year-on-year reads, `BarSeries.trailing_high` and `tail`, the
+  `contract_id_for_symbol` lookup, the universe/grid reads (Session 8); lite's ECB-release,
+  `BaseCurrencyRates`, real-rate and `recent_daily_closes` point-in-time cases (Sessions 10, 11);
+  the thesis-freeze, `external_positions` and `option_ledger` store tests (Session 7 and
+  Session 15). The 019-step migration walks and the 2000-row runner cases are replaced by
+  fresh-chain tests with small tables.
 - Costs: only repository-sourced commission schedules are filled; ES, FR and IT transaction
   taxes are unconfirmed against official texts, the IT rate is `null` (`tax_unknown`).
 
@@ -179,6 +186,12 @@ settles it.
   now the last tradable session itself, so N sessions including it is `session_before(n=N-1)`.
 - Dependabot keeps `exchange-calendars` current; its holiday lists lapse every year, and a
   library upgrade that changes a session fails the golden snapshot for review.
+- Session 8: `history_exchange` NULL means "send none" (`domain/instrument.py`), so the loader
+  sets it explicitly; decide where the `tradable`/`untradeable_reason` invariant and the unique
+  grid cell live now that the universe is configuration.
+- Session 11: add a column-targeted writer for the solved implied volatility (snapshot upserts
+  replace the whole row); add a date-leading index on `bars` if a cross-sectional read needs it.
+- Session 3: the route enum that the `source` columns lack (lite refused unknown routes).
 - A migration is forward-only: a later session that changes a table adds `002_*.sql`; it never
   edits `001_core.sql`.
 - **Owner:** confirm the repository settings listed in the Session 1 log entry.
