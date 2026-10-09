@@ -1,17 +1,20 @@
 """The settings-change audit log.
 
-Every change to an effective setting — from an edit of ``config/owner.yaml`` applied at a
-cycle boundary, ``obliskiq settings set``, Telegram or the cockpit — is appended here as one
-JSON line: who, through which channel, when, which key, the old and new values and why.
+The record of changes to effective settings: one JSON line per changed key with who made
+the change, through which channel, when, the old and new values and why. The code that
+applies a settings change appends to it through :meth:`SettingsAuditLog.record`.
 
-The file is append-only: it is opened with ``O_APPEND`` and never rewritten. Each entry
-carries a sequence number and the SHA-256 of the previous entry, so an edited, reordered or
-removed entry breaks the chain and reading the log fails loudly. (A chain cannot reveal
-entries cut from the end; the log's backups cover that.)
+The file is append-only: it is opened with ``O_APPEND`` and never rewritten, and an
+exclusive lock covers reading the chain and appending to it, so two writers cannot take
+the same sequence number. Each entry carries a sequence number and the SHA-256 of the
+previous entry, computed over the bytes written; an edited, reordered or removed entry
+breaks the chain and reading the log fails loudly. A chain cannot reveal entries cut from
+the end.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import fcntl
 import hashlib
 import json
 import os
@@ -102,15 +105,16 @@ class SettingsAuditLog:
         for number, line in enumerate(lines, start=1):
             where = f"{self._path} line {number}"
             try:
-                entry = AuditEntry.model_validate_json(line)
-            except ValidationError as exc:
+                raw = json.loads(line)
+                entry = AuditEntry.model_validate(raw)
+            except (json.JSONDecodeError, ValidationError) as exc:
                 raise SettingsAuditError(f"{where} is not a valid audit entry") from exc
             if entry.seq != number:
                 raise SettingsAuditError(f"{where} has sequence {entry.seq}, expected {number}")
             if entry.prev_hash != previous:
                 raise SettingsAuditError(f"{where} does not follow the entry before it")
-            fields = entry.model_dump(mode="json", exclude={"hash"})
-            if _digest(fields) != entry.hash:
+            body = {key: value for key, value in raw.items() if key != "hash"}
+            if _digest(body) != entry.hash:
                 raise SettingsAuditError(f"{where} was altered after it was written")
             entries.append(entry)
             previous = entry.hash
@@ -128,15 +132,38 @@ class SettingsAuditLog:
         """Append one entry per change and flush them to disk before returning them."""
         if at.tzinfo is None:
             raise SettingsAuditError("an audit timestamp must be timezone-aware")
-        existing = self.entries()
+        pending = tuple(changes)
+        if not pending:
+            return ()
+        descriptor = self._open_for_append()
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            written = self._entries_after(self.entries(), pending, actor, channel, reason, at)
+            payload = "".join(entry.model_dump_json() + "\n" for entry in written)
+            _write_all(descriptor, payload.encode("utf-8"))
+            os.fsync(descriptor)
+        except OSError as exc:
+            raise SettingsAuditError(f"{self._path} could not be written: {exc}") from exc
+        finally:
+            os.close(descriptor)
+        return written
+
+    @staticmethod
+    def _entries_after(
+        existing: tuple[AuditEntry, ...],
+        changes: tuple[SettingChange, ...],
+        actor: str,
+        channel: str,
+        reason: str | None,
+        at: datetime,
+    ) -> tuple[AuditEntry, ...]:
         previous = existing[-1].hash if existing else GENESIS_HASH
-        moment = at.astimezone(UTC)
-        written: list[AuditEntry] = []
+        built: list[AuditEntry] = []
         for offset, change in enumerate(changes, start=1):
             try:
                 draft = AuditEntry(
                     seq=len(existing) + offset,
-                    at=moment,
+                    at=at.astimezone(UTC),
                     actor=actor,
                     channel=channel,
                     reason=reason,
@@ -148,26 +175,26 @@ class SettingsAuditLog:
                 )
             except ValidationError as exc:
                 raise SettingsAuditError(f"invalid audit entry for {change.key}: {exc}") from exc
-            digest = _digest(draft.model_dump(mode="json", exclude={"hash"}))
-            entry = draft.model_copy(update={"hash": digest})
-            written.append(entry)
+            # Hash exactly what is written, so reading back can never disagree.
+            body = json.loads(draft.model_dump_json(exclude={"hash"}))
+            entry = draft.model_copy(update={"hash": _digest(body)})
+            built.append(entry)
             previous = entry.hash
-        if not written:
-            return ()
-        payload = "".join(entry.model_dump_json() + "\n" for entry in written)
-        self._append(payload.encode("utf-8"))
-        return tuple(written)
+        return tuple(built)
 
-    def _append(self, payload: bytes) -> None:
+    def _open_for_append(self) -> int:
         try:
             self._path.parent.mkdir(mode=DATA_DIR_MODE, parents=True, exist_ok=True)
-            descriptor = os.open(self._path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, LOG_FILE_MODE)
+            return os.open(self._path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, LOG_FILE_MODE)
         except OSError as exc:
             raise SettingsAuditError(f"{self._path} cannot be opened for appending: {exc}") from exc
-        try:
-            os.write(descriptor, payload)
-            os.fsync(descriptor)
-        except OSError as exc:
-            raise SettingsAuditError(f"{self._path} could not be written: {exc}") from exc
-        finally:
-            os.close(descriptor)
+
+
+def _write_all(descriptor: int, payload: bytes) -> None:
+    """Write every byte: ``os.write`` may write fewer than it was given."""
+    remaining = memoryview(payload)
+    while remaining:
+        count = os.write(descriptor, remaining)
+        if count <= 0:
+            raise OSError("the file accepted no bytes")
+        remaining = remaining[count:]

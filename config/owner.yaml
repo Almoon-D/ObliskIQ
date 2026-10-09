@@ -6,8 +6,7 @@
 # After an edit, check it with:   obliskiq config validate
 # See every setting in force:     obliskiq settings show
 #
-# A running bot applies changes at the next cycle boundary, and every change is recorded
-# in the settings audit log.
+# Changes take effect the next time ObliskIQ reads its configuration.
 
 account:
   # The currency the account is measured in: budgets, caps and benchmarks are expressed

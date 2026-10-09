@@ -19,9 +19,9 @@ _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
 
 
 class FrozenModel(BaseModel):
-    """Base for configuration models: immutable, and unknown keys are errors."""
+    """Base for configuration models: immutable; unknown keys and non-finite numbers are errors."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 
 
 def _currency_code(value: str) -> str:

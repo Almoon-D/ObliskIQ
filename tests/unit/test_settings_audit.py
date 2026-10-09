@@ -6,9 +6,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 import os
 import stat
+import threading
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from obliskiq.config import load_config
 from obliskiq.config.audit import (
@@ -163,8 +165,10 @@ def test_a_location_under_a_file_fails_loudly(tmp_path):
     blocker = tmp_path / "file"
     blocker.write_text("", encoding="utf-8")
     log = SettingsAuditLog(blocker / "sub" / "log.jsonl")
-    with pytest.raises(SettingsAuditError, match="cannot be read"):
+    with pytest.raises(SettingsAuditError, match="cannot be opened for appending"):
         _record(log, SettingChange(key="a", old=None, new=1))
+    with pytest.raises(SettingsAuditError, match="cannot be read"):
+        log.entries()
 
 
 def test_a_log_that_cannot_be_opened_fails_loudly(log, monkeypatch):
@@ -196,3 +200,63 @@ def test_without_a_data_dir_there_is_no_log(config_dir):
     settings = load_config(config_dir).settings
     with pytest.raises(EnvVarError, match="OBLISK_DATA_DIR"):
         SettingsAuditLog.for_settings(settings, load_environment(env_file=None))
+
+
+def test_a_non_finite_value_is_refused_before_anything_is_written(log):
+    with pytest.raises(ValidationError):
+        SettingChange(key="a", old=None, new=float("nan"))
+    assert not log.path.exists()
+
+
+def test_floats_round_trip_through_the_chain(log):
+    _record(log, SettingChange(key="threshold", old=0.1, new=1e-7))
+    _record(log, SettingChange(key="threshold", old=1e-7, new=2.5))
+    assert [entry.new for entry in log.entries()] == [1e-7, 2.5]
+
+
+def test_the_hash_covers_the_bytes_on_disk(log):
+    """Verification reads the line as written, so formatting cannot drift from the hash."""
+    _record(log, SettingChange(key="a", old=None, new={"nested": [1, "two", None]}))
+    raw = json.loads(log.path.read_text(encoding="utf-8"))
+    raw["new"] = {"nested": [1, "two"]}
+    log.path.write_text(json.dumps(raw) + "\n", encoding="utf-8")
+    with pytest.raises(SettingsAuditError, match="altered"):
+        log.entries()
+
+
+def test_a_short_write_is_completed(log, monkeypatch):
+    real_write = os.write
+
+    def one_byte_at_a_time(descriptor: int, payload: bytes) -> int:
+        return real_write(descriptor, bytes(payload[:1]))
+
+    monkeypatch.setattr(os, "write", one_byte_at_a_time)
+    _record(log, SettingChange(key="a", old=None, new="x"))
+    monkeypatch.undo()
+    assert [entry.new for entry in log.entries()] == ["x"]
+
+
+def test_a_write_that_accepts_nothing_fails_loudly(log, monkeypatch):
+    monkeypatch.setattr(os, "write", lambda *_args: 0)
+    with pytest.raises(SettingsAuditError, match="accepted no bytes"):
+        _record(log, SettingChange(key="a", old=None, new=1))
+
+
+def test_concurrent_writers_keep_one_unbroken_chain(log):
+    """Two writers on separate descriptors serialise on the lock."""
+    rounds = 40
+
+    def write(name: str) -> None:
+        writer = SettingsAuditLog(log.path)
+        for number in range(rounds):
+            _record(writer, SettingChange(key=name, old=number, new=number + 1))
+
+    threads = [
+        threading.Thread(target=write, args=(name,)) for name in ("cli", "service", "cockpit")
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    entries = log.entries()
+    assert [entry.seq for entry in entries] == list(range(1, 3 * rounds + 1))
