@@ -27,10 +27,10 @@ measured viable at the account's size against live chains (`legacy/lite/docs/DEC
 ### D3 · Edge is calibrated probability × asymmetric payoff (§4, §5.11)
 
 Stated probabilities shrink toward the base rate (market-implied, or the random-walk barrier
-probability), never toward 0.5; until a layer has a pre-registered minimum of graded outcomes
-and Brier skill above zero it sizes by a fixed risk budget. Rejected: Kelly shrunk to 0.5,
-which overstates the edge of a 3:1 target; base-rate anchoring without the fixed-budget
-regime would size at ≈ 0 and freeze the satellite.
+probability); until a layer has a pre-registered minimum of graded outcomes and Brier skill
+above zero it sizes by a fixed risk budget. Rejected: shrinking toward 0.5, as the old clamp
+did (`legacy/old/ObliskIQ/modules/execution/phase4_decision_engine.py:831-832,878`), which
+overstates the edge of a 3:1 target; base-rate anchoring alone would freeze the satellite.
 
 ### D4 · Simons means statistical discipline, not microstructure (§4, §5.2)
 
@@ -51,8 +51,8 @@ Trend has the stronger evidence (Moskowitz, Ooi & Pedersen 2012); bands-only is 
 
 Rejected: adding to long options after the move confirms (a higher premium for the same
 convexity) and delayed quotes for options (wide spreads; stale mids misprice). Pyramiding is
-for shares only. Stocks, ETFs, funds and bonds accept delayed quotes within a maximum age,
-with the collar widened by σ·√(delay).
+for shares only; stocks, ETFs, funds and bonds accept delayed quotes within a maximum age.
+Evidence: the §4 rows, and lite's sleeve rules (`legacy/lite/docs/DECISIONS.md:37-91`).
 
 ### D7 · Bonds by a computed rule; swap partners on a different index (§4, §5.3, §5.16)
 
@@ -66,9 +66,9 @@ negligible tracking cost.
 
 OAuth 1.0a where IBKR grants it; otherwise the Client Portal Gateway with automated login,
 unattended in paper (paper logins have no second factor). Evidence: IBKR told the owner on
-2026-10-08 that OAuth 1.0a is for institutional clients, while lite ran OAuth live and
-headless on 2026-09-10 (`legacy/lite/docs/DECISIONS.md:2124`; 3,832 chain rows across 21
-underlyings, `legacy/lite/ROADMAP.legacy.md:128-129`).
+2026-10-08 that OAuth 1.0a is for institutional clients, while lite's Client Portal route over
+OAuth, its headless route (`legacy/lite/docs/DECISIONS.md:229-231`), ran live on 2026-09-10:
+3,832 chain rows across 21 underlyings (`legacy/lite/ROADMAP.legacy.md:127-129`).
 
 ### D9 · Standard CPython 3.14, not free-threaded (§4, §7)
 
@@ -81,7 +81,7 @@ single-threaded and not every scientific wheel ships a free-threaded build.
 
 Rejected: separate grids by region or by sector. Different questions need different axes;
 one table `(entity, indicator, as_of, value, status, reason, …)` keeps them consistent and
-carries lite's explicit `ok | n/a | stale | inapplicable` statuses.
+carries lite's explicit statuses, `inapplicable` included (`legacy/lite/docs/DECISIONS.md:531,622`).
 
 ### D11 · Patterns are pre-registered; the LLM nominates, data disposes (§4, §5.9, §5.10)
 
@@ -101,8 +101,9 @@ lifetimes and 4.3% of firms created all net wealth 1926–2016 (Bessembinder 201
 
 Risk balance (All Weather), trend following (the CTA tradition), reflexivity (the satellite),
 and statistical discipline as the reason the other three can be trusted. Not pillars: value
-investing (a selection factor instead), permanent tail hedging (bleeds the variance risk
-premium; trend protects more cheaply), FX carry (needs forwards, which the mandate forbids).
+(a selection factor), permanent tail hedging (it pays away the variance risk premium,
+Bollerslev, Tauchen & Zhou 2009; trend protects more cheaply, Hurst, Ooi & Pedersen 2017),
+FX carry (it needs forwards, which the mandate forbids).
 
 ### D14 · Legacy pattern triage (§6.4)
 
@@ -122,12 +123,12 @@ attributed where copied. A further dependency needs an entry here.
 
 ### D16 · Owner decisions (§11)
 
-Any account size, with a configurable minimum trade; budgets core 70 / equity satellite 20 /
-option premium 5 / cash ≥ 5 by default, moved by the allocation rule up to an owner ceiling;
-fully autonomous in paper; OPRA L1 and Eurex Core L1 shared from the main username to its
-paper account; existing holdings `unmanaged`; EUR base, selectable; FIFO and the two-month
-rule as Spanish law requires; a release on every version change. Open: the LLM provider and
-budget, the machine, the paper capital cap, the satellite ceiling, fund-switch support.
+Any account size, with a configurable minimum trade; capital budgets with defaults per §11
+row 2, moved by the allocation rule up to an owner ceiling; fully autonomous in paper; OPRA L1
+and Eurex Core L1 shared from the main username to its paper account; existing holdings
+`unmanaged`; EUR base, selectable; FIFO and the two-month rule; a release per version. Open:
+the LLM provider and budget, the machine, which holdings to release, the paper capital cap,
+the satellite ceiling, fund-switch support.
 
 ## Session 1 — Foundation (2026-10-08)
 
@@ -170,9 +171,9 @@ lite's dotted-path `config.py`.
 
 CI cancels a superseded run except on `main`, where cancelling could leave a merged commit
 with no completed result (lite's rule, `legacy/lite/tests/test_packaging.py`). The release
-workflow reads the version and notes through `.github/scripts/release_notes.py`, the code
-`tests/unit/test_changelog.py` runs on every change, so a CHANGELOG that would break a release
-fails CI first. The sdist ships an explicit file list, so `legacy/` can never leak into it.
+reads version and notes through `.github/scripts/release_notes.py`, which CI tests and ruff
+holds to Python 3.12 (the runner's), and pins its actions by commit. The sdist ships an
+explicit file list, so `legacy/` cannot leak into it.
 
 ### D22 · Subagents name model families
 
@@ -180,3 +181,9 @@ fails CI first. The sdist ships an explicit file list, so `legacy/` can never le
 SESSION_PROMPTS §C.1. The aliases resolve to the newest model of each family — today the ones
 §C.1 names — so the files carry no version identifiers and follow a family forward; pinning a
 version would be a new entry here.
+
+### D23 · The LLM contract also keeps out the broker
+
+`obliskiq.llm` may import neither `decision`, `execution` nor `ibkr`: the order endpoints live
+in `ibkr`, and the LLM never builds or sends orders (AGENTS.md hard rules). The three import
+contracts were each shown to break on a probe import before they were relied on.

@@ -31,7 +31,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 
 ## Session log
 
-### Session 1 — Foundation (2026-10-08, v0.1.0)
+### Session 1 — Foundation (2026-10-08 → 2026-10-09, v0.1.0)
 
 **Landed.**
 - `docs/MASTER_PLAN.md`, `docs/SESSION_PROMPTS.md` and `AGENTS.md` verbatim from the
@@ -57,7 +57,11 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   decision paths, packaging (real wheel and sdist builds), `.env.example` completeness,
   the CHANGELOG section, workflows, legacy snapshot, package layout; a config-load smoke test.
 - CI (`ci`), the release workflow, Dependabot (uv, github-actions), the PR template.
-- Tests: 332 passing. Coverage measured 99.6%; floor set to 98.6%.
+- Tests: 344 passing. Coverage measured 99.6%; floor set to 98.6%.
+- Review (round 1, fresh reviewer): no blocking finding; twelve non-blocking ones, fixed in
+  this PR except those listed under Follow-ups (audit log hardened against non-finite values,
+  short writes and concurrent writers; read-only profile policies; wider magic-number scope;
+  `llm` ⟂ `ibkr`; `--env-file`; clearer messages; DECISIONS evidence).
 
 **Deferred.** Nothing in scope. Error classes, the `http` config keys and every other
 section of lite's `config.yaml` arrive with their consumers (DECISIONS D2, D20).
@@ -91,7 +95,16 @@ settles it.
 
 - **Owner:** confirm the repository settings listed in the Session 1 log entry.
 - **Owner:** after the merge, archive `Almoon-D/Inversor-Inteligente` (SESSION_PROMPTS §A.4).
+- **Owner:** the copyright notice and package author name the owner (`pyproject.toml`,
+  `src/obliskiq/__init__.py`), as in ObliskIQ-lite-MCP; confirm or ask for a change.
 - GitHub's dependency graph also reads the manifests inside `legacy/`
   (`legacy/lite/pyproject.toml`, `legacy/lite/requirements.txt`,
   `legacy/pulse/pyproject.toml`), so Dependabot alerts may name them until Session 20
   deletes `legacy/`; they are never installed.
+- Session 4 (first thresholds in a decision path): the magic-number guard accepts any
+  module-level UPPER_CASE constant; decide whether decision paths take only an explicit
+  allowlist of protocol and unit constants (a DECISIONS entry either way).
+- Session 19: a release created with `GITHUB_TOKEN` does not trigger `on: release`
+  workflows, so the image build must be a job in `release.yml` (as its prompt says).
+- Release workflow: when a pending run is replaced by a newer push to `main`, the tag lands
+  on the newer commit, which still contains the version change. Accepted; noted here.
