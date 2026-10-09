@@ -1,0 +1,179 @@
+# What trading costs. Money and rates are written as QUOTED STRINGS ("0.005"): a bare 0.005 is a
+# float, and a float cannot hold a price exactly. An owner override replaces a whole list, not a
+# record in it, so copy the list you change.
+#
+# Nothing here is measured. Every row carries its source and `verify_live: true` until a live
+# reading (an order's executions, IBKR's published schedule) settles it. A venue, asset class or
+# currency with no row has NO schedule, and the estimator says so rather than guessing a number.
+costs:
+  # Commission schedules, chosen by (venue, asset class, currency). `venues: null` applies on
+  # any venue. kind per_share: `rate` per share, `minimum` per order, `maximum_fraction_of_value`
+  # of the trade value. kind per_contract: `rate` per contract, `minimum` per order. kind
+  # fraction_of_face: `rate` as a fraction of face value, `minimum` per order, and the schedule is
+  # defined only up to `up_to_face` (a larger order falls into a tier this file does not hold).
+  # A `minimum` of null means no minimum is established for the row.
+  commissions:
+    - id: us_stock
+      venues: [XNYS, XNAS]
+      asset_classes: [stock, etf]
+      currency: USD
+      kind: per_share
+      rate: "0.005"
+      minimum: "1.00"
+      maximum_fraction_of_value: "0.01"
+      up_to_face: null
+      scope_note: US-listed shares and ETFs on IBKR's fixed schedule
+      source:
+        origin: legacy/old transaction_costs.py settings (RiskManagement) @68280e1; IBKR fixed schedule
+        verify_live: true
+    - id: us_option
+      venues: [XNYS, XNAS]
+      asset_classes: [option]
+      currency: USD
+      kind: per_contract
+      rate: "0.65"
+      minimum: "1.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: US listed options (a venue profile maps CBOE and the other US option exchanges here); exchange and regulatory fees of a few cents per contract are not included
+      source:
+        origin: legacy/old transaction_costs.py ($0.65 per contract) and legacy/lite config.yaml (USD 1.00 per-order minimum) @b1ebd49
+        verify_live: true
+    - id: eurex_option
+      venues: [XEUR]
+      asset_classes: [option]
+      currency: EUR
+      kind: per_contract
+      rate: "1.50"
+      minimum: null
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: Eurex single-stock options; no per-order minimum is established
+      source:
+        origin: legacy/lite config.yaml, IBKR published fixed rate, documentation-derived and unverified @b1ebd49
+        verify_live: true
+    - id: us_treasury
+      venues: null
+      asset_classes: [bond]
+      currency: USD
+      kind: fraction_of_face
+      rate: "0.00002"
+      minimum: "5.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: US Treasuries only (0.002 % of face); other USD bonds are not covered by this row
+      source:
+        origin: docs/MASTER_PLAN.md section 5.3 (IBKR US Treasuries 0.002 % of face, minimum USD 5)
+        verify_live: true
+    - id: eur_bond
+      venues: null
+      asset_classes: [bond]
+      currency: EUR
+      kind: fraction_of_face
+      rate: "0.001"
+      minimum: "1.00"
+      maximum_fraction_of_value: null
+      up_to_face: "8500"
+      scope_note: EUR bonds up to EUR 8,500 of face; the schedule for a larger order is not held here
+      source:
+        origin: docs/MASTER_PLAN.md section 5.3 (IBKR EUR bonds 0.1 % up to EUR 8,500, minimum EUR 1)
+        verify_live: true
+
+  # Transaction taxes, by the country of the ISSUER (they follow the company, not the venue).
+  # `rate` null means the rate could not be stated with confidence: the estimator then returns
+  # tax_unknown and never zero. `confirmation` says what was read when the row was written:
+  # official (an official source), secondary (consistent secondary sources citing the provision)
+  # or none. `needs_issuer_list`: the tax applies only to issuers on a published list (a market
+  # capitalisation threshold), which the caller must say; when it does not, the estimate assumes
+  # the issuer is taxable and says so. This is not tax advice.
+  taxes:
+    - id: gb_stamp_duty_reserve_tax
+      issuer_country: GB
+      asset_classes: [stock]
+      sides: [buy]
+      rate: "0.005"
+      effective_from: null
+      needs_issuer_list: false
+      provision: Finance Act 1986 section 87 (stamp duty reserve tax, 0.5 %); HMRC Stamp Taxes on Shares Manual STSM031010
+      confirmation: official
+      note: Not charged on securities of newly listed companies for three years from listing (HM Treasury policy paper, 2025-11-26); the estimate ignores that relief and so errs high.
+      source:
+        origin: gov.uk HMRC Stamp Taxes on Shares Manual, read 2026-10-09
+        verify_live: true
+    - id: hk_stamp_duty
+      issuer_country: HK
+      asset_classes: [stock]
+      sides: [buy, sell]
+      rate: "0.001"
+      effective_from: 2023-11-17
+      needs_issuer_list: false
+      provision: Stamp Duty Ordinance (Cap. 117) as amended by the Stamp Duty (Amendment) (Stock Transfers) Bill 2023; 0.1 % of the consideration from each of buyer and seller
+      confirmation: official
+      note: Exchange-traded funds are exempt; the estimate ignores that and so errs high.
+      source:
+        origin: Hong Kong IRD press release 2023-11-15 and HKEX circular CT 158/2023, read 2026-10-09
+        verify_live: true
+    - id: es_financial_transaction_tax
+      issuer_country: ES
+      asset_classes: [stock]
+      sides: [buy]
+      rate: "0.002"
+      effective_from: 2021-01-16
+      needs_issuer_list: true
+      provision: Ley 5/2020, de 15 de octubre, del Impuesto sobre las Transacciones Financieras (0.2 % of acquisitions of Spanish listed shares with market capitalisation above EUR 1,000 million on 1 December of the previous year)
+      confirmation: secondary
+      note: The AEAT publishes the list of taxable issuers each year.
+      source:
+        origin: Ley 5/2020 as summarised by AEAT-citing secondary sources, read 2026-10-09
+        verify_live: true
+    - id: fr_financial_transaction_tax
+      issuer_country: FR
+      asset_classes: [stock]
+      sides: [buy]
+      rate: "0.004"
+      effective_from: 2025-04-01
+      needs_issuer_list: true
+      provision: Code general des impots article 235 ter ZD (0.4 % of acquisitions of shares of French listed companies with market capitalisation above EUR 1,000 million on 1 December of the previous year), rate raised by article 98 of the 2025 finance law
+      confirmation: secondary
+      note: Amendments to raise the rate again for 2026 were tabled; whether any passed was not established, so the rate may be higher. BOFiP BOI-ANNX-000467 lists taxable issuers.
+      source:
+        origin: BOFiP and finance-law summaries from secondary sources, read 2026-10-09
+        verify_live: true
+    - id: it_financial_transaction_tax
+      issuer_country: IT
+      asset_classes: [stock]
+      sides: [buy, sell]
+      rate: null
+      effective_from: null
+      needs_issuer_list: true
+      provision: Legge 24 dicembre 2012, n. 228, article 1 commas 491-500 (financial transaction tax on shares of Italian issuers)
+      confirmation: none
+      note: Sources disagree. 0.1 % on regulated markets and 0.2 % elsewhere was the rate until 2025; one secondary source reports 0.2 % and 0.4 % from 2026-01-01 under Legge 30 dicembre 2025, n. 199 comma 29. Not confirmed against the official text, so no rate is entered.
+      source:
+        origin: Il Sole 24 Ore summary of Legge 199/2025; no official text read, 2026-10-09
+        verify_live: true
+
+  # The legacy friction tiers, kept as labelled ASSUMPTIONS: none is measured, and transaction-cost
+  # analysis of the account's own fills replaces them. A fraction is a decimal (0.001 is 0.1 %).
+  friction:
+    source:
+      origin: legacy/old modules/config/settings.py RiskManagement and transaction_costs.py @68280e1; assumptions, not measurements
+      verify_live: true
+    equity:
+      # A share whose market capitalisation (in USD) reaches this is liquid. Unknown is treated as
+      # illiquid.
+      liquid_market_cap_usd: "10000000000"
+      # The cost of crossing the spread on one leg, and flat slippage, by liquidity tier.
+      liquid_spread_fraction: "0.001"
+      illiquid_spread_fraction: "0.005"
+      liquid_slippage_fraction: "0.001"
+      illiquid_slippage_fraction: "0.005"
+      # Square-root market impact: coefficient * sqrt(order value / average daily value), capped.
+      impact_coefficient: "0.10"
+      impact_cap_fraction: "0.05"
+    option:
+      # Half-spread per leg as a fraction of the option's value (a round trip is twice this).
+      liquid_half_spread_fraction: "0.005"
+      single_name_half_spread_fraction: "0.015"
+      # Underlyings whose listed options trade penny-wide with deep books.
+      liquid_underlyings: [SPY, QQQ, IWM, DIA, VIX, SPX, NDX, RUT, EEM, XLF, XLE]

@@ -26,6 +26,7 @@ from .schema_calendars import (
     SyntheticCalendarConfig,
     VenueConfig,
 )
+from .schema_costs import CostsConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
@@ -97,6 +98,7 @@ class ObliskConfig(FrozenModel):
     numerics: NumericsConfig
     smile: SmileConfig
     liquidity: LiquidityConfig
+    costs: CostsConfig
     calendars: CalendarsConfig
     venues: dict[Mic, VenueConfig]
     synthetic_calendars: dict[Mic, SyntheticCalendarConfig]
