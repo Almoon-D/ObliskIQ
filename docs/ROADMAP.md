@@ -73,10 +73,11 @@ section of lite's `config.yaml` arrive with their consumers (DECISIONS D2, D20).
 
 **Repository settings vs SESSION_PROMPTS §A.1.** The session's `gh` was not authenticated
 and the GitHub tools it had do not read repository settings, so only part could be checked:
-private ✓, default branch `main` ✓, AGPL-3.0 ✓. Not readable, for the owner to confirm:
-merge commits and rebase merging disabled with squash kept ("Pull request title and
-description"); automatic deletion of merged branches; Dependabot alerts and security
-updates; Actions workflow permissions read-only; the optional ruleset requiring `ci`.
+private ✓, default branch `main` ✓, AGPL-3.0 ✓. Squash merging was disabled: GitHub refused
+the protocol's squash merge (405) on 2026-10-09 and the owner enabled it. Not readable, for
+the owner to confirm: merge commits and rebase merging disabled; the squash message "Pull
+request title and description"; automatic deletion of merged branches; Dependabot alerts and
+security updates; Actions workflow permissions read-only; the optional ruleset requiring `ci`.
 
 **Process.** The harness assigned the branch `claude/funny-keller-biu3b6` instead of
 `s01-foundation`; GitHub steps of the end-of-session protocol ran through the GitHub tools
