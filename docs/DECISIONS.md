@@ -373,7 +373,16 @@ belongs to the order boundary (Session 5), not to a cost estimate. Before a tax 
 `effective_from` the leg has no rule and is labelled `tax_not_modelled`, so a backtest of an
 earlier date understates cost and must read that label; `breakeven_move` doubles one leg's
 fraction and so omits a side-specific tax of the other leg (Session 14 prices both legs). The
-USD 1.00 option order minimum is new. Lite's IV-solve tests that need the store (vendor column
+USD 1.00 option order minimum is new. The cost functions refuse malformed
+input instead of pricing it: a side other than `buy`/`sell`, an issuer country that is not two
+upper-case letters, a negative or non-finite notional, a non-positive or non-finite multiplier
+or entry price. An unknown tax has no amount (`None`), as an unknown commission has none. A share
+whose issuer country is not given has `tax_unknown` and no total, because a share's tax follows
+its issuer; for other asset classes a missing country is labelled `tax_not_modelled`. A
+`maximum_fraction_of_value` of zero is refused at load. Open questions, recorded not decided: any
+USD bond is priced on the US Treasury row because order terms cannot tell a Treasury from other
+bonds (Session 9's bond rule supplies the distinction); a missing average daily value gives zero
+market impact without a label. Lite's IV-solve tests that need the store (vendor column
 untouched, rate as-of refusals, vendor-served skip, source ordering) stay with Session 11.
 
 ### D31 · Costs

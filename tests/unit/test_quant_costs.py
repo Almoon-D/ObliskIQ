@@ -290,7 +290,7 @@ def test_an_issuer_with_no_rule_is_not_modelled_rather_than_untaxed(book):
     assert (us.amount, us.applies, us.gap) == (D(0), False, None)
     assert "no tax rule for US" in us.detail
     unknown_country = apply(book, None)
-    assert unknown_country.applies is False
+    assert (unknown_country.amount, unknown_country.gap) == (None, CostGap.TAX_UNKNOWN)
     assert "issuer country not given" in unknown_country.detail
 
 

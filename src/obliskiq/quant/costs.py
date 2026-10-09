@@ -22,6 +22,7 @@ the Apache License permits.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
@@ -42,6 +43,8 @@ _EQUITY_LIKE = frozenset({AssetClass.STOCK, AssetClass.ETF, AssetClass.ETC})
 LEGS_IN_A_ROUND_TRIP = 2
 
 type Side = Literal["buy", "sell"]
+_SIDES = frozenset({"buy", "sell"})
+_COUNTRY = re.compile(r"[A-Z]{2}")
 
 
 class CostGap(StrEnum):
@@ -92,12 +95,13 @@ class CommissionEstimate:
 class TaxEstimate:
     """A transaction tax on one leg.
 
-    ``applies`` is ``False`` when no configured rule covers the issuer and side (the tax is then
-    not modelled, which is not the same as the tax being zero). ``scope_assumed`` marks an
+    ``amount`` is ``None`` while the tax is unknown (``TAX_UNKNOWN``): an unknown tax is not a
+    number. ``applies`` is ``False`` when no configured rule covers the issuer and side (the tax
+    is then not modelled, which is not the same as the tax being zero). ``scope_assumed`` marks an
     estimate that assumed an issuer was on a published list because the caller did not say.
     """
 
-    amount: Decimal
+    amount: Decimal | None
     gap: CostGap | None
     rule_id: str | None
     applies: bool
@@ -128,14 +132,18 @@ class LegCost:
     def total(self) -> Decimal | None:
         """The sum of every component, or ``None`` while any of them cannot be priced."""
         commission = self.commission.amount
+        tax = self.tax.amount
         if (
             self.gaps
+            or self.commission.gap is not None
+            or self.tax.gap is not None
             or self.spread_cost is None
             or self.slippage_cost is None
             or commission is None
+            or tax is None
         ):
             return None
-        return self.spread_cost + self.slippage_cost + commission + self.tax.amount
+        return self.spread_cost + self.slippage_cost + commission + tax
 
     @property
     def total_fraction(self) -> Decimal | None:
@@ -293,8 +301,25 @@ class CostBook:
         when the caller says the issuer is not on it and assumed to apply when the caller does not
         say, which errs towards the higher cost and is labelled ``scope_assumed``.
         """
+        if side not in _SIDES:
+            raise ValueError(f"side must be 'buy' or 'sell', got {side!r}")
+        if notional is not None and (not notional.is_finite() or notional < ZERO):
+            raise ValueError(f"a notional must be finite and not negative, got {notional}")
         if issuer_country is None:
+            if asset_class is AssetClass.STOCK:
+                # A share's tax follows its issuer; without the country it cannot be priced.
+                return TaxEstimate(
+                    None,
+                    CostGap.TAX_UNKNOWN,
+                    None,
+                    True,
+                    True,
+                    False,
+                    "issuer country not given for a share",
+                )
             return TaxEstimate(ZERO, None, None, False, False, False, "issuer country not given")
+        if not _COUNTRY.fullmatch(issuer_country):
+            raise ValueError(f"an issuer country is two upper-case letters, got {issuer_country!r}")
         rules = [
             rule
             for rule in self._taxes
@@ -312,7 +337,7 @@ class CostBook:
         if unknown:
             first = unknown[0]
             return TaxEstimate(
-                ZERO,
+                None,
                 CostGap.TAX_UNKNOWN,
                 first.id,
                 True,
@@ -438,7 +463,9 @@ class CostBook:
         multiplier for an option's notional and is required for an option: a premium per unit
         without it would be costed as one unit, a hundredth of the money at risk.
         """
-        if terms.asset_class is AssetClass.OPTION and (multiplier is None or multiplier <= ZERO):
+        if multiplier is not None and (not multiplier.is_finite() or multiplier <= ZERO):
+            raise ValueError(f"a contract multiplier must be positive and finite, got {multiplier}")
+        if terms.asset_class is AssetClass.OPTION and multiplier is None:
             raise ValueError("an option leg needs its contract multiplier to be costed")
         value = terms.value(Decimal(1) if multiplier is None else multiplier)
         if value is None:
@@ -525,6 +552,8 @@ def breakeven_move(entry_price: Decimal, cost: LegCost) -> tuple[Decimal, Decima
     Costs are paid on entry and again on exit, so the drag is twice the single-leg fraction.
     ``None`` when the leg could not be priced or has no notional.
     """
+    if not entry_price.is_finite() or entry_price <= ZERO:
+        raise ValueError(f"an entry price must be positive and finite, got {entry_price}")
     fraction = cost.total_fraction
     if fraction is None:
         return None

@@ -51,7 +51,7 @@ class CommissionSchedule(FrozenModel):
     kind: Literal["per_share", "per_contract", "fraction_of_face"]
     rate: Annotated[Decimal, BeforeValidator(_not_a_float), Field(gt=0)]
     minimum: Amount | None
-    maximum_fraction_of_value: Fraction | None
+    maximum_fraction_of_value: Rate | None
     up_to_face: Amount | None
     scope_note: NonEmptyText
     source: Provenance
