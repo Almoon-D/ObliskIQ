@@ -161,14 +161,18 @@ def test_an_incident_for_an_unknown_venue_is_refused() -> None:
 def test_reloading_the_manual_file_keeps_the_fed_incidents() -> None:
     fed = feed_incident()
     fresh = IncidentBook((make_incident(incident_id="new-manual"),))
-    book = IncidentBook((make_incident(incident_id="old-manual"), fed)).with_manual(fresh)
+    book = IncidentBook((make_incident(incident_id="old-manual"), fed)).with_manual(
+        fresh, "manual-incidents.yaml"
+    )
     assert {i.incident_id for i in book.incidents} == {"new-manual", fed.incident_id}
     assert book.invalid is None
 
 
 def test_an_unreadable_manual_file_marks_the_book_invalid_but_keeps_fed_incidents() -> None:
     fed = feed_incident()
-    book = IncidentBook((fed,)).with_manual(IncidentBook.unreadable("bad file"))
+    book = IncidentBook((fed,)).with_manual(
+        IncidentBook.unreadable("bad file"), "manual-incidents.yaml"
+    )
     assert book.invalid == "bad file"
     assert book.incidents == (fed,)
 

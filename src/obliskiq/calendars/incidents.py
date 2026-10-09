@@ -18,9 +18,15 @@ from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import AwareDatetime, Field, PositiveInt, ValidationError
+from pydantic import (
+    AwareDatetime,
+    BeforeValidator,
+    Field,
+    PositiveInt,
+    ValidationError,
+)
 
 from ..config.base import FrozenModel
 from ..config.loader import ConfigInvalid, read_yaml_mapping
@@ -35,9 +41,22 @@ FOREVER = datetime.max.replace(tzinfo=UTC)
 
 def blocking_span(incident: Incident, grace: timedelta) -> Span:
     """When an incident blocks: its start to its expected end plus ``grace`` (or forever)."""
+    end = _end_with_grace(incident, grace)
+    return (incident.start, FOREVER if end is None else end)
+
+
+def _end_with_grace(incident: Incident, grace: timedelta) -> datetime | None:
+    """The instant the block ends, or ``None`` for one that never ends.
+
+    An expected end so far out that adding the grace overflows is an open-ended block, not a
+    crash: an incident can lengthen a block, never lift it.
+    """
     if incident.expected_end is None:
-        return (incident.start, FOREVER)
-    return (incident.start, incident.expected_end + grace)
+        return None
+    try:
+        return incident.expected_end + grace
+    except OverflowError:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,18 +138,36 @@ class IncidentBook:
         kept = tuple(i for i in self.incidents if i.origin != origin)
         return type(self)((*kept, *fresh), self.invalid)
 
-    def with_manual(self, manual: IncidentBook) -> IncidentBook:
-        """This book with its manual entries (and the file's validity) taken from ``manual``."""
-        fed = tuple(i for i in self.incidents if i.source is not IncidentSource.MANUAL)
-        return IncidentBook((*manual.incidents, *fed), manual.invalid)
+    def with_manual(self, manual: IncidentBook, origin: str) -> IncidentBook:
+        """This book with the manual file's entries and validity taken from ``manual``.
+
+        ``origin`` is the manual file's name: only entries that came from that file are
+        replaced, so an entry another origin raised survives a reload.
+        """
+        kept = tuple(i for i in self.incidents if i.origin != origin)
+        return IncidentBook((*manual.incidents, *kept), manual.invalid)
 
     def stale(self, now: datetime, grace: timedelta) -> tuple[Incident, ...]:
         """Incidents whose block has run out while the entry is still in the book."""
         return tuple(
             incident
             for incident in self.incidents
-            if incident.expected_end is not None and incident.expected_end + grace < now
+            if (end := _end_with_grace(incident, grace)) is not None and end < now
         )
+
+
+def _plain_int(value: object) -> object:
+    """An identifier is a whole number as written: ``yes`` or ``true`` is not contract 1."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("must be a whole number")
+    return value
+
+
+def _written_time(value: object) -> object:
+    """A time is written with an explicit UTC offset, not as a count of seconds."""
+    if isinstance(value, bool | int | float) or value is None:
+        raise ValueError("must be a date and time with an explicit UTC offset")
+    return value
 
 
 class _ManualEntry(FrozenModel):
@@ -139,9 +176,11 @@ class _ManualEntry(FrozenModel):
     id: NonEmptyText
     venue: Mic
     scope: IncidentScope
-    conid: PositiveInt | None = Field(default=None)
-    start: AwareDatetime
-    expected_end: AwareDatetime | None = Field(default=None)
+    conid: Annotated[PositiveInt, BeforeValidator(_plain_int)] | None = Field(default=None)
+    start: Annotated[AwareDatetime, BeforeValidator(_written_time)]
+    expected_end: Annotated[AwareDatetime, BeforeValidator(_written_time)] | None = Field(
+        default=None
+    )
     reason: NonEmptyText
 
 
@@ -153,7 +192,7 @@ def load_manual_incidents(path: Path, venues: Collection[str]) -> IncidentBook:
     before the start) makes the whole book invalid: one typo must never silently drop the
     entries beside it.
     """
-    if not path.exists():
+    if not path.exists() and not path.is_symlink():
         return IncidentBook()
     try:
         return IncidentBook(_read_entries(path, venues))
@@ -165,8 +204,8 @@ def _read_entries(path: Path, venues: Collection[str]) -> tuple[Incident, ...]:
     origin = path.name
     try:
         data = read_yaml_mapping(path, origin)
-    except ConfigInvalid as error:
-        raise IncidentFileError(str(error)) from None
+    except (ConfigInvalid, UnicodeDecodeError, OSError) as error:
+        raise IncidentFileError(f"{origin}: cannot be read ({error})") from None
     unknown = sorted(set(data) - {"incidents"})
     if unknown:
         raise IncidentFileError(f"{origin}: unknown top-level key(s) {', '.join(unknown)}")

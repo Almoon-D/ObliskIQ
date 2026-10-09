@@ -36,6 +36,7 @@ from ..domain.calendar import Incident, IncidentScope, PhaseKind, TimeWindow, Ve
 from ..errors import (
     CalendarCoverageError,
     CalendarError,
+    IncidentRejectedError,
     ScheduleInconsistentError,
     UnknownExchangeCodeError,
     UnknownVenueError,
@@ -172,6 +173,16 @@ def _build_venue(settings: ObliskConfig, mic: str, start: date, end: date) -> Ve
     )
 
 
+def _describe(disagreements: tuple[Disagreement, ...]) -> str:
+    return "; ".join(
+        f"{d.source}: {d.kind.value} {d.observed} vs {d.calendar}" for d in disagreements
+    )
+
+
+def _disagreement_detail(view: _DayView) -> str:
+    return _describe(view.status.disagreements)
+
+
 class Calendars:
     """Venue calendars, phases, incidents and the last tradable session of an option."""
 
@@ -189,6 +200,9 @@ class Calendars:
     ) -> None:
         self._runtimes = dict(runtimes)
         self._manual_path = manual_incidents_path
+        self._manual_origins: set[str] = (
+            set() if manual_incidents_path is None else {manual_incidents_path.name}
+        )
         self._exchanges = dict(exchanges)
         self._grace = incident_grace
         self._tolerance = tolerance
@@ -323,12 +337,17 @@ class Calendars:
                 "manual incident file unreadable; all venues blocked",
                 extra={"error": manual.invalid},
             )
-        book = self._incidents.with_manual(manual)
+        self._manual_origins.add(path.name)
+        book = self._incidents.with_manual(manual, path.name)
         self._incidents = book
         return book
 
     def accept_incidents(self, origin: str, incidents: Sequence[Incident]) -> None:
         """Replace a source's incidents, refusing any beyond what its venue lets it raise."""
+        if origin in self._manual_origins:
+            raise IncidentRejectedError(
+                f"'{origin}' is the manual incident file's own name; reload the file instead"
+            )
         policies = {mic: runtime.incident_policy for mic, runtime in self._runtimes.items()}
         self._incidents = self._incidents.replace_origin(origin, incidents, policies)
 
@@ -433,6 +452,10 @@ class Calendars:
         if reason is not None and reason is not BlockReason.INCIDENT_OVERLAP:
             return Tradability(mic, at, reason, view.status.detail)
         if contains(view.final, at):
+            if date_critical and view.status.disagreements:
+                return Tradability(
+                    mic, at, BlockReason.SOURCE_DISAGREEMENT, _disagreement_detail(view)
+                )
             window = next(w for w in to_windows(view.final) if w.contains(at))
             return Tradability(mic, at, None, "", window)
         if contains(view.base, at):
@@ -505,10 +528,7 @@ class Calendars:
                 mic,
                 day,
                 BlockReason.SOURCE_DISAGREEMENT,
-                "; ".join(
-                    f"{d.source}: {d.kind.value} {d.observed} vs {d.calendar}"
-                    for d in disagreements
-                ),
+                _describe(disagreements),
                 disagreements=disagreements,
             )
         else:

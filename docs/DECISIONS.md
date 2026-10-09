@@ -313,6 +313,16 @@ the close is dropped, as the library already does on special-close dates, anythi
 order is `schedule_inconsistent`). All durations are computed on UTC instants: pulse subtracted
 two wall-clock datetimes of one zone, which is an hour wrong across a daylight-saving change.
 
+Findings of the adversarial test round on the facade: a date-critical order is blocked by a source
+disagreement even when an incident also touches the day and the instant lies outside it; a manual
+file that is not valid UTF-8, or a symlink whose target is gone, makes the book invalid instead
+of leaving the previous book in force; a reload replaces only the entries that came from the
+manual file's own origin, and `accept_incidents` refuses that origin, so neither path can erase
+the other's halts; an expected end so far out that adding the grace overflows is an open-ended
+block; a `conid` or time written as a boolean or a number (`yes`, a Unix time) is refused. A
+raising or silent cross-check source still never blocks, even a date-critical query (D28): the
+cross-check is advisory evidence, and a source that fails must not close a market.
+
 Findings of the port check against the pulse bot, chosen or deferred. `phase_at` and `is_open`
 describe the schedule and ignore incidents (pulse's phase state returned a halt phase); only
 `tradability` and `venue_status` apply incidents, and an order path must call them. A naive
