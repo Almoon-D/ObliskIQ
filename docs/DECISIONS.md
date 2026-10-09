@@ -313,6 +313,22 @@ the close is dropped, as the library already does on special-close dates, anythi
 order is `schedule_inconsistent`). All durations are computed on UTC instants: pulse subtracted
 two wall-clock datetimes of one zone, which is an hour wrong across a daylight-saving change.
 
+Findings of the port check against the pulse bot, chosen or deferred. `phase_at` and `is_open`
+describe the schedule and ignore incidents (pulse's phase state returned a halt phase); only
+`tradability` and `venue_status` apply incidents, and an order path must call them. A naive
+datetime is refused. Manual and feed incidents are a union, several per venue, so an operator
+cannot override a wrong feed halt (pulse let a manual record replace a feed record); Session 10
+decides whether an override is wanted, and until then the block errs towards no trade. Incidents
+carry a free-text reason, not pulse's four types, and an incident lapses at `expected_end` plus
+grace where pulse stayed in a reopening phase until removed. The calendar window is two years
+back and three forward (`calendars.history_years`, `horizon_years`), narrower than the
+library's default, so an older date is `calendar_not_covered`. The IBKR map omits lite's
+`ICEEU` → `XLON` and maps `IBIS` to `XETR` and `NASDAQ` to `XNAS` (lite used `XEUR` and `XNYS`):
+Session 8 pins each code with a contract. Pulse's `build_upcoming_events`, pre-notice
+thresholds, `loop_mode` and `scaffold_config` are not carried; a digest rebuilds the holiday and
+early-close forecast from `SessionBounds.early_close`. The XNAS halt-feed endpoint and pulse's
+rule that a structured feed needs a URL are not carried; Session 10 re-adds them with the feed.
+
 ### D29 · Venue configuration
 
 `venues.<MIC>` holds only what every venue has (name, region, time zone, phase windows,
@@ -342,6 +358,23 @@ value, as `config/defaults/{numerics,smile,liquidity}.yaml`. Left out because no
 them yet (Sessions 11 and 12 extend the same files): `solve.enabled`, `smile.skew_delta`,
 `smile.term_structure.*`, `liquidity.spread_waiver_min_open_interest` and `data.*`.
 `market_data_status_live` disappears: the decoded enum defines what is live.
+
+Inference and cost-model findings of the port check. Legacy fixed its floors and defaults (a
+Newey–West minimum of 3, Spearman and bootstrap minimums of 5, 2000 resamples, one seed, 0.05
+levels) inside the functions; every one is now a required argument that the caller reads from its
+own configuration (Sessions 11, 14 and 18 add those keys with their consumers), and the functions
+refuse a minimum below two observations for a mean and three pairs for a rank correlation, and an
+`alpha` outside (0, 1) or `n_boot` below one whatever the data. The result is a dataclass and
+`ci95` is `ci`. In `costs`, an order with a non-positive or non-finite quantity or price is
+refused (legacy returned a zero commission), and an option leg must be given its contract
+multiplier (a premium per unit costed as one unit understates the money at risk a hundredfold).
+Money is returned unrounded: quantisation to the instrument's tick and the currency's minor unit
+belongs to the order boundary (Session 5), not to a cost estimate. Before a tax rule's
+`effective_from` the leg has no rule and is labelled `tax_not_modelled`, so a backtest of an
+earlier date understates cost and must read that label; `breakeven_move` doubles one leg's
+fraction and so omits a side-specific tax of the other leg (Session 14 prices both legs). The
+USD 1.00 option order minimum is new. Lite's IV-solve tests that need the store (vendor column
+untouched, rate as-of refusals, vendor-served skip, source ordering) stay with Session 11.
 
 ### D31 · Costs
 

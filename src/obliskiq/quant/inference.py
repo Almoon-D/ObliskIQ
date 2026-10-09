@@ -30,6 +30,10 @@ from statistics import NormalDist
 
 _SQRT_TWO = math.sqrt(2.0)
 
+#: The fewest observations at which each statistic is an estimate and not a constant.
+_MEAN_FLOOR = 2
+_RANK_PAIRS_FLOOR = 3
+
 
 def normal_cdf(x: float) -> float:
     """Standard normal CDF, in closed form through ``erf``."""
@@ -79,9 +83,16 @@ def benjamini_hochberg(p_values: Sequence[float | None], *, q: float) -> list[bo
     return reject
 
 
-def _require_minimum(minimum: int) -> None:
-    if minimum < 1:
-        raise ValueError(f"a minimum number of observations must be at least 1, got {minimum}")
+def _require_minimum(minimum: int, *, floor: int) -> None:
+    """Refuse a minimum so small that the statistic is undefined or meaningless.
+
+    A standard error needs two observations and a rank correlation three; below that the result
+    is a constant (an interval of zero width, a coefficient of exactly one), not an estimate.
+    """
+    if minimum < floor:
+        raise ValueError(
+            f"a minimum number of observations must be at least {floor} here, got {minimum}"
+        )
 
 
 def _finite(values: Sequence[float | None]) -> list[float]:
@@ -117,7 +128,8 @@ def newey_west_mean(
     approximation, slightly anti-conservative for very small samples, so callers set
     ``min_points`` high enough before rendering a verdict.
     """
-    _require_minimum(min_points)
+    _require_minimum(min_points, floor=_MEAN_FLOOR)
+    z = critical_value(alpha)
     xs = _finite(values)
     n = len(xs)
     if n < min_points:
@@ -137,7 +149,6 @@ def newey_west_mean(
     if se == 0.0:
         return MeanEstimate(n, mean, 0.0, None, None, (mean, mean))
     t_stat = mean / se
-    z = critical_value(alpha)
     return MeanEstimate(
         n=n,
         mean=mean,
@@ -172,7 +183,7 @@ def spearman_ic(
     Pairs with a missing or non-finite member are dropped. ``None`` below ``min_pairs`` usable
     pairs or when either side has no variance: a coefficient is undefined there, never zero.
     """
-    _require_minimum(min_pairs)
+    _require_minimum(min_pairs, floor=_RANK_PAIRS_FLOOR)
     pairs = [
         (float(s), float(o))
         for s, o in zip(signal, outcome, strict=False)
@@ -272,7 +283,10 @@ def bootstrap_mean_ci(
     Seeded, because a verdict must not change between two runs on the same data. ``lo`` and ``hi``
     are ``None`` below ``min_points`` observations.
     """
-    _require_minimum(min_points)
+    _require_minimum(min_points, floor=_MEAN_FLOOR)
+    critical_value(alpha)
+    if n_boot < 1:
+        raise ValueError(f"n_boot must be at least 1, got {n_boot}")
     xs = _finite(values)
     n = len(xs)
     if n < min_points:

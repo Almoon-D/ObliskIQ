@@ -113,14 +113,32 @@ def test_more_lags_than_data_are_capped():
     assert nw(xs, lags=100).se == nw(xs, lags=len(xs) - 1).se
 
 
-@pytest.mark.parametrize("minimum", [0, -1])
-def test_a_minimum_below_one_is_refused(minimum):
-    with pytest.raises(ValueError, match="at least 1"):
+@pytest.mark.parametrize("minimum", [0, -1, 1])
+def test_a_minimum_too_small_for_a_standard_error_is_refused(minimum):
+    with pytest.raises(ValueError, match="at least 2"):
         newey_west_mean([1.0, 2.0], 0, alpha=ALPHA, min_points=minimum)
-    with pytest.raises(ValueError, match="at least 1"):
-        spearman_ic([1.0], [1.0], min_pairs=minimum)
-    with pytest.raises(ValueError, match="at least 1"):
+    with pytest.raises(ValueError, match="at least 2"):
         bootstrap_mean_ci([1.0], block=1, n_boot=10, seed=1, alpha=ALPHA, min_points=minimum)
+
+
+@pytest.mark.parametrize("minimum", [0, -1, 1, 2])
+def test_a_minimum_too_small_for_a_rank_correlation_is_refused(minimum):
+    with pytest.raises(ValueError, match="at least 3"):
+        spearman_ic([1.0, 2.0], [1.0, 2.0], min_pairs=minimum)
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.2, 1.5])
+def test_an_alpha_outside_the_open_unit_interval_is_refused_whatever_the_data(alpha):
+    flat = [1.0, 1.0, 1.0]
+    with pytest.raises(ValueError, match="alpha"):
+        newey_west_mean(flat, 0, alpha=alpha, min_points=2)
+    with pytest.raises(ValueError, match="alpha"):
+        bootstrap_mean_ci(flat, block=1, n_boot=10, seed=1, alpha=alpha, min_points=2)
+
+
+def test_zero_bootstrap_resamples_are_refused():
+    with pytest.raises(ValueError, match="n_boot"):
+        bootstrap_mean_ci([1.0, 2.0, 3.0], block=1, n_boot=0, seed=1, alpha=ALPHA, min_points=2)
 
 
 # ── Benjamini-Hochberg ──

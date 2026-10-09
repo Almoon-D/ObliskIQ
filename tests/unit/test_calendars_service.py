@@ -175,6 +175,16 @@ def test_good_friday_is_not_a_session_and_the_next_open_is_the_next_session(
     assert calendars.previous_session("XETR", good_friday) == good_friday - timedelta(days=1)
 
 
+def test_a_naive_datetime_is_refused_not_read_in_the_system_zone(calendars: Calendars) -> None:
+    naive = datetime(2026, 10, 9, 12, 0)
+    with pytest.raises(ValueError, match="time zone"):
+        calendars.session_day("XNYS", naive)
+    with pytest.raises(ValueError, match="time zone"):
+        calendars.is_open("XNYS", naive)
+    with pytest.raises(ValueError, match="time zone"):
+        calendars.last_completed_session("XNYS", naive)
+
+
 def test_a_weekend_says_weekend(calendars: Calendars) -> None:
     status = calendars.venue_status("XNYS", date(2026, 10, 10))
     assert status.reason is BlockReason.NOT_A_SESSION

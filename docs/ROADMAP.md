@@ -182,6 +182,9 @@ settles it.
   venues; port lite's realised-volatility estimators (`collect/vol.py`).
 - Session 10: feeds enter through `Calendars.accept_incidents(origin, incidents)`, which
   replaces one origin wholesale; a single-stock halt uses instrument scope.
+- Session 12: lite's `mandatory_close_trading_days` (10) has no key in `config/` yet. Lite's own
+  test expects 2026-06-05 for a 2026-06-19 holiday expiry at N = 10; the new anchor gives
+  2026-06-04, one session more conservative.
 - Session 12: lite counted "N days back from expiry", excluding the expiry; the anchor is
   now the last tradable session itself, so N sessions including it is `session_before(n=N-1)`.
 - Dependabot keeps `exchange-calendars` current; its holiday lists lapse every year, and a

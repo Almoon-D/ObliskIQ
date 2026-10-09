@@ -159,7 +159,9 @@ class MarketSchedule(ABC):
         return None
 
     def session_day(self, at: datetime) -> date:
-        """The venue-local calendar date of an instant."""
+        """The venue-local calendar date of an instant (a naive datetime is refused)."""
+        if at.tzinfo is None:
+            raise ValueError("an instant must carry a time zone; a naive datetime is ambiguous")
         return at.astimezone(self.zone).date()
 
     def last_completed_session(self, at: datetime) -> date | None:

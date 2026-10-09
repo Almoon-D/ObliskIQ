@@ -123,10 +123,21 @@ def test_the_cap_has_the_last_word_over_the_minimum(book):
     assert book.commission(shares("10", "0.02")).amount == D("0.0020")
 
 
-def test_an_empty_order_pays_nothing(book):
-    estimate = book.commission(shares("0", "100"))
-    assert estimate.amount == D(0)
-    assert estimate.gap is None
+@pytest.mark.parametrize(
+    ("quantity", "price"),
+    [("0", "100"), ("-5", "100"), ("10", "-5"), ("10", "0"), ("NaN", "100"), ("10", "Infinity")],
+)
+def test_an_order_with_no_quantity_or_a_non_positive_price_is_refused(quantity, price):
+    with pytest.raises(ValueError, match="must be positive"):
+        shares(quantity, price)
+
+
+def test_an_option_leg_without_its_multiplier_is_refused_not_costed_as_one_unit(book):
+    ten = OrderTerms("XNYS", AssetClass.OPTION, "USD", D(10), D("10"))
+    with pytest.raises(ValueError, match="multiplier"):
+        leg(book, ten, underlying_symbol="SPY")
+    with pytest.raises(ValueError, match="multiplier"):
+        leg(book, ten, multiplier=D(0), underlying_symbol="SPY")
 
 
 def test_an_etf_takes_the_same_us_schedule(book):
@@ -454,13 +465,6 @@ def test_an_asset_class_with_no_spread_model_is_a_gap(book):
 def test_a_leg_needs_a_price(book):
     with pytest.raises(ValueError, match="needs the order's price"):
         leg(book, OrderTerms("XNAS", AssetClass.STOCK, "USD", D(10)))
-
-
-def test_a_leg_with_no_notional_has_no_fraction(book):
-    zero = shares("0", "100")
-    cost = leg(book, zero, market_cap_usd=D("3000000000000"), issuer_country="US")
-    assert cost.notional == D(0)
-    assert cost.total_fraction is None
 
 
 def test_gaps_accumulate_across_components(book):

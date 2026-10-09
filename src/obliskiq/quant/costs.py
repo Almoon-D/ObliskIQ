@@ -68,6 +68,12 @@ class OrderTerms:
     quantity: Decimal
     price: Decimal | None = None
 
+    def __post_init__(self) -> None:
+        if not self.quantity.is_finite() or self.quantity <= ZERO:
+            raise ValueError(f"an order's quantity must be positive, got {self.quantity}")
+        if self.price is not None and (not self.price.is_finite() or self.price <= ZERO):
+            raise ValueError(f"an order's price must be positive when given, got {self.price}")
+
     def value(self, multiplier: Decimal = Decimal(1)) -> Decimal | None:
         """Notional value of the order, or ``None`` when no price was given."""
         return None if self.price is None else self.quantity * self.price * multiplier
@@ -135,7 +141,7 @@ class LegCost:
     def total_fraction(self) -> Decimal | None:
         """The total as a fraction of the notional (0.002 is 0.2 %)."""
         total = self.total
-        if total is None or self.notional is None or self.notional <= 0:
+        if total is None or self.notional is None:
             return None
         return total / self.notional
 
@@ -240,8 +246,6 @@ class CostBook:
     @staticmethod
     def _apply_schedule(schedule: CommissionSchedule, terms: OrderTerms) -> CommissionEstimate:
         unverified = schedule.source.verify_live
-        if terms.quantity <= 0:
-            return CommissionEstimate(ZERO, None, schedule.id, unverified, "empty order")
         if (
             schedule.kind == "fraction_of_face"
             and schedule.up_to_face is not None
@@ -424,16 +428,19 @@ class CostBook:
         average_daily_value: Decimal | None = None,
         underlying_symbol: str | None = None,
         liquid_underlying: bool | None = None,
-        multiplier: Decimal = Decimal(1),
+        multiplier: Decimal | None = None,
     ) -> LegCost:
         """The cost of one leg: spread, slippage, commission and transaction tax.
 
         Equity-like instruments take the equity tiers (an unknown market capitalisation is
         illiquid, the conservative tier); options take the half-spread tier; any other asset class
         has no spread model and is ``NO_FRICTION_MODEL``. ``multiplier`` is the contract
-        multiplier for an option's notional.
+        multiplier for an option's notional and is required for an option: a premium per unit
+        without it would be costed as one unit, a hundredth of the money at risk.
         """
-        value = terms.value(multiplier)
+        if terms.asset_class is AssetClass.OPTION and (multiplier is None or multiplier <= ZERO):
+            raise ValueError("an option leg needs its contract multiplier to be costed")
+        value = terms.value(Decimal(1) if multiplier is None else multiplier)
         if value is None:
             raise ValueError("a leg needs the order's price to be costed")
         commission = self.commission(terms)
