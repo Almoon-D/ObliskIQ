@@ -19,7 +19,8 @@ concurrency:
 jobs:
   release:
     name: release
-    runs-on: ubuntu-latest
+    # Pinned: release_notes.py runs on this image's own Python 3.12.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       # Pinned by commit: this is the one workflow that can write to the repository.

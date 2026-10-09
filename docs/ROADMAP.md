@@ -57,11 +57,12 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   decision paths, packaging (real wheel and sdist builds), `.env.example` completeness,
   the CHANGELOG section, workflows, legacy snapshot, package layout; a config-load smoke test.
 - CI (`ci`), the release workflow, Dependabot (uv, github-actions), the PR template.
-- Tests: 344 passing. Coverage measured 99.6%; floor set to 98.6%.
-- Review (round 1, fresh reviewer): no blocking finding; twelve non-blocking ones, fixed in
-  this PR except those listed under Follow-ups (audit log hardened against non-finite values,
-  short writes and concurrent writers; read-only profile policies; wider magic-number scope;
-  `llm` ⟂ `ibkr`; `--env-file`; clearer messages; DECISIONS evidence).
+- Tests: 350 passing. Coverage measured 99.6%; floor set to 98.6%.
+- Review: two rounds by a fresh reviewer, no blocking finding in either. The non-blocking
+  findings were fixed in this PR (the audit log hardened against non-finite values, short
+  writes and concurrent readers and writers; read-only, picklable profile policies; wider
+  magic-number scope; `llm` ⟂ `ibkr`; `--env-file`; clearer messages; DECISIONS evidence),
+  except those listed under Follow-ups.
 
 **Deferred.** Nothing in scope. Error classes, the `http` config keys and every other
 section of lite's `config.yaml` arrive with their consumers (DECISIONS D2, D20).
@@ -106,5 +107,6 @@ settles it.
   allowlist of protocol and unit constants (a DECISIONS entry either way).
 - Session 19: a release created with `GITHUB_TOKEN` does not trigger `on: release`
   workflows, so the image build must be a job in `release.yml` (as its prompt says).
-- Release workflow: when a pending run is replaced by a newer push to `main`, the tag lands
-  on the newer commit, which still contains the version change. Accepted; noted here.
+- Release workflow: when a pending run is replaced by a newer push to `main`, the replaced
+  version is never released (the newer commit carries its own version). Recovery: re-run the
+  cancelled run from the Actions tab; it tags its own commit.

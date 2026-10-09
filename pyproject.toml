@@ -78,7 +78,7 @@ line-length = 100
 target-version = "py314"
 src = ["src", "tests"]
 extend-exclude = ["legacy"]
-# The release workflow runs this script on the runner's own Python (3.12 on ubuntu-24.04).
+# The release workflow runs this script on its pinned runner's own Python 3.12.
 per-file-target-version = { ".github/scripts/*.py" = "py312" }
 
 [tool.ruff.lint]

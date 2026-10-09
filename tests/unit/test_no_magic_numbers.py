@@ -8,8 +8,10 @@ source file. A numeric literal in a decision-path package must be either
   rather than a tunable.
 
 Anything else comes from configuration. The decision paths are the packages whose numbers
-size, gate, place, fund, tax, budget or grade money (:data:`DECISION_PATHS`); calendars,
-collectors, the store and reporting carry protocol and format constants and are left out.
+size, gate, place, fund, tax, budget, rank or grade money (:data:`DECISION_PATHS`);
+calendars, collectors, the store, the domain models, reporting, the cockpit, the command line,
+configuration loading and the shared helpers carry protocol and format constants and are
+left out.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -32,6 +34,7 @@ DECISION_PATHS = (
     "orchestration",
     "scoreboard",
     "quant",
+    "grid",
     "llm",
 )
 

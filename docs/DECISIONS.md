@@ -49,10 +49,10 @@ Trend has the stronger evidence (Moskowitz, Ooi & Pedersen 2012); bands-only is 
 
 ### D6 · Options: one block when IV is cheap, on real-time quotes (§4, §5.6, §5.13)
 
-Rejected: adding to long options after the move confirms (a higher premium for the same
-convexity) and delayed quotes for options (wide spreads; stale mids misprice). Pyramiding is
-for shares only; stocks, ETFs, funds and bonds accept delayed quotes within a maximum age.
-Evidence: the §4 rows, and lite's sleeve rules (`legacy/lite/docs/DECISIONS.md:37-91`).
+Rejected: adding to long options after the move confirms, which pays a higher premium for the
+same convexity, and delayed quotes for options, whose wide spreads make stale mids misprice
+(MASTER_PLAN §4, lines 163 and 168). Pyramiding is for shares only; stocks, ETFs, funds and
+bonds accept delayed quotes within a maximum age.
 
 ### D7 · Bonds by a computed rule; swap partners on a different index (§4, §5.3, §5.16)
 
@@ -66,9 +66,9 @@ negligible tracking cost.
 
 OAuth 1.0a where IBKR grants it; otherwise the Client Portal Gateway with automated login,
 unattended in paper (paper logins have no second factor). Evidence: IBKR told the owner on
-2026-10-08 that OAuth 1.0a is for institutional clients, while lite's Client Portal route over
-OAuth, its headless route (`legacy/lite/docs/DECISIONS.md:229-231`), ran live on 2026-09-10:
-3,832 chain rows across 21 underlyings (`legacy/lite/ROADMAP.legacy.md:127-129`).
+2026-10-08 that OAuth 1.0a is for institutional clients, while lite kept the OAuth route as its
+route of record (`legacy/lite/docs/DECISIONS.md:248-250`) and ran it live on 2026-09-10
+(`…/DECISIONS.md:2124`): 3,832 chain rows, 21 underlyings (`legacy/lite/ROADMAP.legacy.md:127-129`).
 
 ### D9 · Standard CPython 3.14, not free-threaded (§4, §7)
 
@@ -123,12 +123,12 @@ attributed where copied. A further dependency needs an entry here.
 
 ### D16 · Owner decisions (§11)
 
-Any account size, with a configurable minimum trade; capital budgets with defaults per §11
-row 2, moved by the allocation rule up to an owner ceiling; fully autonomous in paper; OPRA L1
-and Eurex Core L1 shared from the main username to its paper account; existing holdings
-`unmanaged`; EUR base, selectable; FIFO and the two-month rule; a release per version. Open:
-the LLM provider and budget, the machine, which holdings to release, the paper capital cap,
-the satellite ceiling, fund-switch support.
+The §11 table, rows 1–13, as the owner decided: any account size with a configurable minimum
+trade; budgets per row 2, moved by the allocation rule; autonomous paper; OPRA and Eurex Core
+L1 shared to paper, everything else delayed; a global universe under lite's limits; holdings
+`unmanaged`; EUR base; FIFO and the two-month rule; withdrawals planned at once, asking first
+before cutting protected positions. Open: the LLM provider and budget, the machine, holdings to
+release, the paper capital cap, the satellite ceiling, fund-switch support.
 
 ## Session 1 — Foundation (2026-10-08)
 
@@ -185,5 +185,5 @@ version would be a new entry here.
 ### D23 · The LLM contract also keeps out the broker
 
 `obliskiq.llm` may import neither `decision`, `execution` nor `ibkr`: the order endpoints live
-in `ibkr`, and the LLM never builds or sends orders (AGENTS.md hard rules). The three import
-contracts were each shown to break on a probe import before they were relied on.
+in `ibkr`, and the LLM never builds or sends orders (AGENTS.md). This adds a contract and
+leaves the plan's rule (§5.10) as written. Each import contract was shown to break on a probe.
