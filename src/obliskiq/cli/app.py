@@ -30,6 +30,9 @@ from ..logging_setup import configure_logging
 EXIT_OK = 0
 EXIT_INVALID = 1
 
+#: Longest value ``settings show`` prints in full; longer ones (a list of phase windows) are cut.
+VALUE_LIMIT = 48
+
 
 @dataclass(frozen=True)
 class Loaded:
@@ -64,10 +67,14 @@ def _config_validate(loaded: Loaded, out: TextIO) -> int:
     return EXIT_OK
 
 
+def _shorten(text: str) -> str:
+    return text if len(text) <= VALUE_LIMIT else f"{text[: VALUE_LIMIT - 1]}…"
+
+
 def _settings_show(loaded: Loaded, out: TextIO) -> int:
     profile = loaded.profile
     rows = [("SETTING", "VALUE", "SOURCE")]
-    rows += [(key, str(value), source) for key, value, source in loaded.config.leaves()]
+    rows += [(key, _shorten(str(value)), source) for key, value, source in loaded.config.leaves()]
     key_width = max(len(row[0]) for row in rows)
     value_width = max(len(row[1]) for row in rows)
     print(f"Effective settings — jurisdiction {profile.id} ({profile.name})", file=out)

@@ -31,8 +31,9 @@ from pydantic import AwareDatetime, Field, JsonValue, ValidationError
 from ..domain.base import NonEmptyText
 from ..env import Environment
 from ..errors import SettingsAuditError
+from .base import FrozenModel
 from .loader import flatten
-from .schema import FrozenModel, ObliskConfig
+from .schema import ObliskConfig
 
 #: The ``prev_hash`` of the first entry.
 GENESIS_HASH = "0" * hashlib.sha256().digest_size * 2

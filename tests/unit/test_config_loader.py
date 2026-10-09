@@ -40,22 +40,24 @@ def test_the_shipped_configuration_loads(repo_root):
     assert settings.logging.level == "INFO"
     assert settings.logging.format == "json"
     assert settings.paths.settings_audit_log == "settings-audit.jsonl"
-    assert loaded.files == (
-        "config/defaults/logging.yaml",
-        "config/defaults/paths.yaml",
-        "config/owner.yaml",
-    )
+    assert {"config/defaults/logging.yaml", "config/defaults/paths.yaml"} <= set(loaded.files)
+    assert loaded.files[-1] == "config/owner.yaml", "the owner's panel is read last"
+    assert list(loaded.files[:-1]) == sorted(loaded.files[:-1])
 
 
 def test_every_value_knows_its_source(config_dir):
-    leaves = {key: source for key, _value, source in load_config(config_dir).leaves()}
-    assert leaves == {
+    loaded = load_config(config_dir)
+    leaves = {key: source for key, _value, source in loaded.leaves()}
+    foundation = {
         "account.base_currency": "config/owner.yaml",
         "jurisdiction": "config/owner.yaml",
         "logging.format": "config/defaults/logging.yaml",
         "logging.level": "config/defaults/logging.yaml",
         "paths.settings_audit_log": "config/defaults/paths.yaml",
     }
+    assert foundation.items() <= leaves.items()
+    assert set(leaves.values()) <= set(loaded.files)
+    assert all(source for source in leaves.values())
 
 
 def test_the_settings_are_frozen(config_dir):
@@ -185,14 +187,20 @@ def test_a_yaml_boolean_where_text_is_expected_gets_a_hint(config_dir):
 
 
 def test_a_bad_value_in_a_defaults_file_is_located_there(config_dir):
-    _write(config_dir / "defaults" / "paths.yaml", "paths:\n  settings_audit_log: ../escape\n")
+    _write(
+        config_dir / "defaults" / "paths.yaml",
+        "paths:\n  settings_audit_log: ../escape\n  manual_incidents: m.yaml\n",
+    )
     (problem,) = _problems(config_dir)
     assert problem.startswith("config/defaults/paths.yaml: paths.settings_audit_log: must be")
 
 
 @pytest.mark.parametrize("value", ["/abs/log.jsonl", "../up.jsonl", "dir/", "a\\\\b.jsonl"])
 def test_the_audit_log_must_stay_inside_the_data_dir(config_dir, value):
-    _write(config_dir / "defaults" / "paths.yaml", f'paths:\n  settings_audit_log: "{value}"\n')
+    _write(
+        config_dir / "defaults" / "paths.yaml",
+        f'paths:\n  settings_audit_log: "{value}"\n  manual_incidents: m.yaml\n',
+    )
     assert "relative path inside the data directory" in _problems(config_dir)[0]
 
 

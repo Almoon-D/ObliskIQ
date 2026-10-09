@@ -34,3 +34,35 @@ class SettingsAuditError(ObliskError):
 
 class UpstreamError(ObliskError):
     """An upstream API failed, and no substitute value exists."""
+
+
+class CalendarError(ObliskError):
+    """The calendar layer cannot answer, and a guess would be a permissive one."""
+
+
+class CalendarCoverageError(CalendarError):
+    """A date falls outside the calendar a venue was built with.
+
+    The library and the configuration know sessions only inside a window; outside it a venue
+    is neither open nor closed but unknown, and callers must not read that as either.
+    """
+
+
+class UnknownVenueError(CalendarError):
+    """A venue code that no configured venue carries."""
+
+
+class UnknownExchangeCodeError(CalendarError):
+    """An IBKR exchange code that maps to no venue (``SMART`` is a router, not a venue)."""
+
+
+class ScheduleInconsistentError(CalendarError):
+    """A session whose own times contradict one another (a break after the close, say)."""
+
+
+class IncidentFileError(CalendarError):
+    """The manual incident file is malformed. Every venue stays blocked until it is fixed."""
+
+
+class IncidentRejectedError(CalendarError):
+    """An incident outside the scope its source is trusted to raise."""

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from obliskiq import __version__
-from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, main, run
+from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, VALUE_LIMIT, _shorten, main, run
 
 
 @pytest.fixture(autouse=True)
@@ -33,9 +33,12 @@ def test_config_validate_reports_the_essentials(config_dir):
     status, out, err = _run("--config-dir", str(config_dir), "config", "validate")
     assert status == EXIT_OK
     assert err == ""
-    assert out.splitlines() == [
-        "configuration is valid (config/defaults/logging.yaml, config/defaults/paths.yaml, "
-        "config/owner.yaml)",
+    first, *rest = out.splitlines()
+    assert first.startswith("configuration is valid (config/defaults/")
+    assert first.endswith(", config/owner.yaml)")
+    for shipped in ("logging", "paths", "venues"):
+        assert f"config/defaults/{shipped}.yaml" in first
+    assert rest == [
         "  base currency  EUR",
         "  jurisdiction   es (Spain)",
         "  policies       none declared",
@@ -47,22 +50,35 @@ def test_settings_show_lists_every_setting_with_its_source(config_dir):
     assert status == EXIT_OK
     lines = out.splitlines()
     assert lines[0] == "Effective settings — jurisdiction es (Spain)"
-    table = [line.split() for line in lines[2:]]
-    assert table == [
-        ["SETTING", "VALUE", "SOURCE"],
-        ["account.base_currency", "EUR", "config/owner.yaml"],
-        ["jurisdiction", "es", "config/owner.yaml"],
-        ["logging.format", "json", "config/defaults/logging.yaml"],
-        ["logging.level", "INFO", "config/defaults/logging.yaml"],
-        ["paths.settings_audit_log", "settings-audit.jsonl", "config/defaults/paths.yaml"],
-    ]
+    table = {line.split()[0]: line.split() for line in lines[3:]}
+    assert lines[2].split() == ["SETTING", "VALUE", "SOURCE"]
+    assert table["account.base_currency"] == ["account.base_currency", "EUR", "config/owner.yaml"]
+    assert table["jurisdiction"] == ["jurisdiction", "es", "config/owner.yaml"]
+    assert table["logging.format"] == [
+        "logging.format", "json", "config/defaults/logging.yaml",
+    ]  # fmt: skip
+    assert table["logging.level"] == ["logging.level", "INFO", "config/defaults/logging.yaml"]
+    assert table["paths.settings_audit_log"] == [
+        "paths.settings_audit_log", "settings-audit.jsonl", "config/defaults/paths.yaml",
+    ]  # fmt: skip
+    assert all(line.rstrip().split()[-1].startswith("config/") for line in lines[3:])
+
+
+def test_a_long_value_is_cut_to_keep_the_table_readable(config_dir):
+    _, out, _ = _run("--config-dir", str(config_dir), "settings", "show")
+    cut = [line for line in out.splitlines() if "…" in line]
+    assert any(line.startswith("venues.XNYS.phase_windows") for line in cut)
+    assert all(line.count("…") == 1 for line in cut)
+    assert _shorten("x" * 100) == "x" * (VALUE_LIMIT - 1) + "…"
+    assert _shorten("x" * VALUE_LIMIT) == "x" * VALUE_LIMIT
 
 
 def test_the_environment_override_shows_as_such(config_dir, monkeypatch):
     monkeypatch.setenv("OBLISK_LOG_FORMAT", "text")
     status, out, _ = _run("--config-dir", str(config_dir), "settings", "show")
     assert status == EXIT_OK
-    assert "logging.format            text" in out
+    (line,) = [row for row in out.splitlines() if row.startswith("logging.format ")]
+    assert line.split()[:2] == ["logging.format", "text"]
     assert "environment (OBLISK_LOG_FORMAT)" in out
 
 
