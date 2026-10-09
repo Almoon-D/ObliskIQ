@@ -484,22 +484,18 @@ def test_a_seasonal_override_that_changes_nothing_is_a_configuration_error() -> 
     seasonal = SeasonalCloseConfig(
         reference_timezone="America/New_York", close=library_close, source=NOTE
     )
-    with pytest.raises(ConfigError, match="library already closes at"):
+    with pytest.raises(ConfigError, match="never closes later than"):
         LibrarySchedule.build("BVMF", "America/Sao_Paulo", START, END, None, seasonal)
 
 
-def test_a_seasonal_close_later_than_the_librarys_never_lengthens_the_day() -> None:
+def test_a_seasonal_close_later_than_the_librarys_is_a_configuration_error() -> None:
     oracle = xc.get_calendar("BVMF", start=START, end=END)
     zone = ZoneInfo("America/Sao_Paulo")
     library_close = oracle.closes.iloc[0].tz_convert(zone)
     later = (library_close + timedelta(hours=1)).strftime("%H:%M")
     seasonal = SeasonalCloseConfig(reference_timezone="America/New_York", close=later, source=NOTE)
-    schedule = LibrarySchedule.build("BVMF", "America/Sao_Paulo", START, END, None, seasonal)
-    assert schedule.coverage is not None
-    for day in schedule.sessions_between(*schedule.coverage):
-        session = schedule.session(day)
-        assert session is not None
-        assert session.close <= oracle.closes.loc[str(day)].to_pydatetime(), day
+    with pytest.raises(ConfigError, match="can only shorten the day"):
+        LibrarySchedule.build("BVMF", "America/Sao_Paulo", START, END, None, seasonal)
 
 
 # ── last completed session, next open and close ──

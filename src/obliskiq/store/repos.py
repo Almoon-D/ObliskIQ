@@ -72,7 +72,8 @@ def upsert_instrument(store: Store, instrument: Instrument) -> None:
     """Insert an instrument, or update the one with the same conid (its ``created_at`` stays).
 
     A supersession is never changed here: an update leaves a stored one as it is, and an update
-    that names a different replacement is refused (``supersede_instrument`` is the only writer).
+    that names a different replacement is refused (for an existing instrument
+    ``supersede_instrument`` is the only writer).
     """
     params = instrument_params(instrument)
     with store.transaction():

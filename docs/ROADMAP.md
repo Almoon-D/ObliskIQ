@@ -173,7 +173,7 @@ settles it.
 | Order window 30 min after the open and 15 before the close | 2 | 18 (TCA) |
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
 | Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`) | 2 | library upgrade; 6 (digest) |
-| `market_data_status` decoding: `FROZEN_DELAYED` → `frozen`, unknown flag → NULL with the raw flag kept | 2 | 3 |
+| IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept | 2 | 3 |
 | US stock, US option and Eurex option commission schedules | 2 | 4 (paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 9 (bond rule) |
 | Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |

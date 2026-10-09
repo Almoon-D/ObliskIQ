@@ -74,8 +74,6 @@ class IncidentPolicy:
 
 def check_scope(incident: Incident, policy: IncidentPolicy) -> None:
     """Refuse an incident beyond what its source is trusted to raise."""
-    if incident.source is IncidentSource.MANUAL:
-        return
     if not policy.accepts_feed:
         raise IncidentRejectedError(
             f"{incident.venue}: no incident feed is declared for this venue, so "

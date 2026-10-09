@@ -5,8 +5,9 @@ Each is a ``StrEnum`` whose values are what the store holds and the configuratio
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Self
 
 
@@ -79,13 +80,15 @@ class MarketDataStatus(StrEnum):
         return _ROUTE_FLAGS.get(flag.strip().upper().replace("-", "_"))
 
 
-_ROUTE_FLAGS: dict[str, MarketDataStatus] = {
-    "REALTIME": MarketDataStatus.REALTIME,
-    "DELAYED": MarketDataStatus.DELAYED,
-    "FROZEN": MarketDataStatus.FROZEN,
-    "FROZEN_DELAYED": MarketDataStatus.FROZEN,
-    "DELAYED_FROZEN": MarketDataStatus.FROZEN,
-}
+_ROUTE_FLAGS: Mapping[str, MarketDataStatus] = MappingProxyType(
+    {
+        "REALTIME": MarketDataStatus.REALTIME,
+        "DELAYED": MarketDataStatus.DELAYED,
+        "FROZEN": MarketDataStatus.FROZEN,
+        "FROZEN_DELAYED": MarketDataStatus.FROZEN,
+        "DELAYED_FROZEN": MarketDataStatus.FROZEN,
+    }
+)
 
 
 class MarketDataQuality(StrEnum):

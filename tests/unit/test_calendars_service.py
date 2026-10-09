@@ -424,6 +424,18 @@ def test_a_feed_may_raise_only_what_its_venue_declares(
     )  # the refused replacement changed nothing
 
 
+def test_building_without_a_data_directory_says_the_manual_file_is_not_read(
+    build_calendars: Callable[..., Calendars], tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="obliskiq.calendars"):
+        build_calendars(("XNYS",))
+    assert "manual incident file is not read" in caplog.text
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="obliskiq.calendars"):
+        build_calendars(("XNYS",), data_dir=tmp_path)
+    assert "manual incident file is not read" not in caplog.text
+
+
 def test_a_malformed_manual_file_blocks_every_venue_until_a_good_one_is_read(
     build_calendars: Callable[..., Calendars], tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

@@ -72,7 +72,8 @@ Each is a decision in `docs/DECISIONS.md` (D31).
 - The legacy equity path booked a flat 0.0 for commission; the port charges the per-share
   schedule.
 - A missing row, a missing tax rate and an unknown issuer country for a share are explicit
-  statuses. A missing average daily value gives zero market impact and an unknown
-  market capitalisation the illiquid tier; both are labelled, not silent defaults.
+  statuses. A missing average daily value gives zero market impact without a label (a known
+  gap, Session 18's cost analysis replaces it); an unknown market capitalisation takes the
+  illiquid tier and is labelled `market_cap_unknown`.
 - Lite's open-interest gate is not part of costs: gates own it, and passing on a missing
   figure was dishonest degradation.

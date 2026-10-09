@@ -109,11 +109,6 @@ FEED_POLICY = IncidentPolicy(accepts_feed=True, feed_scope=IncidentScope.INSTRUM
 NO_FEED = IncidentPolicy(accepts_feed=False, feed_scope=IncidentScope.VENUE)
 
 
-def test_manual_entries_are_accepted_at_either_scope_and_for_any_policy() -> None:
-    check_scope(make_incident(), NO_FEED)
-    check_scope(feed_incident(source=IncidentSource.MANUAL), NO_FEED)
-
-
 def test_a_feed_within_its_declared_scope_is_accepted() -> None:
     check_scope(feed_incident(), FEED_POLICY)
 

@@ -237,10 +237,11 @@ class LibrarySchedule(MarketSchedule):
                 f"lunch_breaks.{mic}: the library now carries a break for {mic}; "
                 "remove the override"
             )
-        if seasonal is not None and not self._seasonal_days_differ():
+        if seasonal is not None and not self._seasonal_shortens_a_day():
             raise ConfigError(
-                f"seasonal_closes.{mic}: the library already closes at {seasonal.close} while "
-                f"{seasonal.reference_timezone} observes daylight saving time; remove the override"
+                f"seasonal_closes.{mic}: the library never closes later than {seasonal.close} "
+                f"while {seasonal.reference_timezone} observes daylight saving time; an "
+                "override can only shorten the day, so remove it"
             )
 
     @classmethod
@@ -269,15 +270,15 @@ class LibrarySchedule(MarketSchedule):
             )
         return cls(mic, ZoneInfo(timezone), calendar, lunch, seasonal)
 
-    def _seasonal_days_differ(self) -> bool:
-        """Does the override change the close on at least one covered day?"""
+    def _seasonal_shortens_a_day(self) -> bool:
+        """Does the override close earlier than the library on at least one covered day?"""
         assert self._seasonal is not None
         assert self.coverage is not None
         for day in self.sessions_between(*self.coverage):
             if day in self._early_closes or not self._reference_in_dst(day):
                 continue
             library_close = _library_instant(self._calendar.session_close(day))
-            if library_close != _local_to_utc(day, self._seasonal.close, self.zone):
+            if _local_to_utc(day, self._seasonal.close, self.zone) < library_close:
                 return True
         return False
 
@@ -301,9 +302,7 @@ class LibrarySchedule(MarketSchedule):
         close = _library_instant(calendar.session_close(day))
         early = day in self._early_closes
         if self._seasonal is not None and not early and self._reference_in_dst(day):
-            # An override can only shorten the day: one later than the library's close would
-            # open time the library does not.
-            close = min(close, _local_to_utc(day, self._seasonal.close, self.zone))
+            close = _local_to_utc(day, self._seasonal.close, self.zone)
         break_start: datetime | None = None
         break_end: datetime | None = None
         if calendar.session_has_break(day):
