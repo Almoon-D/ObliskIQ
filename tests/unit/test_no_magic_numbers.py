@@ -7,8 +7,9 @@ source file. A numeric literal in a decision-path package must be either
 * the value of a module-level UPPER_CASE constant, which names a protocol or unit fact
   rather than a tunable.
 
-Anything else comes from configuration. The decision paths are the packages that size,
-gate, place, fund, tax or budget money (:data:`DECISION_PATHS`).
+Anything else comes from configuration. The decision paths are the packages whose numbers
+size, gate, place, fund, tax, budget or grade money (:data:`DECISION_PATHS`); calendars,
+collectors, the store and reporting carry protocol and format constants and are left out.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -20,7 +21,19 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_DIR = ROOT / "src" / "obliskiq"
 
 #: Packages whose numbers are money decisions.
-DECISION_PATHS = ("decision", "execution", "engines", "capital", "tax", "jurisdiction")
+DECISION_PATHS = (
+    "decision",
+    "execution",
+    "engines",
+    "capital",
+    "tax",
+    "jurisdiction",
+    "ibkr",
+    "orchestration",
+    "scoreboard",
+    "quant",
+    "llm",
+)
 
 #: Literals that carry no policy: indices, halves, squares, sign flips.
 STRUCTURAL = frozenset({0, 1, 2, -1, 0.5})

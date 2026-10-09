@@ -22,7 +22,7 @@ from obliskiq.env import (
 from obliskiq.errors import EnvVarError
 from obliskiq.logging_setup import configure_logging, get_logger
 
-#: The names the Session 1 prompt lists, plus the OBLISK_ locations and logging overrides.
+#: The credentials the plan names, plus the OBLISK_ locations and logging overrides.
 EXPECTED_NAMES = {
     "FRED_API_KEY",
     "EIA_API_KEY",

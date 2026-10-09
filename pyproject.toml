@@ -45,6 +45,9 @@ dev = [
     "types-PyYAML>=6.0.12",
 ]
 
+[tool.uv]
+python-preference = "only-managed"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/obliskiq"]
 
@@ -75,6 +78,8 @@ line-length = 100
 target-version = "py314"
 src = ["src", "tests"]
 extend-exclude = ["legacy"]
+# The release workflow runs this script on the runner's own Python (3.12 on ubuntu-24.04).
+per-file-target-version = { ".github/scripts/*.py" = "py312" }
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT", "PTH", "ARG", "ERA"]
@@ -124,10 +129,10 @@ root_packages = ["obliskiq"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "The LLM layer never reaches sizing, gates or orders"
+name = "The LLM layer never reaches sizing, gates, orders or the broker"
 type = "forbidden"
 source_modules = ["obliskiq.llm"]
-forbidden_modules = ["obliskiq.decision", "obliskiq.execution"]
+forbidden_modules = ["obliskiq.decision", "obliskiq.execution", "obliskiq.ibkr"]
 
 [[tool.importlinter.contracts]]
 name = "Compute never reaches the broker, the network or execution"

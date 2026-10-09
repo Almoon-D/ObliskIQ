@@ -6,6 +6,7 @@ boolean. GitHub reads the files as YAML 1.2, where it stays a string.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -140,3 +141,10 @@ def test_the_pull_request_template_has_every_section_and_the_money_path_checklis
     ]
     boxes = [line for line in text.splitlines() if line.startswith("- [ ] ")]
     assert len(boxes) == 8
+
+
+def test_the_write_workflow_pins_its_actions_by_commit():
+    for step in _steps(_load("workflows/release.yml"), "release"):
+        if "uses" in step:
+            ref = step["uses"].split("@", 1)[1]
+            assert re.fullmatch(r"[0-9a-f]{40}", ref), step["uses"]
