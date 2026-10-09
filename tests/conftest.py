@@ -6,14 +6,22 @@ developer's own credentials or overrides can never change a result.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import os
 import shutil
 from pathlib import Path
 
 import pytest
+from hypothesis import settings
 
 from obliskiq.env import variable_names
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Generated cases are never judged on speed (a slow runner is not a failing property); in CI
+# the examples are derandomised so a red run reproduces from the commit alone.
+settings.register_profile("default", deadline=None)
+settings.register_profile("ci", deadline=None, derandomize=True)
+settings.load_profile("ci" if os.environ.get("CI") else "default")
 
 
 @pytest.fixture(autouse=True)
