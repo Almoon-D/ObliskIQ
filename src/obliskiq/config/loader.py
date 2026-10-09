@@ -219,6 +219,10 @@ def load_config(
     ``overrides`` maps a dotted key to ``(value, source)``; the environment uses it for the
     logging block. Raises :class:`ConfigInvalid` with every problem found.
     """
+    if not config_dir.is_dir():
+        raise ConfigInvalid(
+            [ConfigProblem(str(config_dir.absolute()), "", "configuration directory not found")]
+        )
     problems: list[ConfigProblem] = []
     merged: dict[str, Any] = {}
     sources: dict[str, str] = {}
@@ -311,10 +315,13 @@ def explain_validation_error(
                 ConfigProblem(source, key, "is not a known setting" + _suggest(model, loc))
             )
             continue
+        given = error.get("input")
+        if given is None and kind in {"model_type", "dict_type"}:
+            problems.append(ConfigProblem(source, key, "is empty; set the settings under it"))
+            continue
         message = str(error["msg"]).removeprefix("Value error, ")
         message = message.replace("Input should be a valid string", "must be text")
         message = message.replace("Input should be", "must be")
-        given = error.get("input")
         if isinstance(given, bool) and kind == "string_type":
             message = (
                 f"{message} (got {given!r}: YAML reads yes, no, on and off as booleans; quote it)"

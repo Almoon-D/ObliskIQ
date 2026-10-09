@@ -189,3 +189,15 @@ def test_policies_declared_in_yaml_are_read(config_dir):
     )
     profile = load_profile(config_dir, "es")
     assert _registry().resolve(profile).name == "strict"
+
+
+def test_a_profiles_policies_cannot_be_changed_after_loading(config_dir):
+    _write(
+        config_dir / "jurisdictions" / "es.yaml",
+        "id: es\nname: Spain\npolicies:\n  eligibility: strict\n",
+    )
+    profile = load_profile(config_dir, "es")
+    with pytest.raises(TypeError):
+        profile.policies["eligibility"] = "lenient"  # type: ignore[index]
+    assert profile.model_dump()["policies"] == {"eligibility": "strict"}
+    assert _registry().resolve(profile).name == "strict"

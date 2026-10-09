@@ -144,3 +144,22 @@ def test_main_uses_the_real_streams(config_dir, capsys, monkeypatch):
     monkeypatch.setattr("obliskiq.cli.app.default_env_file", lambda: None)
     assert main(["--config-dir", str(config_dir), "config", "validate"]) == EXIT_OK
     assert "configuration is valid" in capsys.readouterr().out
+
+
+def test_an_env_file_named_on_the_command_line_is_read(config_dir, tmp_path):
+    env_file = tmp_path / "custom.env"
+    env_file.write_text("OBLISK_LOG_FORMAT=text\n", encoding="utf-8")
+    status, out, _ = _run(
+        "--env-file", str(env_file), "--config-dir", str(config_dir), "settings", "show"
+    )
+    assert status == EXIT_OK
+    assert "environment (OBLISK_LOG_FORMAT)" in out
+
+
+def test_a_missing_env_file_fails_loudly(config_dir, tmp_path):
+    missing = tmp_path / "absent.env"
+    status, _, err = _run(
+        "--env-file", str(missing), "--config-dir", str(config_dir), "config", "validate"
+    )
+    assert status == EXIT_INVALID
+    assert f"env file not found: {missing}" in err

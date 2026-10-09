@@ -16,9 +16,18 @@ SCRIPT = Path(sys.executable).parent / "obliskiq"
 
 
 def _run(*argv: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run the script with none of ObliskIQ's variables and an empty env file, so neither the
+    developer's environment nor a ``.env`` in the checkout can change the result."""
     env = {name: value for name, value in os.environ.items() if name not in variable_names()}
+    empty_env_file = cwd / "empty.env"
+    empty_env_file.write_text("", encoding="utf-8")
     return subprocess.run(
-        [str(SCRIPT), *argv], cwd=cwd, env=env, capture_output=True, text=True, check=False
+        [str(SCRIPT), "--env-file", str(empty_env_file), *argv],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 

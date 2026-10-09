@@ -9,9 +9,12 @@ switch plus, at most, a new policy module.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
+from typing import Annotated
 
-from pydantic import Field, ValidationError
+from pydantic import AfterValidator, Field, PlainSerializer, ValidationError
 
 from ..config.loader import (
     ConfigInvalid,
@@ -27,16 +30,25 @@ JURISDICTIONS_DIR = "jurisdictions"
 PROFILE_SUFFIX = ".yaml"
 
 
+def _read_only(value: Mapping[str, str]) -> Mapping[str, str]:
+    return MappingProxyType(dict(value))
+
+
 class JurisdictionProfile(FrozenModel):
     """One jurisdiction's rules as data.
 
     ``policies`` maps a policy kind to the id of the registered policy the profile uses for
-    it. A profile that declares none has nothing to resolve; asking it for a policy fails.
+    it, read-only once loaded. A profile that declares none has nothing to resolve; asking
+    it for a policy fails.
     """
 
     id: Identifier
     name: NonEmptyText
-    policies: dict[Identifier, Identifier] = Field(default_factory=dict)
+    policies: Annotated[
+        Mapping[Identifier, Identifier],
+        AfterValidator(_read_only),
+        PlainSerializer(dict, return_type=dict[str, str]),
+    ] = Field(default_factory=dict, validate_default=True)
 
 
 def available_profiles(config_dir: Path) -> tuple[str, ...]:

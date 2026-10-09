@@ -305,3 +305,15 @@ def test_a_problem_is_located_at_its_nearest_known_ancestor():
 def test_no_suggestion_is_offered_below_a_field_that_is_not_a_section():
     assert _suggest(ObliskConfig, ["jurisdiction", "extra"]) == ""
     assert _suggest(ObliskConfig, ["acount"]) == " (did you mean 'account'?)"
+
+
+def test_an_empty_section_with_no_defaults_says_so(config_dir):
+    _write(config_dir / "owner.yaml", "account:\n  # base_currency: EUR\njurisdiction: es\n")
+    assert _problems(config_dir) == [
+        "config/owner.yaml: account: is empty; set the settings under it"
+    ]
+
+
+def test_a_missing_config_directory_is_reported_with_its_full_path(tmp_path):
+    missing = tmp_path / "nowhere"
+    assert _problems(missing) == [f"{missing}: configuration directory not found"]

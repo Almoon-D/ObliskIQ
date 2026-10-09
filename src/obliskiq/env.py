@@ -207,8 +207,11 @@ def variable_names() -> frozenset[str]:
 def load_environment(*, env_file: Path | None) -> Environment:
     """Read the environment (and ``env_file``, when given), failing loudly on a bad value.
 
-    The error names each offending variable and what is wrong with it, never the value.
+    The error names each offending variable and what is wrong with it, never the value. A
+    named env file that does not exist is an error, not an empty file.
     """
+    if env_file is not None and not env_file.is_file():
+        raise EnvVarError(f"env file not found: {env_file}")
     try:
         return Environment(_env_file=env_file)
     except ValidationError as exc:

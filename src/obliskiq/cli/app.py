@@ -89,6 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="the directory holding owner.yaml, defaults/ and jurisdictions/ "
         "(default: OBLISK_CONFIG_DIR, else config/ of the source checkout)",
     )
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        help="read environment variables from this file "
+        "(default: .env at the root of the source checkout, when present)",
+    )
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     config = commands.add_parser("config", help="check the configuration")
@@ -114,10 +120,13 @@ def run(
     stdout: TextIO,
     stderr: TextIO,
 ) -> int:
-    """Parse ``argv`` and run the command. Returns the exit status."""
+    """Parse ``argv`` and run the command. Returns the exit status.
+
+    ``env_file`` is the env file read when ``--env-file`` is not given.
+    """
     args = build_parser().parse_args(argv)
     try:
-        env = load_environment(env_file=env_file)
+        env = load_environment(env_file=args.env_file if args.env_file is not None else env_file)
         config_dir: Path = (
             args.config_dir if args.config_dir is not None else (env.resolved_config_dir())
         )
