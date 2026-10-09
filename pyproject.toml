@@ -97,6 +97,12 @@ files = ["src"]
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+# exchange_calendars ships no type information; its use is confined to calendars/schedule.py,
+# which turns every result into a standard-library type.
+module = ["exchange_calendars", "exchange_calendars.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true

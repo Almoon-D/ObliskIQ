@@ -9,13 +9,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import os
 import shutil
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 from hypothesis import settings
 
+from obliskiq.calendars.service import Calendars
+from obliskiq.config import ObliskConfig, load_config
 from obliskiq.domain.enums import (
     AssetClass,
     InstrumentRole,
@@ -46,6 +48,70 @@ def _isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
     return ROOT
+
+
+class DateRules:
+    """Calendar rules written out independently of the library under test."""
+
+    @staticmethod
+    def easter_sunday(year: int) -> date:
+        """Western Easter by the anonymous Gregorian (computus) algorithm."""
+        a, b, c = year % 19, year // 100, year % 100
+        d, e = b // 4, b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i, k = c // 4, c % 4
+        weekday_offset = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * weekday_offset) // 451
+        month = (h + weekday_offset - 7 * m + 114) // 31
+        day = (h + weekday_offset - 7 * m + 114) % 31 + 1
+        return date(year, month, day)
+
+    @staticmethod
+    def nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+        """The ``n``-th ``weekday`` (Monday is 0) of a month, counting from 1."""
+        first = date(year, month, 1)
+        return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (n - 1))
+
+    @staticmethod
+    def last_weekday(year: int, month: int, weekday: int) -> date:
+        following = date(year + month // 12, month % 12 + 1, 1)
+        return following - timedelta(days=(following.weekday() - weekday) % 7 or 7)
+
+
+@pytest.fixture(scope="session")
+def rules() -> type[DateRules]:
+    return DateRules
+
+
+@pytest.fixture(scope="session")
+def shipped_settings() -> ObliskConfig:
+    """The shipped configuration, loaded once. Read-only: models are frozen."""
+    return load_config(ROOT / "config").settings
+
+
+#: The reference date every calendar test builds around (the session's date).
+CALENDAR_REFERENCE = date(2026, 10, 9)
+
+
+@pytest.fixture(scope="session")
+def calendars(shipped_settings: ObliskConfig) -> Calendars:
+    """Every shipped venue, built once for the session. Tests must not change its incidents;
+    a test that does builds its own through ``build_calendars``."""
+    return Calendars.from_settings(shipped_settings, reference=CALENDAR_REFERENCE)
+
+
+@pytest.fixture
+def build_calendars(shipped_settings: ObliskConfig) -> Callable[..., Calendars]:
+    """A fresh facade over a subset of the shipped venues (fast: build only what is named)."""
+
+    def build(venues: tuple[str, ...], **kwargs: Any) -> Calendars:
+        return Calendars.from_settings(
+            shipped_settings, reference=CALENDAR_REFERENCE, venues=venues, **kwargs
+        )
+
+    return build
 
 
 @pytest.fixture
