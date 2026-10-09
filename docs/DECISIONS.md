@@ -273,7 +273,8 @@ Every repository read takes a keyword-only `as_of` with no default, `COUNT(*)` i
 Bars are read up to the session `as_of` (callers pass the calendars' `last_completed_session`,
 never an open session); snapshots, chains and curves up to `snapshot_date <= as_of`; macro by
 `release_date <= as_of` in SQL; instruments by `created_at` and `superseded_at`, so a
-supersession recorded later is invisible. A snapshot date after `as_of` raises. A macro
+supersession is invisible before the `superseded_at` its writer states (the store does not
+stamp it, and `upsert_instrument` never changes a supersession). A snapshot date after `as_of` raises. A macro
 observation with no release date cannot be placed in time: it is excluded and counted in
 `MacroSeries.unaligned` (bounded by `collected_at`, so the count too is what the store held on
 `as_of`), and a series from several sources must be asked for by source. One macro value is

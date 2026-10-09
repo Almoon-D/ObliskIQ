@@ -121,10 +121,16 @@ class IncidentBook:
     ) -> Self:
         """The book with everything from ``origin`` replaced; nothing changes if one is refused.
 
-        Every incident must come from ``origin`` and sit within its venue's declared scope.
+        Every incident must be a feed incident from ``origin`` and sit within its venue's declared
+        scope: manual entries come from the manual file, never through a feed's door.
         """
         fresh = tuple(incidents)
         for incident in fresh:
+            if incident.source is not IncidentSource.FEED:
+                raise IncidentRejectedError(
+                    f"'{incident.incident_id}' is a {incident.source.value} incident; "
+                    "only feed incidents are accepted from a feed"
+                )
             if incident.origin != origin:
                 raise IncidentRejectedError(
                     f"'{incident.incident_id}' names origin {incident.origin}, not {origin}"

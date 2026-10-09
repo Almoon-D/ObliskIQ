@@ -301,7 +301,9 @@ class LibrarySchedule(MarketSchedule):
         close = _library_instant(calendar.session_close(day))
         early = day in self._early_closes
         if self._seasonal is not None and not early and self._reference_in_dst(day):
-            close = _local_to_utc(day, self._seasonal.close, self.zone)
+            # An override can only shorten the day: one later than the library's close would
+            # open time the library does not.
+            close = min(close, _local_to_utc(day, self._seasonal.close, self.zone))
         break_start: datetime | None = None
         break_end: datetime | None = None
         if calendar.session_has_break(day):

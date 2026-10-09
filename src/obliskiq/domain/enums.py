@@ -65,20 +65,27 @@ class MarketDataStatus(StrEnum):
     def from_route_flag(cls, flag: str | None) -> Self | None:
         """The status a route's verbatim flag stands for; ``None`` when it is not recognised.
 
-        A flag naming both frozen and delayed data is read as frozen, the stricter claim.
+        The whole flag (trimmed, case-folded, ``-`` read as ``_``) must be one of the known
+        spellings: a flag that merely contains a known word (``NOT_REALTIME``) is not read as
+        that word. A flag naming both frozen and delayed data is frozen, the stricter claim.
         An unrecognised flag is not guessed at: the caller keeps the raw text beside a missing
         status.
+
+        VERIFY-LIVE(IBKR market-data flag spellings): the known spellings are lite's and have
+        not been seen live through this system's routes; Session 3 settles them.
         """
         if flag is None:
             return None
-        words = set(flag.strip().upper().replace("-", "_").split("_"))
-        if "FROZEN" in words:
-            return cls.FROZEN
-        if "DELAYED" in words:
-            return cls.DELAYED
-        if "REALTIME" in words:
-            return cls.REALTIME
-        return None
+        return _ROUTE_FLAGS.get(flag.strip().upper().replace("-", "_"))
+
+
+_ROUTE_FLAGS: dict[str, MarketDataStatus] = {
+    "REALTIME": MarketDataStatus.REALTIME,
+    "DELAYED": MarketDataStatus.DELAYED,
+    "FROZEN": MarketDataStatus.FROZEN,
+    "FROZEN_DELAYED": MarketDataStatus.FROZEN,
+    "DELAYED_FROZEN": MarketDataStatus.FROZEN,
+}
 
 
 class MarketDataQuality(StrEnum):

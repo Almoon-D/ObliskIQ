@@ -130,13 +130,25 @@ def test_superseding_refuses_the_unknown_the_repeated_and_the_circular(
     assert unchanged.superseded_by is None
 
 
-def test_an_upsert_cannot_close_a_supersession_cycle(
+def test_a_routine_upsert_neither_erases_nor_moves_a_supersession(
     seeded: Store, make_instrument: Callable[..., Instrument]
 ) -> None:
-    repos.supersede_instrument(seeded, SPY, OTHER, at=LATER)
-    looping = make_instrument(conid=OTHER, symbol="EWJ", superseded_by=SPY, superseded_at=LATER)
-    with pytest.raises(StoreError, match="would make a cycle"):
-        repos.upsert_instrument(seeded, looping)
+    repos.upsert_instrument(seeded, make_instrument(conid=2, symbol="NEW"))
+    repos.supersede_instrument(seeded, SPY, 2, at=LATER)
+    refresh = repos.get_instrument(seeded, SPY, as_of=date(2027, 1, 1))
+    assert refresh is not None
+    repos.upsert_instrument(
+        seeded, refresh.model_copy(update={"superseded_by": None, "superseded_at": None})
+    )
+    stored = repos.get_instrument(seeded, SPY, as_of=date(2027, 1, 1))
+    assert stored is not None
+    assert (stored.superseded_by, stored.superseded_at) == (2, LATER)
+    moved = refresh.model_copy(update={"superseded_by": OTHER, "superseded_at": LATER})
+    with pytest.raises(StoreError, match="supersede_instrument only"):
+        repos.upsert_instrument(seeded, moved)
+    unsuperseded = make_instrument(conid=OTHER, symbol="EWJ", superseded_by=2, superseded_at=LATER)
+    with pytest.raises(StoreError, match="supersede_instrument only"):
+        repos.upsert_instrument(seeded, unsuperseded)
 
 
 def test_resolving_follows_the_chain_as_it_stood_on_the_day(

@@ -488,6 +488,20 @@ def test_a_seasonal_override_that_changes_nothing_is_a_configuration_error() -> 
         LibrarySchedule.build("BVMF", "America/Sao_Paulo", START, END, None, seasonal)
 
 
+def test_a_seasonal_close_later_than_the_librarys_never_lengthens_the_day() -> None:
+    oracle = xc.get_calendar("BVMF", start=START, end=END)
+    zone = ZoneInfo("America/Sao_Paulo")
+    library_close = oracle.closes.iloc[0].tz_convert(zone)
+    later = (library_close + timedelta(hours=1)).strftime("%H:%M")
+    seasonal = SeasonalCloseConfig(reference_timezone="America/New_York", close=later, source=NOTE)
+    schedule = LibrarySchedule.build("BVMF", "America/Sao_Paulo", START, END, None, seasonal)
+    assert schedule.coverage is not None
+    for day in schedule.sessions_between(*schedule.coverage):
+        session = schedule.session(day)
+        assert session is not None
+        assert session.close <= oracle.closes.loc[str(day)].to_pydatetime(), day
+
+
 # ── last completed session, next open and close ──
 
 

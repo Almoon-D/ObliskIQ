@@ -49,7 +49,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   point-in-time reads, import contracts for the new packages (D32); the Session 1 exact-leaf
   tests became "every leaf has a source".
 - Docs: DECISIONS D24–D32, CHANGELOG 0.2.0, `docs/knowledge/{calendars,costs}.md`.
-- Tests: 1,467 passing. Coverage measured 99.91 %; floor raised from 98.6 % to 98.9 %.
+- Tests: 1,709 passing. Coverage measured 99.91 %; floor raised from 98.6 % to 98.9 %.
 
 **Deferred.**
 - Holiday lists for XSHE, XNSE, CHIA and XSPX: the library lacks them, so those venues are
@@ -176,6 +176,15 @@ settles it.
   `observe()` only reads); `None` means "no information", not "closed". Register IBKR's
   trading schedule as the third source and record the endpoint and format in
   `docs/knowledge/ibkr.md`.
+- Session 3: IBKR's trading schedule will disagree with the library's XEUR hours (08:00–22:00) on
+  open and close every day, because Eurex option-product hours differ; every date-critical XEUR
+  query would then block. Register the IBKR schedule per product (option hours) or compare
+  regular hours of the equity venues only, and record the decision.
+- Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
+  stamped with a period-end reference date, and the whole batch rolls back; relax or split it
+  with the first live macro route.
+- Session 4: `tradability` and `venue_status` take `conid` as an optional argument and ignore
+  instrument-scoped halts without it; the pre-trade check must pass the order's conid.
 - Session 4: call the instant view — `Calendars.tradability(venue, at, ...)` — and, for an
   option, `common_windows` with the underlying's venue; `venue_status` is the planning view.
 - Session 8: pin the IBKR codes with contracts; source holiday lists for the four synthetic
@@ -186,7 +195,7 @@ settles it.
   test expects 2026-06-05 for a 2026-06-19 holiday expiry at N = 10; the new anchor gives
   2026-06-04, one session more conservative.
 - Session 12: lite counted "N days back from expiry", excluding the expiry; the anchor is
-  now the last tradable session itself, so N sessions including it is `session_before(n=N-1)`.
+  now the last tradable session itself, so N sessions including it is `session_before(..., sessions=N-1)`.
 - Dependabot keeps `exchange-calendars` current; its holiday lists lapse every year, and a
   library upgrade that changes a session fails the golden snapshot for review.
 - Session 8: `history_exchange` NULL means "send none" (`domain/instrument.py`), so the loader

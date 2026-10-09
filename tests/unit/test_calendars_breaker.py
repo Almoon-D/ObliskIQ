@@ -560,20 +560,14 @@ def test_an_end_far_in_the_future_blocks_rather_than_crashing(
     assert calendars.last_tradable_session("XNYS", "XNYS", DAY).session < DAY
 
 
-def test_a_manual_incident_taken_on_the_feed_path_survives_a_manual_reload(
-    fresh: Callable[..., Calendars], tmp_path: Path
+def test_a_manual_labelled_incident_is_refused_on_the_feed_path(
+    fresh: Callable[..., Calendars],
 ) -> None:
     calendars = fresh()
     desk = incident(incident_id="desk-1", origin="ops-desk")
-    try:
+    with pytest.raises(IncidentRejectedError, match="only feed incidents"):
         calendars.accept_incidents("ops-desk", [desk])
-    except IncidentRejectedError:
-        return  # refusing a manual-labelled incident on the feed path is a fix as well
-    assert calendars.venue_status("XNYS", DAY).reason is BlockReason.INCIDENT_OVERLAP
-    path = tmp_path / MANUAL
-    path.write_text("incidents: []\n", encoding="utf-8")
-    calendars.reload_manual_incidents(path)
-    assert calendars.venue_status("XNYS", DAY).reason is BlockReason.INCIDENT_OVERLAP
+    assert calendars.venue_status("XNYS", DAY).ok
 
 
 def test_the_feed_path_cannot_erase_the_manual_files_entries(
@@ -597,7 +591,7 @@ def test_a_manual_file_link_whose_target_is_gone_is_unreadable_not_empty(
     assert fresh().reload_manual_incidents(path).invalid is not None
 
 
-def test_reloading_or_accepting_the_same_thing_twice_changes_nothing(
+def test_reloading_the_same_file_twice_changes_nothing(
     fresh: Callable[..., Calendars], tmp_path: Path
 ) -> None:
     path = tmp_path / MANUAL
@@ -611,10 +605,6 @@ def test_reloading_or_accepting_the_same_thing_twice_changes_nothing(
     restarted.reload_manual_incidents(path)
     assert restarted.tradable_windows("XNYS", DAY) == calendars.tradable_windows("XNYS", DAY)
     assert restarted.venue_status("XNYS", DAY) == calendars.venue_status("XNYS", DAY)
-    desk = incident(incident_id="desk-1", origin="ops-desk", venue="XETR")
-    calendars.accept_incidents("ops-desk", [desk])
-    calendars.accept_incidents("ops-desk", [desk])
-    assert sum(i.incident_id == "desk-1" for i in calendars.incident_book.incidents) == 1
 
 
 # ── (1) a schedule that contradicts itself, fails or knows nothing ──

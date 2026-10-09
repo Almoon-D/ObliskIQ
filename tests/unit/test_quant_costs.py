@@ -315,13 +315,13 @@ def test_the_highest_rate_stands_when_several_apply(shipped_settings):
     assert estimate.amount == D("40.000")
 
 
-def test_a_tax_with_no_notional_costs_nothing_but_is_still_reported(shipped_settings):
+def test_a_zero_notional_pays_a_zero_tax_that_still_applies(shipped_settings):
     only = custom_book(shipped_settings, taxes=[tax()])
     estimate = only.transaction_tax(
         issuer_country="GB",
         asset_class=AssetClass.STOCK,
         side="buy",
-        notional=None,
+        notional=D(0),
         on=TODAY,
     )
     assert estimate.amount == D(0)

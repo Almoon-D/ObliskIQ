@@ -1198,8 +1198,8 @@ DELIVERABLES
    tenor window, mandatory close by calendar, strike-smile N(d₂) zombie test over two
    sessions), its budget from `capital.budgets` on current NAV. Every option date rule
    counts from Session 2's `Calendars.last_tradable_session` for the option and its underlying,
-   minus a configured buffer of sessions (`session_before(…, n)`; N sessions including the
-   last tradable one is n = N − 1).
+   minus a configured buffer of sessions (`session_before(…, sessions)`; N sessions including the
+   last tradable one is sessions = N − 1).
 3. engines/risk/ (lite risk engine: volatility-scaled stops, trailing stops, averaging-down
    rule, pre-earnings rule); engines/fx/ (four-way base-currency-real decomposition,
    carry-illusion test); engines/commodity/ (curves, roll, COT, inventory seasonal

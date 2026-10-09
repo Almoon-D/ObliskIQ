@@ -507,7 +507,7 @@ def test_the_tolerance_decides_whether_open_and_close_disagree(
     ]
 
 
-def test_a_source_that_says_open_on_a_closed_day_disagrees(
+def test_a_day_the_calendar_already_blocks_is_not_compared_with_a_source(
     build_calendars: Callable[..., Calendars],
 ) -> None:
     saturday = date(2026, 10, 10)

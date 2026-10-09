@@ -251,6 +251,8 @@ class Calendars:
             if entry.venue in runtimes
         }
         manual_path = None if data_dir is None else data_dir / settings.paths.manual_incidents
+        if manual_path is None and incidents is None:
+            log.warning("no data directory given: the manual incident file is not read")
         if incidents is None and manual_path is not None:
             incidents = load_manual_incidents(manual_path, runtimes.keys())
         return cls(
@@ -544,7 +546,7 @@ class Calendars:
     # ── cross-checks ──
 
     def _cross_check(
-        self, mic: str, day: date, times: SessionTimes | None, conid: int | None
+        self, mic: str, day: date, times: SessionTimes, conid: int | None
     ) -> tuple[Disagreement, ...]:
         found: list[Disagreement] = []
         for source in self._sources:
@@ -555,18 +557,18 @@ class Calendars:
                 continue
             if observed is None:
                 continue
-            if observed.is_session != (times is not None):
+            if not observed.is_session:
                 found.append(
                     Disagreement(
                         mic,
                         day,
                         DisagreementKind.IS_SESSION,
                         source.name,
-                        "session" if times is not None else "closed",
-                        "session" if observed.is_session else "closed",
+                        "session",
+                        "closed",
                     )
                 )
-            elif times is not None and observed.open is not None and observed.close is not None:
+            elif observed.open is not None and observed.close is not None:
                 if abs(observed.open - times.open) > self._tolerance:
                     found.append(
                         Disagreement(

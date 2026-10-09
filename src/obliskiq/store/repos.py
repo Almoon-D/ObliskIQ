@@ -69,11 +69,20 @@ def _count(store: Store, sql: str, params: Sequence[object]) -> int:
 
 
 def upsert_instrument(store: Store, instrument: Instrument) -> None:
-    """Insert an instrument, or update the one with the same conid (its ``created_at`` stays)."""
+    """Insert an instrument, or update the one with the same conid (its ``created_at`` stays).
+
+    A supersession is never changed here: an update leaves a stored one as it is, and an update
+    that names a different replacement is refused (``supersede_instrument`` is the only writer).
+    """
     params = instrument_params(instrument)
     with store.transaction():
-        if instrument.superseded_by is not None:
-            _refuse_supersession_cycle(store, instrument.conid, instrument.superseded_by)
+        stored = store.execute(
+            "SELECT superseded_by FROM instruments WHERE conid = ?", (instrument.conid,)
+        ).fetchone()
+        if stored is not None and instrument.superseded_by not in (None, stored["superseded_by"]):
+            raise StoreError(
+                f"instrument {instrument.conid} is superseded through supersede_instrument only"
+            )
         store.execute(
             f"INSERT INTO instruments ({INSTRUMENT_COLUMNS}) VALUES ({_placeholders(len(params))}) "
             "ON CONFLICT (conid) DO UPDATE SET symbol = excluded.symbol, "
@@ -82,8 +91,7 @@ def upsert_instrument(store: Store, instrument: Instrument) -> None:
             "ucits = excluded.ucits, kid_status = excluded.kid_status, "
             "share_class = excluded.share_class, lot_size = excluded.lot_size, "
             "option_exchange = excluded.option_exchange, "
-            "history_exchange = excluded.history_exchange, roles = excluded.roles, "
-            "superseded_by = excluded.superseded_by, superseded_at = excluded.superseded_at",
+            "history_exchange = excluded.history_exchange, roles = excluded.roles",
             params,
         )
 

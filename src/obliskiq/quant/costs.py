@@ -286,7 +286,7 @@ class CostBook:
         issuer_country: str | None,
         asset_class: AssetClass,
         side: Side,
-        notional: Decimal | None,
+        notional: Decimal,
         on: date,
         taxable_issuer: bool | None = None,
     ) -> TaxEstimate:
@@ -303,7 +303,7 @@ class CostBook:
         """
         if side not in _SIDES:
             raise ValueError(f"side must be 'buy' or 'sell', got {side!r}")
-        if notional is not None and (not notional.is_finite() or notional < ZERO):
+        if not notional.is_finite() or notional < ZERO:
             raise ValueError(f"a notional must be finite and not negative, got {notional}")
         if issuer_country is None:
             if asset_class is AssetClass.STOCK:
@@ -350,7 +350,7 @@ class CostBook:
         chosen = max(rules, key=lambda rule: rule.rate or ZERO)
         rate = chosen.rate or ZERO
         scope_assumed = chosen.needs_issuer_list and taxable_issuer is None
-        amount = ZERO if notional is None else notional * rate
+        amount = notional * rate
         return TaxEstimate(
             amount,
             None,

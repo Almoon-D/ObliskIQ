@@ -16,7 +16,6 @@ from ..domain.calendar import Incident, TimeWindow
 
 class BlockReason(StrEnum):
     UNKNOWN_VENUE = "unknown_venue"
-    EXCHANGE_UNMAPPED = "exchange_unmapped"
     CALENDAR_NOT_COVERED = "calendar_not_covered"
     NOT_A_SESSION = "not_a_session"
     SCHEDULE_INCONSISTENT = "schedule_inconsistent"

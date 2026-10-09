@@ -20,7 +20,7 @@ yet seen against the exchange or the broker (queued in `docs/ROADMAP.md`).
   - The upgrade is the remedy: Dependabot keeps `exchange-calendars` current because these
     holiday lists lapse every year.
 - Absent from the library: XSHE (Shenzhen), XNSE (NSE India), CHIA (Shanghai–HK Connect
-  segment) and XSPX (the S&P index calendar). They are configured as synthetic venues with no
+  segment) and XSPX (the South Pacific Stock Exchange, Fiji). They are configured as synthetic venues with no
   holiday list, so every date is `blocked(calendar_not_covered)` until a holiday list is
   sourced. `[xcal ✓ 2026-10-09]` `VERIFY-LIVE(holiday lists for XSHE, XNSE, CHIA, XSPX)`
 - XEUR (Eurex) exists in the library since 4.13.2. Its session is the whole venue's, 08:00–22:00
@@ -71,14 +71,14 @@ yet seen against the exchange or the broker (queued in `docs/ROADMAP.md`).
   checked against a second code path (an oracle over the library's own sessions) in
   `tests/unit/test_calendars_service.py`.
 - Lite counted "N days back from expiry", excluding the expiry; the anchor here is the last
-  tradable session itself, so N sessions *including* it is `session_before(..., n=N - 1)`.
+  tradable session itself, so N sessions *including* it is `session_before(..., sessions=N - 1)`.
 
 ## Venues and the broker's codes
 
 - `config/defaults/venues.yaml` holds 27 venues and 23 IBKR exchange codes. Every code is a
   claim from the legacy repositories or from lite's observed routes; none is pinned against a
-  contract id yet. `SMART` is a routing alias, not a venue, and raises
-  `blocked(exchange_unmapped)`. `VERIFY-LIVE(IBKR exchange codes → venues)`; Session 8 pins
+  contract id yet. `SMART` is a routing alias, not a venue; an unlisted code raises
+  `UnknownExchangeCodeError`, never a default venue. `VERIFY-LIVE(IBKR exchange codes → venues)`; Session 8 pins
   them with contracts.
 - The phase windows (pre-market, opening auction, closing auction, post-market) are the pulse
   bot's, unmeasured. `VERIFY-LIVE(venue phase windows)`. The order window — 30 minutes after

@@ -51,7 +51,8 @@ the row's `verify_live` is cleared.
   that blocks a total; the label is what tells a reader the figure leaves a tax out. Countries
   and instrument classes (ETFs, ADRs, derivatives) with a tax this file does not hold are in
   that position.
-- An issuer country the caller does not give is also reported, as `issuer country not given`.
+- A share whose issuer country the caller does not give is `tax_unknown` and has no total;
+  for any other asset class a missing country is labelled `tax_not_modelled`.
 - `VERIFY-LIVE(taxes)`: the ES, FR and IT rows need the official texts; the GB and HK rows are
   read from official sources but not from an executed trade's confirmation.
 
@@ -70,7 +71,8 @@ Each is a decision in `docs/DECISIONS.md` (D31).
 
 - The legacy equity path booked a flat 0.0 for commission; the port charges the per-share
   schedule.
-- A missing row, a missing tax rate and an unknown liquidity input are explicit statuses,
-  never a silent default.
+- A missing row, a missing tax rate and an unknown issuer country for a share are explicit
+  statuses. A missing average daily value gives zero market impact and an unknown
+  market capitalisation the illiquid tier; both are labelled, not silent defaults.
 - Lite's open-interest gate is not part of costs: gates own it, and passing on a missing
   figure was dishonest degradation.
