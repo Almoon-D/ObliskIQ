@@ -32,6 +32,11 @@ the observation that settled it.
 
 ## Files
 
-Files are added by the sessions that verify them (`ibkr.md`, `ibkr-orders.md`,
+- `calendars.md` — what `exchange_calendars` reports, the venue facts `venues.yaml` cites,
+  and how expiry and daylight saving behave.
+- `costs.md` — the commission schedules, the transaction taxes and the friction assumptions
+  behind `costs.yaml`, and how well each was confirmed.
+
+More files are added by the sessions that verify them (`ibkr.md`, `ibkr-orders.md`,
 `ibkr-capabilities.md`, `macro-sources.md`, `tax-es.md`, …); none is written ahead of the
 evidence.
