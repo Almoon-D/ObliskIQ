@@ -538,7 +538,9 @@ DELIVERABLES
    cash-quantity types), /iserver/contract/{conid}/algos, the market scanner (parameters
    and run), and the contract's trading schedule.
 4. The trading schedule registered as the third ScheduleSource of Session 2's agreement
-   check (endpoint and format recorded in docs/knowledge/ibkr.md; VERIFY-LIVE until seen).
+   check: a synchronous, cache-backed source (refreshed asynchronously here; `observe()`
+   only reads; None means no information, not closed) (endpoint and format recorded in
+   docs/knowledge/ibkr.md; VERIFY-LIVE until seen).
 5. ibkr/ratelimit.py: token buckets per endpoint group from config; history ≤ 10/s and
    ≤ 50/min; snapshot ≤ 100 conids and ≤ 50 fields per call (IBKR Web API changelog,
    2026-09-09 and 2025-12-10); global concurrency cap; Retry-After honoured; jittered
@@ -632,8 +634,9 @@ DELIVERABLES
    refused until Session 5 can fund it by conversion); notional caps per order
    and per day; maximum orders per day; quote policy per asset class (options
    realtime_required on the option AND its underlying; others realtime_preferred with a
-   maximum delay); collar = base + k·σ·√(delay); venue_status ok and inside its tradable
-   window (Session 2 calendars); kill switch off; mode permits writes; approval present
+   maximum delay); collar = base + k·σ·√(delay); `Calendars.tradability` ok at the order
+   instant (Session 2's act-now view, not the planning `venue_status`; an option also inside
+   `common_windows` with its underlying's venue); kill switch off; mode permits writes; approval present
    if required; the mandatory-close rule for options on ineligible ETPs.
 7. execution/modes.py: shadow (simulated fills with quant/costs), paper, live-small, live;
    upgrades by explicit command with audit; downgrades automatic.
@@ -930,7 +933,8 @@ READ: legacy/lite/universe.yaml (all), legacy/lite/src/obliskiq/collect/*.py,
 legacy/lite/docs/COLLECTORS.md, legacy/lite/docs/DECISIONS.md sections "Instruments,
 PRIIPs and wrappers", "Data and collection", "The European chains…", "The market axis,
 realigned for allocation", "Two collector defects…"; legacy/old/ObliskIQ/modules/config/
-global_vehicles.py. Port lite's `collectors`, `data` and `calendars` keys you consume.
+global_vehicles.py. Port lite's `collectors` and `data` keys you consume (Session 2 ported
+`calendars` into `config/defaults/venues.yaml`).
 
 DELIVERABLES
 1. config/universe.yaml: grid axes ported from lite (markets, 12 sectors, unmapped_cells
@@ -1096,7 +1100,8 @@ DELIVERABLES
    volume and tone, Welford anomaly z-scores, warm-up); RSS (central banks, regulators,
    IR feeds of satellite names; dedupe; raw items stored for the EventExtractor). VADER
    only as an offline fallback tone.
-6. Halt feeds into calendars/incidents.py: port market-pulse-bot's structured-feed
+6. Halt feeds into calendars/incidents.py through `Calendars.accept_incidents(origin,
+   incidents)`, which replaces one origin wholesale: port market-pulse-bot's structured-feed
    parser and its Nasdaq Trader trade-halts feed, which is single-stock in scope. A
    single-stock halt blocks that instrument only, never the venue (record this
    instrument-level blocking in DECISIONS). Market-wide halts and exceptional closures
@@ -1180,8 +1185,10 @@ sleeve", "The equity sleeve", "Volatility, risk and the screen", "The credit tie
 date comparison…", "A guard is verified by mutation, not by being green", and the matching
 tests; legacy/lite/references/commodities-universe.md. Port lite's `option_sleeve`,
 `tenor`, `zombie_test`, `equity_risk`, `fx_inflation`, `commodities`, `screen`,
-`liquidity` and `smile` keys you consume, except `option_sleeve.budget_pct`: the option
-budget is read from Session 7's `capital.budgets` (one owner; recorded in DECISIONS).
+`liquidity` and `smile` keys you consume (Session 2 ported part of the last two into
+`config/defaults/{liquidity,smile}.yaml`; extend those files), except
+`option_sleeve.budget_pct`: the option budget is read from Session 7's `capital.budgets`
+(one owner; recorded in DECISIONS).
 
 DELIVERABLES
 1. The option surface view in the measurement store: per underlying, delta × tenor × IV,
@@ -1190,8 +1197,9 @@ DELIVERABLES
    recovery on qualifying realised gains, concurrency cap, minimum premium, catalyst-driven
    tenor window, mandatory close by calendar, strike-smile N(d₂) zombie test over two
    sessions), its budget from `capital.budgets` on current NAV. Every option date rule
-   counts from Session 2's last_tradable_session for the option and its underlying, minus
-   a configured buffer of sessions.
+   counts from Session 2's `Calendars.last_tradable_session` for the option and its underlying,
+   minus a configured buffer of sessions (`session_before(…, sessions)`; N sessions including the
+   last tradable one is sessions = N − 1).
 3. engines/risk/ (lite risk engine: volatility-scaled stops, trailing stops, averaging-down
    rule, pre-earnings rule); engines/fx/ (four-way base-currency-real decomposition,
    carry-illusion test); engines/commodity/ (curves, roll, COT, inventory seasonal

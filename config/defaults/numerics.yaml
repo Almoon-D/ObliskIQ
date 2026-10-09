@@ -1,0 +1,50 @@
+# Black-Scholes-Merton engine and the implied-volatility solver. Volatilities and rates are
+# decimals everywhere (0.32 is 32 %).
+numerics:
+  bsm:
+    # Calendar days per year for the time to expiry (how expiries and theta are quoted); not the
+    # 252-session basis used to scale realised volatility.
+    day_count_basis: 365.0
+    # One calendar day. Below this the model is meaningless, so time is floored here.
+    min_tau_years: 0.0027397
+    min_sigma: 0.005
+    max_sigma: 4.0
+    # Floor for spot and strike, so a log of zero cannot happen.
+    min_price: 0.0001
+    # Vega and rho are quoted per one volatility point (1 % is 0.01); theta per calendar day.
+    vega_per_point_divisor: 100.0
+    theta_per_day_divisor: 365.0
+
+  implied_vol:
+    # brenner_subrahmanyam seeds Newton from a closed form; fixed starts every contract at
+    # seed_fixed_sigma. The fixed seed is also used for a contract the closed form cannot seed.
+    seed_method: brenner_subrahmanyam
+    seed_fixed_sigma: 0.35
+    seed_min_sigma: 0.02
+    seed_max_sigma: 2.5
+    max_newton_iterations: 24
+    max_bisection_iterations: 100
+    # A price is matched when it is within the larger of the absolute and the relative tolerance
+    # (an absolute one alone is meaningless across a five-cent and a five-hundred-unit contract).
+    price_abs_tolerance: 0.00005
+    price_rel_tolerance: 0.0001
+    # Below this vega Newton is unusable and the contract falls through to bisection.
+    min_vega: 0.00001
+    # A solved volatility is reported only when a one-point move shifts the price by at least this
+    # much: far out of the money a near-zero price fits a wide band of volatilities.
+    min_vega_for_reported_iv: 0.001
+    # A price below discounted intrinsic, or above the no-arbitrage ceiling, has a data error and
+    # no implied volatility.
+    reject_below_intrinsic: true
+    reject_above_upper_bound: true
+    # Solving an at-the-money volatility the route did not serve. BSM prices a European option,
+    # and the ETFs here are American-style, so the solve is confined to the region where the
+    # early-exercise premium is small.
+    solve:
+      min_dte: 90
+      max_dte: 200
+      # Strikes within this fraction of spot are solved; beyond it a chain goes to bid 0 / ask
+      # 0.01 and a near-zero price fits a wide band of volatilities.
+      moneyness_band: 0.15
+      # Past this fraction of contracts that did not converge, a run reports degraded.
+      max_non_converged_fraction: 0.20

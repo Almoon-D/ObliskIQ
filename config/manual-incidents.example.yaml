@@ -1,0 +1,32 @@
+# Manual incidents: market-wide halts and exceptional closures you enter by hand.
+#
+# Copy this file to manual-incidents.yaml in the data directory (OBLISK_DATA_DIR) when a venue
+# halts or closes unexpectedly. The calendars read it when they start and when asked to reload.
+#
+# An incident blocks trading from `start` until `expected_end` plus the grace period in
+# calendars.incidents.grace_minutes. Leave `expected_end` out when no end is known: the venue
+# then stays blocked until you remove the entry. Remove an entry once the venue has reopened.
+#
+# A mistake in this file (an unknown key, a time without an offset, an unknown venue, a
+# duplicate id) blocks EVERY venue until it is fixed: one typo must never silently drop the
+# entries beside it.
+#
+# Fields
+#   id           a name unique within this file
+#   venue        a market code from config/defaults/venues.yaml, such as XNYS
+#   scope        venue (the whole venue) or instrument (one contract; needs conid)
+#   conid        the IBKR contract id, for scope: instrument only
+#   start        when the halt began, with a UTC offset
+#   expected_end when it should end, with a UTC offset (optional)
+#   reason       a short note for the log
+#
+# Example:
+#
+# incidents:
+#   - id: nyse-matching-engine-2026-09-22
+#     venue: XNYS
+#     scope: venue
+#     start: 2026-09-22T17:10:00+00:00
+#     expected_end: 2026-09-22T18:15:00+00:00
+#     reason: Full-market matching engine incident
+incidents: []

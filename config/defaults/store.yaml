@@ -1,0 +1,8 @@
+# The SQLite store. Write-ahead logging and foreign keys are always on; the store refuses to
+# open without them.
+store:
+  # How long a connection waits for another process's write lock before giving up.
+  busy_timeout_ms: 10000
+  # NORMAL is durable against a process crash and, in WAL mode, loses at most the last commits
+  # on a power cut. FULL and EXTRA wait for the disk on every commit.
+  synchronous: NORMAL

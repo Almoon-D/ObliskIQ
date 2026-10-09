@@ -15,6 +15,7 @@ from typing import Annotated, Any
 
 from pydantic import AfterValidator, BeforeValidator, Field, PlainSerializer, ValidationError
 
+from ..config.base import FrozenModel
 from ..config.loader import (
     ConfigInvalid,
     ConfigProblem,
@@ -23,7 +24,8 @@ from ..config.loader import (
     flatten,
     read_yaml_mapping,
 )
-from ..config.schema import FrozenModel, Identifier, NonEmptyText
+from ..config.schema import Identifier
+from ..domain.base import NonEmptyText
 
 JURISDICTIONS_DIR = "jurisdictions"
 PROFILE_SUFFIX = ".yaml"

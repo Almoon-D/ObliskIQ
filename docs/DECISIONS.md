@@ -187,3 +187,256 @@ version would be a new entry here.
 `obliskiq.llm` may import neither `decision`, `execution` nor `ibkr`: the order endpoints live
 in `ibkr`, and the LLM never builds or sends orders (AGENTS.md). This adds a contract and
 leaves the plan's rule (§5.10) as written. Each import contract was shown to break on a probe.
+
+## Session 2 — Store, calendars and numerics (2026-10-09)
+
+### D24 · Dependencies: numpy and exchange-calendars, no scipy
+
+Runtime adds `numpy>=2.3,<3` and `exchange-calendars>=4.13.2,<5`. pandas arrives only as
+`exchange_calendars`' dependency and is never imported by our code; the library and its pandas
+objects stay inside `calendars/schedule.py`, which hands out standard-library types in UTC.
+scipy is not added: the one function lite took from it, `ndtr`, is
+`0.5 * erfc(-x / sqrt(2))` through `math.erfc` (exact to double precision, checked against
+`statistics.NormalDist` and lite's test constants). This departs from MASTER_PLAN §7 and D17,
+which listed scipy; a dependency with one consumer that the standard library serves is not
+worth its weight. Dependabot keeps `exchange-calendars` current on purpose: its precomputed
+calendars (XSHG, XBOM, XSES here) end on 31 December of their last recorded year, and
+`Calendars.coverage()` reports each venue's window. exchange_calendars 4.13.2 builds XHKG's
+Easter Monday with a bare-integer numpy timedelta that numpy 2.5 deprecates; one narrow
+`filterwarnings` ignore names that module and message so nothing else is hidden.
+
+### D25 · The store's shape
+
+A fresh `001_core.sql` replaces lite's nineteen migrations. Tables are renamed for the plan's
+vocabulary: `universe` → `instruments`, `underlying_snapshots` → `snapshots`,
+`curve_snapshots` → `curves`, `collector_sequences` → `runs`, `collector_runs` → `run_steps`
+(`run_id` is nullable: a step invoked on its own is not half of a run). `instruments` are
+never deleted; a correction supersedes (`superseded_by`, `superseded_at`), and a read as of an
+earlier date sees whether an instrument existed and whether it was superseded by then. Its other
+attributes (`kid_status`, `ucits`, `lot_size`, `roles`, `history_exchange`) are overwritten in
+place, so a past `as_of` read returns today's values for them; an attribute history, if a
+later session needs one, is a new table. `bars` are **daily only and keyed by `session_date`**,
+the listing venue's local date: lite keyed them by a UTC timestamp and a frequency, where a
+weekly bar stamped at its period start would leak the days after it and an Asian session's
+UTC date is the previous day. Weekly and monthly series are derived when needed. Dates and
+stamps have one fixed shape each (`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM:SSZ`), enforced by a GLOB
+`CHECK`; the mappers raise `StoreError` on a stored value that is not a real date or time.
+
+`market_data_status` is the **decoded** kind of quote (`realtime | delayed | frozen | none`,
+`NULL` when the route said nothing, never read as realtime) and carries a `CHECK`; the route's
+own flag is kept verbatim beside it in `market_data_raw`, and `quote_delay_seconds` beside that.
+Lite deliberately put no `CHECK` on the raw flag so an unforeseen value could not crash a
+collector on a day that cannot be recollected; the same intent holds here because the decoder
+never emits a value outside the enum (an unrecognised flag becomes a `NULL` status with the raw
+text kept). There is no `CHECK` on route names (`source`): SQLite cannot alter a `CHECK`, and no route
+vocabulary exists yet, so the domain models accept any non-empty text; lite refused unknown
+routes, and the enum that restores that arrives with the routes (Session 3). Not carried
+because nothing serves them yet: vendor IV percentiles, bar watermarks, the grid, ledger and
+census tables, and lite's `macro_fetch_log`, `collector_state`, `futures_roots`,
+`vendor_fetch_log`, `universe_rejections`, `nav_history` and `commodity_proxy_map`; later
+sessions add what a live route supplies by migration. The `universe` columns that describe the
+grid and eligibility (`market`, `sector`, `tradable` with its `untradeable_reason` invariant,
+the unique grid-cell index, `collect_chain`, `collect_bars` and the rest) are not carried: the
+universe is configuration from Session 8, and that session decides where those invariants live.
+The shape was derived by reading lite's chain, not by transcribing it.
+
+Three write and read behaviours differ from lite and are chosen. A snapshot, chain or curve
+upsert replaces the whole row (lite's writers each owned disjoint columns, such as the solved
+implied volatility); a second route or a re-run therefore overwrites the first, and Session 11,
+which adds the solver, adds a column-targeted writer with it. Content `CHECK`s that lite avoided
+(`delta` range, `expiry >= snapshot_date`, `bars.close` and `macro.value` NOT NULL) are kept
+because a row that violates them is wrong, not merely unusual, and a batch containing one rolls
+back whole: a collector reports the day as failed instead of storing it. `limit <= 0` on a read
+raises where lite ignored it.
+
+### D26 · The migration runner and the connection
+
+Python 3.14 `autocommit=True`: the runner and `Store.transaction()` begin and end every
+transaction themselves. Each migration runs inside one `BEGIN IMMEDIATE` together with its
+`schema_migrations` row, with the applied set read again inside the write lock, so two
+processes starting on an empty database apply the first migration once. It refuses an edited
+migration (SHA-256 of the LF-normalised text; `.gitattributes` fixes `*.sql` to LF), a missing
+file, an unapplied one below an applied one, a gap or repeat in the numbering, and a script
+that carries transaction control or sets a connection pragma. Foreign keys are switched off
+for the duration of a migration, as SQLite's table-rebuild procedure requires, and
+`PRAGMA foreign_key_check` runs before the commit, rolling back on any violation; a rebuild of
+a referenced table is therefore possible and cannot lose a referenced row. Write-ahead logging
+(a file database) and foreign keys are fixed in code and checked after being set; only
+`store.busy_timeout_ms` and `store.synchronous` (`NORMAL`, `FULL` or `EXTRA`; `OFF` is not
+offered, since a crash could corrupt the database) are configuration. `transaction()` takes
+the write lock at the outermost level and savepoints inside; there is no `commit()`. A `Store`
+belongs to the thread that opened it; async callers use `asyncio.to_thread`.
+
+### D27 · Point-in-time reads
+
+Every repository read takes a keyword-only `as_of` with no default, `COUNT(*)` included.
+Bars are read up to the session `as_of` (callers pass the calendars' `last_completed_session`,
+never an open session); snapshots, chains and curves up to `snapshot_date <= as_of`; macro by
+`release_date <= as_of` in SQL; instruments by `created_at` and `superseded_at`, so a
+supersession is invisible before the `superseded_at` its writer states (the store does not
+stamp it, and `upsert_instrument` never changes a supersession). A snapshot date after `as_of` raises. A macro
+observation with no release date cannot be placed in time: it is excluded and counted in
+`MacroSeries.unaligned` (bounded by `collected_at`, so the count too is what the store held on
+`as_of`), and a series from several sources must be asked for by source. One macro value is
+kept per period (a re-pull overwrites; Session 10 adds the vintage). `curve_front_history`
+takes the earliest expiry listed each session and drops a session whose front has no price;
+lite took the earliest *priced* expiry, which silently spliced two contracts into one series.
+Two structural tests keep this true: every public read in `store/repos.py` has a required
+keyword-only `as_of`, and no package outside `store/` holds a SQL string.
+
+### D28 · Calendar semantics
+
+Two views of a day. `venue_status(venue, day)` is the planning view: any incident overlapping
+the session blocks it (`partial` says whether tradable time remains), which is what an exit
+scheduled against an expiry needs. `tradability(venue, at)` is the act-now view: incident
+intervals are subtracted exactly, so trading resumes after a halt; a pre-trade check calls it.
+The prompt's `tradable_window` is `tradable_windows`, plural, since a lunch break or an incident
+splits it. An incident blocks `[start, expected_end + grace]`, or `[start, ∞)` without an end,
+a function of the record alone; the clock only drives a once-per-incident "stale, remove it"
+warning. Manual incidents need an explicit UTC offset, a known venue, an end after the start, a
+reason, and for instrument scope an int `conid`; a file that cannot be read makes the whole book
+invalid and blocks every venue (`incident_file_invalid`), because one typo must never silently
+drop the entries beside it (pulse's loader failed open). A feed may raise only what its venue
+declares. A date the library or configuration does not cover is `calendar_not_covered`, never
+open; `coverage()` reports each venue's window.
+
+Cross-check sources (`ScheduleSource`, registered by Session 3) are synchronous and
+cache-backed, return `None` for "no information" (distinct from closed), compare the regular
+session only (product hours differ and would read as a permanent disagreement), alert once per
+(venue, day, kind, source) through an injected sink, and block only `date_critical` queries.
+`last_tradable_session` walks back to the last day both venues are `ok` date-critically, lists
+every day it skipped with the venue and reason, and raises when it meets a day the calendars
+cannot judge. XEUR is a 27th venue (the library carries it since 4.13.2): its hours are the
+whole venue's and wider than equity options trade, so an option order uses `common_windows` of
+the option venue and the underlying venue. An unmapped IBKR code (`SMART`, anything unlisted)
+raises. The library's sessions are sanity-checked (`open < break < close`; a break at or after
+the close is dropped, as the library already does on special-close dates, anything else out of
+order is `schedule_inconsistent`). All durations are computed on UTC instants: pulse subtracted
+two wall-clock datetimes of one zone, which is an hour wrong across a daylight-saving change.
+
+Findings of the adversarial test round on the facade: a date-critical order is blocked by a source
+disagreement even when an incident also touches the day and the instant lies outside it; a manual
+file that is not valid UTF-8, or a symlink whose target is gone, makes the book invalid instead
+of leaving the previous book in force; a reload replaces only the entries that came from the
+manual file's own origin, and `accept_incidents` refuses that origin, so neither path can erase
+the other's halts; an expected end so far out that adding the grace overflows is an open-ended
+block; a `conid` or time written as a boolean or a number (`yes`, a Unix time) is refused. A
+raising or silent cross-check source still never blocks, even a date-critical query (D28): the
+cross-check is advisory evidence, and a source that fails must not close a market.
+
+Findings of the port check against the pulse bot, chosen or deferred. `phase_at` and `is_open`
+describe the schedule and ignore incidents (pulse's phase state returned a halt phase); only
+`tradability` and `venue_status` apply incidents, and an order path must call them. A naive
+datetime is refused. Manual and feed incidents are a union, several per venue, so an operator
+cannot override a wrong feed halt (pulse let a manual record replace a feed record); Session 10
+decides whether an override is wanted, and until then the block errs towards no trade. Incidents
+carry a free-text reason, not pulse's four types, and an incident lapses at `expected_end` plus
+grace where pulse stayed in a reopening phase until removed. The calendar window is two years
+back and three forward (`calendars.history_years`, `horizon_years`), narrower than the
+library's default, so an older date is `calendar_not_covered`. The IBKR map omits lite's
+`ICEEU` → `XLON` and maps `IBIS` to `XETR` and `NASDAQ` to `XNAS` (lite used `XEUR` and `XNYS`):
+Session 8 pins each code with a contract. Pulse's `build_upcoming_events`, pre-notice
+thresholds, `loop_mode` and `scaffold_config` are not carried; a digest rebuilds the holiday and
+early-close forecast from `SessionBounds.early_close`. The XNAS halt-feed endpoint and pulse's
+rule that a structured feed needs a URL are not carried; Session 10 re-adds them with the feed.
+
+### D29 · Venue configuration
+
+`venues.<MIC>` holds only what every venue has (name, region, time zone, phase windows,
+incident source, provenance); what applies to a few venues lives in sparse MIC-keyed sections
+(`synthetic_calendars`, `lunch_breaks`, `seasonal_closes`), and
+`calendars.venue_order_offsets` ships empty. A venue is synthetic exactly when its MIC is in
+`synthetic_calendars`, otherwise its MIC is the `exchange_calendars` name. The four venues the
+library lacks (CHIA, XNSE, XSHE, XSPX) ship with no holiday list and are therefore
+`calendar_not_covered` until one is sourced; pulse treated them as open every weekday. The
+Singapore midday break (the library skips it; pulse's test for it was an expected failure) and
+B3's earlier close while New York observes daylight saving time are configured overrides, and
+an override over a break or a seasonal close the library later gains is a build error. Orders
+go 30 minutes after the open to 15 before the close, a venue override available, until
+transaction-cost analysis calibrates them. Times in YAML must be quoted (`"10:00"`; PyYAML
+reads an unquoted 10:00 as the number 600), and the schema says so. Every value carries a source
+and `verify_live`. `ibkr_exchanges` is a keyed mapping from IBKR code to venue; the codes the
+prompt names plus those lite evidenced (`FTA`, `CDE`, `AMEX`, `BATS`, `LSEETF`) are mapped, all
+awaiting a live reading. Pulse's per-venue currency is dropped: the instrument carries it.
+
+### D30 · Numerical configuration
+
+Lite's `numerics.bsm`, `numerics.implied_vol` and `numerics.implied_vol.solve`
+(`min_dte`, `max_dte`, `moneyness_band`, `max_non_converged_fraction`), `smile`
+(`min_abs_delta`, `max_abs_delta`, `butterfly_max_iv_deviation`, `min_points`) and `liquidity`
+(`max_spread_pct`, `min_open_interest`, `require_session_volume`) keys carry over unchanged in
+value, as `config/defaults/{numerics,smile,liquidity}.yaml`. Left out because nothing consumes
+them yet (Sessions 11 and 12 extend the same files): `solve.enabled`, `smile.skew_delta`,
+`smile.term_structure.*`, `liquidity.spread_waiver_min_open_interest` and `data.*`.
+`market_data_status_live` disappears: the decoded enum defines what is live, and the decoder
+matches the whole raw flag against known spellings, so `NOT_REALTIME` is never live
+(`VERIFY-LIVE(IBKR market-data flag spellings)`).
+
+Inference and cost-model findings of the port check. Legacy fixed its floors and defaults (a
+Newey–West minimum of 3, Spearman and bootstrap minimums of 5, 2000 resamples, one seed, 0.05
+levels) inside the functions; every one is now a required argument that the caller reads from its
+own configuration (Sessions 11, 14 and 18 add those keys with their consumers), and the functions
+refuse a minimum below two observations for a mean and three pairs for a rank correlation, and an
+`alpha` outside (0, 1) or `n_boot` below one whatever the data. The result is a dataclass and
+`ci95` is `ci`. In `costs`, an order with a non-positive or non-finite quantity or price is
+refused (legacy returned a zero commission), and an option leg must be given its contract
+multiplier (a premium per unit costed as one unit understates the money at risk a hundredfold).
+Money is returned unrounded: quantisation to the instrument's tick and the currency's minor unit
+belongs to the order boundary (Session 5), not to a cost estimate. Before a tax rule's
+`effective_from` the leg has no rule and is labelled `tax_not_modelled`, so a backtest of an
+earlier date understates cost and must read that label; `breakeven_move` doubles one leg's
+fraction and so omits a side-specific tax of the other leg (Session 14 prices both legs). The
+USD 1.00 option order minimum is new. The cost functions refuse malformed
+input instead of pricing it: a side other than `buy`/`sell`, an issuer country that is not two
+upper-case letters, a negative or non-finite notional, a non-positive or non-finite multiplier
+or entry price. An unknown tax has no amount (`None`), as an unknown commission has none. A share
+whose issuer country is not given has `tax_unknown` and no total, because a share's tax follows
+its issuer; for other asset classes a missing country is labelled `tax_not_modelled`. A
+`maximum_fraction_of_value` of zero is refused at load. Open questions, recorded not decided: any
+USD bond is priced on the US Treasury row because order terms cannot tell a Treasury from other
+bonds (Session 9's bond rule supplies the distinction); a missing average daily value gives zero
+market impact without a label. Lite's IV-solve tests that need the store (vendor column
+untouched, rate as-of refusals, vendor-served skip, source ordering) stay with Session 11.
+
+### D31 · Costs
+
+`quant/costs.py` is rebuilt on configuration, not copied. Commission schedules are rows chosen
+by (venue, asset class, currency); transaction taxes are rows chosen by the issuer's country,
+asset class, side and date, each with its provision, a `confirmation` (`official`,
+`secondary` or `none`), an `effective_from` and `verify_live`. Money and rates are `Decimal`
+written as quoted strings; a float in the file is refused with a hint. **An unknown cost is a
+status, not a number:** `no_schedule`, `beyond_tier` (the EUR bond tier past EUR 8,500 is not
+held), `tax_unknown` (a rate that could not be stated is `null`), `no_friction_model`; a leg with
+any gap has no total, and a position cannot be adjusted by a cost nobody knows. Taxes are applied
+as a conservative upper bound: a tax that depends on a published issuer list is assumed to apply
+when the caller does not say, labelled `scope_assumed`, and an issuer with no rule is "not
+modelled", which is not the same as untaxed. The 2026-10-09 reading: UK stamp duty reserve tax
+0.5 % (gov.uk, official) and Hong Kong stamp duty 0.1 % each side (IRD and HKEX, official), Spain
+0.2 % and France 0.4 % (secondary sources citing the provisions; a further French rise for 2026
+was tabled and not settled), Italy **no rate entered** (sources disagree: 0.1 % and 0.2 % until
+2025, reportedly 0.2 % and 0.4 % from 2026-01-01). Commission rows are the figures this
+repository holds (US shares and ETFs $0.005 per share, $1 minimum, 1 % cap; US options $0.65 per
+contract, $1 minimum; Eurex options EUR 1.50, minimum unestablished; US Treasuries 0.002 % of
+face, USD 5 minimum; EUR bonds 0.1 % up to EUR 8,500, EUR 1 minimum), all awaiting a live
+reading. The legacy spread, slippage and impact tiers are kept as labelled assumptions. Two
+behaviours of the legacy model change: its equity path booked a flat `commission_per_trade` of
+0.0 instead of the per-share schedule it had just defined (fixed), and its open-interest gate is
+dropped (the option gates own liquidity, and `None → acceptable` contradicted honest
+degradation). Cost fractions are decimals, not percents.
+
+### D32 · Guards and tooling
+
+The unread-key scan learns `KEYED_MAPPINGS`: for a section keyed by data (venues, IBKR codes) the
+section and key are stripped and the remainder must be read as an attribute chain inside
+`calendars/`; controls show an orphan field is caught, a chain in another package does not count
+and every keyed section is non-empty. A cost record's fields inside a list are checked by a test
+that each is read in `quant/costs.py`. `test_no_hardcoded_trading_times` refuses clock times,
+`time(h, m)`, `hour=`/`minute=` literals, IANA zone names and configured venue codes in source
+files, with a positive control for each. The exact-leaf assertions in the loader and CLI tests
+become "the foundation rows are present and every value has a source", and `settings show` cuts
+long values. Import contracts: `domain` is a leaf; `store`, `calendars` and `quant` are mutually
+independent; `calendars` reaches neither the broker nor httpx nor the store. Hypothesis runs
+with `deadline=None` and, in CI, derandomised; the property tests share stateless factory
+fixtures through an explicit health-check suppression. The golden snapshot of 207 sessions
+(`tests/fixtures/calendars/`) pins what the library says on nine dates; a library upgrade that
+moves one fails the test and is reviewed, not absorbed.

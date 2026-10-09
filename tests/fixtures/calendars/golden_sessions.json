@@ -1,0 +1,2019 @@
+{
+ "library": "exchange-calendars 4.13.2",
+ "generated_on": "2026-10-09",
+ "rows": [
+  {
+   "venue": "BVMF",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T10:00:00-03:00",
+    "close": "2026-03-06T18:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T10:00:00-03:00",
+    "close": "2026-03-09T17:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T10:00:00-03:00",
+    "close": "2026-04-06T17:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T10:00:00-03:00",
+    "close": "2026-10-09T17:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T10:00:00-03:00",
+    "close": "2026-10-26T17:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-11-02",
+   "session": null
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T10:00:00-03:00",
+    "close": "2026-11-27T18:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "BVMF",
+   "day": "2026-12-24",
+   "session": null
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+01:00",
+    "close": "2026-03-06T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+01:00",
+    "close": "2026-03-09T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+02:00",
+    "close": "2026-10-09T17:30:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+01:00",
+    "close": "2026-10-26T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+01:00",
+    "close": "2026-11-02T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+01:00",
+    "close": "2026-11-27T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XAMS",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+01:00",
+    "close": "2026-12-24T14:05:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T10:00:00+11:00",
+    "close": "2026-03-06T16:00:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T10:00:00+11:00",
+    "close": "2026-03-09T16:00:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T10:00:00+11:00",
+    "close": "2026-10-09T16:00:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T10:00:00+11:00",
+    "close": "2026-10-26T16:00:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T10:00:00+11:00",
+    "close": "2026-11-02T16:00:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T10:00:00+11:00",
+    "close": "2026-11-27T16:00:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XASX",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T10:00:00+11:00",
+    "close": "2026-12-24T14:10:00+11:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:15:00+05:30",
+    "close": "2026-03-06T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:15:00+05:30",
+    "close": "2026-03-09T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:15:00+05:30",
+    "close": "2026-04-06T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:15:00+05:30",
+    "close": "2026-10-09T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:15:00+05:30",
+    "close": "2026-10-26T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:15:00+05:30",
+    "close": "2026-11-02T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:15:00+05:30",
+    "close": "2026-11-27T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XBOM",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:15:00+05:30",
+    "close": "2026-12-24T15:30:00+05:30",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+01:00",
+    "close": "2026-03-06T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+01:00",
+    "close": "2026-03-09T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+02:00",
+    "close": "2026-10-09T17:30:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+01:00",
+    "close": "2026-10-26T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+01:00",
+    "close": "2026-11-02T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+01:00",
+    "close": "2026-11-27T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XETR",
+   "day": "2026-12-24",
+   "session": null
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T08:00:00+01:00",
+    "close": "2026-03-06T22:00:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T08:00:00+01:00",
+    "close": "2026-03-09T22:00:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T08:00:00+02:00",
+    "close": "2026-10-09T22:00:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T08:00:00+01:00",
+    "close": "2026-10-26T22:00:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T08:00:00+01:00",
+    "close": "2026-11-02T22:00:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T08:00:00+01:00",
+    "close": "2026-11-27T22:00:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XEUR",
+   "day": "2026-12-24",
+   "session": null
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:30:00+08:00",
+    "close": "2026-03-06T16:00:00+08:00",
+    "break_start": "2026-03-06T12:00:00+08:00",
+    "break_end": "2026-03-06T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:30:00+08:00",
+    "close": "2026-03-09T16:00:00+08:00",
+    "break_start": "2026-03-09T12:00:00+08:00",
+    "break_end": "2026-03-09T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:30:00+08:00",
+    "close": "2026-10-09T16:00:00+08:00",
+    "break_start": "2026-10-09T12:00:00+08:00",
+    "break_end": "2026-10-09T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:30:00+08:00",
+    "close": "2026-10-26T16:00:00+08:00",
+    "break_start": "2026-10-26T12:00:00+08:00",
+    "break_end": "2026-10-26T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:30:00+08:00",
+    "close": "2026-11-02T16:00:00+08:00",
+    "break_start": "2026-11-02T12:00:00+08:00",
+    "break_end": "2026-11-02T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:30:00+08:00",
+    "close": "2026-11-27T16:00:00+08:00",
+    "break_start": "2026-11-27T12:00:00+08:00",
+    "break_end": "2026-11-27T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XHKG",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:30:00+08:00",
+    "close": "2026-12-24T12:00:00+08:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+09:00",
+    "close": "2026-03-06T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+09:00",
+    "close": "2026-03-09T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-04-03",
+   "session": {
+    "open": "2026-04-03T09:00:00+09:00",
+    "close": "2026-04-03T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:00:00+09:00",
+    "close": "2026-04-06T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-10-09",
+   "session": null
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+09:00",
+    "close": "2026-10-26T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+09:00",
+    "close": "2026-11-02T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+09:00",
+    "close": "2026-11-27T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XKRX",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+09:00",
+    "close": "2026-12-24T15:30:00+09:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T08:00:00+00:00",
+    "close": "2026-03-06T16:30:00+00:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T08:00:00+00:00",
+    "close": "2026-03-09T16:30:00+00:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T08:00:00+01:00",
+    "close": "2026-10-09T16:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T08:00:00+00:00",
+    "close": "2026-10-26T16:30:00+00:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T08:00:00+00:00",
+    "close": "2026-11-02T16:30:00+00:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T08:00:00+00:00",
+    "close": "2026-11-27T16:30:00+00:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XLON",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T08:00:00+00:00",
+    "close": "2026-12-24T12:30:00+00:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+01:00",
+    "close": "2026-03-06T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+01:00",
+    "close": "2026-03-09T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+02:00",
+    "close": "2026-10-09T17:30:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+01:00",
+    "close": "2026-10-26T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+01:00",
+    "close": "2026-11-02T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+01:00",
+    "close": "2026-11-27T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMAD",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+01:00",
+    "close": "2026-12-24T14:00:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T08:30:00-06:00",
+    "close": "2026-03-06T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T08:30:00-06:00",
+    "close": "2026-03-09T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T08:30:00-06:00",
+    "close": "2026-04-06T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T08:30:00-06:00",
+    "close": "2026-10-09T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T08:30:00-06:00",
+    "close": "2026-10-26T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-11-02",
+   "session": null
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T08:30:00-06:00",
+    "close": "2026-11-27T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMEX",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T08:30:00-06:00",
+    "close": "2026-12-24T15:00:00-06:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+01:00",
+    "close": "2026-03-06T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+01:00",
+    "close": "2026-03-09T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+02:00",
+    "close": "2026-10-09T17:30:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+01:00",
+    "close": "2026-10-26T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+01:00",
+    "close": "2026-11-02T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+01:00",
+    "close": "2026-11-27T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XMIL",
+   "day": "2026-12-24",
+   "session": null
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:30:00-05:00",
+    "close": "2026-03-06T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:30:00-04:00",
+    "close": "2026-03-09T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:30:00-04:00",
+    "close": "2026-04-06T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:30:00-04:00",
+    "close": "2026-10-09T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:30:00-04:00",
+    "close": "2026-10-26T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:30:00-05:00",
+    "close": "2026-11-02T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:30:00-05:00",
+    "close": "2026-11-27T13:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XNAS",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:30:00-05:00",
+    "close": "2026-12-24T13:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:30:00-05:00",
+    "close": "2026-03-06T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:30:00-04:00",
+    "close": "2026-03-09T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:30:00-04:00",
+    "close": "2026-04-06T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:30:00-04:00",
+    "close": "2026-10-09T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:30:00-04:00",
+    "close": "2026-10-26T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:30:00-05:00",
+    "close": "2026-11-02T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:30:00-05:00",
+    "close": "2026-11-27T13:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XNYS",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:30:00-05:00",
+    "close": "2026-12-24T13:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T10:00:00+13:00",
+    "close": "2026-03-06T16:45:00+13:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T10:00:00+13:00",
+    "close": "2026-03-09T16:45:00+13:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T10:00:00+13:00",
+    "close": "2026-10-09T16:45:00+13:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-10-26",
+   "session": null
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T10:00:00+13:00",
+    "close": "2026-11-02T16:45:00+13:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T10:00:00+13:00",
+    "close": "2026-11-27T16:45:00+13:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XNZE",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T10:00:00+13:00",
+    "close": "2026-12-24T12:45:00+13:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+01:00",
+    "close": "2026-03-06T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+01:00",
+    "close": "2026-03-09T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+02:00",
+    "close": "2026-10-09T17:30:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+01:00",
+    "close": "2026-10-26T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+01:00",
+    "close": "2026-11-02T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+01:00",
+    "close": "2026-11-27T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XPAR",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+01:00",
+    "close": "2026-12-24T14:05:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+08:00",
+    "close": "2026-03-06T17:00:00+08:00",
+    "break_start": "2026-03-06T12:00:00+08:00",
+    "break_end": "2026-03-06T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+08:00",
+    "close": "2026-03-09T17:00:00+08:00",
+    "break_start": "2026-03-09T12:00:00+08:00",
+    "break_end": "2026-03-09T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:00:00+08:00",
+    "close": "2026-04-06T17:00:00+08:00",
+    "break_start": "2026-04-06T12:00:00+08:00",
+    "break_end": "2026-04-06T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+08:00",
+    "close": "2026-10-09T17:00:00+08:00",
+    "break_start": "2026-10-09T12:00:00+08:00",
+    "break_end": "2026-10-09T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+08:00",
+    "close": "2026-10-26T17:00:00+08:00",
+    "break_start": "2026-10-26T12:00:00+08:00",
+    "break_end": "2026-10-26T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+08:00",
+    "close": "2026-11-02T17:00:00+08:00",
+    "break_start": "2026-11-02T12:00:00+08:00",
+    "break_end": "2026-11-02T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+08:00",
+    "close": "2026-11-27T17:00:00+08:00",
+    "break_start": "2026-11-27T12:00:00+08:00",
+    "break_end": "2026-11-27T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSES",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+08:00",
+    "close": "2026-12-24T17:00:00+08:00",
+    "break_start": "2026-12-24T12:00:00+08:00",
+    "break_end": "2026-12-24T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:30:00-03:00",
+    "close": "2026-03-06T16:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:30:00-03:00",
+    "close": "2026-03-09T16:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:30:00-04:00",
+    "close": "2026-04-06T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:30:00-03:00",
+    "close": "2026-10-09T16:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:30:00-03:00",
+    "close": "2026-10-26T16:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:30:00-03:00",
+    "close": "2026-11-02T17:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:30:00-03:00",
+    "close": "2026-11-27T17:00:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSGO",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:30:00-03:00",
+    "close": "2026-12-24T12:30:00-03:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:30:00+08:00",
+    "close": "2026-03-06T15:00:00+08:00",
+    "break_start": "2026-03-06T11:30:00+08:00",
+    "break_end": "2026-03-06T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:30:00+08:00",
+    "close": "2026-03-09T15:00:00+08:00",
+    "break_start": "2026-03-09T11:30:00+08:00",
+    "break_end": "2026-03-09T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-04-03",
+   "session": {
+    "open": "2026-04-03T09:30:00+08:00",
+    "close": "2026-04-03T15:00:00+08:00",
+    "break_start": "2026-04-03T11:30:00+08:00",
+    "break_end": "2026-04-03T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:30:00+08:00",
+    "close": "2026-10-09T15:00:00+08:00",
+    "break_start": "2026-10-09T11:30:00+08:00",
+    "break_end": "2026-10-09T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:30:00+08:00",
+    "close": "2026-10-26T15:00:00+08:00",
+    "break_start": "2026-10-26T11:30:00+08:00",
+    "break_end": "2026-10-26T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:30:00+08:00",
+    "close": "2026-11-02T15:00:00+08:00",
+    "break_start": "2026-11-02T11:30:00+08:00",
+    "break_end": "2026-11-02T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:30:00+08:00",
+    "close": "2026-11-27T15:00:00+08:00",
+    "break_start": "2026-11-27T11:30:00+08:00",
+    "break_end": "2026-11-27T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSHG",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:30:00+08:00",
+    "close": "2026-12-24T15:00:00+08:00",
+    "break_start": "2026-12-24T11:30:00+08:00",
+    "break_end": "2026-12-24T13:00:00+08:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+01:00",
+    "close": "2026-03-06T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+01:00",
+    "close": "2026-03-09T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+02:00",
+    "close": "2026-10-09T17:30:00+02:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+01:00",
+    "close": "2026-10-26T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+01:00",
+    "close": "2026-11-02T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+01:00",
+    "close": "2026-11-27T17:30:00+01:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XSWX",
+   "day": "2026-12-24",
+   "session": null
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+08:00",
+    "close": "2026-03-06T13:30:00+08:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+08:00",
+    "close": "2026-03-09T13:30:00+08:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-04-06",
+   "session": null
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-10-09",
+   "session": null
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-10-26",
+   "session": null
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+08:00",
+    "close": "2026-11-02T13:30:00+08:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+08:00",
+    "close": "2026-11-27T13:30:00+08:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTAI",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+08:00",
+    "close": "2026-12-24T13:30:00+08:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:00:00+09:00",
+    "close": "2026-03-06T15:30:00+09:00",
+    "break_start": "2026-03-06T11:30:00+09:00",
+    "break_end": "2026-03-06T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:00:00+09:00",
+    "close": "2026-03-09T15:30:00+09:00",
+    "break_start": "2026-03-09T11:30:00+09:00",
+    "break_end": "2026-03-09T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-04-03",
+   "session": {
+    "open": "2026-04-03T09:00:00+09:00",
+    "close": "2026-04-03T15:30:00+09:00",
+    "break_start": "2026-04-03T11:30:00+09:00",
+    "break_end": "2026-04-03T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:00:00+09:00",
+    "close": "2026-04-06T15:30:00+09:00",
+    "break_start": "2026-04-06T11:30:00+09:00",
+    "break_end": "2026-04-06T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:00:00+09:00",
+    "close": "2026-10-09T15:30:00+09:00",
+    "break_start": "2026-10-09T11:30:00+09:00",
+    "break_end": "2026-10-09T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:00:00+09:00",
+    "close": "2026-10-26T15:30:00+09:00",
+    "break_start": "2026-10-26T11:30:00+09:00",
+    "break_end": "2026-10-26T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:00:00+09:00",
+    "close": "2026-11-02T15:30:00+09:00",
+    "break_start": "2026-11-02T11:30:00+09:00",
+    "break_end": "2026-11-02T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:00:00+09:00",
+    "close": "2026-11-27T15:30:00+09:00",
+    "break_start": "2026-11-27T11:30:00+09:00",
+    "break_end": "2026-11-27T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTKS",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:00:00+09:00",
+    "close": "2026-12-24T15:30:00+09:00",
+    "break_start": "2026-12-24T11:30:00+09:00",
+    "break_end": "2026-12-24T12:30:00+09:00",
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-03-06",
+   "session": {
+    "open": "2026-03-06T09:30:00-05:00",
+    "close": "2026-03-06T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-03-09",
+   "session": {
+    "open": "2026-03-09T09:30:00-04:00",
+    "close": "2026-03-09T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-04-03",
+   "session": null
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-04-06",
+   "session": {
+    "open": "2026-04-06T09:30:00-04:00",
+    "close": "2026-04-06T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-10-09",
+   "session": {
+    "open": "2026-10-09T09:30:00-04:00",
+    "close": "2026-10-09T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-10-26",
+   "session": {
+    "open": "2026-10-26T09:30:00-04:00",
+    "close": "2026-10-26T16:00:00-04:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-11-02",
+   "session": {
+    "open": "2026-11-02T09:30:00-05:00",
+    "close": "2026-11-02T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-11-27",
+   "session": {
+    "open": "2026-11-27T09:30:00-05:00",
+    "close": "2026-11-27T16:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": false
+   }
+  },
+  {
+   "venue": "XTSE",
+   "day": "2026-12-24",
+   "session": {
+    "open": "2026-12-24T09:30:00-05:00",
+    "close": "2026-12-24T13:00:00-05:00",
+    "break_start": null,
+    "break_end": null,
+    "early_close": true
+   }
+  }
+ ]
+}

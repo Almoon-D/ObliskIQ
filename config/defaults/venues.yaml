@@ -1,0 +1,615 @@
+# Calendars and venues.
+#
+# What decides when a venue is tradable: the library calendar (or a synthetic one), the phase
+# windows around the session, the order-window offsets and the IBKR exchange-code map. Read by
+# obliskiq.calendars. Every block carries a `sources` note; `verify_live: true` means the value
+# came from a legacy source and still awaits a live reading (docs/ROADMAP.md, Live verification
+# queue). The IBKR codes are pinned for real in Session 8.
+#
+# Times are quoted "HH:MM" (YAML reads an unquoted 10:00 as the number 600).
+#
+# `venues` is keyed by market code (MIC). Unless the MIC is in `synthetic_calendars`, it is also
+# the exchange_calendars name of the venue's calendar. Venue-specific extras live in the side
+# sections below, keyed by the same MIC, so no venue carries a null for a block it lacks.
+
+calendars:
+  # How much calendar to build around today: sessions, holidays and early closes outside
+  # [today - history_years, today + horizon_years] are "not covered" and block, never open.
+  # Long enough for a long-dated option, short enough that every library covers it.
+  history_years: 2
+  horizon_years: 3
+  # Orders go only in [open + after_open, close - before_close] of the regular phase.
+  # Expert judgement, not a measurement; Session 18's cost analysis calibrates it.
+  order_offsets:
+    after_open_minutes: 30
+    before_close_minutes: 15
+  # Per-venue overrides of order_offsets, keyed by MIC. Empty: every venue uses the default.
+  venue_order_offsets: {}
+  # A cross-check source (Session 3 registers IBKR's trading schedule) that places a session's
+  # open or close further than this from the calendar's is a disagreement.
+  cross_check:
+    time_tolerance_minutes: 5
+  # An incident keeps blocking this long after its expected end, in case trading has not
+  # actually resumed. An open-ended incident blocks until it is removed.
+  incidents:
+    grace_minutes: 30
+
+venues:
+  XNYS:
+    name: "NYSE"
+    region: America
+    timezone: America/New_York
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 240}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XNYS"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XNAS:
+    name: "Nasdaq"
+    region: America
+    timezone: America/New_York
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 240}
+    incident_source: {type: structured_feed, scope: single_stock}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2: XNAS is an alias of the XNYS calendar"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XTSE:
+    name: "Toronto Stock Ex."
+    region: America
+    timezone: America/Toronto
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -150, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XTSE"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  BVMF:
+    name: "B3 Bolsa do Brasil"
+    region: America
+    timezone: America/Sao_Paulo
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar BVMF"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XMEX:
+    name: "Bolsa de Méjico"
+    region: America
+    timezone: America/Mexico_City
+    phase_windows: []
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XMEX"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XSGO:
+    name: "Bolsa de Santiago"
+    region: America
+    timezone: America/Santiago
+    phase_windows: []
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XSGO"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XLON:
+    name: "London Stock Ex."
+    region: Europe
+    timezone: Europe/London
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -10, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 5, end_offset_minutes: 10}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XLON"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XMAD:
+    name: "Bolsa de Madrid"
+    region: Europe
+    timezone: Europe/Madrid
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 5, end_offset_minutes: 15}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XMAD"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XETR:
+    name: "Deutsche Börse Xetra"
+    region: Europe
+    timezone: Europe/Berlin
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -5, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XETR"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XPAR:
+    name: "Euronext Paris"
+    region: Europe
+    timezone: Europe/Paris
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -105, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 5, end_offset_minutes: 10}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XPAR"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XAMS:
+    name: "Euronext Amsterdam"
+    region: Europe
+    timezone: Europe/Amsterdam
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -105, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 5, end_offset_minutes: 10}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XAMS"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XMIL:
+    name: "Euronext Milán"
+    region: Europe
+    timezone: Europe/Rome
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -90, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 5, end_offset_minutes: 10}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XMIL"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XSWX:
+    name: "SIX Swiss Ex."
+    region: Europe
+    timezone: Europe/Zurich
+    phase_windows:
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 10}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XSWX"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XTKS:
+    name: "Tokyo Stock Ex."
+    region: Asia
+    timezone: Asia/Tokyo
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -60, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XTKS"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XHKG:
+    name: "Hong Kong Ex."
+    region: Asia
+    timezone: Asia/Hong_Kong
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 10}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XHKG"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XSHG:
+    name: "Shanghai Stock Ex."
+    region: Asia
+    timezone: Asia/Shanghai
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -3, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XSHG"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XSHE:
+    name: "Shenzhen Stock Ex."
+    region: Asia
+    timezone: Asia/Shanghai
+    phase_windows:
+      - {phase: opening_auction, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -3, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for XSHE"
+        verify_live: true
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XBOM:
+    name: "BSE India"
+    region: Asia
+    timezone: Asia/Kolkata
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 30}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XBOM"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XNSE:
+    name: "NSE India"
+    region: Asia
+    timezone: Asia/Kolkata
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 30}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for XNSE"
+        verify_live: true
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XKRX:
+    name: "Korea Ex."
+    region: Asia
+    timezone: Asia/Seoul
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XKRX"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XTAI:
+    name: "Taiwan Stock Ex."
+    region: Asia
+    timezone: Asia/Taipei
+    phase_windows:
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XTAI"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XSES:
+    name: "Singapore Ex."
+    region: Asia
+    timezone: Asia/Singapore
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 6}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 6, end_offset_minutes: 16}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XSES"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XASX:
+    name: "Australian Securities Ex."
+    region: Oceania
+    timezone: Australia/Sydney
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -180, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 11}
+      - {phase: post_market, anchor: session_close, start_offset_minutes: 11, end_offset_minutes: 21}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XASX"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  CHIA:
+    name: "Cboe Australia"
+    region: Oceania
+    timezone: Australia/Sydney
+    phase_windows: []
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for CHIA"
+        verify_live: true
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XNZE:
+    name: "New Zealand"
+    region: Oceania
+    timezone: Pacific/Auckland
+    phase_windows:
+      - {phase: pre_market, anchor: session_open, start_offset_minutes: -90, end_offset_minutes: 0}
+      - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 15}
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XNZE"
+        verify_live: false
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XSPX:
+    name: "South Pacific Stock Ex."
+    region: Oceania
+    timezone: Pacific/Fiji
+    phase_windows: []
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for XSPX"
+        verify_live: true
+      phases:
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        verify_live: true
+  XEUR:
+    name: "Eurex"
+    region: Europe
+    timezone: Europe/Berlin
+    phase_windows: []
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XEUR (added in 4.13.2); its hours are the whole venue's, wider than equity options trade, so an option also needs its underlying venue's window"
+        verify_live: true
+      phases:
+        origin: "none modelled: no source for Eurex auction windows"
+        verify_live: true
+
+# Venues the library lacks: fixed hours, a weekday set and a declared holiday list.
+# `holidays_through: null` declares nothing: every date is then "not covered" and blocks.
+# A sourced holiday list (with the date it is known through) unblocks a venue.
+synthetic_calendars:
+  XSHE:
+    open: "09:30"
+    close: "15:00"
+    trading_days: [mon, tue, wed, thu, fri]
+    holidays: []
+    holidays_through: null
+  XNSE:
+    open: "09:15"
+    close: "15:30"
+    trading_days: [mon, tue, wed, thu, fri]
+    holidays: []
+    holidays_through: null
+  CHIA:
+    open: "10:00"
+    close: "16:13"
+    trading_days: [mon, tue, wed, thu, fri]
+    holidays: []
+    holidays_through: null
+  XSPX:
+    open: "10:00"
+    close: "12:00"
+    trading_days: [mon, tue, wed, thu, fri]
+    holidays: []
+    holidays_through: null
+
+# A lunch break the library does not carry. It applies only where the library has no break;
+# a venue that gains a library break must drop its entry (a build error otherwise).
+lunch_breaks:
+  XSHE:
+    start: "11:30"
+    end: "13:00"
+    source:
+      origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (synthetic lunch)"
+      verify_live: true
+  XSES:
+    start: "12:00"
+    end: "13:00"
+    source:
+      origin: "market-pulse-bot README @900dbf4, citing the SGX Rulebook mid-day break; exchange_calendars 4.13.2 documents that it skips this break"
+      verify_live: true
+
+# A regular close that moves while another market observes daylight saving. `close` replaces
+# the library's close on those days.
+seasonal_closes:
+  BVMF:
+    reference_timezone: America/New_York
+    close: "17:00"
+    source:
+      origin: "market-pulse-bot config/exchanges.yaml @900dbf4 and README: B3 closes earlier while New York is on daylight saving time"
+      verify_live: true
+
+# IBKR exchange code -> the venue whose calendar governs it. A code that is not listed is not
+# tradable (SMART is a routing alias, not a venue). Every row awaits live confirmation: Session 8
+# pins contract ids and corrects this map against what IBKR reports.
+ibkr_exchanges:
+  ARCA:
+    venue: XNYS
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  NYSE:
+    venue: XNYS
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  AMEX:
+    venue: XNYS
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  BATS:
+    venue: XNYS
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  CBOE:
+    venue: XNYS
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49); US equity options follow the NYSE calendar; ETF options trade later than the cash close, which this profile treats as closed"
+      verify_live: true
+  NASDAQ:
+    venue: XNAS
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile"
+      verify_live: true
+  EUREX:
+    venue: XEUR
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49); the Eurex option venue"
+      verify_live: true
+  IBIS:
+    venue: XETR
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile (lite maps IBIS to its option calendar; the listing venue is Xetra)"
+      verify_live: true
+  BM:
+    venue: XMAD
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  MEFFRV:
+    venue: XMAD
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49); MEFF derivatives assumed to follow the Madrid calendar"
+      verify_live: true
+  SBF:
+    venue: XPAR
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  MONEP:
+    venue: XPAR
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile; MONEP options assumed to follow the Paris calendar"
+      verify_live: true
+  AEB:
+    venue: XAMS
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  FTA:
+    venue: XAMS
+    source:
+      origin: "legacy/lite/universe.yaml option_exchange FTA, [MCP ✓ 2026-08-24] (lite @b1ebd49)"
+      verify_live: true
+  LSE:
+    venue: XLON
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  LSEETF:
+    venue: XLON
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      verify_live: true
+  TSE:
+    venue: XTSE
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49) (IBKR TSE is Toronto)"
+      verify_live: true
+  CDE:
+    venue: XTSE
+    source:
+      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49) (Montreal options keep the Canadian calendar)"
+      verify_live: true
+  BVME:
+    venue: XMIL
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile"
+      verify_live: true
+  EBS:
+    venue: XSWX
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile"
+      verify_live: true
+  TSEJ:
+    venue: XTKS
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile (IBKR TSEJ is Tokyo)"
+      verify_live: true
+  SEHK:
+    venue: XHKG
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile"
+      verify_live: true
+  ASX:
+    venue: XASX
+    source:
+      origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile"
+      verify_live: true

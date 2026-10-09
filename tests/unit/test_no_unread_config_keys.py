@@ -14,6 +14,13 @@ profile in a variable or attribute named ``profile``. A section listed in
 :data:`RUNTIME_KEYED` is read wholesale and keyed at runtime; reading the section consumes
 its children.
 
+A section listed in :data:`KEYED_MAPPINGS` is a mapping keyed by data (a venue's MIC, an IBKR
+exchange code) whose entries share one shape. The key means nothing to a reader: code reads
+``entry.sources.calendar.origin`` off whichever entry it holds. So for
+``venues.XNYS.sources.calendar.origin`` the section and the key are stripped and
+``sources.calendar.origin`` must appear as consecutive attributes in a chain inside the
+package named for that section. An entry's field nothing in the package reads is an orphan.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -32,6 +39,15 @@ PROFILE_PREFIX = "profile"
 #: Sections read wholesale and keyed at runtime, with the reason. Their children are data.
 RUNTIME_KEYED = {
     "profile.policies": "policy kind -> policy id, keyed by the registry resolving that kind",
+}
+
+#: Sections keyed by data, with the package that must read the fields beneath each key.
+KEYED_MAPPINGS = {
+    "venues": "calendars",
+    "synthetic_calendars": "calendars",
+    "lunch_breaks": "calendars",
+    "seasonal_closes": "calendars",
+    "ibkr_exchanges": "calendars",
 }
 
 #: Roots that carry no meaning in a chain.
@@ -128,9 +144,32 @@ def _contains(chain: list[str], wanted: list[str]) -> bool:
     return any(chain[i : i + width] == wanted for i in range(len(chain) - width + 1))
 
 
-def unread_keys(leaves: dict[str, str], chains: list[list[str]]) -> list[str]:
+def _package_chains(package: str) -> list[list[str]]:
+    chains: list[list[str]] = []
+    for path in sorted((SOURCE_DIR / package).rglob("*.py")):
+        chains.extend(attribute_chains(path.read_text(encoding="utf-8")))
+    return chains
+
+
+def _keyed_chains() -> dict[str, list[list[str]]]:
+    return {package: _package_chains(package) for package in set(KEYED_MAPPINGS.values())}
+
+
+def unread_keys(
+    leaves: dict[str, str],
+    chains: list[list[str]],
+    keyed_chains: dict[str, list[list[str]]] | None = None,
+) -> list[str]:
+    keyed_chains = keyed_chains or {}
     orphans: list[str] = []
     for key in sorted(leaves):
+        head = key.split(".")[0]
+        if head in KEYED_MAPPINGS:
+            fields = key.split(".")[2:]  # strip the section and the runtime key
+            pool = keyed_chains.get(KEYED_MAPPINGS[head], [])
+            if not any(_contains(chain, fields or [head]) for chain in pool):
+                orphans.append(key)
+            continue
         section = next((s for s in RUNTIME_KEYED if key.startswith(f"{s}.")), None)
         wanted = (section or key).split(".")
         if not any(_contains(chain, wanted) for chain in chains):
@@ -150,7 +189,7 @@ def test_there_is_a_config_to_scan():
 
 def test_every_config_key_has_a_consumer():
     leaves = config_leaves()
-    orphans = unread_keys(leaves, _source_chains())
+    orphans = unread_keys(leaves, _source_chains(), _keyed_chains())
     listed = "\n  ".join(f"{key}  ({leaves[key]})" for key in orphans)
     assert not orphans, (
         f"config/ declares {len(orphans)} key(s) nothing in src/obliskiq/ reads:\n  {listed}\n\n"
@@ -162,7 +201,7 @@ def test_every_config_key_has_a_consumer():
 def test_the_scan_catches_an_orphan_key():
     """Positive control: without it, a resolver that matched everything would pass."""
     leaves = {**config_leaves(), "account.a_key_nobody_reads": "config/owner.yaml"}
-    assert unread_keys(leaves, _source_chains()) == ["account.a_key_nobody_reads"]
+    assert unread_keys(leaves, _source_chains(), _keyed_chains()) == ["account.a_key_nobody_reads"]
 
 
 def test_a_namespaced_profile_key_needs_its_namespace():
@@ -194,3 +233,41 @@ def test_every_runtime_keyed_section_has_a_reason():
     for section, reason in RUNTIME_KEYED.items():
         assert section.split(".")[0] == PROFILE_PREFIX or section in config_leaves(), section
         assert reason
+
+
+# ── keyed mappings ──
+
+
+def test_every_keyed_section_has_entries_to_check():
+    """A keyed section with nothing in it would pass vacuously."""
+    heads = {key.split(".")[0] for key in config_leaves()}
+    assert set(KEYED_MAPPINGS) <= heads
+    for package in set(KEYED_MAPPINGS.values()):
+        assert (SOURCE_DIR / package).is_dir(), package
+
+
+def test_a_keyed_field_nothing_reads_is_reported():
+    """Positive control: an orphan field under a venue is caught whatever the venue's key."""
+    leaves = {**config_leaves(), "venues.ZZZZ.a_field_nobody_reads": "config/owner.yaml"}
+    orphans = unread_keys(leaves, _source_chains(), _keyed_chains())
+    assert orphans == ["venues.ZZZZ.a_field_nobody_reads"]
+
+
+def test_a_keyed_field_is_read_whichever_entry_the_code_holds():
+    chains = {"calendars": [["entry", "sources", "calendar", "origin"]]}
+    leaves = {
+        "venues.XNYS.sources.calendar.origin": "x",
+        "venues.XETR.sources.calendar.origin": "x",
+    }
+    assert unread_keys(leaves, [], chains) == []
+
+
+def test_a_chain_in_another_package_does_not_consume_a_keyed_field():
+    leaves = {"venues.XNYS.name": "x"}
+    elsewhere = {"store": [["entry", "name"]]}
+    assert unread_keys(leaves, [["entry", "name"]], elsewhere) == ["venues.XNYS.name"]
+
+
+def test_a_keyed_field_must_be_read_as_a_chain_not_as_separate_names():
+    chains = {"calendars": [["entry", "sources"], ["other", "calendar", "origin"]]}
+    assert unread_keys({"venues.XNYS.sources.calendar.origin": "x"}, [], chains) != []

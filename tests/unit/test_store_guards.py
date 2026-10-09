@@ -1,0 +1,120 @@
+"""Structural guards on the store: every read is bounded, and only the store holds SQL.
+
+Adapted from the point-in-time pass over the legacy reads, which found unbounded reads one at
+a time (a ``COUNT(*)`` among them). The guards below find the next one by construction.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+"""
+
+import ast
+import inspect
+import re
+from collections.abc import Callable
+from pathlib import Path
+from types import ModuleType
+
+from obliskiq.store import repos
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE_DIR = ROOT / "src" / "obliskiq"
+
+#: Names that write; every other public function in ``repos`` reads.
+WRITE_PREFIXES = ("upsert_", "supersede_")
+
+_SQL = re.compile(
+    r"\s*(SELECT\b.+\bFROM\b|INSERT\s+(OR\s+\w+\s+)?INTO\b|UPDATE\s+\w+\s+SET\b|DELETE\s+FROM\b"
+    r"|PRAGMA\s+\w+|CREATE\s+(TABLE|INDEX|UNIQUE|TRIGGER|VIEW)\b|DROP\s+\w+|ALTER\s+TABLE\b"
+    r"|BEGIN(\s+IMMEDIATE)?\s*$)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def public_functions(module: ModuleType) -> dict[str, Callable[..., object]]:
+    return {
+        name: function
+        for name, function in inspect.getmembers(module, inspect.isfunction)
+        if not name.startswith("_") and function.__module__ == module.__name__
+    }
+
+
+def unbounded_reads(functions: dict[str, Callable[..., object]]) -> list[str]:
+    """Reads that do not take a required, keyword-only ``as_of``."""
+    problems: list[str] = []
+    for name, function in sorted(functions.items()):
+        if name.startswith(WRITE_PREFIXES):
+            continue
+        parameter = inspect.signature(function).parameters.get("as_of")
+        if (
+            parameter is None
+            or parameter.kind is not inspect.Parameter.KEYWORD_ONLY
+            or parameter.default is not inspect.Parameter.empty
+        ):
+            problems.append(name)
+    return problems
+
+
+def sql_strings(source: str) -> list[tuple[int, str]]:
+    return [
+        (node.lineno, node.value.strip()[:40])
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _SQL.match(node.value)
+    ]
+
+
+def test_there_are_reads_to_check() -> None:
+    names = set(public_functions(repos))
+    reads = {n for n in names if not n.startswith(WRITE_PREFIXES)}
+    assert {"bar_series", "macro_series", "chain_rows", "curve", "snapshot_count"} <= reads
+    assert {"upsert_bars", "upsert_macro", "supersede_instrument"} <= names - reads
+
+
+def test_every_repository_read_takes_a_required_keyword_only_as_of() -> None:
+    assert unbounded_reads(public_functions(repos)) == []
+
+
+def test_the_scan_catches_a_read_without_a_bound() -> None:
+    """Positive controls: a guard that passed everything would pass here too."""
+
+    def no_bound(store: object, conid: int) -> None: ...
+
+    def positional(store: object, as_of: object) -> None: ...
+
+    def optional(store: object, *, as_of: object = None) -> None: ...
+
+    def bounded(store: object, *, as_of: object) -> None: ...
+
+    def write(store: object, rows: object) -> None: ...
+
+    functions = {
+        "no_bound": no_bound,
+        "positional": positional,
+        "optional": optional,
+        "bounded": bounded,
+        "upsert_things": write,
+    }
+    assert unbounded_reads(functions) == ["no_bound", "optional", "positional"]
+
+
+def test_no_package_outside_the_store_holds_sql() -> None:
+    problems: list[str] = []
+    for path in sorted(SOURCE_DIR.rglob("*.py")):
+        relative = path.relative_to(SOURCE_DIR)
+        if relative.parts[0] == "store":
+            continue
+        for line, text in sql_strings(path.read_text(encoding="utf-8")):
+            problems.append(f"{relative}:{line}: {text}")
+    assert not problems, "SQL belongs in obliskiq/store/:\n  " + "\n  ".join(problems)
+
+
+def test_the_scan_for_sql_catches_each_statement_kind() -> None:
+    for statement in (
+        'q = "SELECT * FROM bars"',
+        'q = "  insert into bars values (1)"',
+        'q = "UPDATE bars SET close = 1"',
+        'q = "DELETE FROM bars"',
+        'q = "PRAGMA foreign_keys = ON"',
+        'q = "CREATE TABLE t (i INTEGER)"',
+    ):
+        assert sql_strings(statement), statement
+    for harmless in ('q = "select one"', 'q = "Update"', 'q = "the SELECT keyword"'):
+        assert sql_strings(harmless) == [], harmless

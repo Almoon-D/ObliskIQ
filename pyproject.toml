@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.1.0"
+version = "0.2.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -18,7 +18,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "exchange-calendars>=4.13.2,<5",
     "httpx>=0.28,<0.29",
+    "numpy>=2.3,<3",
     "pydantic>=2.12,<3",
     "pydantic-settings>=2.11,<3",
     "PyYAML>=6.0.3,<7",
@@ -86,7 +88,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT", "PTH", "ARG",
 
 [tool.ruff.lint.per-file-ignores]
 # Handlers in httpx mock transports take a request the test does not read.
-"tests/**" = ["ARG001"]
+"tests/**" = ["ARG001", "ARG002"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -94,6 +96,12 @@ strict = true
 files = ["src"]
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# exchange_calendars ships no type information; its use is confined to calendars/schedule.py,
+# which turns every result into a standard-library type.
+module = ["exchange_calendars", "exchange_calendars.*"]
+ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
@@ -110,7 +118,13 @@ norecursedirs = [
 addopts = ["--strict-markers", "--strict-config", "-ra", "--import-mode=importlib"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # exchange_calendars 4.13.2 builds XHKG's Easter Monday with a bare-integer numpy
+    # timedelta; numpy 2.5 deprecates that. Library code, not ours: the filter names the
+    # module and the message so nothing else is hidden.
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning:exchange_calendars.exchange_calendar_xhkg",
+]
 
 [tool.coverage.run]
 source = ["obliskiq"]
@@ -122,7 +136,7 @@ precision = 1
 show_missing = true
 skip_covered = true
 # Measured coverage minus one point; it only ever rises. docs/ROADMAP.md records each measurement.
-fail_under = 98.6
+fail_under = 98.9
 
 [tool.importlinter]
 root_packages = ["obliskiq"]
@@ -145,3 +159,27 @@ name = "Nothing imports the legacy snapshot"
 type = "forbidden"
 source_modules = ["obliskiq"]
 forbidden_modules = ["legacy"]
+
+[[tool.importlinter.contracts]]
+name = "The domain layer imports nothing else of ours"
+type = "forbidden"
+source_modules = ["obliskiq.domain"]
+forbidden_modules = [
+    "obliskiq.config", "obliskiq.store", "obliskiq.calendars", "obliskiq.quant",
+    "obliskiq.ibkr", "obliskiq.data", "obliskiq.grid", "obliskiq.engines",
+    "obliskiq.jurisdiction", "obliskiq.tax", "obliskiq.capital", "obliskiq.llm",
+    "obliskiq.decision", "obliskiq.execution", "obliskiq.orchestration",
+    "obliskiq.scoreboard", "obliskiq.reporting", "obliskiq.server", "obliskiq.cli",
+    "obliskiq.util", "obliskiq.errors", "obliskiq.env", "obliskiq.logging_setup",
+]
+
+[[tool.importlinter.contracts]]
+name = "Store, calendars and quant do not depend on one another"
+type = "independence"
+modules = ["obliskiq.store", "obliskiq.calendars", "obliskiq.quant"]
+
+[[tool.importlinter.contracts]]
+name = "Calendars never reach the broker, the network or execution"
+type = "forbidden"
+source_modules = ["obliskiq.calendars"]
+forbidden_modules = ["obliskiq.ibkr", "httpx", "obliskiq.execution"]
