@@ -408,6 +408,12 @@ async def negotiate_live_session_token(
             await asyncio.sleep(asked if asked is not None else policy.delay_for(attempt))
     if response is None:  # pragma: no cover - the final attempt either raised or answered
         raise IbkrUpstreamError("/oauth/live_session_token gave no answer")
+    if response.status_code in policy.retry_status_codes:
+        # Still busy or failing after every retry: an upstream fault, not a refusal.
+        raise IbkrUpstreamError(
+            f"/oauth/live_session_token still answered HTTP {response.status_code} after "
+            f"{policy.retries + 1} attempts"
+        )
     if response.status_code != HTTP_OK:
         raise AuthError(
             f"/oauth/live_session_token returned HTTP {response.status_code}: "

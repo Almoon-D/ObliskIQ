@@ -74,9 +74,11 @@ class GatewayTransport:
         self._install_dir = install_dir
         self._policy = policy
         self._timeout = timeout_seconds
-        self._driver: LoginDriver = driver if driver is not None else PlaywrightLoginDriver()
-        self._download_client = download_client
         self._java = JavaRuntime(java_home, inherit=tuple(ibkr.gateway.inherited_environment))
+        self._driver: LoginDriver = (
+            driver if driver is not None else PlaywrightLoginDriver(env=self._java.environment())
+        )
+        self._download_client = download_client
         self._install: GatewayInstall | None = None
         self._process: GatewayProcess | None = None
         self._lock = asyncio.Lock()
@@ -136,7 +138,7 @@ class GatewayTransport:
             since = self._monotonic() - self._last_login_at
             if since < interval:
                 raise RecoveryDeferredError(
-                    f"the Gateway logged in {since:.0f} s ago; the next login is allowed in "
+                    f"the last Gateway login attempt was {since:.0f} s ago; the next is allowed in "
                     f"{interval - since:.0f} s, so repeated logins cannot lock the username"
                 )
         details: list[str] = []

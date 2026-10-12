@@ -16,6 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -71,8 +72,12 @@ def _proof_returned(body: str) -> bool | None:
 class PlaywrightLoginDriver:
     """:class:`LoginDriver` over a headless Chromium (Playwright)."""
 
-    def __init__(self, *, executable_path: str | None = None) -> None:
+    def __init__(
+        self, *, executable_path: str | None = None, env: Mapping[str, str] | None = None
+    ) -> None:
         self._executable_path = executable_path
+        # The browser's environment; ``None`` lets it inherit this process's (tests only).
+        self._env: dict[str, str | float | bool] | None = dict(env) if env is not None else None
 
     async def login(
         self,
@@ -105,6 +110,7 @@ class PlaywrightLoginDriver:
                 headless=True,
                 executable_path=self._executable_path,
                 args=[f"--ignore-certificate-errors-spki-list={spki_pin}"],
+                env=self._env,
             )
             try:
                 page = await browser.new_page()

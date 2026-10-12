@@ -558,12 +558,15 @@ read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees eac
   `IbkrError`), so the attempts, the alert and the lost-session state always follow; the
   keepalive survives any failure. One repair runs at a time: concurrent requests that failed
   before it finished retry instead of repairing again or failing. The OAuth token request signs
-  each retry afresh (a resent nonce is a replay) and honours `Retry-After`; a signing failure is
-  not retried again by the request. The Gateway logs in again at most once per
-  `gateway.login.min_relogin_interval_seconds`, so a repair loop cannot lock the username; inside
-  the interval a repair stops at once and its alert says when the next login is allowed. The
-  600 s is a judgement, not a measurement: IBKR publishes no login rate or lock-out count. The
-  Gateway's child processes inherit only `gateway.inherited_environment`.
+  each retry afresh (a resent nonce is a replay) and honours `Retry-After`; a token endpoint
+  still unreachable or busy after them is an upstream fault, counted by the group's breaker and
+  not retried again by the request (a signature refusal stays a refusal). The Gateway logs in
+  again at most once per `gateway.login.min_relogin_interval_seconds`, so a repair loop cannot
+  lock the username; inside the interval a repair stops at once and its alert says when the next
+  attempt is allowed. The interval's default is a judgement, not a measurement: IBKR publishes no
+  login rate or lock-out count. The Gateway's JVM, the JDK tools and the login browser inherit
+  only `gateway.inherited_environment` (never an `OBLISK_*` variable); the Playwright driver
+  process itself still inherits this process's environment.
 - **Pacing.** A request waiting for its window holds no concurrency permit; a slot and a permit
   are taken together, so the recorded instant stays the sending instant.
 - **History.** `daily_between` anchors its first request at `latest` (lite's was anchored at the

@@ -48,7 +48,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 - `docs/knowledge/ibkr.md`: lite's verified findings condensed with their route tags, IBKR's
   documented pacing, changelog, availability codes, field ids, schedule, rules, per-user market
   data and live→paper sharing, and this session's Gateway trial.
-- Tests: 2,276 passing. Coverage measured 99.61 %; floor raised from 98.9 % to 99.4 %. The
+- Tests: 2,279 passing. Coverage measured 99.58 %; floor raised from 98.9 % to 99.4 %. The
   concurrency test (200 requests against virtual time, every window checked) found a
   float-rounding hole in the sliding window — expiry and wait disagreed, so a full per-minute
   window admitted a burst at one instant — fixed with a regression and a property test.
@@ -99,7 +99,13 @@ blocking finding; eleven non-blocking, fixed in the PR (signing failures not ret
 counted by the breaker; OAuth `Retry-After`; alert hooks run outside the repair context; an
 environment allowlist for the Gateway's child processes; a deferred re-login stops the attempts
 and says when; non-object ledger rows named unreadable; tests for each) or recorded (the order
-path's paced endpoints, Session 4; the daily bar stamp per venue, VERIFY-LIVE).
+path's paced endpoints, Session 4; the daily bar stamp per venue, VERIFY-LIVE). Round 3 (fresh
+`reviewer` on that delta, the last round): no blocking finding; eight non-blocking, six fixed in
+the PR (a token endpoint busy to the end is an upstream fault counted by the breaker; the
+deferral message; `OBLISK_*` never allowed in the child environment, `JDK_JAVA_OPTIONS` added;
+the login browser gets the allowlisted environment; the VERIFY-LIVE code marker; docs) and two
+recorded as follow-ups below (token negotiation inside the limiter slot; retrying a deferred
+repair from the keepalive).
 
 **Process.** The harness assigned the branch `claude/magical-bardeen-ct4oql`; GitHub steps of the
 end-of-session protocol ran through the GitHub tools instead of `gh`. Test ports were delegated to
@@ -272,6 +278,13 @@ settles it.
   (D34). Decide, before Session 6 runs the bot on a machine: try the Gateway login there (Session
   6/19 checks it first), ask IBKR again about OAuth for the paper login, or accept a daily manual
   login. Until then sessions build against fixtures.
+- Session 4: OAuth token negotiation runs inside `headers()`, inside the limiter slot, and honours
+  `Retry-After`; a token outage can hold every concurrency permit for minutes, and each of
+  `rearm`'s sub-requests renegotiates. Before the order path and kill switch share the limiter,
+  ensure the token outside the slot and stop `rearm` at the first `TransportUnavailableError`.
+- Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
+  failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the
+  keepalive repair once it passes and fail reads fast, without a new alert, before then.
 - Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
   `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
 - Session 4: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per

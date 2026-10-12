@@ -28,15 +28,20 @@ from .base import FrozenModel
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _FIELD_ID_RE = re.compile(r"[0-9]{1,6}")
 _PREFIX_RE = re.compile(r"D[A-Z]{0,3}")
+_ENV_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+#: The prefix of ObliskIQ's own environment variables (`env.py`).
+OWN_ENV_PREFIX = "OBLISK_"
 
 #: IBKR's per-request ceilings (changelog 2025-12-10, docs/knowledge/ibkr.md): a configured
 #: batch above them is refused by the API, so the configuration may not ask for one.
 IBKR_MAX_CONIDS_PER_SNAPSHOT = 100
 IBKR_MAX_FIELDS_PER_SNAPSHOT = 50
 
-#: The endpoints this client calls that IBKR paces on their own (docs/knowledge/ibkr.md,
-#: "Pacing"): each must sit in a rate group, or an owner override could leave it paced by the
-#: global window alone. The order path adds its own (orders, trades, P&L) with Session 4.
+#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing") that this client calls or
+#: that share a cap with one it calls (`portfolio/subaccounts` with `portfolio/accounts`): each
+#: must sit in a rate group, or an owner override could leave it paced by the global window
+#: alone. The order path adds its own (orders, trades, P&L) with Session 4.
 IBKR_PACED_ENDPOINTS = (
     "iserver/marketdata/history",
     "iserver/marketdata/snapshot",
@@ -110,6 +115,15 @@ def _account_prefix(value: str) -> str:
     if not _PREFIX_RE.fullmatch(value):
         # IBKR paper accounts start with D (DU, DF); a live prefix (U, F) is never a paper one.
         raise ValueError("must be one to four capital letters starting with D, such as DU")
+    return value
+
+
+def _inherited_variable(value: str) -> str:
+    if not _ENV_NAME_RE.fullmatch(value):
+        raise ValueError("must be an environment variable name")
+    if value.startswith(OWN_ENV_PREFIX):
+        # ObliskIQ's own variables carry the broker credentials: never passed to a child.
+        raise ValueError(f"{OWN_ENV_PREFIX}* variables are never passed to child processes")
     return value
 
 
@@ -305,9 +319,7 @@ class GatewayConfig(FrozenModel):
     keystore_validity_days: PositiveInt
     probe_interval_seconds: PositiveFloat
     stop_grace_seconds: PositiveFloat
-    inherited_environment: list[
-        Annotated[str, StringConstraints(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
-    ]
+    inherited_environment: list[Annotated[str, AfterValidator(_inherited_variable)]]
     login: GatewayLoginConfig
 
 

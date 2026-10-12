@@ -29,6 +29,9 @@ Session 3 — IBKR read path. Read-only: no order endpoint is touched.
   futures ladders, bond filters, funds, trading rules, algos, the trading schedule and the
   scanner; `ibkr/identity.py` (conid, venue and currency pinned; ambiguity refused; corrections
   supersede); `ibkr/guard.py` (the account must be listed and, under paper, paper-prefixed).
+  The endpoint groups refuse every read until the guard has passed; incomplete position and cash
+  reads raise rather than return short; snapshot field ids follow IBKR's field table where
+  lite's differed (DECISIONS D37, D41).
 - IBKR's trading schedule as a calendar `ScheduleSource` (`ibkr/schedule_source.py`).
 - `obliskiq preflight --read-only`; without credentials it prints "no credentials" and exits 2.
 - `config/defaults/ibkr.yaml`, `config/defaults/http.yaml`, `paths.ibkr_gateway`,
@@ -38,17 +41,6 @@ Session 3 — IBKR read path. Read-only: no order endpoint is touched.
 ### Changed
 
 - `RetryPolicy.from_settings` and a public `retry_after_seconds` in `util/http.py`.
-- Snapshot field ids follow IBKR's field table where lite's differed (DECISIONS D37).
-- Read paths fail closed where lite skipped: an unreadable position row, a positions pager that
-  reaches its cap and an unreadable cash balance raise; the history walk is anchored at the end
-  of its window (D41).
-- `IbkrClient`'s endpoint groups refuse every read until the account guard has passed
-  (`start()`, or `accounts()` then `run_guard()`).
-- A paper account prefix must start with `D` (`ibkr.paper_account_prefixes`); snapshot batch
-  sizes are bounded by IBKR's ceilings; every self-paced endpoint the client calls needs a rate
-  group.
-- New keys: `ibkr.gateway.probe_interval_seconds`, `stop_grace_seconds`,
-  `inherited_environment` and `login.min_relogin_interval_seconds`.
 
 ## [0.2.0] - 2026-10-09
 

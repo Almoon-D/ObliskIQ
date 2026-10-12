@@ -1087,12 +1087,13 @@ async def test_an_unreachable_token_endpoint_is_an_ibkr_upstream_error(
     assert session.live_session_token is None
 
 
-async def test_a_retryable_status_on_the_last_attempt_is_reported(
+async def test_a_retryable_status_on_the_last_attempt_is_an_upstream_fault(
     respx_mock: Any, session: OAuthSession, policy: RetryPolicy
 ) -> None:
+    """Busy to the end is not a refusal: the session counts it against the breaker."""
     respx_mock.post(TOKEN_URL).mock(return_value=httpx.Response(503, text="busy"))
     async with httpx.AsyncClient() as client:
-        with pytest.raises(AuthError, match="HTTP 503"):
+        with pytest.raises(IbkrUpstreamError, match="HTTP 503"):
             await negotiate_live_session_token(session, TOKEN_URL, client, policy)
 
 

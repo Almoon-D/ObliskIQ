@@ -13,7 +13,9 @@ and each failure is handled by the advice its class carries:
   401 31 minutes into a run with ~22 h left on the token was the same drop. If the repeat fails
   too, the transport logs in again (renegotiate the token, or re-run the Gateway login) and the
   call is repeated once more; then it raises.
-* **never** (403, a no-data body, a malformed request, an undecodable body): raised at once.
+* **never** (403, a no-data body, a malformed request, an undecodable body, a transport that
+  could not sign the request after its own retries): raised at once. The last also counts
+  toward the group's circuit breaker.
 
 ``/tickle`` keeps the session alive on a configured interval and reads its ``competing`` and
 ``authenticated`` flags. A competing session (another connection took the username) and a session

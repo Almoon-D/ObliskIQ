@@ -174,6 +174,8 @@ class HistoryReader:
                 log.info("the backward walk stopped making progress")
                 break
             cursor = reached - timedelta(days=1)
+        # VERIFY-LIVE(daily bar t stamp per venue): the window is filtered on the UTC date of the
+        # bar start; a venue stamping its daily bar before UTC midnight would shift by a day.
         bars = tuple(
             sorted(
                 (bar for bar in collected.values() if earliest <= bar.start.date() <= latest),

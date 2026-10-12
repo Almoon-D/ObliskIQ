@@ -150,7 +150,9 @@ def run_login(monkeypatch, shipped_settings):
         module.Response = FakeResponse  # type: ignore[attr-defined]
         module.async_playwright = lambda: FakePlaywright(browser, launches)  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "playwright.async_api", module)
-        outcome = await PlaywrightLoginDriver(executable_path="/opt/chrome").login(
+        outcome = await PlaywrightLoginDriver(
+            executable_path="/opt/chrome", env={"PATH": "/usr/bin"}
+        ).login(
             url="https://localhost:5000/sso/Login",
             username="paper-user",
             password="paper-pass",
@@ -179,6 +181,7 @@ async def test_a_successful_login_switches_to_paper_types_pauses_and_submits(
     assert launch["headless"] is True
     assert launch["args"] == ["--ignore-certificate-errors-spki-list=PIN="]
     assert launch["executable_path"] == "/opt/chrome"
+    assert launch["env"] == {"PATH": "/usr/bin"}, "the browser gets only the allowed variables"
     kinds = [action[0] for action in page.actions]
     assert kinds.index("click") < kinds.index("type"), "paper is selected before typing"
     typed = [action for action in page.actions if action[0] == "type"]

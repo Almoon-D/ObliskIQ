@@ -286,3 +286,13 @@ def test_an_override_cannot_drop_a_paced_endpoints_group(shipped_settings):
     data["groups"] = [group for group in data["groups"] if group["name"] != "history"]
     with pytest.raises(ValidationError, match="iserver/marketdata/history"):
         RateLimitConfig.model_validate(data)
+
+
+@pytest.mark.parametrize("name", ["OBLISK_IBKR_GATEWAY_PASSWORD", "OBLISK_ANYTHING", "1BAD"])
+def test_the_gateway_environment_can_never_list_obliskiqs_own_variables(shipped_settings, name):
+    data = _with(
+        shipped_settings.ibkr.gateway,
+        inherited_environment=[*shipped_settings.ibkr.gateway.inherited_environment, name],
+    )
+    with pytest.raises(ValidationError):
+        GatewayConfig.model_validate(data)

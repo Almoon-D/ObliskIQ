@@ -595,7 +595,7 @@ async def test_a_relogin_inside_the_interval_is_refused_without_a_login(
     transport = transport_for(driver, [False, True, False, False, True], clock=clock)
     await transport.prepare()
     clock[0] = interval / 2
-    with pytest.raises(RecoveryDeferredError, match="next login is allowed in"):
+    with pytest.raises(RecoveryDeferredError, match="the next is allowed in"):
         await transport.recover()
     assert len(driver.calls) == 1
     clock[0] = interval
