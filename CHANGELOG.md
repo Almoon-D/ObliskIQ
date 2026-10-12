@@ -11,15 +11,15 @@ Paper runs use the Gateway; OAuth is the live account's (DECISIONS D42).
 
 ### Changed
 
-- The `oauth` transport refuses profile `paper`, as the Gateway refuses profile `live`; the
+- The `oauth` transport refuses any profile but `live`, as the Gateway refuses `live`; the
   refusal comes before any credential is read, so a paper run never looks for an OAuth key
   file. `obliskiq preflight --read-only` prints `refused: …` (exit 1) for such a combination.
 - `Environment` no longer checks that the OAuth key paths exist when it loads; the live OAuth
   transport looks for them and refuses a missing file by name.
 - AGENTS.md, MASTER_PLAN §5.12, `.env.example` and SESSION_PROMPTS §A: cloud environments hold
   the paper Gateway login only, never OAuth keys.
-- `docs/knowledge/ibkr.md`: the second Gateway attempt from a cloud container, and why it
-  cannot hold a login there (the outbound address changes per connection).
+- `docs/knowledge/ibkr.md`: the second Gateway attempt from a cloud container, and its likely
+  cause (the outbound address changes per connection).
 
 ## [0.3.0] - 2026-10-12
 

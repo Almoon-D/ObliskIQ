@@ -209,9 +209,12 @@ async def run_read_only(
     ibkr = settings.ibkr
     account_id = env.ibkr_account_id.get_secret_value() if env.ibkr_account_id else ""
     known = (account_id,)
+    # Both before any credential is read: a paper run never opens an OAuth key file.
+    if env.ibkr_profile is None:
+        report.add(STEP_TRANSPORT, False, "OBLISK_IBKR_PROFILE is unset")
+        return report
     refusal = transport_refusal(env) if transport is None else None
     if refusal is not None:
-        # Refused before any credential is read: a paper run never opens an OAuth key file.
         report.add(STEP_TRANSPORT, False, refusal)
         return report
     if env.ibkr_transport == "oauth" and transport is None:
@@ -219,9 +222,6 @@ async def run_read_only(
         async with httpx.AsyncClient(timeout=ibkr.request_timeout_seconds) as handshake:
             if not await oauth_handshake(env, settings, handshake, report):
                 return report
-    if env.ibkr_profile is None:
-        report.add(STEP_TRANSPORT, False, "OBLISK_IBKR_PROFILE is unset")
-        return report
     guard = AccountGuard(account_id, env.ibkr_profile, tuple(ibkr.paper_account_prefixes))
     try:
         guard.check_prefix()

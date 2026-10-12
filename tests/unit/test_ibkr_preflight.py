@@ -362,3 +362,19 @@ def test_a_paper_gateway_run_needs_no_oauth_variable(monkeypatch):
     env = Environment(_env_file=None)
     assert missing_credentials(env) == []
     assert transport_refusal(env) is None
+
+
+async def test_oauth_without_a_profile_reads_no_key_file(monkeypatch, shipped_settings):
+    """Fail closed: an unset profile is not live, so the handshake never opens a key file."""
+    monkeypatch.delenv("OBLISK_IBKR_PROFILE", raising=False)
+    for name, value in {
+        "OBLISK_IBKR_ACCOUNT_ID": ACCOUNT,
+        "OBLISK_IBKR_TRANSPORT": "oauth",
+        **ABSENT_KEYS,
+    }.items():
+        monkeypatch.setenv(name, value)
+    env = Environment(_env_file=None)
+    assert transport_refusal(env) is not None
+    report = await run_read_only(env, shipped_settings, data_dir=None)
+    assert [step.name for step in report.steps] == ["transport"]
+    assert "OBLISK_IBKR_PROFILE" in report.steps[0].detail

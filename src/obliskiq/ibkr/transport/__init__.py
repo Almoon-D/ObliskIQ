@@ -11,7 +11,7 @@ from ...errors import EnvVarError
 from ...util.http import RetryPolicy
 from ..errors import ProfileRefusedError
 from .base import Transport, TransportKind
-from .gateway import GatewayTransport
+from .gateway import LIVE_REFUSAL, GatewayTransport
 from .gateway_login import LoginDriver
 from .oauth import OAuthCredentials, OAuthSession, OAuthTransport
 
@@ -32,11 +32,9 @@ def transport_refusal(env: Environment) -> str | None:
     the live account's, so a paper run never looks for or reads them.
     """
     if env.ibkr_transport == TransportKind.GATEWAY.value and env.ibkr_profile == "live":
-        return (
-            "the Client Portal Gateway is paper-only here: a live login needs the owner's "
-            "second factor, so profile live never logs in through it"
-        )
-    if env.ibkr_transport == TransportKind.OAUTH.value and env.ibkr_profile == "paper":
+        return LIVE_REFUSAL
+    # Anything but an explicit live profile (paper, or none set) is refused: fail closed.
+    if env.ibkr_transport == TransportKind.OAUTH.value and env.ibkr_profile != "live":
         return (
             "the OAuth transport and its keys are for the live account only; a paper run uses "
             "the Gateway (OBLISK_IBKR_TRANSPORT=gateway) and reads no OAuth key"

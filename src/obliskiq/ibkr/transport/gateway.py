@@ -35,6 +35,12 @@ log = get_logger("ibkr.gateway")
 
 HTTP_OK = 200
 
+#: Why the Gateway never runs under profile live.
+LIVE_REFUSAL = (
+    "the Client Portal Gateway is paper-only here: a live login needs the owner's second factor, "
+    "so profile live never logs in through it"
+)
+
 #: The endpoint, under the API base path, the Gateway answers with 200 once logged in and 401
 #: before.
 SESSION_PROBE_ENDPOINT = "tickle"
@@ -60,10 +66,7 @@ class GatewayTransport:
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if profile != "paper":
-            raise ProfileRefusedError(
-                "the Client Portal Gateway is paper-only here: a live login needs the owner's "
-                "second factor, so profile live never logs in through it"
-            )
+            raise ProfileRefusedError(LIVE_REFUSAL)
         self._ibkr = ibkr
         self._username = username
         self._password = password

@@ -34,7 +34,8 @@ uses.
 
 IBKR answered (2026-10-08) that OAuth 1.0a is for institutional clients and that retail
 accounts reach the Web API through the Client Portal Gateway. The plan therefore supports
-both (MASTER_PLAN §5.12): `oauth` where IBKR grants it, `gateway` otherwise.
+both (MASTER_PLAN §5.12): `gateway` for paper, `oauth` for the live account where IBKR grants
+it (DECISIONS D42).
 
 1. **Paper account:** use the paper account of your **main** username (Settings → Paper
    Trading Account). Note its paper username and account id (it starts with `DU`). No
@@ -98,8 +99,9 @@ provider later is a YAML entry plus one variable. Not used: `ESTAT_APP_ID` (e-St
 per-observation release dates) and `MARKETDATA_API_TOKEN` (marketdata.app allows one
 device per account, which cloud sessions cannot hold). No GitHub token: sessions use the
 built-in GitHub access. The Gateway's local address is configuration. Session 3 settled that
-the Gateway installs and runs inside a cloud session but its login does not hold there (the
-session's outbound address changes from one connection to the next; `docs/knowledge/ibkr.md`),
+the Gateway installs and runs inside a cloud session but its login did not complete there (most
+likely because the session's outbound address changes from one connection to the next;
+`docs/knowledge/ibkr.md`),
 so sessions build against fixtures and the live checks run on the machine.
 
 Without paper credentials, leave the IBKR variables out: sessions then build against
