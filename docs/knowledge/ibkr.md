@@ -275,6 +275,16 @@ machine: VERIFY-LIVE(Gateway headless login on the deployment machine), then eve
 Session 3 prompt lists (the US stock, the European ETF, the US and Eurex options with and without
 the owner logged in live, a scanner run, the trading schedule).
 
+**Second attempt, same day (16:20 UTC), with the merged client.** The container's outbound
+address is not stable: ten fresh HTTPS connections left from four addresses in one /24, while one
+kept-alive connection kept a single address. The Gateway opens several connections to IBKR during
+the login, so they leave from different addresses, which matches the fresh `JSESSIONID` IBKR
+issued mid-flow in the first attempt. One run of `obliskiq preflight --read-only` (gateway, paper,
+Java 11, two login attempts) ended the same way: the SRP proof came back (`M2`, password accepted)
+and the form then showed "Authentication failed". No further login was tried, to keep clear of a
+lock-out. So the Gateway login cannot be completed from this cloud container; it runs on the
+deployment machine, which has one outbound address. [CP ✓ 2026-10-12]
+
 The decoders keep lite's live readings as their tests; the new field ids (`7633`, `7638`,
 `7087`, theta `7310` and vega `7311`) are IBKR's table and VERIFY-LIVE(snapshot field ids), as is
 VERIFY-LIVE(secdef search without secType).

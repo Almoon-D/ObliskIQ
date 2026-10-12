@@ -140,13 +140,10 @@ class Environment(BaseSettings):
 
     @field_validator("ibkr_signature_key_path", "ibkr_encryption_key_path", "ibkr_dh_param_path")
     @classmethod
-    def _key_file_exists(cls, value: Path | None) -> Path | None:
-        if value is None:
-            return None
-        resolved = value.expanduser()
-        if not resolved.is_file():
-            raise ValueError(f"points at a file that does not exist: {resolved}")
-        return resolved
+    def _expand_key_path(cls, value: Path | None) -> Path | None:
+        # Not checked here: the OAuth keys are the live account's (DECISIONS D42), looked for
+        # only when the live OAuth transport loads them, which refuses a missing file by name.
+        return value.expanduser() if value is not None else None
 
     @field_validator("ibkr_gateway_java_home")
     @classmethod

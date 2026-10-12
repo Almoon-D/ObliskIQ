@@ -20,6 +20,7 @@ from obliskiq.ibkr.preflight import (
     PreflightReport,
     run_read_only,
 )
+from obliskiq.ibkr.transport import missing_credentials, transport_refusal
 
 BASE = "https://gw.test/v1/api"
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ibkr"
@@ -199,7 +200,7 @@ def test_the_preflight_requires_the_read_only_flag(config_dir, capsys):
 
 
 def test_a_transport_without_its_variables_counts_as_no_credentials(config_dir, monkeypatch):
-    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
+    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "live")
     monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", ACCOUNT)
     monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "oauth")
     status, out, _ = _run("--config-dir", str(config_dir), "preflight", "--read-only")
@@ -208,7 +209,7 @@ def test_a_transport_without_its_variables_counts_as_no_credentials(config_dir, 
 
 
 async def test_the_oauth_handshake_runs_first_and_stops_the_walk(monkeypatch, shipped_settings):
-    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
+    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "live")
     monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", ACCOUNT)
     monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "oauth")
     report = await run_read_only(Environment(_env_file=None), shipped_settings, data_dir=None)
@@ -292,3 +293,72 @@ def test_with_credentials_the_cli_prints_the_masked_report_and_its_verdict(
     assert ACCOUNT not in out, "the account id is masked"
     assert "IBKR read-only preflight" in out
     assert status == expected
+
+
+# ── each transport serves one profile (D42) ──
+
+#: OAuth variables pointing at key files that do not exist: reading any of them would fail.
+ABSENT_KEYS = {
+    "OBLISK_IBKR_CP_BASE_URL": "https://api.ibkr.test",
+    "OBLISK_IBKR_CONSUMER_KEY": "consumer",
+    "OBLISK_IBKR_ACCESS_TOKEN": "token",
+    "OBLISK_IBKR_ACCESS_TOKEN_SECRET": "c2VjcmV0",
+    "OBLISK_IBKR_SIGNATURE_KEY": "/nonexistent/signature.pem",
+    "OBLISK_IBKR_ENCRYPTION_KEY": "/nonexistent/encryption.pem",
+    "OBLISK_IBKR_DH_PARAM": "/nonexistent/dhparam.pem",
+}
+
+
+@pytest.mark.parametrize("with_keys", [False, True])
+def test_oauth_under_profile_paper_is_refused_without_asking_for_keys(
+    config_dir, monkeypatch, with_keys
+):
+    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
+    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", ACCOUNT)
+    monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "oauth")
+    if with_keys:
+        for name, value in ABSENT_KEYS.items():
+            monkeypatch.setenv(name, value)
+    status, out, _ = _run("--config-dir", str(config_dir), "preflight", "--read-only")
+    assert status == 1
+    assert out.startswith("refused: the OAuth transport and its keys are for the live account")
+    assert "OBLISK_IBKR_SIGNATURE_KEY" not in out, "a paper run never asks for OAuth keys"
+
+
+async def test_oauth_under_profile_paper_reads_no_key_file(monkeypatch, shipped_settings):
+    for name, value in {
+        "OBLISK_IBKR_PROFILE": "paper",
+        "OBLISK_IBKR_ACCOUNT_ID": ACCOUNT,
+        "OBLISK_IBKR_TRANSPORT": "oauth",
+        **ABSENT_KEYS,
+    }.items():
+        monkeypatch.setenv(name, value)
+    report = await run_read_only(Environment(_env_file=None), shipped_settings, data_dir=None)
+    assert [step.name for step in report.steps] == ["transport"]
+    assert "live account only" in report.steps[0].detail
+
+
+def test_the_gateway_under_profile_live_is_refused_at_the_cli(config_dir, monkeypatch):
+    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "live")
+    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", ACCOUNT)
+    monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "gateway")
+    status, out, _ = _run("--config-dir", str(config_dir), "preflight", "--read-only")
+    assert status == 1
+    assert "paper-only" in out
+
+
+def test_a_paper_gateway_run_needs_no_oauth_variable(monkeypatch):
+    """The paper route asks for the Gateway login only, whatever OAuth variables are absent."""
+    for name, value in {
+        "OBLISK_IBKR_PROFILE": "paper",
+        "OBLISK_IBKR_ACCOUNT_ID": ACCOUNT,
+        "OBLISK_IBKR_TRANSPORT": "gateway",
+        "OBLISK_IBKR_GATEWAY_USERNAME": "paper-user",
+        "OBLISK_IBKR_GATEWAY_PASSWORD": "paper-pass",
+    }.items():
+        monkeypatch.setenv(name, value)
+    for name in ABSENT_KEYS:
+        monkeypatch.delenv(name, raising=False)
+    env = Environment(_env_file=None)
+    assert missing_credentials(env) == []
+    assert transport_refusal(env) is None

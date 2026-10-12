@@ -577,3 +577,15 @@ read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees eac
 - **Configuration bounds.** Snapshot batches stay inside IBKR's ceilings (100 conids, 50 fields);
   every endpoint this client calls that IBKR paces on its own must sit in a rate group (the order
   path adds its endpoints in Session 4); a paper prefix starts with `D`.
+
+### D42 · OAuth is the live account's; paper runs use the Gateway (owner, 2026-10-12)
+
+The owner decided that OAuth keys (`.pem` files) are reserved for the live account. The `oauth`
+transport now refuses profile `paper` (and the Gateway keeps refusing profile `live`): one
+check, `transport_refusal`, runs in `build_transport`, the preflight and the CLI **before** any
+credential is read, so a paper run never looks for, asks for or opens an OAuth key. For the same
+reason `Environment` no longer checks at load time that the key paths exist; the live OAuth
+transport looks for them when it loads its keys and refuses a missing file by name (a missing
+key stays an error, never a silent fallback). AGENTS.md, MASTER_PLAN §5.12, `.env.example` and
+SESSION_PROMPTS §A say so: cloud environments hold the paper Gateway login only, never OAuth
+keys. lite ran OAuth on the live username; nothing in ObliskIQ used paper OAuth keys.

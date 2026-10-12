@@ -21,7 +21,7 @@ from ..config import LoadedConfig, load_config
 from ..env import Environment, default_env_file, load_environment
 from ..errors import ConfigError, EnvVarError
 from ..ibkr.preflight import run_read_only
-from ..ibkr.transport import missing_credentials
+from ..ibkr.transport import missing_credentials, transport_refusal
 from ..jurisdiction import (
     SHIPPED_POLICY_KINDS,
     JurisdictionProfile,
@@ -93,6 +93,11 @@ def _settings_show(loaded: Loaded, out: TextIO) -> int:
 def _preflight(loaded: Loaded, out: TextIO) -> int:
     """``preflight --read-only``: walk the IBKR read path and report each step."""
     env = loaded.env
+    refusal = transport_refusal(env)
+    if refusal is not None:
+        # Before the credential check: a refused combination never asks for its keys.
+        print(f"refused: {refusal}", file=out)
+        return EXIT_INVALID
     missing = missing_credentials(env)
     if missing:
         print("no credentials", file=out)

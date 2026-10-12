@@ -9,7 +9,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 |---|---|---|---|---|
 | 1 | Foundation | scaffold, docs, owner settings and defaults, jurisdiction registry, CI, releases, legacy snapshot | done | v0.1.0 |
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference, costs | done | v0.2.0 |
-| 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0 |
+| 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path and safety rails | intents, order client, reply policy, pre-trade checks, paper guard, modes, kill switch, live order test | next | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest | planned | |
@@ -30,6 +30,27 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 21 | Research: first pattern batch | pre-registered tests of §5.9; passes go to shadow | any time after 18 | |
 
 ## Session log
+
+### Session 3 follow-up — paper over the Gateway, OAuth live-only (2026-10-12, v0.3.1)
+
+**Owner request.** Run paper through the Gateway with the automated headless login and the
+paper username and password from the environment; never look for or require OAuth `.pem` files
+for paper. Owner decision: OAuth keys are the live account's (D42).
+
+**Landed.** `transport_refusal` (OAuth refuses profile paper, the Gateway profile live) before any
+credential is read, in `build_transport`, the preflight and the CLI; `Environment` no longer
+looks for the key files at load; tests for each (a paper run with OAuth variables pointing at
+nothing never opens them). AGENTS.md, MASTER_PLAN §5.12, `.env.example`, D42.
+
+**Live findings.** The container's outbound address changes from one connection to the next
+(four addresses in ten fresh connections; one per kept-alive connection). One read-only run of
+`obliskiq preflight --read-only` over the paper Gateway: password accepted (SRP `M2`), then
+"Authentication failed"; no further login, to stay clear of a lock-out. The Gateway login needs
+a stable outbound address: it runs on the deployment machine (`docs/knowledge/ibkr.md`). The
+Session 3 VERIFY-LIVE rows stay open.
+
+**SESSION_PROMPTS edits (facts changed by this work).** §A.2 step 3 (no paper OAuth keys),
+§A.3 (the paper-OAuth variables and setup script removed; the cloud Gateway outcome stated).
 
 ### Session 3 — IBKR read path (2026-10-12, v0.3.0)
 
@@ -274,10 +295,11 @@ settles it.
 
 ## Follow-ups
 
-- **Owner:** the Client Portal Gateway login could not be automated from a cloud container
-  (D34). Decide, before Session 6 runs the bot on a machine: try the Gateway login there (Session
-  6/19 checks it first), ask IBKR again about OAuth for the paper login, or accept a daily manual
-  login. Until then sessions build against fixtures.
+- **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
+  the live account's, D42). It cannot hold a login from a cloud container (outbound address
+  changes per connection), so the first live run is on the deployment machine (Session 6/19
+  checks it first); until then sessions build against fixtures. If the login fails there too,
+  the fallback is a daily manual login.
 - Session 4: OAuth token negotiation runs inside `headers()`, inside the limiter slot, and honours
   `Retry-After`; a token outage can hold every concurrency permit for minutes, and each of
   `rearm`'s sub-requests renegotiates. Before the order path and kill switch share the limiter,

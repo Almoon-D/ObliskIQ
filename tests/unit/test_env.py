@@ -19,7 +19,8 @@ from obliskiq.env import (
     repository_root,
     variable_names,
 )
-from obliskiq.errors import EnvVarError
+from obliskiq.errors import ConfigError, EnvVarError
+from obliskiq.ibkr.transport.oauth import OAuthCredentials
 from obliskiq.logging_setup import configure_logging, get_logger
 
 #: The credentials the plan names, plus the OBLISK_ locations and logging overrides.
@@ -151,10 +152,21 @@ def test_a_bad_value_fails_loudly_naming_the_variable(monkeypatch, name, value, 
     assert fragment in str(raised.value)
 
 
-def test_a_missing_key_file_is_an_error_not_a_downgrade(monkeypatch, tmp_path):
-    monkeypatch.setenv("OBLISK_IBKR_DH_PARAM", str(tmp_path / "absent.pem"))
-    with pytest.raises(EnvVarError, match="OBLISK_IBKR_DH_PARAM: points at a file that does not"):
-        load_environment(env_file=None)
+def test_a_missing_key_file_is_an_error_not_a_downgrade(monkeypatch, tmp_path, shipped_settings):
+    """Looked for only when the live OAuth transport loads its keys (DECISIONS D42), and then
+    a missing file is an error naming it, never a silent fallback."""
+    for name, value in {
+        "OBLISK_IBKR_CONSUMER_KEY": "consumer",
+        "OBLISK_IBKR_ACCESS_TOKEN": "token",
+        "OBLISK_IBKR_ACCESS_TOKEN_SECRET": "c2VjcmV0",
+        "OBLISK_IBKR_SIGNATURE_KEY": str(tmp_path / "absent-signature.pem"),
+        "OBLISK_IBKR_ENCRYPTION_KEY": str(tmp_path / "absent-encryption.pem"),
+        "OBLISK_IBKR_DH_PARAM": str(tmp_path / "absent.pem"),
+    }.items():
+        monkeypatch.setenv(name, value)
+    env = load_environment(env_file=None)
+    with pytest.raises(ConfigError, match="absent"):
+        OAuthCredentials.from_environment(env, shipped_settings.ibkr)
 
 
 def test_the_data_dir_has_no_default():
@@ -252,3 +264,11 @@ def test_paths_expand_the_home_directory(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("OBLISK_DATA_DIR", "~/obliskiq-data")
     assert load_environment(env_file=None).data_dir == Path(tmp_path) / "obliskiq-data"
+
+
+def test_an_oauth_key_path_is_not_looked_for_when_the_environment_loads(monkeypatch, tmp_path):
+    """A paper run never looks for the live account's OAuth keys (DECISIONS D42)."""
+    absent = tmp_path / "live-only.pem"
+    monkeypatch.setenv("OBLISK_IBKR_SIGNATURE_KEY", str(absent))
+    env = Environment(_env_file=None)
+    assert env.ibkr_signature_key_path == absent

@@ -439,7 +439,7 @@ identifiers or balances. `llm` cannot import `decision` or `execution`.
 - **Transport.** The IBKR Client Portal Web API, reached by one of two transports chosen in
   config (`ibkr.transport`), with the same endpoints and client above them:
   - `oauth`: OAuth 1.0a, live session token negotiated and refreshed before expiry
-    (where IBKR grants OAuth to the account);
+    (where IBKR grants OAuth to the account; the live account only, DECISIONS D42);
   - `gateway`: the Client Portal Gateway (IBKR's Java application) on the bot's machine,
     logged in automatically by a headless browser in the style of IBeam (Apache-2.0).
     Paper logins need no second factor, so this runs unattended in paper; a live login
