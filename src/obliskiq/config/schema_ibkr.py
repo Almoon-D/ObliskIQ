@@ -34,12 +34,14 @@ _PREFIX_RE = re.compile(r"D[A-Z]{0,3}")
 IBKR_MAX_CONIDS_PER_SNAPSHOT = 100
 IBKR_MAX_FIELDS_PER_SNAPSHOT = 50
 
-#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing"): each must sit in a rate
-#: group, or an owner override could leave it paced by the global window alone.
+#: The endpoints this client calls that IBKR paces on their own (docs/knowledge/ibkr.md,
+#: "Pacing"): each must sit in a rate group, or an owner override could leave it paced by the
+#: global window alone. The order path adds its own (orders, trades, P&L) with Session 4.
 IBKR_PACED_ENDPOINTS = (
     "iserver/marketdata/history",
     "iserver/marketdata/snapshot",
     "portfolio/accounts",
+    "portfolio/subaccounts",
     "iserver/scanner/params",
     "iserver/scanner/run",
     "tickle",
@@ -303,6 +305,9 @@ class GatewayConfig(FrozenModel):
     keystore_validity_days: PositiveInt
     probe_interval_seconds: PositiveFloat
     stop_grace_seconds: PositiveFloat
+    inherited_environment: list[
+        Annotated[str, StringConstraints(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
+    ]
     login: GatewayLoginConfig
 
 

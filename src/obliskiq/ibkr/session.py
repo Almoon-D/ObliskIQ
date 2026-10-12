@@ -37,7 +37,7 @@ from typing import Any
 import httpx
 
 from ..config.schema_ibkr import IbkrConfig
-from ..errors import ObliskError
+from ..errors import UpstreamError
 from ..logging_setup import get_logger
 from ..util.http import RetryPolicy, retry_after_seconds
 from .errors import (
@@ -45,8 +45,10 @@ from .errors import (
     DecodeError,
     IbkrError,
     IbkrUpstreamError,
+    RecoveryDeferredError,
     RetryAdvice,
     SessionExpiredError,
+    TransportUnavailableError,
     classify,
 )
 from .ratelimit import Clock, RateLimiter, SystemClock
@@ -212,11 +214,14 @@ class BrokerSession:
         async with self._limiter.slot(path) as group:
             try:
                 headers = await self._transport.headers(method, url, query)
-            except IbkrError:
-                raise
-            except ObliskError as exc:
+            except UpstreamError as exc:
+                # A refusal (a failed token signature check) passes through as it is. A transport
+                # that could not reach its own upstream has retried already: counted once, and
+                # not retried again by this request's backoff.
+                if isinstance(exc, IbkrError) and not isinstance(exc, IbkrUpstreamError):
+                    raise
                 self._limiter.failure(group)
-                raise IbkrUpstreamError(
+                raise TransportUnavailableError(
                     f"{self.redact(label)}: the transport could not sign the request "
                     f"({type(exc).__name__})"
                 ) from exc
@@ -410,6 +415,8 @@ class BrokerSession:
                 # A transport fault that is not an IbkrError (a browser that will not launch, a
                 # bug) must still count, alert and leave the session marked unauthenticated.
                 last = exc
+                if isinstance(exc, RecoveryDeferredError):
+                    break  # the transport said when it will try; sooner attempts are wasted
             else:
                 if status.authenticated:
                     self._emit(SessionAlertKind.REAUTHENTICATED, reason)
@@ -437,10 +444,14 @@ class BrokerSession:
         log.warning("broker session alert", extra={"kind": kind.value, "detail": alert.detail})
         if self._alert is None:
             return
+        # Alerts fire inside a repair; work the hook starts is not part of it and may repair.
+        token = _REPAIRING.set(False)
         try:
             self._alert(alert)
         except Exception:
             log.exception("session alert hook failed")
+        finally:
+            _REPAIRING.reset(token)
 
     # ── keepalive ──
 

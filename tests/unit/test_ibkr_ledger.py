@@ -109,3 +109,9 @@ def test_a_ledger_that_is_not_an_object_reads_as_nothing(body):
     reading = decode_ledger(body, base_currency="EUR")
     assert reading.nav is None
     assert reading.balances == ()
+
+
+def test_a_currency_row_that_is_not_an_object_is_named_as_unreadable(ledger):
+    ledger["USD"] = "n/a"
+    reading = decode_ledger(ledger, base_currency="EUR")
+    assert reading.unreadable_currencies == ("USD",)

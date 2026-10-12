@@ -37,15 +37,13 @@ def parse_major_version(output: str) -> int | None:
     return first
 
 
-#: The prefix of ObliskIQ's environment variables, kept out of child processes.
-OWN_PREFIX = "OBLISK_"
-
-
 @dataclass(frozen=True)
 class JavaRuntime:
     """A Java home, or ``None`` for whatever ``java`` the ``PATH`` holds."""
 
     home: Path | None
+    #: The variables of this process the child processes inherit; nothing else is passed.
+    inherit: tuple[str, ...]
 
     def tool(self, name: str) -> str:
         """The path of a JDK/JRE tool (``java``, ``keytool``)."""
@@ -65,10 +63,10 @@ class JavaRuntime:
     def environment(self) -> dict[str, str]:
         """The environment the Gateway's launcher runs with: this runtime first on ``PATH``.
 
-        ObliskIQ's own variables are left out: the Gateway and the JDK tools need none of them,
-        and they carry the broker credentials.
+        Only the allowed variables are inherited: the Gateway and the JDK tools need none of this
+        process's credentials (broker, bot, data sources).
         """
-        env = {name: value for name, value in os.environ.items() if not name.startswith(OWN_PREFIX)}
+        env = {name: os.environ[name] for name in self.inherit if name in os.environ}
         if self.home is not None:
             env["JAVA_HOME"] = str(self.home)
             env["PATH"] = f"{self.home / 'bin'}{os.pathsep}{env.get('PATH', '')}"

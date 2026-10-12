@@ -25,7 +25,7 @@ from pydantic import SecretStr
 
 from obliskiq.config import load_config
 from obliskiq.config.schema_ibkr import IbkrConfig
-from obliskiq.ibkr.errors import GatewayError, ProfileRefusedError
+from obliskiq.ibkr.errors import GatewayError, ProfileRefusedError, RecoveryDeferredError
 from obliskiq.ibkr.transport import gateway as gateway_module
 from obliskiq.ibkr.transport.gateway import GatewayTransport
 from obliskiq.ibkr.transport.gateway_install import (
@@ -53,6 +53,9 @@ ips:
   allow:
     - 127.0.0.1
 """
+
+#: What the fake JDK scripts need from this process's environment.
+INHERIT = ("PATH", "HOME")
 
 
 def _archive(extra: dict[str, str] | None = None) -> bytes:
@@ -186,7 +189,11 @@ async def test_the_install_downloads_verifies_and_pins_its_own_certificate(
     respx.get(ibkr.gateway.download_url).mock(return_value=httpx.Response(200, content=data))
     async with httpx.AsyncClient() as client:
         install = await ensure_installed(
-            ibkr, tmp_path / "gw", client=client, policy=policy, java=JavaRuntime(java_home)
+            ibkr,
+            tmp_path / "gw",
+            client=client,
+            policy=policy,
+            java=JavaRuntime(java_home, inherit=INHERIT),
         )
     assert (install.root / MARKER_FILE).read_text().strip() == ibkr.gateway.sha256
     conf = (install.root / str(CONF_FILE)).read_text()
@@ -213,7 +220,11 @@ async def test_a_completed_install_is_not_downloaded_again(tmp_path, ibkr_for, j
     async with httpx.AsyncClient() as client:
         for _ in range(2):
             await ensure_installed(
-                ibkr, tmp_path / "gw", client=client, policy=policy, java=JavaRuntime(java_home)
+                ibkr,
+                tmp_path / "gw",
+                client=client,
+                policy=policy,
+                java=JavaRuntime(java_home, inherit=INHERIT),
             )
     assert route.call_count == 1
 
@@ -225,7 +236,11 @@ async def test_a_failed_download_installs_nothing(tmp_path, ibkr_for, java_home,
     async with httpx.AsyncClient() as client:
         with pytest.raises(GatewayError, match="HTTP 404"):
             await ensure_installed(
-                ibkr, tmp_path / "gw", client=client, policy=policy, java=JavaRuntime(java_home)
+                ibkr,
+                tmp_path / "gw",
+                client=client,
+                policy=policy,
+                java=JavaRuntime(java_home, inherit=INHERIT),
             )
     assert existing_install(ibkr, tmp_path / "gw") is None
 
@@ -241,7 +256,11 @@ async def test_a_changed_archive_is_refused_before_it_is_unpacked(
     async with httpx.AsyncClient() as client:
         with pytest.raises(GatewayError, match="not the pinned"):
             await ensure_installed(
-                ibkr, tmp_path / "gw", client=client, policy=policy, java=JavaRuntime(java_home)
+                ibkr,
+                tmp_path / "gw",
+                client=client,
+                policy=policy,
+                java=JavaRuntime(java_home, inherit=INHERIT),
             )
     assert not (tmp_path / "gw").exists() or not any((tmp_path / "gw").iterdir())
 
@@ -268,28 +287,34 @@ async def test_a_runtime_of_an_untested_version_is_refused(tmp_path):
     (home / "bin").mkdir(parents=True)
     _script(home / "bin" / "java", "echo 'openjdk version \"21.0.12.1\"' >&2\n")
     with pytest.raises(GatewayError, match="version 21"):
-        await JavaRuntime(home).require([11])
+        await JavaRuntime(home, inherit=INHERIT).require([11])
 
 
 async def test_a_runtime_of_a_tested_version_passes(java_home):
-    assert await JavaRuntime(java_home).require([11]) == 11
+    assert await JavaRuntime(java_home, inherit=INHERIT).require([11]) == 11
 
 
 def test_a_java_home_without_the_tool_is_refused(tmp_path):
     with pytest.raises(GatewayError, match="no keytool"):
-        JavaRuntime(tmp_path).tool("keytool")
+        JavaRuntime(tmp_path, inherit=INHERIT).tool("keytool")
 
 
-def test_child_processes_get_none_of_obliskiqs_variables(java_home, monkeypatch):
+def test_child_processes_inherit_only_the_allowed_variables(
+    java_home, monkeypatch, shipped_settings
+):
     monkeypatch.setenv("OBLISK_IBKR_GATEWAY_PASSWORD", "paper-pass")
-    monkeypatch.setenv("OBLISK_IBKR_ACCESS_TOKEN_SECRET", "secret")
-    env = JavaRuntime(java_home).environment()
-    assert not [name for name in env if name.startswith("OBLISK_")]
-    assert "paper-pass" not in env.values()
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "bot-secret")
+    monkeypatch.setenv("FRED_API_KEY", "fred-secret")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    allowed = tuple(shipped_settings.ibkr.gateway.inherited_environment)
+    env = JavaRuntime(java_home, inherit=allowed).environment()
+    assert set(env) <= {*allowed, "JAVA_HOME"}
+    assert not {"paper-pass", "bot-secret", "fred-secret"} & set(env.values())
+    assert env["LANG"] == "C.UTF-8"
 
 
 def test_the_runtime_comes_first_on_the_launcher_path(java_home):
-    env = JavaRuntime(java_home).environment()
+    env = JavaRuntime(java_home, inherit=INHERIT).environment()
     assert env["JAVA_HOME"] == str(java_home)
     assert env["PATH"].startswith(str(java_home / "bin"))
 
@@ -327,7 +352,7 @@ async def test_a_gateway_already_serving_is_used_and_never_stopped(
         _install(tmp_path, "exit 9\n"),
         ibkr=_gateway("https://localhost:59999", startup=2.0),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
 
     async def serving(self):
@@ -344,7 +369,7 @@ async def test_a_gateway_that_exits_while_starting_is_reported(tmp_path, java_ho
         _install(tmp_path, "exit 3\n"),
         ibkr=_gateway("https://localhost:59998", startup=5.0),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
     with pytest.raises(GatewayError, match="exited with status 3"):
         await process.start()
@@ -355,7 +380,7 @@ async def test_a_gateway_that_never_answers_times_out_and_is_stopped(tmp_path, j
         _install(tmp_path, "sleep 30\n"),
         ibkr=_gateway("https://localhost:59997", startup=1.5),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
     with pytest.raises(GatewayError, match="did not answer"):
         await process.start()
@@ -369,7 +394,7 @@ async def test_a_started_gateway_is_stopped_with_its_process_group(
         _install(tmp_path, "sleep 30\n"),
         ibkr=_gateway("https://localhost:59996", startup=5.0),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
     calls = {"n": 0}
 
@@ -389,7 +414,7 @@ async def test_a_probe_through_the_pinned_certificate_fails_closed(tmp_path, jav
         _install(tmp_path, "exit 0\n"),
         ibkr=_gateway("https://localhost:1", startup=1.0),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
     assert await process.answering() is False
 
@@ -570,7 +595,7 @@ async def test_a_relogin_inside_the_interval_is_refused_without_a_login(
     transport = transport_for(driver, [False, True, False, False, True], clock=clock)
     await transport.prepare()
     clock[0] = interval / 2
-    with pytest.raises(GatewayError, match="another login waits"):
+    with pytest.raises(RecoveryDeferredError, match="next login is allowed in"):
         await transport.recover()
     assert len(driver.calls) == 1
     clock[0] = interval
@@ -635,7 +660,7 @@ async def test_a_serving_gateway_answers_the_readiness_probe(tmp_path, java_home
         _install(tmp_path, "exit 0\n"),
         ibkr=_gateway("https://localhost:59995", startup=1.0),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
     respx.get("https://localhost:59995/v1/api/tickle").mock(return_value=httpx.Response(401))
     assert await process.answering() is True
@@ -646,7 +671,7 @@ async def test_a_gateway_ignoring_sigterm_is_killed(tmp_path, java_home, monkeyp
         _install(tmp_path, "trap '' TERM\nwhile true; do sleep 0.1; done\n"),
         ibkr=_gateway("https://localhost:59994", startup=5.0, stop_grace=0.5),
         readiness_path=READINESS,
-        java=JavaRuntime(java_home),
+        java=JavaRuntime(java_home, inherit=INHERIT),
     )
     calls = {"n": 0}
 
@@ -664,10 +689,10 @@ def test_java_on_the_path_is_used_when_no_home_is_set(monkeypatch):
     from obliskiq.ibkr.transport import gateway_java
 
     monkeypatch.setattr(gateway_java.shutil, "which", lambda name: f"/usr/bin/{name}")
-    assert JavaRuntime(None).tool("keytool") == "/usr/bin/keytool"
+    assert JavaRuntime(None, inherit=INHERIT).tool("keytool") == "/usr/bin/keytool"
     monkeypatch.setattr(gateway_java.shutil, "which", lambda _name: None)
     with pytest.raises(GatewayError, match="keytool was not found"):
-        JavaRuntime(None).tool("keytool")
+        JavaRuntime(None, inherit=INHERIT).tool("keytool")
 
 
 async def test_an_injected_download_client_is_used(transport_for, monkeypatch, tmp_path):

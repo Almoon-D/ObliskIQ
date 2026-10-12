@@ -182,6 +182,11 @@ ibkr:
     # the grace a stopping Gateway gets before it is killed.
     probe_interval_seconds: 1.0
     stop_grace_seconds: 10.0
+    # The only variables the Gateway's JVM and the JDK tools inherit: what a shell, Java and a
+    # proxy need. Everything else (broker, bot and data-source credentials) stays out.
+    inherited_environment:
+      [PATH, HOME, USER, LANG, LC_ALL, TZ, TMPDIR, JAVA_TOOL_OPTIONS,
+       HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy]
     login:
       route: /sso/Login?forwardTo=22&RL=1&ip2loc=on
       username_selector: "input[name=username]"

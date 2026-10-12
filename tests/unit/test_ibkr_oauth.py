@@ -33,6 +33,7 @@ from obliskiq.config.schema_ibkr import IbkrConfig
 from obliskiq.env import Environment
 from obliskiq.errors import ConfigError, EnvVarError, UpstreamError
 from obliskiq.ibkr.errors import ERROR_EXCERPT_CHARS, AuthError, IbkrUpstreamError
+from obliskiq.ibkr.transport import oauth as oauth_module
 from obliskiq.ibkr.transport.base import TransportKind
 from obliskiq.ibkr.transport.oauth import (
     LiveSessionToken,
@@ -1093,3 +1094,33 @@ async def test_a_retryable_status_on_the_last_attempt_is_reported(
     async with httpx.AsyncClient() as client:
         with pytest.raises(AuthError, match="HTTP 503"):
             await negotiate_live_session_token(session, TOKEN_URL, client, policy)
+
+
+async def test_a_retry_after_on_the_token_endpoint_is_honoured(
+    respx_mock: Any,
+    session: OAuthSession,
+    credentials: OAuthCredentials,
+    policy: RetryPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    waits: list[float] = []
+
+    async def no_sleep(seconds: float) -> None:
+        waits.append(seconds)
+
+    monkeypatch.setattr(oauth_module.asyncio, "sleep", no_sleep)
+    answer = _ibkr_answers(credentials)
+    calls: list[int] = []
+
+    def busy_then_ok(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"Retry-After": "7"}, text="slow down")
+        return answer(request)
+
+    respx_mock.post(TOKEN_URL).mock(side_effect=busy_then_ok)
+    async with httpx.AsyncClient() as client:
+        await negotiate_live_session_token(
+            session, TOKEN_URL, client, dataclasses.replace(policy, retries=1)
+        )
+    assert waits == [7.0]

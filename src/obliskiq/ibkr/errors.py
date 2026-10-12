@@ -119,8 +119,18 @@ class CircuitOpenError(IbkrError):
     retry = RetryAdvice.BACKOFF
 
 
+class TransportUnavailableError(IbkrError):
+    """The transport could not prepare a request (an unreachable OAuth token endpoint) after its
+    own retries; the request is not retried again on top of them."""
+
+
 class GatewayError(IbkrError):
     """The Client Portal Gateway cannot be installed, started or logged in."""
+
+
+class RecoveryDeferredError(GatewayError):
+    """A login is not attempted yet (the re-login interval has not passed); retrying sooner is
+    pointless, so a repair stops its attempts at once."""
 
 
 class AccountGuardError(ObliskError):

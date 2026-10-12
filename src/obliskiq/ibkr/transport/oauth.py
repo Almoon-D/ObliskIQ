@@ -43,7 +43,7 @@ from ...config.schema_ibkr import IbkrConfig
 from ...env import Environment
 from ...errors import ConfigError, EnvVarError, UpstreamError
 from ...logging_setup import get_logger
-from ...util.http import RetryPolicy, request_with_retry
+from ...util.http import RetryPolicy, request_with_retry, retry_after_seconds
 from ..errors import AuthError, IbkrUpstreamError, excerpt
 from .base import TransportKind
 
@@ -385,6 +385,7 @@ async def negotiate_live_session_token(
     response: httpx.Response | None = None
     for attempt in range(policy.retries + 1):
         headers, _challenge = oauth.build_live_session_token_request(url)
+        response = None
         try:
             response = await request_with_retry(client, "POST", url, policy=once, headers=headers)
         except UpstreamError as exc:
@@ -396,7 +397,15 @@ async def negotiate_live_session_token(
             if response.status_code not in policy.retry_status_codes:
                 break
         if attempt < policy.retries:
-            await asyncio.sleep(policy.delay_for(attempt))
+            asked = retry_after_seconds(response, policy) if response is not None else None
+            log.warning(
+                "live session token request failed; retrying with a new signature",
+                extra={
+                    "attempt": attempt + 1,
+                    "status": response.status_code if response is not None else None,
+                },
+            )
+            await asyncio.sleep(asked if asked is not None else policy.delay_for(attempt))
     if response is None:  # pragma: no cover - the final attempt either raised or answered
         raise IbkrUpstreamError("/oauth/live_session_token gave no answer")
     if response.status_code != HTTP_OK:

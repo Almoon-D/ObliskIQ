@@ -472,9 +472,9 @@ def decode_ledger(body: Any, *, base_currency: str) -> Ledger:
     unreadable: list[str] = []
     for key, entry in ledger.items():
         code = currency_code(key)
-        if code is None or not isinstance(entry, Mapping):
+        if code is None:
             continue
-        cash = to_decimal(entry.get("cashbalance"))
+        cash = to_decimal(entry.get("cashbalance")) if isinstance(entry, Mapping) else None
         if cash is None:
             unreadable.append(code)
             continue

@@ -23,8 +23,10 @@ from obliskiq.ibkr.errors import (
     IbkrUpstreamError,
     NoDataPermanentError,
     RateLimitedError,
+    RecoveryDeferredError,
     RequestRejectedError,
     SessionExpiredError,
+    TransportUnavailableError,
 )
 from obliskiq.ibkr.session import (
     ISERVER_ACCOUNTS_PATH,
@@ -775,19 +777,52 @@ async def test_the_keepalive_outlives_a_failure_that_is_not_an_ibkr_error(
     assert fake_transport.recovered >= 1, "the grace led to a repair"
 
 
-async def test_a_transport_that_cannot_sign_is_an_upstream_error_and_backs_off(
+async def test_a_transport_that_cannot_reach_its_upstream_is_not_retried_on_top(
     session, fake_transport, shipped_settings
 ):
+    """The OAuth token request retries on its own; the request must not multiply them."""
+    calls = 0
+
     async def unreachable(method: str, url: str, params: Any) -> dict[str, str]:
-        raise UpstreamError("token endpoint unreachable")
+        nonlocal calls
+        calls += 1
+        raise IbkrUpstreamError("/oauth/live_session_token was unreachable after 4 attempts")
 
     fake_transport.headers = unreachable  # type: ignore[method-assign]
     with mocked() as mock:
         route = mock.route().respond(200, json={})
-        with pytest.raises(IbkrUpstreamError, match="could not sign"):
+        with pytest.raises(TransportUnavailableError, match="could not sign"):
             await session.request("GET", "iserver/accounts")
     assert route.call_count == 0
-    assert session.limiter.breaker_state("default").value == "closed"
+    assert calls == 1, "signing failures are not retried again by the request's backoff"
+
+
+@pytest.mark.parametrize("failure", [UpstreamError("unreachable"), IbkrUpstreamError("gone")])
+async def test_signing_failures_count_against_the_groups_breaker(
+    session, fake_transport, shipped_settings, failure
+):
+    async def failing(method: str, url: str, params: Any) -> dict[str, str]:
+        raise failure
+
+    fake_transport.headers = failing  # type: ignore[method-assign]
+    threshold = shipped_settings.ibkr.ratelimit.breaker_failure_threshold
+    with mocked() as mock:
+        mock.route().respond(200, json={})
+        for _ in range(threshold):
+            with pytest.raises(TransportUnavailableError):
+                await session.request("GET", "iserver/accounts")
+    assert session.limiter.breaker_state("default").value == "open"
+
+
+async def test_a_signature_refusal_from_the_transport_passes_through(session, fake_transport):
+    async def refused(method: str, url: str, params: Any) -> dict[str, str]:
+        raise AuthError("live session token failed IBKR's signature check")
+
+    fake_transport.headers = refused  # type: ignore[method-assign]
+    with mocked() as mock:
+        mock.route().respond(200, json={})
+        with pytest.raises(AuthError, match="signature check"):
+            await session.request("GET", "iserver/accounts")
 
 
 async def test_gateway_calls_ignore_proxy_settings_from_the_environment(
@@ -833,3 +868,52 @@ async def test_concurrent_401s_wait_for_one_repair_and_all_succeed(session):
         results = await asyncio.gather(*(session.get(SNAPSHOT) for _ in range(5)))
     assert results == [{"ok": True}] * 5
     assert inits == 1, "one repair served every concurrent request"
+
+
+async def test_a_reauthentication_already_done_by_a_concurrent_request_is_not_repeated(
+    session, fake_transport
+):
+    """Two requests that failed before the same repair: the second takes its outcome."""
+    with mocked() as mock:
+        mock.route().respond(200, json=AUTHENTICATED)
+        await session.open()
+        before = session._repairs
+        await session.reauthenticate("first")
+        assert fake_transport.recovered == 1
+        status = await session.reauthenticate("second", after=before)
+    assert fake_transport.recovered == 1, "no second login for the same failure"
+    assert status.authenticated
+
+
+async def test_work_started_by_the_alert_hook_may_repair_its_own_session(
+    make_session, fake_transport
+):
+    """Alerts fire inside a repair; a task the hook starts must not inherit that state."""
+    from obliskiq.ibkr import session as session_module
+
+    seen: list[bool] = []
+
+    def hook(alert: SessionAlert) -> None:
+        seen.append(session_module._REPAIRING.get())
+
+    session = make_session(alert=hook)
+    with mocked() as mock:
+        mock.route().respond(200, json=AUTHENTICATED)
+        await session.open()
+        await session.reauthenticate("checking the hook")
+    assert seen == [False]
+
+
+async def test_a_deferred_login_stops_the_attempts_and_says_when(
+    session, alerts, fake_transport, fake_clock
+):
+    """Inside the re-login interval further attempts are wasted: one try, one alert naming the
+    wait, no pauses."""
+    fake_transport.fail_recover = RecoveryDeferredError("the next login is allowed in 420 s")
+    with mocked() as mock:
+        mock.route().respond(200, json=AUTHENTICATED)
+        with pytest.raises(SessionExpiredError, match="allowed in 420 s"):
+            await session.reauthenticate("the brokerage session was lost")
+    assert fake_transport.recovered == 1
+    assert fake_clock.slept == []
+    assert [alert.kind for alert in alerts] == [SessionAlertKind.REAUTHENTICATION_FAILED]

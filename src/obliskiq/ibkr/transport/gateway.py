@@ -24,7 +24,7 @@ from pydantic import SecretStr
 from ...config.schema_ibkr import IbkrConfig
 from ...logging_setup import get_logger
 from ...util.http import RetryPolicy
-from ..errors import GatewayError, ProfileRefusedError
+from ..errors import GatewayError, ProfileRefusedError, RecoveryDeferredError
 from .base import TransportKind
 from .gateway_install import GatewayInstall, ensure_installed
 from .gateway_java import JavaRuntime
@@ -76,7 +76,7 @@ class GatewayTransport:
         self._timeout = timeout_seconds
         self._driver: LoginDriver = driver if driver is not None else PlaywrightLoginDriver()
         self._download_client = download_client
-        self._java = JavaRuntime(java_home)
+        self._java = JavaRuntime(java_home, inherit=tuple(ibkr.gateway.inherited_environment))
         self._install: GatewayInstall | None = None
         self._process: GatewayProcess | None = None
         self._lock = asyncio.Lock()
@@ -135,9 +135,9 @@ class GatewayTransport:
         if self._last_login_at is not None:
             since = self._monotonic() - self._last_login_at
             if since < interval:
-                raise GatewayError(
-                    f"the Gateway logged in {since:.0f} s ago; another login waits until "
-                    f"{interval:.0f} s have passed, so repeated logins cannot lock the username"
+                raise RecoveryDeferredError(
+                    f"the Gateway logged in {since:.0f} s ago; the next login is allowed in "
+                    f"{interval - since:.0f} s, so repeated logins cannot lock the username"
                 )
         details: list[str] = []
         self._last_login_at = self._monotonic()

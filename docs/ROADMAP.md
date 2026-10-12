@@ -48,7 +48,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 - `docs/knowledge/ibkr.md`: lite's verified findings condensed with their route tags, IBKR's
   documented pacing, changelog, availability codes, field ids, schedule, rules, per-user market
   data and live→paper sharing, and this session's Gateway trial.
-- Tests: 2,268 passing. Coverage measured 99.53 %; floor raised from 98.9 % to 99.3 %. The
+- Tests: 2,276 passing. Coverage measured 99.61 %; floor raised from 98.9 % to 99.4 %. The
   concurrency test (200 requests against virtual time, every window checked) found a
   float-rounding hole in the sliding window — expiry and wait disagreed, so a full per-minute
   window admitted a burst at one instant — fixed with a regression and a property test.
@@ -80,9 +80,10 @@ preflight reads after it.
 **Contradictions with the prompt, decided and recorded.** The prompt's `ibkr/errors.py` sits beside
 the shared `obliskiq/errors.py`; IBKR's error classes subclass `UpstreamError` there. The
 "third ScheduleSource" is the first source built on Session 2's protocol beside the library and
-synthetic schedules; registering it with the calendars is Session 6's (follow-up below). Lite's `accept_first_on_no_exact_match: true` would
-contradict "ambiguous resolution refused" and is `false` (D37). The live step (prompt item 10) could
-not pass its first sub-step from a cloud container.
+synthetic schedules; registering it with the calendars is Session 6's (follow-up below). Lite's
+`accept_first_on_no_exact_match: true` would contradict "ambiguous resolution refused" and is
+`false` (D37). The live step (prompt item 10) could not pass its first sub-step from a cloud
+container.
 
 **Review.** Round 1 (fresh `reviewer`): one blocking finding — re-authentication and the
 keepalive stopped silently on failures that were not `IbkrError` (an unreachable OAuth token
@@ -93,7 +94,12 @@ cash reads raise; the endpoint groups open only after the account guard; concurr
 repair; OAuth retries are signed afresh; Gateway re-logins are spaced; secrets stay out of child
 processes and command lines; schema bounds for IBKR's ceilings, paced endpoints and paper
 prefixes; `daily_between` honours `latest`; 6509 codes and spelled flags each decode by their own
-rule; the `L` price prefix is read as lite read it.
+rule; the `L` price prefix is read as lite read it. Round 2 (fresh `reviewer` on the delta): no
+blocking finding; eleven non-blocking, fixed in the PR (signing failures not retried twice and
+counted by the breaker; OAuth `Retry-After`; alert hooks run outside the repair context; an
+environment allowlist for the Gateway's child processes; a deferred re-login stops the attempts
+and says when; non-object ledger rows named unreadable; tests for each) or recorded (the order
+path's paced endpoints, Session 4; the daily bar stamp per venue, VERIFY-LIVE).
 
 **Process.** The harness assigned the branch `claude/magical-bardeen-ct4oql`; GitHub steps of the
 end-of-session protocol ran through the GitHub tools instead of `gh`. Test ports were delegated to
@@ -257,6 +263,7 @@ settles it.
 | `/contract/trading-schedule` shape, holidays omitted, and agreement with the calendars (closes the Session 2 phase-window, SGX, B3 and XEUR rows) | 3 | first session with a working login |
 | `/iserver/auth/ssodh/init` with `publish`/`compete` as query parameters through the Gateway (lite used them over OAuth) | 3 | first session with a working login |
 | `ssoExpires` and the daily reset as seen by the keepalive | 3 | 6 |
+| The daily bar's `t` stamp per venue (the history window is filtered on the UTC date of the bar start; a venue stamping before UTC midnight would shift by a day) | 3 | 8 |
 | Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | first session with a working login |
 
 ## Follow-ups
@@ -265,6 +272,8 @@ settles it.
   (D34). Decide, before Session 6 runs the bot on a machine: try the Gateway login there (Session
   6/19 checks it first), ask IBKR again about OAuth for the paper login, or accept a daily manual
   login. Until then sessions build against fixtures.
+- Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
+  `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
 - Session 4: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per
   currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis` (`documented_bound`
   for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read

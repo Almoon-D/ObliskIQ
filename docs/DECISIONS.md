@@ -558,8 +558,12 @@ read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees eac
   `IbkrError`), so the attempts, the alert and the lost-session state always follow; the
   keepalive survives any failure. One repair runs at a time: concurrent requests that failed
   before it finished retry instead of repairing again or failing. The OAuth token request signs
-  each retry afresh (a resent nonce is a replay). The Gateway logs in again at most once per
-  `gateway.login.min_relogin_interval_seconds`, so a repair loop cannot lock the username.
+  each retry afresh (a resent nonce is a replay) and honours `Retry-After`; a signing failure is
+  not retried again by the request. The Gateway logs in again at most once per
+  `gateway.login.min_relogin_interval_seconds`, so a repair loop cannot lock the username; inside
+  the interval a repair stops at once and its alert says when the next login is allowed. The
+  600 s is a judgement, not a measurement: IBKR publishes no login rate or lock-out count. The
+  Gateway's child processes inherit only `gateway.inherited_environment`.
 - **Pacing.** A request waiting for its window holds no concurrency permit; a slot and a permit
   are taken together, so the recorded instant stays the sending instant.
 - **History.** `daily_between` anchors its first request at `latest` (lite's was anchored at the
@@ -568,4 +572,5 @@ read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees eac
   flags go through the domain enum as whole words (`DELAYED_FROZEN` is frozen). The `L` price
   prefix reads as halted, as lite read it.
 - **Configuration bounds.** Snapshot batches stay inside IBKR's ceilings (100 conids, 50 fields);
-  every endpoint IBKR paces on its own must sit in a rate group; a paper prefix starts with `D`.
+  every endpoint this client calls that IBKR paces on its own must sit in a rate group (the order
+  path adds its endpoints in Session 4); a paper prefix starts with `D`.

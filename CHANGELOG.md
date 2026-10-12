@@ -42,6 +42,13 @@ Session 3 — IBKR read path. Read-only: no order endpoint is touched.
 - Read paths fail closed where lite skipped: an unreadable position row, a positions pager that
   reaches its cap and an unreadable cash balance raise; the history walk is anchored at the end
   of its window (D41).
+- `IbkrClient`'s endpoint groups refuse every read until the account guard has passed
+  (`start()`, or `accounts()` then `run_guard()`).
+- A paper account prefix must start with `D` (`ibkr.paper_account_prefixes`); snapshot batch
+  sizes are bounded by IBKR's ceilings; every self-paced endpoint the client calls needs a rate
+  group.
+- New keys: `ibkr.gateway.probe_interval_seconds`, `stop_grace_seconds`,
+  `inherited_environment` and `login.min_relogin_interval_seconds`.
 
 ## [0.2.0] - 2026-10-09
 
