@@ -605,7 +605,7 @@ engine and tax ledger that call them.
 
 | Source | Use | Credential | Status |
 |---|---|---|---|
-| IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | OAuth keys where granted; otherwise the paper username and password for the Gateway's automated login | read path verified live over OAuth (lite); Gateway route and order path new |
+| IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | the paper username and password for the Gateway's automated login (paper); OAuth keys for the live account where granted (DECISIONS D42) | read path verified live over OAuth (lite); Gateway route and order path new |
 | FRED / ALFRED (+ API v2 bulk) | US and global rates, curves, breakevens, credit, CPI, Eurostat HICP redistribution | `FRED_API_KEY` | verified |
 | ECB Data Portal | €STR, deposit rate, FX reference rates, yield curves | none | verified |
 | Bank of Japan Time-Series API | JGB yields, FX, monetary base | none | verify |

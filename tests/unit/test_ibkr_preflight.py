@@ -378,3 +378,12 @@ async def test_oauth_without_a_profile_reads_no_key_file(monkeypatch, shipped_se
     report = await run_read_only(env, shipped_settings, data_dir=None)
     assert [step.name for step in report.steps] == ["transport"]
     assert "OBLISK_IBKR_PROFILE" in report.steps[0].detail
+
+
+def test_oauth_with_no_profile_at_the_cli_names_the_unset_profile(config_dir, monkeypatch):
+    monkeypatch.delenv("OBLISK_IBKR_PROFILE", raising=False)
+    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", ACCOUNT)
+    monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "oauth")
+    status, out, _ = _run("--config-dir", str(config_dir), "preflight", "--read-only")
+    assert status == EXIT_NO_CREDENTIALS
+    assert "OBLISK_IBKR_PROFILE" in out

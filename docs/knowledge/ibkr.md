@@ -279,11 +279,12 @@ the owner logged in live, a scanner run, the trading schedule).
 address is not stable: ten fresh HTTPS connections left from four addresses in one /24, while one
 kept-alive connection kept a single address. The likely cause of the failure, not observed
 directly: the Gateway opens several connections to IBKR during the login, which would leave from
-different addresses and fits the fresh `JSESSIONID` IBKR issued mid-flow in the first attempt. One run of `obliskiq preflight --read-only` (gateway, paper,
-Java 11, two login attempts) ended the same way: the SRP proof came back (`M2`, password accepted)
+different addresses and fits the fresh `JSESSIONID` IBKR issued mid-flow in the first attempt.
+One run of `obliskiq preflight --read-only` (gateway, paper, Java 11, two login attempts) ended
+the same way: the SRP proof came back (`M2`, password accepted)
 and the form then showed "Authentication failed". No further login was tried, to keep clear of a
-lock-out. [CP ✓ 2026-10-12] So the Gateway login did not complete from this cloud container
-twice; the next attempt is on the deployment machine, where a stable outbound address is
+lock-out. [CP ✓ 2026-10-12] So on both attempts the Gateway login did not complete from this
+cloud container; the next attempt is on the deployment machine, where a stable outbound address is
 expected but not yet seen.
 
 The decoders keep lite's live readings as their tests; the new field ids (`7633`, `7638`,

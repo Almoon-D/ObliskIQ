@@ -37,21 +37,21 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 paper username and password from the environment; never look for or require OAuth `.pem` files
 for paper. Owner decision: OAuth keys are the live account's (D42).
 
-**Landed.** `transport_refusal` (OAuth refuses profile paper, the Gateway profile live) before any
-credential is read, in `build_transport`, the preflight and the CLI; `Environment` no longer
-looks for the key files at load; tests for each (a paper run with OAuth variables pointing at
-nothing never opens them). AGENTS.md, MASTER_PLAN §5.12, `.env.example`, D42.
+**Landed.** `transport_refusal` (OAuth refuses any profile but live, the Gateway profile live)
+before any credential is read, in `build_transport`, the preflight and the CLI; `Environment` no
+longer looks for the key files at load; tests for each (a paper run with OAuth variables pointing
+at nothing never opens them). AGENTS.md, MASTER_PLAN §5.12 and §5.18, `.env.example`, D42.
 
 **Live findings.** The container's outbound address changes from one connection to the next
 (four addresses in ten fresh connections; one per kept-alive connection). One read-only run of
 `obliskiq preflight --read-only` over the paper Gateway: password accepted (SRP `M2`), then
 "Authentication failed"; no further login, to stay clear of a lock-out. The likely cause is the
 changing outbound address (not observed directly); the next attempt is on the deployment machine
-(`docs/knowledge/ibkr.md`). The
-Session 3 VERIFY-LIVE rows stay open.
+(`docs/knowledge/ibkr.md`). The Session 3 VERIFY-LIVE rows stay open.
 
-**SESSION_PROMPTS edits (facts changed by this work).** §A.2 step 3 (no paper OAuth keys),
-§A.3 (the paper-OAuth variables and setup script removed; the cloud Gateway outcome stated).
+**SESSION_PROMPTS edits (facts changed by this work).** §A.2 intro (Gateway for paper, OAuth for
+live), §A.2 step 3 (no paper OAuth keys), §A.3 (the paper-OAuth variables and setup script
+removed; the cloud Gateway outcome stated).
 
 ### Session 3 — IBKR read path (2026-10-12, v0.3.0)
 
@@ -298,11 +298,12 @@ settles it.
 
 - **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
   the live account's, D42). Its login did not complete from a cloud container (most likely the
-  outbound address changing per connection), so the first live run is on the deployment machine (Session 6/19
-  checks it first); until then sessions build against fixtures. If the login fails there too,
-  the fallback is a daily manual login.
-- Session 4: a test of `run_read_only` under live OAuth with a passing (mocked) handshake, so the
-  `build_transport` branch after the handshake runs in tests (review of v0.3.1).
+  outbound address changing per connection), so the first live run is on the deployment
+  machine (Session 6/19 checks it first); until then sessions build against fixtures. If the
+  login fails there too, the fallback is a daily manual login.
+- Session 4: tests that run `run_read_only` through its own `build_transport` (no injected
+  transport): live OAuth with a passing (mocked) handshake, and the Gateway with a data directory
+  and an injected login driver (review of v0.3.1).
 - Session 4: OAuth token negotiation runs inside `headers()`, inside the limiter slot, and honours
   `Retry-After`; a token outage can hold every concurrency permit for minutes, and each of
   `rearm`'s sub-requests renegotiates. Before the order path and kill switch share the limiter,

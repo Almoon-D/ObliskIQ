@@ -83,7 +83,7 @@ OBLISK_IBKR_GATEWAY_PASSWORD=<paper password>
 ```
 
 OAuth variables and key files are never set in this environment: they are the live
-account's (DECISIONS D42), and the `oauth` transport refuses profile `paper`.
+account's (DECISIONS D42), and the `oauth` transport refuses any profile but `live`.
 
 Optional, added when the session that uses them comes up:
 

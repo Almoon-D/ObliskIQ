@@ -93,7 +93,8 @@ def _settings_show(loaded: Loaded, out: TextIO) -> int:
 def _preflight(loaded: Loaded, out: TextIO) -> int:
     """``preflight --read-only``: walk the IBKR read path and report each step."""
     env = loaded.env
-    refusal = transport_refusal(env)
+    # An unset profile is reported as unset (below), not as a refused combination.
+    refusal = transport_refusal(env) if env.ibkr_profile is not None else None
     if refusal is not None:
         # Before the credential check: a refused combination never asks for its keys.
         print(f"refused: {refusal}", file=out)
