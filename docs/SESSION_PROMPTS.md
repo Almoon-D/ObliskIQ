@@ -589,12 +589,18 @@ DELIVERABLES
    used in Session 5. place_idempotent(): looks the cOID up in live orders and trades
    before any placement. Only limit-capped order types can be built; never a plain market
    order.
-4. The clearance lock: place, place_idempotent and modify take a PretradeClearance bound
-   to the intent id, and only the pre-trade gate (execution/pretrade.py) issues one; a
-   guard test fails if anything else under src/ constructs it. This session ships the gate
-   failing closed: every intent is refused with reason `pretrade_unavailable`. Session 4a
-   replaces it with the checks. cancel needs no clearance, so the kill switch works when
-   everything else fails.
+4. The clearance lock: place, place_idempotent and modify take a PretradeClearance that
+   only the pre-trade gate (execution/pretrade.py) issues; a guard test fails if anything
+   else under src/ constructs it. A clearance is bound to the intent id and the order's
+   terms (side, quantity, limit price), is used once, and expires no later than the quote
+   policy's maximum age. The gate clears by role: an order that adds risk (an entry, or a
+   conversion that funds one) faces every check; an order that reduces it (a protective
+   exit, a sell of no more than is held, a sell-to-close, flatten) is cleared with the
+   kill switch ON and past the daily caps, on the mandate, the paper guard, the limit cap
+   and the mode. This session ships the gate failing closed: every intent is refused with
+   reason `pretrade_unavailable`; Session 4a replaces it with the checks. cancel needs no
+   clearance and is allowed in every mode and with the kill switch ON (the paper guard
+   alone applies), so the kill switch works when everything else fails.
 5. Reply policy (config): confirm only whitelisted message ids. o354 (no market data) is
    confirmed only when the asset class's quote policy accepts delayed quotes AND a fresh
    delayed quote exists AND the order is limit-capped inside the collar. Unknown message
@@ -607,12 +613,14 @@ DELIVERABLES
    every transition appends an IntentEvent. Property tests.
 7. execution/modes.py: shadow (simulated fills with quant/costs), paper, live-small, live;
    upgrades by explicit command with audit; downgrades automatic. The write boundary
-   refuses any write the mode does not permit, and re-checks the paper guard (profile
-   paper ⇒ paper-prefix account) before every write.
+   refuses any placement or modification the mode does not permit (cancel is allowed in
+   every mode), and re-checks the paper guard (profile paper ⇒ paper-prefix account)
+   before every write.
 8. execution/killswitch.py: file + DB flag + CLI `obliskiq kill on|off`; checked
-   immediately before every broker write; ON cancels working entry orders and never
-   cancels orders with role protective. `obliskiq flatten --confirm` is separate
-   (Session 4a: it places closing orders, which pass the gate).
+   immediately before every placement or modification that adds risk; ON cancels working
+   entry orders and never cancels orders with role protective. `obliskiq flatten
+   --confirm` is separate (Session 4a: its closing orders are cleared by role, kill
+   switch ON included).
 9. A stateful fake broker built with respx (orders, replies, status, trades, cancels) that
    Session 4a and Session 5 extend.
 10. docs/knowledge/ibkr-orders.md: endpoints, fields and message ids (from ibind and IBKR
@@ -622,10 +630,11 @@ TESTS (failure branches are the point), on the stateful fake broker: unknown rep
 with and without a delayed policy and a fresh quote; o354 with a stale quote, with a delayed
 quote beyond the maximum age, and outside the collar; whatif warning; rejection; cancel
 race; crash between place and status (no double placement); duplicate intent; place or
-modify without a clearance refused; the shipped gate refuses every intent; kill switch
-while working (entries cancelled, protective kept), also while the gate refuses; mode
-downgrade mid-cycle; a write the mode does not permit; live account id under the paper
-profile → refused at the write boundary.
+modify without a clearance refused; a clearance reused, expired or presented for changed
+terms refused; the shipped gate refuses every intent; kill switch while working (entries
+cancelled, protective kept), also while the gate refuses; mode downgrade mid-cycle; a
+cancel after a downgrade to shadow still reaches the broker; a placement the mode does not
+permit; live account id under the paper profile → refused at the write boundary.
 
 ACCEPTANCE: every reply-policy branch and write-boundary refusal tested; no plain market
 order constructible (test); no broker write without a clearance (guard test); mypy strict;
@@ -677,10 +686,15 @@ DELIVERABLES
    instant (Session 2's act-now view, not the planning `venue_status`; an option also
    inside `common_windows` with its underlying's venue); kill switch off; mode permits
    writes; approval present if required; the mandatory-close rule for options on
-   ineligible ETPs.
+   ineligible ETPs. These apply in full to orders that add risk. An order that reduces it
+   (a protective exit, a sell of no more than is held, a sell-to-close, flatten) is cleared
+   with the kill switch ON, past the daily caps and the maximum orders per day, and
+   without buy-side eligibility, on the mandate, the paper guard, the limit cap and the
+   mode (Session 4's clearance by role). The paper guard, kill switch and mode are also
+   checked at Session 4's write boundary: defence in depth, by design.
 2. An optional approval queue (off by default, per-sleeve config).
-3. `obliskiq flatten --confirm`: closing orders for the managed positions, through the
-   gate; separate from the kill switch.
+3. `obliskiq flatten --confirm`: closing orders for the managed positions, cleared by
+   role, so they pass with the kill switch ON; separate from the kill switch.
 4. `obliskiq preflight --paper-order-test` — whatif, then place one non-marketable limit
    order for the minimum quantity of a UCITS ETF in the base currency and of a liquid US
    stock (both in the skeleton allowlist; if the paper account holds no USD, the stock
@@ -693,12 +707,14 @@ DELIVERABLES
    the algos offered in docs/knowledge/ibkr-orders.md as [CP ✓ <date>].
 
 TESTS (failure branches are the point), on Session 4's fake broker: every reason code with
-its positive control; option order without a real-time quote on the option, and on the
-underlying; collar breach; DST window edge; venue blocked by an incident; a calendar
+its positive control; stale quote; delayed quote beyond the maximum age; option order
+without a real-time quote on the option, and on the underlying; collar breach; DST window edge; venue blocked by an incident; a calendar
 disagreement blocking an option order near its last tradable session but not a stock order;
 sell above the position; option sell-to-open; a prohibited product; an `unmanaged`
 holding; a currency the account does not hold; caps per order and per day; approval
-missing; live account id under the paper profile → refused.
+missing; live account id under the paper profile → refused; with the kill switch ON,
+flatten clears its closing orders and any buy is refused; a protective stop is cleared with
+the kill switch ON and after the daily cap is reached.
 
 ACCEPTANCE: every reason code tested; mypy strict; import contracts green; the PR lists
 the reason codes with their tests and the live findings or the VERIFY-LIVE queued.
@@ -733,18 +749,21 @@ DELIVERABLES
    shortly before it; conversions batched to amortise the minimum commission; a buffer
    per active currency; excess repatriated; any intent that would leave a negative
    balance in any currency is refused (this extends Session 4a's cash check with funding
-   by conversion).
+   by conversion). A conversion that funds an entry is cleared as part of that entry's
+   risk.
    Valuation rates from IBKR; ECB reference rates only for reporting.
 2. execution/pricing.py: (a) an IBKR algo or peg with a limit cap, chosen from the
    contract's algo list, enabled per venue and asset class in config (default off until
    verified live); (b) a patient limit at the reference mid ± k ticks (tick rules from
    contract rules), repriced up to N times every M minutes toward the touch, then
    cancelled and retried at the next tradable window. The collar widens with σ·√(delay).
-   Never a plain market order.
+   Each reprice is a modify with a fresh clearance for its new terms. Never a plain market
+   order.
 3. execution/protective.py: protective exits rest at the broker as stop-limit orders
    (stop price and limit offset from the intent's protective spec), re-placed after
    fills, trailing roll-ups and partial exits; verified present at every heartbeat;
-   missing → re-placed and alerted.
+   missing → re-placed and alerted. Each placement and resize is cleared by the gate as an
+   order that reduces risk, so it goes through with the kill switch ON.
 4. execution/executor.py: stage → convert currency if needed → whatif → place_idempotent
    → replies → poll → reprice or cancel → protective exit → reconcile; staged and
    submitted intents resume by cOID after a restart.
@@ -769,7 +788,7 @@ with staged and submitted intents; reconciliation drift → freeze; partial brok
 not green; the kill switch during a reprice keeps the protective stop.
 
 ACCEPTANCE: every money path tested on its failure branches; the PR lists the live
-findings; no plain market order constructible anywhere (test).
+findings or the VERIFY-LIVE queued; no plain market order constructible anywhere (test).
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
@@ -963,7 +982,8 @@ PRECONDITION: Sessions 1–7 merged. Otherwise STOP.
 GOAL: a global universe where any instrument can be data and only eligible ones can be
 bought, single-stock candidates for every grid cell, and the market-data collectors.
 
-READ: legacy/lite/universe.yaml (all), legacy/lite/src/obliskiq/collect/*.py,
+READ: legacy/lite/universe.yaml (all of it is ported: inspect it by script and by
+section, not whole into the context), legacy/lite/src/obliskiq/collect/*.py,
 legacy/lite/docs/COLLECTORS.md, legacy/lite/docs/DECISIONS.md:166-381, 2190-2331,
 2673-2967 (sections "Instruments, PRIIPs and wrappers", "Data and collection", "The
 European chains…", "The market axis, realigned for allocation", "Two collector defects…");

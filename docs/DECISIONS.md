@@ -600,8 +600,9 @@ keys. lite ran OAuth on the live username; nothing in ObliskIQ used paper OAuth 
 Sessions 1–3 used 111M, 219M and 260M cache-read tokens against about 1M output tokens each,
 and kept reaching usage limits; cache reads are the context size times the number of turns. A
 profile of every transcript event of Sessions 2 and 3 traced the context to front-loaded
-reading (Session 3 grew from 74k to 421k tokens in 73 calls before any code: the 134k-character
-playbook and whole legacy modules), subagents reading `legacy/MANIFEST.md` whole (seven times in
+reading (Session 3 grew from 74k to 421k tokens in 73 calls before any code:
+`legacy/lite/references/ibkr-playbook.md`, 124k characters, read whole, and whole legacy
+modules), subagents reading `legacy/MANIFEST.md` whole (seven times in
 Session 2), polling (42 `ListAgents` calls at 200k–500k of context), plan-mode echoes of the plan
 (78k characters in Session 2) and an owner follow-up run at 525k–678k of context. Test output
 and diffs were not drivers. AGENTS.md therefore reads by section and per deliverable ("Read
@@ -624,9 +625,15 @@ intents and their tables, the order client and its idempotency, the reply and qu
 state machine, modes, the kill switch and the paper guard. Session 4a builds the pre-trade
 checks above it, the approval queue, `flatten` and the paper order test. So that no write ever
 exists without a gate, `place` and `modify` take a `PretradeClearance` that only the pre-trade
-gate issues, bound to the intent id; Session 4 ships that gate refusing every intent
-(`pretrade_unavailable`) and Session 4a replaces it. `cancel` takes no clearance, so the kill
-switch works when everything else fails. Rejected: shipping the write path unlocked for one
+gate issues, bound to the intent id and the order's terms, single use and short-lived; Session
+4 ships that gate refusing every intent (`pretrade_unavailable`) and Session 4a replaces it.
+The gate clears by role, so the lock never blocks the rule that the kill switch keeps
+protective exits: an order that adds risk faces every check; a protective exit, a sell of no
+more than is held or a flatten is cleared with the kill switch ON and past the daily caps, on
+the mandate, the paper guard, the limit cap and the mode. `cancel` takes no clearance and is
+allowed in every mode, so the kill switch works when everything else fails. The paper guard,
+the kill switch and the mode are checked both at Session 4's write boundary and as Session
+4a reason codes, deliberately: defence in depth. Rejected: shipping the write path unlocked for one
 session (nothing could call it yet, but the lock is cheap and stays as an invariant); building
 the pre-trade checks first (the kill switch's cancels and the no-margin whatif need the order
 client).
