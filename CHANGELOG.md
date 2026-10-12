@@ -5,6 +5,31 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.3.2] - 2026-10-12
+
+Sessions read what their work needs, when it needs it (DECISIONS D43); Session 4 is split into
+Sessions 4 and 4a (D44). Process and documents only; no runtime code changes.
+
+### Added
+
+- `make prompt S=<id>` prints the common header and one session's prompt. Tests cover the
+  extraction (4 versus 4a, 1 versus 10, unknown and missing ids) and check that every line
+  range a prompt pins in `legacy/` covers whole sections.
+
+### Changed
+
+- AGENTS.md: "Read first" reads by section; a new "Context budget" (legacy per deliverable,
+  frozen ranges for prose and YAML, code by symbol, money-path mechanics read at the source,
+  no polling, read once); the paper Gateway login is not attempted from a cloud container; the
+  reviewer reads its own diff; the environment's GitHub tools stand in for `gh`.
+- `.claude/agents/`: `explorer` cites `path:start-end` ranges and never stands in for
+  money-path source; `port-checker` and `reviewer` read `MANIFEST`, `DECISIONS` and
+  `MASTER_PLAN` by section.
+- SESSION_PROMPTS: Session 4 becomes Session 4 (order path, kill switch and modes, behind a
+  fail-closed pre-trade clearance) and Session 4a (pre-trade rails, approval queue, `flatten`,
+  paper order test); later prompts pin frozen legacy ranges; §B asks for auto mode and a fresh
+  session for follow-ups. MASTER_PLAN §10 and the ROADMAP follow the split.
+
 ## [0.3.1] - 2026-10-12
 
 Paper runs use the Gateway; OAuth is the live account's (DECISIONS D42).

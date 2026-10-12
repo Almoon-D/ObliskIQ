@@ -10,7 +10,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 1 | Foundation | scaffold, docs, owner settings and defaults, jurisdiction registry, CI, releases, legacy snapshot | done | v0.1.0 |
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference, costs | done | v0.2.0 |
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
-| 4 | Order path and safety rails | intents, order client, reply policy, pre-trade checks, paper guard, modes, kill switch, live order test | next | |
+| 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | next | |
+| 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | planned | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots, `es` tax policy, TWR | planned | |
@@ -30,6 +31,32 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 21 | Research: first pattern batch | pre-registered tests of §5.9; passes go to shadow | any time after 18 | |
 
 ## Session log
+
+### Reading budget and the Session 4 split (2026-10-12, v0.3.2)
+
+**Owner request.** Sessions spend too many tokens reading; cut the cost without weakening the
+build. Owner decision: split Session 4 into 4 and 4a (D44).
+
+**Measured.** A profile of every transcript event of Sessions 2 and 3 (D43): the context grew
+mostly from front-loaded legacy reading, whole-file `MANIFEST` reads by subagents, polling,
+plan-mode echoes and a follow-up run in a long session; test output and diffs were small.
+
+**Landed.** AGENTS.md "Read first" by section and a new "Context budget"; the paper Gateway
+login is not attempted from a cloud container; the reviewer reads its own diff; the
+environment's GitHub tools stand in for `gh`. `make prompt S=<id>` with tests, including one
+that every pinned legacy range covers whole sections. `.claude/agents/`: `explorer` cites
+ranges and never stands in for money-path source; `port-checker` and `reviewer` read by grep
+and by section. MASTER_PLAN §10 and the sessions table show Sessions 4 and 4a.
+
+**SESSION_PROMPTS edits.** §B steps 3, 5 and 7 (`make prompt`, auto mode, a fresh session for
+follow-ups, 4a listed); §C table rows 4 and 4a and the cloud-login note; Session 4 replaced by
+Session 4 (order path, kill switch and modes, behind a fail-closed pre-trade clearance) and
+Session 4a (pre-trade rails, approval queue, `flatten`, paper order test); Session 5's
+precondition and READ; the references in Sessions 5, 7 and 8 now name 4a; pinned legacy ranges
+in the READ blocks of Sessions 5, 6, 8, 10, 11, 12, 17 and 19.
+
+**Follow-ups retargeted.** Cash and quote reads → Sessions 4 and 4a; `tradability` with the
+conid and the instant view → 4a; the commission-schedule live check → 4a.
 
 ### Session 3 follow-up — paper over the Gateway, OAuth live-only (2026-10-12, v0.3.1)
 
@@ -278,7 +305,7 @@ settles it.
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
 | Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`) | 2 | library upgrade; 6 (digest) |
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | first session with a working login |
-| US stock, US option and Eurex option commission schedules | 2 | 4 (paper order test), 18 (TCA) |
+| US stock, US option and Eurex option commission schedules | 2 | 4a (paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 9 (bond rule) |
 | Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
@@ -313,7 +340,7 @@ settles it.
   keepalive repair once it passes and fail reads fast, without a new alert, before then.
 - Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
   `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
-- Session 4: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per
+- Sessions 4 and 4a: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per
   currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis` (`documented_bound`
   for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read
   until the account guard has passed (D41). Incomplete position or cash reads raise.
@@ -328,9 +355,9 @@ settles it.
 - Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
   stamped with a period-end reference date, and the whole batch rolls back; relax or split it
   with the first live macro route.
-- Session 4: `tradability` and `venue_status` take `conid` as an optional argument and ignore
+- Session 4a: `tradability` and `venue_status` take `conid` as an optional argument and ignore
   instrument-scoped halts without it; the pre-trade check must pass the order's conid.
-- Session 4: call the instant view — `Calendars.tradability(venue, at, ...)` — and, for an
+- Session 4a: call the instant view — `Calendars.tradability(venue, at, ...)` — and, for an
   option, `common_windows` with the underlying's venue; `venue_status` is the planning view.
 - Session 8: pin the IBKR codes with contracts; source holiday lists for the four synthetic
   venues; port lite's realised-volatility estimators (`collect/vol.py`).

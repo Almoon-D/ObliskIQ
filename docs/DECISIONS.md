@@ -592,3 +592,41 @@ transport looks for them when it loads its keys and refuses a missing file by na
 key stays an error, never a silent fallback). AGENTS.md, MASTER_PLAN §5.12, `.env.example` and
 SESSION_PROMPTS §A say so: cloud environments hold the paper Gateway login only, never OAuth
 keys. lite ran OAuth on the live username; nothing in ObliskIQ used paper OAuth keys.
+
+## Reading budget and the Session 4 split (owner request, 2026-10-12)
+
+### D43 · Sessions read their slice, when they need it
+
+Sessions 1–3 used 111M, 219M and 260M cache-read tokens against about 1M output tokens each,
+and kept reaching usage limits; cache reads are the context size times the number of turns. A
+profile of every transcript event of Sessions 2 and 3 traced the context to front-loaded
+reading (Session 3 grew from 74k to 421k tokens in 73 calls before any code: the 134k-character
+playbook and whole legacy modules), subagents reading `legacy/MANIFEST.md` whole (seven times in
+Session 2), polling (42 `ListAgents` calls at 200k–500k of context), plan-mode echoes of the plan
+(78k characters in Session 2) and an owner follow-up run at 525k–678k of context. Test output
+and diffs were not drivers. AGENTS.md therefore reads by section and per deliverable ("Read
+first", "Context budget"): prompts pin line ranges into the frozen `legacy/` tree for prose
+sections and YAML keys; code is named by symbol and read with its helpers, a ported module
+whole; money-path mechanics are read at the source by the session model; nothing is polled;
+`make prompt S=<id>` prints one session's prompt. Rejected: an AGENTS.md line telling sessions
+to disregard the prompts' reading directives and read nothing upfront. It contradicts the
+prompts instead of fixing them, leaves the subagent, polling and follow-up costs in place, and
+lets a money-path session write code before reading its plan sections. Rejected too: a line cap
+on `explorer` answers; the risk is a summary standing in for source, so money-path source is
+never delegated.
+
+### D44 · Session 4 is split at the broker-write boundary
+
+Session 4 carried more work than Session 3, which ended at 678k tokens of context; cost grows
+with the square of a session's length, and the riskiest code is reviewed better as two smaller
+diffs (owner decision). Session 4 builds everything at and below the broker-write boundary:
+intents and their tables, the order client and its idempotency, the reply and quote policy, the
+state machine, modes, the kill switch and the paper guard. Session 4a builds the pre-trade
+checks above it, the approval queue, `flatten` and the paper order test. So that no write ever
+exists without a gate, `place` and `modify` take a `PretradeClearance` that only the pre-trade
+gate issues, bound to the intent id; Session 4 ships that gate refusing every intent
+(`pretrade_unavailable`) and Session 4a replaces it. `cancel` takes no clearance, so the kill
+switch works when everything else fails. Rejected: shipping the write path unlocked for one
+session (nothing could call it yet, but the lock is cheap and stays as an invariant); building
+the pre-trade checks first (the kill switch's cancels and the no-margin whatif need the order
+client).
