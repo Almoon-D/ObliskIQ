@@ -626,14 +626,16 @@ state machine, modes, the kill switch and the paper guard. Session 4a builds the
 checks above it, the approval queue, `flatten` and the paper order test. So that no write ever
 exists without a gate, `place` and `modify` take a `PretradeClearance` that only the pre-trade
 gate issues, bound to the intent id and the order's terms, single use and short-lived; Session 4
-ships that gate refusing every intent (`pretrade_unavailable`) and Session 4a replaces it. So
-that the lock never breaks the rule that the kill switch keeps protective exits, the gate
-classes each order by its verified effect, never by its declared role, and waives a fixed list
-of checks for an order that reduces risk; no short is enforced against every working sell and
-every issued clearance, one clearance per conid at a time. A role is never trusted: two sells
-that are each within the position could together go short, and a "protective" buy is still a
-buy. The exact rule, its waivers and its tests are stated once, in Session 4's item 4 of
-SESSION_PROMPTS. `cancel` takes no clearance and is allowed in every mode, so the kill switch
+ships that gate refusing every intent (`pretrade_unavailable`) and Session 4a replaces it. The
+lock is stated as five invariants with their tests, once, in Session 4's item 4 of
+SESSION_PROMPTS (the gate; no short against every sell that could still reach the broker;
+class by effect, never by role, with a fixed list of waivers for orders that reduce risk; a
+kill switch that works when everything else fails; no exit that leaves a position
+unprotected); the mechanism is the implementing session's design. A role is never trusted:
+two sells that are each within the position could together go short, and a "protective" buy
+is still a buy. Four review rounds of this PR found a new mechanism gap each time the prompt
+described a mechanism; invariants with adversarial tests and `test-breaker` are the safer
+contract. `cancel` takes no clearance and is allowed in every mode, so the kill switch
 works when everything else fails. The paper guard, the kill switch and the mode are checked both
 at Session 4's write boundary and as Session 4a reason codes, deliberately: defence in depth.
 Rejected: shipping the write path unlocked for one session (nothing could call it yet, but the

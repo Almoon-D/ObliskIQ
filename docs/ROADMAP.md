@@ -52,12 +52,13 @@ and by section. MASTER_PLAN §10 and the sessions table show Sessions 4 and 4a.
 follow-ups, 4a listed); §C table rows 4 and 4a and the cloud-login note; Session 4 replaced by
 Session 4 (order path, kill switch and modes, behind a fail-closed pre-trade clearance) and
 Session 4a (pre-trade rails, approval queue, `flatten`, paper order test); the clearance lock
-stated once in Session 4's item 4 (class by verified effect, the exact waivers for orders that
-reduce risk, cancel in every mode) and referred to by 4a and Session 5; the `exit` role;
-Session 5's precondition, READ, items 1–3 (conversions, reprices and protective stops under the
-lock), TESTS and ACCEPTANCE (VERIFY-LIVE); the references in Sessions 5, 7 and 8 now name 4a;
-Session 8 inspects `universe.yaml` by script; pinned legacy ranges in the READ blocks of
-Sessions 5, 6, 8, 10, 11, 12, 17 and 19.
+stated once in Session 4's item 4 as invariants I1–I5 with their tests (the gate, no short
+across working and cleared sells, class by effect with exact waivers, a kill switch that works
+when everything else fails, no unprotected exit) and referred to by 4a, Session 5 and D44; the
+`exit` role; Session 5's precondition, READ, items 1–3 (conversions, reprices and protective
+stops under the lock), TESTS and ACCEPTANCE (VERIFY-LIVE); the references in Sessions 5, 7 and 8
+now name 4a; Session 8 inspects `universe.yaml` by script; pinned legacy ranges in the READ
+blocks of Sessions 5, 6, 8, 10, 11, 12, 17 and 19.
 
 **Follow-ups retargeted.** Cash and quote reads → Sessions 4 and 4a; `tradability` with the
 conid and the instant view → 4a; the commission-schedule live check → 4a.
@@ -345,9 +346,10 @@ settles it.
 - Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
   `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
 - Sessions 4 and 4a: the order path reads cash from `IbkrClient.portfolio.cash_balances()`
-  (Decimal per currency), quotes with `market_data_status`, `delay_seconds` and
-  `delay_basis` (`documented_bound` for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read
-  until the account guard has passed (D41). Incomplete position or cash reads raise.
+  (Decimal per currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis`
+  (`documented_bound` for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint
+  groups refuse every read until the account guard has passed (D41). Incomplete position or cash
+  reads raise.
 - Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])`,
   passing each venue's `is_business_weekday` as `is_trading_weekday` (the calendars expose it per
   venue), and refresh it from one reference conid per venue; pass the session's alert hook to
