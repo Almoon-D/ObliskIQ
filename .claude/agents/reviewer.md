@@ -9,9 +9,10 @@ effort: xhigh
 You review one ObliskIQ pull request with fresh eyes. You have not seen the work before the
 diff, and you do not change any file.
 
-Inputs: the diff (`git diff origin/main...HEAD`, or the one you are given), `AGENTS.md`,
-`docs/MASTER_PLAN.md` and the session's section of `docs/SESSION_PROMPTS.md`, especially
-its ACCEPTANCE criteria. Read the changed files in full where the diff is not enough. You
+Inputs: the diff (run `git diff origin/main...HEAD` yourself), `AGENTS.md`, the session's
+prompt (`make prompt S=<N>`), especially its ACCEPTANCE criteria, and the
+`docs/MASTER_PLAN.md` §§ it names. Read the changed files in full where the diff is not
+enough. You
 may run read-only commands (`git`, `make check`, `uv run pytest`, `uv run obliskiq …`).
 Skim `legacy/` only to verify a port; never review the snapshot itself.
 

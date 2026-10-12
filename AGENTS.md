@@ -5,16 +5,43 @@ tax-aware trend tilt), a satellite (the Asymmetry Hunter, defined risk) and a ha
 decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API
 over OAuth 1.0a.
 
-## Read first, in this order
+## Read first — your slice, not whole files
 
-1. `docs/MASTER_PLAN.md` — the design. Do not re-derive or relitigate it.
-2. `docs/SESSION_PROMPTS.md` — your session's section is your task.
-3. `docs/DECISIONS.md` — why things are as they are; what was rejected.
-4. `docs/ROADMAP.md` — what is done, what is open, the session log.
-5. `docs/knowledge/` — observed broker and data-source behaviour, tagged by route and date.
+1. Your task: `make prompt S=<N>` prints the common header and your section of
+   `docs/SESSION_PROMPTS.md`.
+2. `docs/MASTER_PLAN.md` — the design. Do not re-derive or relitigate it. Read the §§ your
+   prompt names, in full, before writing code; other §§ when a question sends you there.
+3. `docs/DECISIONS.md` — why things are as they are; what was rejected. The entries that
+   cite your §§ or touch your modules, and the previous session's.
+4. `docs/ROADMAP.md` — the latest session-log entry and every line that names your session
+   (Follow-ups, Live verification queue).
+5. `docs/knowledge/` — observed broker and data-source behaviour, tagged by route and date:
+   the files your work touches.
 
-If the code contradicts the plan or your prompt, stop and report it in the PR description
-before writing code around it.
+Find sections with `grep -n '^#'` and read them by line range. If the code contradicts the
+plan or your prompt, stop and report it in the PR description before writing code around it.
+
+## Context budget
+
+Everything in your context is paid for again on every later turn, so a file read at the
+start of a long session costs its size hundreds of times over. Read what the work in front
+of you needs, when it needs it.
+
+- Legacy material is read per deliverable, when you start it, not all upfront. `legacy/` is
+  frozen, so a `path:a-b` range in a prompt (a prose section or a YAML key) is exact. Code is
+  named by symbol: read it with the helpers and types it uses; a module you port, read
+  whole. A range or a symbol is where reading starts, not a fence: follow what it calls.
+- `legacy/MANIFEST.md` and lite's `config.yaml` are searched or read by range, never whole.
+  Large data files (a universe, fixtures, CSVs) are inspected by script, `head` or `grep`.
+- Read at the source yourself what you port or edit, and every money-path mechanic: broker
+  replies and message ids, order types, failure modes, guards. Background you will not port
+  goes to `explorer`, which locates and cites ranges; its answer never stands in for
+  money-path source.
+- Use the agents below, not a generic exploration agent: their answers are short and the
+  files they read stay out of your context.
+- Never poll. Background subagents and CI report when they finish.
+- Read a file once. Reread only what changed, or, after a compaction, the file you are about
+  to edit. Do not read back what you just wrote.
 
 ## Hard rules (money and safety)
 
@@ -45,7 +72,9 @@ before writing code around it.
   the prompt states. Once the deployed bot runs paper continuously, sessions make no IBKR
   calls unless the owner says it is paused (one brokerage session per username). Without
   credentials, build against fixtures and mark checks `VERIFY-LIVE(<what>)` in code and
-  in `docs/ROADMAP.md` → "Live verification queue".
+  in `docs/ROADMAP.md` → "Live verification queue". The paper Gateway login does not
+  complete from a cloud container (`docs/knowledge/ibkr.md`): sessions there do not attempt
+  it; they build against fixtures and queue `VERIFY-LIVE`.
 - Never print, log or commit secrets, account ids, tokens, `.env` files, keys or personal
   data (a test scans for them). Prompts sent to LLMs carry no account identifiers or
   balances.
@@ -85,8 +114,8 @@ before writing code around it.
 
 - `reviewer` — the fresh reviewer of the end-of-session protocol. Never sees the work
   before the diff.
-- `explorer` — read-only searches across `legacy/` and the repository; returns paths and
-  conclusions, not file dumps.
+- `explorer` — read-only searches across `legacy/` and the repository; returns the
+  conclusion and `path:start-end` evidence, not file dumps.
 - `port-checker` — compares a ported module and its tests with the legacy original and
   lists behaviour that changed without a `DECISIONS.md` entry.
 - `test-breaker` — writes failure-branch and property tests for money paths it did not
@@ -125,10 +154,13 @@ before writing code around it.
 
 ## End-of-session protocol (mandatory, performed by the agent)
 
+Where `gh` is missing or unauthenticated, the environment's GitHub tools do the same steps.
+
 1. **PR.** Push and open it with `gh pr create` using `.github/pull_request_template.md`.
 2. **Check.** `gh pr checks <n> --watch`. Then review with the `reviewer` subagent, which
-   has not seen the work: give it `gh pr diff <n>`, `AGENTS.md` and the session's acceptance
-   criteria; ask for blocking and non-blocking findings on correctness, money-path safety,
+   has not seen the work: give it the PR number and the session number; it reads the diff
+   (`git diff origin/main...HEAD`) and the acceptance criteria (`make prompt S=<N>`)
+   itself. Ask for blocking and non-blocking findings on correctness, money-path safety,
    mandate and eligibility violations, hardcoded values, point-in-time leaks, failure-branch
    tests, cleanliness (dead code, debug prints, stray files, TODOs without an issue,
    commented-out code, version narratives, secrets) and docs consistency. Post the findings
