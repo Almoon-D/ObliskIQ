@@ -833,7 +833,8 @@ subset and inserts an `Na` prompt for the remainder.
 | 1 | Foundation | scaffold, docs, owner settings and defaults, jurisdiction registry, CI, releases, legacy snapshot |
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference |
 | 3 | IBKR read path | OAuth, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, live preflight |
-| 4 | Order path and safety rails | intents, order client, reply policy, pre-trade checks, paper guard, modes, kill switch, live order test |
+| 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch |
+| 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test |
 | 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation |
 | 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots, `es` tax policy, TWR |

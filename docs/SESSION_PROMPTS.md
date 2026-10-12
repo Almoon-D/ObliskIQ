@@ -128,19 +128,22 @@ Client Portal Gateway itself.
    §C.
 2. Pick the model, then `/effort <level>` from §C. Opus 5.5 and Sonnet 5.5 default to
    `medium`, so set it explicitly.
-3. Paste the prompt. From Session 2 on, the one-line launcher is enough: the agent reads
-   the full prompt from `main`, including corrections earlier sessions made.
+3. Start in auto (or accept-edits) permission mode, not plan mode: the prompt needs no
+   approval, and plan mode echoes the whole plan back into the session's context. Paste the
+   prompt. From Session 2 on, the one-line launcher is enough: the agent prints its section
+   from `main` with `make prompt S=<N>`, including corrections earlier sessions made.
 4. The agent opens the PR, reviews it with a fresh subagent, fixes, merges, confirms the
    release and logs the session in `docs/ROADMAP.md`. Read that entry and the release
    notes before the next session.
 5. A PR left open with the `needs-owner` label: answer its summary, then run a short
    session: *"Resolve PR #n per its needs-owner summary, then follow the end-of-session
-   protocol."*
+   protocol."* Any other request after the merge (a follow-up, a fix) also goes to a fresh
+   session: a long session pays its whole context again on every turn.
 6. One brokerage session per username. If you run the bot on a machine between sessions
    (possible from Session 6), stop it before any session whose §C row has a live IBKR
    check and restart it afterwards. Once you deploy for good (§E), sessions skip their
    live checks.
-7. Sessions 4, 5, 13, 14 and 17 touch money most directly. If one of them runs short of
+7. Sessions 4, 4a, 5, 13, 14 and 17 touch money most directly. If one of them runs short of
    context or its review leaves too many findings, the agent merges a coherent, tested
    subset and writes `Session <N>a` for the rest (AGENTS.md). Let it; never ask it to
    rush.
@@ -152,7 +155,8 @@ Client Portal Gateway itself.
 | 1 | Foundation | Opus 5.5 | xhigh | Custom | — |
 | 2 | Store, calendars and numerics | Sonnet 5.5 | xhigh | Custom | — |
 | 3 | IBKR read path | Opus 5.5 | xhigh | **Full** | Gateway trial, read-only preflight |
-| 4 | Order path and safety rails | Fable 5.1 (else Opus 5.5) | xhigh | Custom | one order test |
+| 4 | Order path, kill switch and modes | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
+| 4a | Pre-trade rails | Fable 5.1 (else Opus 5.5) | xhigh | Custom | one order test |
 | 5 | Execution mechanics | Fable 5.1 (else Opus 5.5) | xhigh | Custom | conversion and stop-limit tests |
 | 6 | Walking skeleton | Opus 5.5 | xhigh | Custom | one supervised cycle |
 | 7 | Capital, cash flows and tax | Opus 5.5 | xhigh | Custom | read-only |
@@ -170,6 +174,10 @@ Client Portal Gateway itself.
 | 19 | Cockpit, settings and deployment | Sonnet 5.5 | xhigh | Custom | full preflight |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 21 | Research: first pattern batch | Opus 5.5 | xhigh | **Full** | — |
+
+The paper Gateway login does not complete from a cloud container (docs/knowledge/ibkr.md):
+until the deployment machine logs in, the live steps in this column are queued
+`VERIFY-LIVE` rather than run.
 
 Only Session 1 needs attachments. Fable goes where a subtle mistake costs money; Opus on
 architecture and statistics; Sonnet on well-specified ports. Every session runs one
@@ -538,27 +546,33 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
-## Session 4 — Order path and safety rails
+## Session 4 — Order path, kill switch and modes
 
 **Launcher:** `Execute Session 4 exactly as specified in docs/SESSION_PROMPTS.md on main.`
 
 ```
 You are building ObliskIQ, session 4. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §2, §5.11, §5.12, §5.13, §5.19 carefully). This is the highest-risk code
-in the project: every ambiguity fails closed. Finish with the end-of-session protocol.
+the design (read §2, §5.12, §5.13, §5.19 carefully). This is the highest-risk code in the
+project: every ambiguity fails closed. Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 1–3 merged. Otherwise STOP.
 
-GOAL: orders that can never be sent twice, never violate the mandate, are always
-limit-capped, follow the quote policy, and stop the moment anything is unexpected.
+GOAL: orders that can never be sent twice, are always limit-capped, confirm only the
+replies the policy allows, and stop the moment anything is unexpected — with the kill
+switch, the modes and the paper guard at the broker-write boundary, and no write possible
+without a pre-trade clearance. Session 4a builds the pre-trade checks above this boundary.
 
-REFERENCE (read, do not depend on it): ibind (Apache-2.0). `pip download ibind --no-deps
--d /tmp/ibind` and read ibind/client/ibkr_client_mixins/order_mixin.py and
+REFERENCE (read at the source, do not depend on it): ibind (Apache-2.0). `pip download
+ibind --no-deps -d /tmp/ibind` and read ibind/client/ibkr_client_mixins/order_mixin.py and
 ibind/client/ibkr_utils.py (QuestionType, message ids, the question/answer loop); also
-raw.githubusercontent.com/Voyz/ibind/master/docs/oauth/oauth_1a.md. And
-legacy/old/ObliskIQ/modules/execution/{paper_gate,monitoring_suite}.py with tests.
-Port lite's `instruments` and `discipline` keys you consume (prohibited categories,
-limit-only entries, allowed exit reasons).
+raw.githubusercontent.com/Voyz/ibind/master/docs/oauth/oauth_1a.md. Legacy, by symbol,
+with the helpers they call: legacy/old/ObliskIQ/modules/execution/paper_gate.py
+(`LiveTradingBlockedError`, `assert_live_trading_allowed`, the module docstring) and
+monitoring_suite.py (`MonitoringSuite.check_trading_allowed`, `should_halt_reflexivity`);
+legacy/old/ObliskIQ/tests/test_kill_switch_wiring.py whole, and the tests of those symbols
+in test_paper_gate.py and test_monitoring_suite.py. Paper_gate's promotion criteria belong
+to Session 18. Port lite's `discipline` keys you consume (limit-only entries, allowed exit
+reasons: legacy/lite/config.yaml:333-350).
 
 DELIVERABLES
 1. domain/: OrderIntent (id = uuid.uuid7(); sleeve; thesis_id?; conid; side; Decimal
@@ -573,61 +587,121 @@ DELIVERABLES
    deterministic short form with a stored mapping), reply, status, live orders, trades,
    cancel, modify, and the fields for currency conversion orders (isCcyConv, fxQTY) —
    used in Session 5. place_idempotent(): looks the cOID up in live orders and trades
-   before any placement.
-4. Reply policy (config): confirm only whitelisted message ids. o354 (no market data) is
+   before any placement. Only limit-capped order types can be built; never a plain market
+   order.
+4. The clearance lock: place, place_idempotent and modify take a PretradeClearance bound
+   to the intent id, and only the pre-trade gate (execution/pretrade.py) issues one; a
+   guard test fails if anything else under src/ constructs it. This session ships the gate
+   failing closed: every intent is refused with reason `pretrade_unavailable`. Session 4a
+   replaces it with the checks. cancel needs no clearance, so the kill switch works when
+   everything else fails.
+5. Reply policy (config): confirm only whitelisted message ids. o354 (no market data) is
    confirmed only when the asset class's quote policy accepts delayed quotes AND a fresh
    delayed quote exists AND the order is limit-capped inside the collar. Unknown message
-   → confirmed=false, cancel, alert.
-5. execution/state.py: proposed → approved → staged → submitted → working →
+   → confirmed=false, cancel, alert. The quote policy per asset class (options
+   realtime_required on the option AND its underlying; others realtime_preferred with a
+   maximum delay) and the collar = base + k·σ·√(delay) are defined here, because the
+   reply policy needs them; Session 4a's pre-trade check reuses them.
+6. execution/state.py: proposed → approved → staged → submitted → working →
    partially_filled → filled | cancelled | rejected | expired; illegal transitions raise;
    every transition appends an IntentEvent. Property tests.
-6. execution/pretrade.py (each failure has a reason code): paper guard (profile paper ⇒
+7. execution/modes.py: shadow (simulated fills with quant/costs), paper, live-small, live;
+   upgrades by explicit command with audit; downgrades automatic. The write boundary
+   refuses any write the mode does not permit, and re-checks the paper guard (profile
+   paper ⇒ paper-prefix account) before every write.
+8. execution/killswitch.py: file + DB flag + CLI `obliskiq kill on|off`; checked
+   immediately before every broker write; ON cancels working entry orders and never
+   cancels orders with role protective. `obliskiq flatten --confirm` is separate
+   (Session 4a: it places closing orders, which pass the gate).
+9. A stateful fake broker built with respx (orders, replies, status, trades, cancels) that
+   Session 4a and Session 5 extend.
+10. docs/knowledge/ibkr-orders.md: endpoints, fields and message ids (from ibind and IBKR
+    docs), each tagged; live shapes join it in Session 4a or when a paper login works.
+
+TESTS (failure branches are the point), on the stateful fake broker: unknown reply; o354
+with and without a delayed policy and a fresh quote; o354 with a stale quote, with a delayed
+quote beyond the maximum age, and outside the collar; whatif warning; rejection; cancel
+race; crash between place and status (no double placement); duplicate intent; place or
+modify without a clearance refused; the shipped gate refuses every intent; kill switch
+while working (entries cancelled, protective kept), also while the gate refuses; mode
+downgrade mid-cycle; a write the mode does not permit; live account id under the paper
+profile → refused at the write boundary.
+
+ACCEPTANCE: every reply-policy branch and write-boundary refusal tested; no plain market
+order constructible (test); no broker write without a clearance (guard test); mypy strict;
+import contracts green; the PR lists the reply message ids with their tests.
+OUT OF SCOPE: the pre-trade checks, the approval queue, `flatten` and the paper order test
+(Session 4a); currency conversion, pricing, protective exits, executor, reconciliation
+(Session 5).
+Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
+## Session 4a — Pre-trade rails
+
+**Launcher:** `Execute Session 4a exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 4a. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §2, §5.11, §5.12, §5.13, §5.16 carefully). Every ambiguity fails
+closed. Finish with the end-of-session protocol.
+
+PRECONDITION: Sessions 1–4 merged. Otherwise STOP.
+
+GOAL: no order reaches the broker unless every pre-trade check passes — mandate,
+eligibility, holdings, cash, caps, quote policy, calendars, kill switch, mode and
+approval — and every refusal carries a reason code.
+
+READ: Session 4's code (the write boundary, the clearance, the quote policy and collar, the
+fake broker) and docs/knowledge/ibkr-orders.md; Session 3's cash and quote reads; Session
+2's Calendars (docs/knowledge/calendars.md). Port lite's `instruments` keys you consume
+(prohibited categories, the futures-options switch, the leveraged and inverse markers:
+legacy/lite/config.yaml:270-332) and any `discipline` keys Session 4 left
+(legacy/lite/config.yaml:333-350).
+
+DELIVERABLES
+1. execution/pretrade.py replaces Session 4's fail-closed gate and stays the only issuer of
+   PretradeClearance. Each failure has a reason code: paper guard (profile paper ⇒
    paper-prefix account); eligibility through an EligibilityPolicy protocol in
    jurisdiction/ (the eu_priips policy arrives in Session 8; until then es.yaml selects a
    skeleton policy that allows only the instruments in config
    `eligibility.skeleton_allowlist`, labelled skeleton and removed in Session 8);
-   prohibited categories (futures, futures
-   options, written options, leveraged and inverse products); no short (sell ≤ held;
-   options sell-to-close only); never touch `unmanaged` holdings; no leverage (whatif
-   shows no margin use; cash in the order's currency, read from Session 3's balances,
-   covers the order and the floor — an order in a currency the account does not hold is
-   refused until Session 5 can fund it by conversion); notional caps per order
-   and per day; maximum orders per day; quote policy per asset class (options
-   realtime_required on the option AND its underlying; others realtime_preferred with a
-   maximum delay); collar = base + k·σ·√(delay); `Calendars.tradability` ok at the order
-   instant (Session 2's act-now view, not the planning `venue_status`; an option also inside
-   `common_windows` with its underlying's venue); kill switch off; mode permits writes; approval present
-   if required; the mandatory-close rule for options on ineligible ETPs.
-7. execution/modes.py: shadow (simulated fills with quant/costs), paper, live-small, live;
-   upgrades by explicit command with audit; downgrades automatic.
-8. execution/killswitch.py: file + DB flag + CLI `obliskiq kill on|off`; checked
-   immediately before every broker write; ON cancels working entry orders and never
-   cancels orders with role protective; `obliskiq flatten --confirm` is separate.
-9. An optional approval queue (off by default, per-sleeve config).
-10. LIVE (if paper credentials are present and the guard passes): `obliskiq preflight
-    --paper-order-test` — whatif, then place one non-marketable limit order for the
-    minimum quantity of a UCITS ETF in the base currency and of a liquid US stock (both
-    in the skeleton allowlist; if the paper account holds no USD, the stock order must be
-    refused by the cash check, and that refusal is the recorded outcome), read status and
-    reply messages, cancel. Record request and response
-    shapes, reply message ids, cOID
-    behaviour and the algos offered in docs/knowledge/ibkr-orders.md as [CP ✓ <date>].
-11. docs/knowledge/ibkr-orders.md: endpoints, fields and message ids (from ibind, IBKR docs
-    and the live test), each tagged.
+   prohibited categories (futures, futures options, written options, leveraged and inverse
+   products); no short (sell ≤ held; options sell-to-close only); never touch `unmanaged`
+   holdings; no leverage (whatif shows no margin use; cash in the order's currency, read
+   from Session 3's balances, covers the order and the floor — an order in a currency the
+   account does not hold is refused until Session 5 can fund it by conversion); notional
+   caps per order and per day; maximum orders per day; the quote policy per asset class
+   and the collar (Session 4's definitions); `Calendars.tradability` ok at the order
+   instant (Session 2's act-now view, not the planning `venue_status`; an option also
+   inside `common_windows` with its underlying's venue); kill switch off; mode permits
+   writes; approval present if required; the mandatory-close rule for options on
+   ineligible ETPs.
+2. An optional approval queue (off by default, per-sleeve config).
+3. `obliskiq flatten --confirm`: closing orders for the managed positions, through the
+   gate; separate from the kill switch.
+4. `obliskiq preflight --paper-order-test` — whatif, then place one non-marketable limit
+   order for the minimum quantity of a UCITS ETF in the base currency and of a liquid US
+   stock (both in the skeleton allowlist; if the paper account holds no USD, the stock
+   order must be refused by the cash check, and that refusal is the recorded outcome),
+   read status and reply messages, cancel — built and tested against the fake broker.
+   LIVE: the paper Gateway login does not complete from a cloud container
+   (docs/knowledge/ibkr.md), so from the cloud queue VERIFY-LIVE(paper order test) for
+   the deployment machine (Sessions 6, 19). Where the login works and the guard passes,
+   run it and record request and response shapes, reply message ids, cOID behaviour and
+   the algos offered in docs/knowledge/ibkr-orders.md as [CP ✓ <date>].
 
-TESTS (failure branches are the point), on a stateful fake broker built with respx:
-unknown reply; o354 with and without a delayed policy and a fresh quote; whatif warning;
-rejection; cancel race; crash between place and status (no double placement); duplicate
-intent; stale quote; delayed quote beyond the maximum age; option order without a
-real-time quote on the option, and on the underlying; collar breach; DST window edge;
-venue blocked by an incident; a calendar disagreement blocking an option order near
-its last tradable session but not a stock order; kill switch while working
-(entries cancelled, protective kept); mode downgrade mid-cycle; sell above the position;
-option sell-to-open; a prohibited product; live account id under the paper profile →
-refused.
+TESTS (failure branches are the point), on Session 4's fake broker: every reason code with
+its positive control; option order without a real-time quote on the option, and on the
+underlying; collar breach; DST window edge; venue blocked by an incident; a calendar
+disagreement blocking an option order near its last tradable session but not a stock order;
+sell above the position; option sell-to-open; a prohibited product; an `unmanaged`
+holding; a currency the account does not hold; caps per order and per day; approval
+missing; live account id under the paper profile → refused.
 
 ACCEPTANCE: every reason code tested; mypy strict; import contracts green; the PR lists
-the reason codes with their tests and the live findings.
+the reason codes with their tests and the live findings or the VERIFY-LIVE queued.
 OUT OF SCOPE: currency conversion, pricing, protective exits, executor, reconciliation
 (Session 5).
 Finish with the end-of-session protocol in AGENTS.md.
@@ -644,13 +718,13 @@ You are building ObliskIQ, session 5. AGENTS.md is your operating manual; MASTER
 the design (read §2, §5.12, §5.13 carefully). Money paths fail closed. Finish with the
 end-of-session protocol.
 
-PRECONDITION: Sessions 1–4 merged. Otherwise STOP.
+PRECONDITION: Sessions 1–4a merged. Otherwise STOP.
 
 GOAL: an intent becomes a filled, protected, reconciled position: funded in its currency,
 priced patiently, protected at the broker, resumable after a crash.
 
-READ: Session 4's code and docs/knowledge/ibkr-orders.md; legacy/lite/config.yaml
-`positions` (single-foreign-currency cap: port that key).
+READ: the code of Sessions 4 and 4a and docs/knowledge/ibkr-orders.md;
+legacy/lite/config.yaml:118-133 `positions` (single-foreign-currency cap: port that key).
 
 DELIVERABLES
 1. execution/currency.py — the currency manager: base currency from config; working
@@ -658,7 +732,7 @@ DELIVERABLES
    is funded in its own currency by a limit-capped spot conversion (isCcyConv / fxQTY)
    shortly before it; conversions batched to amortise the minimum commission; a buffer
    per active currency; excess repatriated; any intent that would leave a negative
-   balance in any currency is refused (this extends Session 4's cash check with funding
+   balance in any currency is refused (this extends Session 4a's cash check with funding
    by conversion).
    Valuation rates from IBKR; ECB reference rates only for reporting.
 2. execution/pricing.py: (a) an IBKR algo or peg with a limit cap, chosen from the
@@ -716,12 +790,12 @@ GOAL: the system runs end to end — schedule → targets → intents → execut
 → digest — with a deliberately trivial static target portfolio. Later sessions replace
 stubs, not plumbing.
 
-READ: legacy/lite/src/obliskiq/collect/{sequence,runlog,status}.py, legacy/lite
-docs/DECISIONS.md "Running unattended"; legacy/old/ObliskIQ/modules/notifications/
+READ: legacy/lite/src/obliskiq/collect/{sequence,runlog,status}.py,
+legacy/lite/docs/DECISIONS.md:382-511 "Running unattended"; legacy/old/ObliskIQ/modules/notifications/
 {telegram_notifier,run_summary}.py and test_run_summary.py;
 legacy/pulse/src/market_pulse_bot/{text_formatter,notification_backend}.py (badge language
 and message state); legacy/lite/src/obliskiq/{store,collect}/nav.py. Port
-lite's `runtime` keys you consume.
+lite's `runtime` keys you consume (legacy/lite/config.yaml:741-751).
 
 DELIVERABLES
 1. orchestration/: one asyncio service `obliskiq serve`: heartbeat (config interval);
@@ -833,7 +907,7 @@ DELIVERABLES
    freeze new buys, alert, wait for classification.
 8. Time-weighted return over Session 6's NAV rows (flows neutralised; convention in
    config).
-9. jurisdiction/: the TaxPolicy protocol, registered beside Session 4's EligibilityPolicy
+9. jurisdiction/: the TaxPolicy protocol, registered beside Session 4a's EligibilityPolicy
    in the Session 1 registry. tax/: Lot domain and migration; a LotEngine using the
    policy's lot method.
    jurisdiction/tax_es_irpf.py (`es_irpf`), selected by es.yaml, with its data in that
@@ -890,11 +964,12 @@ GOAL: a global universe where any instrument can be data and only eligible ones 
 bought, single-stock candidates for every grid cell, and the market-data collectors.
 
 READ: legacy/lite/universe.yaml (all), legacy/lite/src/obliskiq/collect/*.py,
-legacy/lite/docs/COLLECTORS.md, legacy/lite/docs/DECISIONS.md sections "Instruments,
-PRIIPs and wrappers", "Data and collection", "The European chains…", "The market axis,
-realigned for allocation", "Two collector defects…"; legacy/old/ObliskIQ/modules/config/
-global_vehicles.py. Port lite's `collectors` and `data` keys you consume (Session 2 ported
-`calendars` into `config/defaults/venues.yaml`).
+legacy/lite/docs/COLLECTORS.md, legacy/lite/docs/DECISIONS.md:166-381, 2190-2331,
+2673-2967 (sections "Instruments, PRIIPs and wrappers", "Data and collection", "The
+European chains…", "The market axis, realigned for allocation", "Two collector defects…");
+legacy/old/ObliskIQ/modules/config/global_vehicles.py. Port lite's `collectors` and `data`
+keys you consume (legacy/lite/config.yaml:351-433, 1113-1260; Session 2 ported `calendars`
+into `config/defaults/venues.yaml`).
 
 DELIVERABLES
 1. config/universe.yaml: grid axes ported from lite (markets, 12 sectors, unmapped_cells
@@ -920,7 +995,7 @@ DELIVERABLES
    and inverse products rejected at ingestion by resolved description (lite's match list);
    futures-tracking ETCs eligible only while lite's contango rule passes, through a
    ContangoCheck interface that fails closed until Session 12 implements it; corporate
-   bonds off by default. es.yaml now selects it; wired into Session 4's pre-trade; the
+   bonds off by default. es.yaml now selects it; wired into Session 4a's pre-trade; the
    skeleton allowlist policy and its config key are removed (the skeleton targets must
    pass eu_priips).
 5. data/market/: port universe (seed, pin, supersede), backfill, snapshots (settle loop,
@@ -1025,15 +1100,15 @@ GOAL: point-in-time macro, positioning, insider and event data for the core, the
 and the Hunter, plus the halt feeds that keep orders away from halted instruments.
 
 READ: legacy/lite/src/obliskiq/macro/*.py, legacy/lite/references/macro-playbook.md (all),
-legacy/lite/docs/DECISIONS.md "Collection without credentials, and what positioning
-measures"; legacy/old/ObliskIQ/modules/market/{cftc_cot_analyzer,gdelt_client,
+legacy/lite/docs/DECISIONS.md:1194-1407 "Collection without credentials, and what
+positioning measures"; legacy/old/ObliskIQ/modules/market/{cftc_cot_analyzer,gdelt_client,
 polymarket_client,rss_news_enhanced,vader_financial_lexicon}.py,
 scripts/backfill_cot_history.py, config/{gdelt_regions,polymarket_markets,
 event_calendar}.json, docs/{COT_REAL,GEO_INPUTS}.md and the tests Session 1 snapshotted
 for them (rss_sources, vader_financial_lexicon included);
 legacy/pulse/src/market_pulse_bot/halt_detector.py, config/exchanges.yaml
 (`incident_source`), README.md (incident coverage) and tests/test_incidents.py. Port
-lite's `macro` keys you consume.
+lite's `macro` keys you consume (legacy/lite/config.yaml:826-1112).
 
 DELIVERABLES
 1. data/macro/: port FRED/ALFRED (output_type=4, vintage windows, value_vintage
@@ -1097,11 +1172,12 @@ views, rankings, cross-asset correlations, the session-level IV solve and a real
 forecast.
 
 READ: legacy/lite/src/obliskiq/compute/{frames,indicators,build_grid,rankings,
-universe_census,iv_solve}.py, legacy/lite/docs/COMPUTE.md (all), legacy/lite/docs/
-DECISIONS.md sections "The grid", "The correlation matrix reaches beyond equities…", "The
-implied term structure…", "Reading the whole bar…", "The grid says which way it is
-moving", "A guard is verified by mutation, not by being green", and the matching tests.
-Port lite's `grid` and `census` keys you consume.
+universe_census,iv_solve}.py, legacy/lite/docs/COMPUTE.md (all),
+legacy/lite/docs/DECISIONS.md:512-874, 1408-1559, 1735-1854, 3144-3215 (sections "The
+grid", "The correlation matrix reaches beyond equities…", "The implied term structure…",
+"Reading the whole bar…", "The grid says which way it is moving", "A guard is verified by
+mutation, not by being green"), and the matching tests. Port lite's `grid` and `census`
+keys you consume (legacy/lite/config.yaml:434-572).
 
 DELIVERABLES
 1. Migration and store: measurements(entity_kind, entity_id, indicator, leaf, as_of, value,
@@ -1140,12 +1216,13 @@ GOAL: the option surface view and the lite engines — options sleeve, risk, fx,
 — plus the candidate gates, composed once and reused everywhere.
 
 READ: legacy/lite/src/obliskiq/compute/{gates,screen,risk_engine,penalty,fx_engine,
-commodity_engine,catalysts,smile}.py, legacy/lite/docs/DECISIONS.md sections "The option
-sleeve", "The equity sleeve", "Volatility, risk and the screen", "The credit tier is a
-date comparison…", "A guard is verified by mutation, not by being green", and the matching
-tests; legacy/lite/references/commodities-universe.md. Port lite's `option_sleeve`,
-`tenor`, `zombie_test`, `equity_risk`, `fx_inflation`, `commodities`, `screen`,
-`liquidity` and `smile` keys you consume (Session 2 ported part of the last two into
+commodity_engine,catalysts,smile}.py, legacy/lite/docs/DECISIONS.md:37-131, 875-919,
+1855-1911, 3144-3215 (sections "The option sleeve", "The equity sleeve", "Volatility, risk
+and the screen", "The credit tier is a date comparison…", "A guard is verified by
+mutation, not by being green"), and the matching tests;
+legacy/lite/references/commodities-universe.md. Port lite's `option_sleeve`, `tenor`,
+`zombie_test`, `equity_risk`, `fx_inflation`, `commodities`, `screen`, `liquidity` and
+`smile` keys you consume (legacy/lite/config.yaml:37-117, 134-144, 156-269, 581-719) (Session 2 ported part of the last two into
 `config/defaults/{liquidity,smile}.yaml`; extend those files), except
 `option_sleeve.budget_pct`: the option budget is read from Session 7's `capital.budgets`
 (one owner; recorded in DECISIONS).
@@ -1443,7 +1520,7 @@ READ: legacy/lite/src/obliskiq/server/guards.py; decision/gates.py and the engin
 phase4_decision_engine.py (apply_quarter_kelly_clamp only), modules/data/
 crisis_database.py, research/validation/{stress_tester,monte_carlo}.py and
 test_crisis_database.py. Port lite's `positions` and `portfolio_circuit_breaker` keys you
-consume.
+consume (legacy/lite/config.yaml:118-133, 145-155).
 
 DELIVERABLES
 1. decision/expression.py: a long option when the IV percentile is at or below threshold,
@@ -1580,9 +1657,9 @@ updates and rolls back unattended on any small always-on Linux machine.
 
 READ: legacy/lite/src/obliskiq/server/*, docs/{SERVER,DEPLOY,ORACLE-CLOUD,GOOGLE-CLOUD}.md,
 deploy/*, Dockerfile and _claude/skills/obliskiq-lite/SKILL.md, all under legacy/lite/;
-legacy/lite/ROADMAP.legacy.md section "What the second provider measured (2026-10-04)";
-legacy/lite/docs/DECISIONS.md "Deploying to the VM…" and "Two providers, one walkthrough".
-Port lite's `server` keys you consume.
+legacy/lite/ROADMAP.legacy.md:146-252 "What the second provider measured (2026-10-04)";
+legacy/lite/docs/DECISIONS.md:1046-1159 ("Deploying to the VM…" and "Two providers, one
+walkthrough"). Port lite's `server` keys you consume (legacy/lite/config.yaml:720-740).
 
 DELIVERABLES
 1. server/: the MCP cockpit (port: bearer auth, streamable HTTP, loopback by default, an
