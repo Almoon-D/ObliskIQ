@@ -256,6 +256,9 @@ settles it.
   (D34). Decide, before Session 6 runs the bot on a machine: try the Gateway login there (Session
   6/19 checks it first), ask IBKR again about OAuth for the paper login, or accept a daily manual
   login. Until then sessions build against fixtures.
+- Session 8: a request waiting for its group's window holds a concurrency permit, so a slow
+  group (`scanner_params`, `portfolio_accounts`) can idle a permit other groups could use. Pacing
+  is unaffected; revisit the limiter's throughput with the collectors.
 - Session 4: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per
   currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis` (`documented_bound`
   for delayed quotes, D38), and calls `IbkrClient.start()` so the account guard runs first.

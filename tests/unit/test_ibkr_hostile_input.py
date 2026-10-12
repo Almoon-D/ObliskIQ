@@ -196,6 +196,6 @@ def test_a_bad_currency_is_absent():
 
 
 def test_the_guard_never_shows_the_account_id_in_its_repr():
-    guard = AccountGuard(account_id="DU1234567", profile="paper", paper_prefixes=("DU",))
-    assert "1234567" not in repr(guard)
+    guard = AccountGuard(account_id="DU12345", profile="paper", paper_prefixes=("DU",))
+    assert "12345" not in repr(guard)
     assert "paper" in repr(guard)
