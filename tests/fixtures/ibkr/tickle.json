@@ -1,0 +1,4 @@
+{"session": "SESSION_PLACEHOLDER", "ssoExpires": 460311, "collission": false, "userId": 0,
+ "hmds": {"error": "no bridge"},
+ "iserver": {"authStatus": {"authenticated": true, "competing": false, "connected": true, "message": "",
+                            "MAC": "00:00:00:00:00:00", "serverInfo": {"serverName": "SERVER", "serverVersion": "VERSION"}}}}

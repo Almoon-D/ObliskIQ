@@ -6,6 +6,7 @@ developer's own credentials or overrides can never change a result.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import asyncio
 import os
 import shutil
 from collections.abc import Callable, Iterator
@@ -13,6 +14,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from hypothesis import settings
 
@@ -29,7 +31,10 @@ from obliskiq.domain.instrument import Instrument
 from obliskiq.domain.macro import MacroObservation
 from obliskiq.domain.market import Bar, ChainRow, CurvePoint, Snapshot
 from obliskiq.env import variable_names
+from obliskiq.ibkr.session import BrokerSession
+from obliskiq.ibkr.transport.base import TransportKind
 from obliskiq.store import Store, open_database
+from obliskiq.util.http import RetryPolicy
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -305,5 +310,100 @@ def make_observation() -> Callable[..., MacroObservation]:
         }
         fields.update(overrides)
         return MacroObservation(**fields)
+
+    return build
+
+
+# ── IBKR test support ──
+
+
+class FakeClock:
+    """Virtual time for the rate limiter and the session: sleeping advances the clock.
+
+    Concurrent sleepers each resume at or after the instant they asked for, so pacing that is
+    correct against this clock is correct against a real one.
+    """
+
+    def __init__(self, start: float = 1_000.0) -> None:
+        self.now = start
+        self.slept: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        target = self.now + max(seconds, 0.0)
+        await asyncio.sleep(0)
+        self.now = max(self.now, target)
+
+
+class FakeTransport:
+    """A transport that needs no login: it counts prepares and recoveries."""
+
+    def __init__(self, base_url: str = "https://gw.test/v1/api") -> None:
+        self._base_url = base_url
+        self.prepared = 0
+        self.recovered = 0
+        self.closed = 0
+        self.fail_recover: Exception | None = None
+
+    @property
+    def kind(self) -> TransportKind:
+        return TransportKind.GATEWAY
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    def verify(self) -> bool:
+        return True
+
+    async def prepare(self) -> None:
+        self.prepared += 1
+
+    async def headers(self, method: str, url: str, params: Any) -> dict[str, str]:
+        return {"Accept": "application/json"}
+
+    async def recover(self) -> None:
+        self.recovered += 1
+        if self.fail_recover is not None:
+            raise self.fail_recover
+
+    async def aclose(self) -> None:
+        self.closed += 1
+
+
+#: The base URL every IBKR test mocks.
+IBKR_BASE = "https://gw.test/v1/api"
+
+
+@pytest.fixture
+def fake_clock() -> FakeClock:
+    return FakeClock()
+
+
+@pytest.fixture
+def fake_transport() -> FakeTransport:
+    return FakeTransport(IBKR_BASE)
+
+
+@pytest.fixture
+def make_session(
+    shipped_settings: ObliskConfig, fake_clock: FakeClock, fake_transport: FakeTransport
+) -> Callable[..., BrokerSession]:
+    """A BrokerSession over the fake transport and clock, its HTTP mocked with respx."""
+
+    def build(**overrides: Any) -> BrokerSession:
+        kwargs: dict[str, Any] = {
+            "clock": fake_clock,
+            "http": httpx.AsyncClient(),
+        }
+        ibkr = overrides.pop("ibkr", shipped_settings.ibkr)
+        kwargs.update(overrides)
+        transport = kwargs.pop("transport", fake_transport)
+        return BrokerSession(
+            transport, ibkr, RetryPolicy.from_settings(shipped_settings.http), **kwargs
+        )
 
     return build

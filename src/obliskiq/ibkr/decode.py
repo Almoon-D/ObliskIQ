@@ -129,7 +129,7 @@ def split_list(raw: Any) -> tuple[str, ...]:
 
 
 def to_decimal(raw: Any) -> Decimal | None:
-    """An exact amount, or ``None`` for absent, unparseable or non-finite input.
+    """An exact amount, or ``None`` for absent, unparseable, non-finite or overflowing input.
 
     A float is read through its shortest ``repr``, so ``0.1`` becomes ``Decimal("0.1")`` and not
     the binary expansion; thousands separators are removed from text.
@@ -147,7 +147,11 @@ def to_decimal(raw: Any) -> Decimal | None:
         value = Decimal(text)
     except InvalidOperation:
         return None
-    return value if value.is_finite() else None
+    # A finite Decimal can still be absurd (``1e999``): an amount no float can hold is not an
+    # amount, the same rule safe_float applies.
+    if not value.is_finite() or not math.isfinite(float(value)):
+        return None
+    return value
 
 
 def currency_code(raw: Any) -> str | None:

@@ -440,3 +440,106 @@ with `deadline=None` and, in CI, derandomised; the property tests share stateles
 fixtures through an explicit health-check suppression. The golden snapshot of 207 sessions
 (`tests/fixtures/calendars/`) pins what the library says on nine dates; a library upgrade that
 moves one fails the test and is reviewed, not absorbed.
+
+## Session 3 — IBKR read path (2026-10-12)
+
+### D33 · Two transports, one session layer
+
+`ibkr/transport/` holds one `Transport` protocol and two implementations chosen by
+`OBLISK_IBKR_TRANSPORT`: `oauth` (lite's OAuth 1.0a, ported in substance, plus renegotiation
+inside the refresh margin and on `recover()`) and `gateway` (IBKR's Client Portal Gateway,
+installed from a pinned archive and logged in by a headless browser). `ibkr/session.py` sits above
+both: one request pipeline (limiter → transport headers → HTTP → `classify`) whose repairs come
+from the error class, so a 401 is repaired the same way whatever the transport. Rejected: a
+transport-specific client (two places to fix the next lite-style finding), and IBeam as a
+dependency (a separate service with its own configuration; it was read as a reference only).
+
+### D34 · The Gateway's trust, runtime and login
+
+The shipped Gateway certificate expired in 2019 and names no host, so a client could only use it
+with verification disabled, which AGENTS.md forbids. Each install generates its own key pair for
+`localhost` with `keytool`; the HTTP client verifies against exactly that certificate with
+hostname checks on, and the browser accepts only its public key
+(`--ignore-certificate-errors-spki-list`). The archive is accepted only at the pinned size and
+SHA-256 (IBKR publishes it at an unversioned URL). The Gateway refuses profile `live`: a live login
+needs the owner's second factor. Its Java runtime is selectable (`OBLISK_IBKR_GATEWAY_JAVA_HOME`)
+and gated by `ibkr.gateway.java_major_versions: [11]` — the version the Gateway's guide names and
+the one on which the login reached "Client login succeeds" once. Playwright is a runtime
+dependency pinned to `>=1.56,<1.57`, the build whose Chromium (1194) the cloud image carries.
+The login types key by key and waits before submitting (`keystroke_delay_ms`,
+`presubmit_wait_seconds`): submitted at once, IBKR answered "Authentication failed". A refused
+password is never retried (repeats can lock the username); an accepted password without a session
+is retried up to `max_attempts`.
+
+**The login did not establish a session from the cloud container** (docs/knowledge/ibkr.md,
+"Session 3"). The transport is kept as built, because the failure is after IBKR accepted the
+credentials and IBKR documents that it does not support automating this login; whether it holds
+on the owner's machine is the first live check of the deployment. If it does not, the remaining
+routes are OAuth (if IBKR grants it) or a login the owner performs daily — a design question for
+the owner, not something to improvise.
+
+### D35 · Pacing below the published caps
+
+IBKR penalty-boxes an IP for 15 minutes on any violation, so the limits are enforced before a
+request is sent, never learnt from a 429. Every window is set below the published cap (9/s for
+10/s, 45/min for 50/min, one per 6 s for one per 5 s, 16 minutes for 15) because the server
+measures arrival, not departure. Windows are sliding and reserved atomically after a concurrency
+permit is held, so the reserved instant is the sending instant. A `Retry-After` pauses the whole
+endpoint group. A group that fails five times in a row opens its circuit for 60 s, then lets one
+probe through. Groups are a list of records (paths and windows) rather than a mapping, so an owner
+override replaces them whole and the unread-key scan reads the list as one key.
+
+### D36 · Errors are classified by body, and each class says what may follow
+
+`classify` keeps lite's body rules (the `/accounts` precondition, the two no-data bodies) and adds
+one: `429 {"error":"Exceed number of conids"}` is a malformed request, never retried. A 401 or a
+lost precondition re-arms once (`ssodh/init` first, then both accounts endpoints, as lite measured)
+and, if that fails, re-authenticates the transport once more before raising: a dropped session
+that `ssodh/init` cannot revive (IBKR's daily reset) needs a new login, not a fourth re-arm. A 403
+is never retried. A competing session or a session that stopped being authenticated (seen on the
+tickle) is re-established and alerted through a hook; lite only logged them.
+
+### D37 · Values changed from lite
+
+- `secdef.accept_first_on_no_exact_match` is `false` (lite: `true`): the session prompt requires an
+  ambiguous resolution to be refused, and lite's own reading shows the first row can be an
+  unrelated instrument. Contract identity (`ibkr/identity.py`) also confirms the currency and the
+  listing venue through `/iserver/contract/{conid}/info` before a conid is accepted.
+- `secdef.send_sec_type: false` (new): IBKR removed `secType` from the search on 2026-09-09; rows
+  are filtered by their sections instead. VERIFY-LIVE.
+- Snapshot field ids, from IBKR's field table: `open_interest` `7638` (lite `7089`, which the
+  table names option volume); per-contract `implied_vol` `7633` (lite `7283`, the underlying's
+  30-day at-the-money vol — kept for the underlying set, where lite measured it); `vega` `7311` and
+  `theta` `7310` (lite had them swapped); `historical_vol_30d` `7087` (lite `7284`, now
+  deprecated). Each is VERIFY-LIVE.
+- `ibkr.history.max_bars_per_request` is dropped: lite declared it and nothing read it; the probe
+  replaces it. `sessions_per_year: 252` joins `history` (lite's `data.trading_days_per_year`, which
+  the chunk probe consumes).
+- `http` keys are lite's values; `ibkr.session.tickle_interval_seconds` stays 45 although IBKR asks
+  for ~60.
+
+### D38 · Market-data availability and delay
+
+Field 6509's first character decides the status (IBKR's table); MCP-style spellings still decode
+through the domain enum. A snapshot does not say how late a delayed quote is, so a delayed quote
+carries IBKR's documented upper bound (1200 s) with the basis `documented_bound`, and a real-time
+quote 0 with basis `realtime`; frozen and none carry no delay. A labelled bound is used rather than
+none because Session 4's collar widens with the delay and an absent delay would have to refuse
+every delayed order.
+
+### D39 · The trading-schedule cross-check
+
+IBKR's `GET /contract/trading-schedule` is the third schedule source: `liquid_hours` per day
+becomes a regular-session observation; `observe()` reads a cache filled by `refresh()` from one
+reference contract per venue. XEUR is skipped (`trading_schedule.skip_venues`): Eurex product
+hours differ from the library's venue hours and would disagree daily (the Session 2 follow-up).
+A weekday missing inside the returned span reads as closed, because IBKR documents that it omits
+non-trading days; a disagreement only blocks date-critical orders, so this errs towards caution.
+
+### D40 · The read client's surface
+
+Every method is a read. Results are frozen pydantic models in `ibkr/models.py`, distinct from the
+domain models Session 4 adds; money (cash, NAV, positions) is `Decimal`, and an amount a float
+cannot hold is absent. The NAV is read only in the configured base currency and refused, never
+converted, otherwise. Positions, cash and NAV are never printed by the preflight. Configuration is
+read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees each key.

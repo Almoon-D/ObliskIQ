@@ -1,0 +1,280 @@
+# IBKR Client Portal Web API
+
+Observed behaviour of IBKR's Web API and the routes around it, with where and when each fact was
+seen. Condensed from ObliskIQ-lite-MCP's `references/ibkr-playbook.md` (legacy/lite, @b1ebd49),
+keeping every verified finding, plus what IBKR documents and what Session 3 measured. Values the
+code uses live in `config/defaults/ibkr.yaml`; why they were chosen is `docs/DECISIONS.md`.
+
+## Routes and tags
+
+Three IBKR routes behave differently, so every line names the one it was seen on:
+
+- **CP** — the Client Portal Web API (`/v1/api`), over OAuth 1.0a or through the Client Portal
+  Gateway. The route this package speaks.
+- **MCP** — the IBKR MCP connector's tools inside a chat session.
+- **CONNECTOR** — the same tools at IBKR's Custom Connector endpoint
+  (`https://api.ibkr.com/v1/api/mcp-public`), an OAuth 2.0 resource.
+
+`[CP ✓ <date>]` verified live on that date; `[DOC <date>]` read in IBKR's documentation on that
+date and not executed; `VERIFY-LIVE(<what>)` built against fixtures (queued in
+`docs/ROADMAP.md`). A finding on MCP or CONNECTOR is **not** a CP fact: the response shapes
+differ (columnar bars with ISO stamps on MCP, `data[]` of `{t,o,h,l,c,v}` with epoch ms on CP).
+
+Unless a line says otherwise, `[CP ✓ 2026-09-…]` readings were taken by lite over OAuth 1.0a on
+the owner's live account; ObliskIQ's own sessions use the paper account.
+
+## Sources
+
+- Web API reference: <https://www.interactivebrokers.com/docs/web-api/v1/> (each page has a `.md`
+  form; fetched 2026-10-12), in particular *Pacing Limitations*, *Regular Server Maintenance*,
+  *Market Data Availability*, *Market Data Fields*, *Live Market Data Snapshot*, *Historical
+  Market Data*, *Authentication Status*, *Initialize Brokerage Session*, *Ping the server*,
+  *Trading Schedule (NEW)*, *Trading Schedule by Symbol*, *Search Contract Rules*, *Search Algo
+  Params by Contract ID*, *Iserver Market Scanner*, *Iserver Scanner Parameters*, *Portfolio
+  Accounts*, *Positions*, *Portfolio Ledger*, *Search Contract by Symbol*, *Search Bond Filter
+  Information*, *Contract information by Contract ID*.
+- Web API changelog: <https://www.interactivebrokers.com/docs/web-api/changelog/> — entries
+  2025-11-18, 2025-12-10, 2026-01-06, 2026-03-27, 2026-04-14, 2026-09-09.
+- Market-data users and sharing:
+  <https://www.interactivebrokers.com/docs/general/market-data-subscriptions/market-data-users/introduction>,
+  <https://www.interactivebrokers.com/docs/general/market-data-subscriptions/market-data-users/market-data-sharing>,
+  *Market Data Considerations* <https://www.ibkrguides.com/kb/article-1719.htm>.
+- Client Portal Gateway: download <https://download2.interactivebrokers.com/portal/clientportal.gw.zip>,
+  *Client Portal Gateway FAQ* and *Limitations of the Client Portal Gateway*
+  (<https://www.interactivebrokers.com/docs/web-api/authentication/cpgw/>).
+- IBeam (Voyz/ibeam, Apache-2.0), read as a reference for the Gateway's automated login, never a
+  dependency.
+
+## What IBKR documents
+
+- **Pacing.** A global limit of 10 requests a second; per endpoint: `/iserver/marketdata/history`
+  10/s **and** 50/min; `/iserver/marketdata/snapshot` 10/s; `/portfolio/accounts` and
+  `/portfolio/subaccounts` 1 per 5 s; `/iserver/scanner/params` 1 per 15 min;
+  `/iserver/scanner/run` 1/s; `/tickle` 1/s; `/iserver/account/orders`, `/trades` and
+  `/pnl/partitioned` 1 per 5 s; `/sso/validate` 1/min; `/fyi/*` 1/s; `/pa/*` 1 per 15 min. A
+  violation answers `429` and puts the IP in a **15-minute penalty box**; repeat violators can be
+  blocked permanently. [DOC 2026-10-12]
+- **Changelog.** 2025-12-10: `/iserver/marketdata/snapshot` takes at most **100 conids** per query
+  and **50 fields**. 2026-09-09: history pacing is 10/s or 50/min; `/hmds/scanner` is deprecated;
+  **the `secType` parameter was removed from `/iserver/secdef/search`**. 2026-01-06: the
+  fundamental tags — dividend amount, dividend yield %, ex-date, P/E, market capitalisation, EPS,
+  beta — are deprecated and no longer served. 2025-11-18: `/hmds/history` is deprecated (use
+  `/iserver/marketdata/history`). 2026-03-27: stocks accept `cashQty`. 2026-04-14: websocket
+  `smd` subscriptions end after 10 minutes. [DOC 2026-10-12]
+- **Daily maintenance.** Web API clients are disconnected at midnight of their connecting region
+  (North America 00:00 US/Eastern, Europe 00:00 CEST, Asia 00:00 HKT). The page's UTC row
+  (20:00, 02:00, 08:00 UTC) contradicts its local row, so neither is configured: a reset is
+  detected when the session reports unauthenticated, and re-established. [DOC 2026-10-12]
+- **Session.** `POST /iserver/auth/ssodh/init` opens the brokerage session (`publish`, `compete`;
+  compete disconnects other brokerage sessions of the user); everything but `/portfolio` needs it.
+  `POST /iserver/auth/status` and `POST /tickle` (whose `iserver.authStatus` nests the same
+  object) report `authenticated`, `competing`, `connected`, `message`, `fail`. IBKR asks for a
+  tickle about every 60 s; an idle session times out. `/iserver/accounts` must be called before
+  `/iserver/marketdata/snapshot`, and `/iserver/secdef/search` before a derivative's snapshot.
+  [DOC 2026-10-12]
+- **Market data availability (field 6509).** First character: `R` real time, `D` delayed (15–20
+  minutes), `Z` frozen (last data at the close, relayed in real time), `Y` frozen delayed, `N` not
+  subscribed, `O` the annual market-data API acknowledgement is not signed; then `P` snapshot or
+  `p` consolidated, `B` book, `d` performance details. [DOC 2026-10-12]
+- **Field ids** (IBKR's table): 31 last (prefix `C` previous close, `H` halted), 84 bid, 86 ask,
+  85/88 sizes, 87 volume abbreviated (`K`/`M`; 7762 is the exact volume), 7283 option implied vol
+  of the underlying (30-day at-the-money), **7633 implied vol of the specific strike**, **7638
+  option open interest**, **7089 option volume**, 7087 30-day historical vol (**7284 is deprecated
+  in favour of 7087**), 7308 delta, 7309 gamma, **7310 theta, 7311 vega**, 6509 availability,
+  7295 open, 7296 close, 7741 prior close, 7768 trading permission. [DOC 2026-10-12]
+- **History.** At most 1000 points per call; `period` and `bar` combinations per a published
+  table; answers carry `data[]` of `{o,c,h,l,v,t}`, `mdAvailability`, `mktDataDelay` (processing
+  delay, ms, not the feed delay). [DOC 2026-10-12]
+- **Trading schedule.** `GET /contract/trading-schedule?conid&exchange` returns the six days
+  around today: per `YYYYMMDD`, `liquid_hours` (the regular session) and `extended_hours` as
+  epoch seconds, with `exchange_time_zone`; non-trading days are omitted. The older
+  `GET /trsrv/secdef/schedule` returns up to a month as local `HHMM` strings per weekday code.
+  VERIFY-LIVE(trading schedule shape and omitted holidays). [DOC 2026-10-12]
+- **Contract rules.** `POST /iserver/contract/rules` (`conid`, `exchange`, `isBuy`) returns order
+  types (in and outside regular hours), cash-quantity types (`cqtTypes`), TIF types, size
+  increment, increment rules (`lowerEdge`, `increment`), price magnifier, algo eligibility. Algos:
+  `GET /iserver/contract/{conid}/algos` (`addParams=1`). Scanner: `GET /iserver/scanner/params`,
+  `POST /iserver/scanner/run` (at most 50 contracts). Bonds: search rows carry `issuers`, and
+  `/iserver/secdef/bond-filters?symbol=BOND&issuerId=` lists maturities, coupons and currencies.
+  [DOC 2026-10-12]
+- **Market data is per user.** A subscription on one username does not reach another user of the
+  same account. A live username may share its market data with one paper account, so both read
+  data under one subscription, billed once; IBKR's *Market Data Considerations* describes how
+  shared data behaves. Whether the paper session receives real-time data while the owner is
+  logged in live elsewhere is VERIFY-LIVE(shared data with the owner logged in live). API data
+  needs an IBKR PRO account, the subscription and the Market Data API acknowledgement (code `O`
+  when it is missing). [DOC 2026-10-12]
+- **The Client Portal Gateway.** IBKR "does not support an automated authentication process for
+  Client Portal Gateway"; clients must log in daily; the login must happen in a browser on the
+  Gateway's own machine, and API calls must come from that machine. It ships without a valid
+  certificate. [DOC 2026-10-12]
+
+## Verified in lite (routes as tagged)
+
+### The OAuth 1.0a handshake
+
+- The handshake passed every step first time: credentials (DH prime 2048 bits), decrypt (32
+  bytes of prepend), DH exchange (a **511-character, odd-length** hex challenge is accepted), the
+  live-session-token signature matched, brokerage session authenticated, tickle kept it open.
+  [CP ✓ 2026-09-10]
+- `OBLISK_IBKR_CP_BASE_URL` is `https://api.ibkr.com` with no path; `/v1/api` is appended.
+  [CP ✓ 2026-09-10]
+- The DH shared secret is a signed big integer (a leading zero byte when the top bit is set); the
+  token is `HMAC-SHA1(K, prepend)` and is verified against `live_session_token_signature`. On
+  OpenSSL builds with implicit rejection a wrong encryption key decrypts to random bytes instead
+  of raising, so the signature check is the backstop and is never skipped (seen across lite's CI
+  matrix).
+
+### Session
+
+- `/iserver/marketdata/*` answers `HTTP 500 {"error":"Please query /accounts first"}` until
+  `/iserver/accounts` is called; `/portfolio/accounts` does not satisfy it. [CP ✓ 2026-09-10]
+- The precondition is **lost mid-run**: re-calling both accounts endpoints cleared nothing across
+  nine attempts, re-running `/iserver/auth/ssodh/init` restored it at once. [CP ✓ 2026-09-10]
+- A bare `401` 31 minutes into a run with ~22 hours left on the token was a dropped brokerage
+  session (the next target collected; a re-run collected 130 rows): re-arm on 401. A `403` is an
+  entitlement answer: never re-armed. [CP ✓ 2026-09-10]
+- `/iserver/accounts` is unreliable as a read (`{}` once, the list minutes later): a
+  precondition to call, not a source to trust. [CP ✓ 2026-09-10]
+
+### Contract search
+
+- `/iserver/secdef/search` takes its terms as a **JSON body**: as query parameters it answers 200
+  with every row's `sections: []` (SPY: 55 matches, 0 sections, against 3 matches and 6 sections
+  as a body). [CP ✓ 2026-09-10]
+- Both section lists (`months`, `exchange`) are **semicolon**-separated; splitting the exchange
+  list on a comma sent the whole list as one exchange and `/secdef/strikes` answered `410`.
+  [CP ✓ 2026-09-10]
+- A miss answers 200 with an **object** `{"error": "No symbol found"}` (TOPIX, `IND`); a hit a
+  list. [CP ✓ 2026-09-10]
+- Every listing of one company answers the same bare ticker (ASML: NASDAQ, TSE, AEB; SAN: NYSE,
+  MEXI, AEQLIT, LSE, BM, WSE, ASX; TTE: NYSE, AEQLIT, SBF); the venue is in `description`. The
+  ranking is **time-varying**: at 09:48 UTC the European lines came first, at 20:05 UTC the US
+  ones; 19 of 74 declared rows resolved to another conid without the declared venue, one of them
+  (`EEM`) to "Micro Ether Euro", a CME index future in EUR. [CP ✓ 2026-09-10]
+- A short ticker returns leveraged ETPs, foreign listings and unrelated issuers (`HG` → Hamilton
+  Insurance second); `security_type` filters were ignored on MCP. [MCP ✓ 2026-08-23/24]
+- The European listings serve their option sections on their own venues: ASML `117589399` AEB →
+  `EUREX`, `FTA`; SAN `30314144` BM → `EUREX`, `MEFFRV`; TTE `29612193` SBF → `EUREX`, `MONEP`;
+  strikes served on `FTA`, `EUREX`, `MONEP`. [CP ✓ 2026-09-10]
+- Conids worth pinning (ambiguous symbols): SLF 45208985 ASX, ATEC 407597432 ASX, XLF 4215220
+  ARCA, 3191 438186903 SEHK; the nine Select Sector SPDRs on ARCA. [MCP ✓ 2026-09-03]
+- `/iserver/contract/{conid}/info` returns `currency` and the valid exchanges (CAC: `SMART,SBF,…`;
+  XIU: `SMART,TSE`); `C40` is the CAC 40 *ESG* fund and `CACX` the same CAC fund in GBP — the
+  currency check cannot catch the first. [CP ✓ 2026-09-14]
+- The search matches one token and silently truncates (`KSM.F` reported 210, returned 15).
+  [MCP ✓ 2026-09-03]
+
+### Snapshots
+
+- Field ids [CP ✓ 2026-09-10]: `31` last (`"C83.05"` on XLP: previous close), `84`/`86` plain
+  bid/ask strings, `87` volume **abbreviated** (`"53.4K"` with `"87_raw": 53400.0` beside it),
+  `6509` availability as letters (`"DP"` SPY and XLP, `"DPB"` ASML), `7283` implied vol and
+  `7284` 30-day historical vol as **percent-suffixed strings** (`"13.126%"`, `"9.449%"`).
+- `7286`–`7288` (dividend amount, yield, ex-date) are never returned while neighbours `7292`–`7295`
+  are; the data is withheld (and deprecated by IBKR since 2026-01-06). [CP ✓ 2026-09-10]
+- **150 conids in one request answer `429 {"error":"Exceed number of conids"}`; 100 is
+  accepted.** A request-shape refusal, not pacing. [CP ✓ 2026-09-10]
+- A cold subscription answers a skeleton first; on a cold option the status and **all four
+  Greeks** arrive at ~1.3 s and the prices at ~7 s (4.8 s when the batch was primed first): a
+  poll settles on a PRICE field only, with ten polls a second apart. [CP ✓ 2026-09-15]
+- A zero on the first call for a conid is not evidence; a lone 0/8 with the venue open is noise.
+  [CP ✓ 2026-09-11, 2026-09-14]
+- After the close: US option quotes survive for hours (87 % priced at 21:08 UTC, `ZBd`), ~1 % by
+  23:04; European chains step down at their close and plateau, by name (ASML 2/8, SAN 8/8, TTE
+  6–8/8). A chain photographed outside hours carries Greeks and no prices. [CP ✓ 2026-09-10..14]
+- `6509` reads `DPBd`/`RBd` while a European venue is open and `ZBd` once it closes.
+  [CP ✓ 2026-09-14]
+- Units: implied vol, historical vol and the IV percentile are fractions on MCP while
+  `dividend-yield.yield_pct` is a **percent** in the same response — a `_pct` suffix states
+  nothing; `-1.0` is IBKR's "no implied vol" sentinel (seen on US, EUREX and FTA contracts, ~27 %
+  of one ASML expiry's strikes); volatility is annualised with √252. [MCP ✓ 2026-08-23..09-09]
+- The underlying can read `REALTIME` while its options read `FROZEN_DELAYED`; `REALTIME` is about
+  entitlement, not the session; a closed market cannot be told from a missing entitlement by a
+  snapshot. [MCP ✓ 2026-08-23/24]
+
+### History
+
+- **257 bars for 400 calendar days requested**; a 2-year request returned bars from 2023-08-08:
+  IBKR serves a span derived from the request, never "the count asked for". [CP ✓ 2026-09-10]
+- `HTTP 500 {"error":"Chart data unavailable"}` and `{"error":"Contract details are not
+  available"}` are final answers wearing a retryable status. [CP ✓ 2026-09-10]
+- "Chart data unavailable" with the native exchange, and bars with the exchange **omitted**: SAN
+  (`BM`), TTE (`SBF`), BARN and LISN (`EBS`), TSEJ funds; ASML answers both ways; hence
+  `history_exchange`. [CP ✓ 2026-09-10, 2026-09-15; MCP ✓ 2026-08-29]
+- BOVA11 refuses 730 and 365 days and serves 181 bars for 182: the endpoint refuses a window
+  longer than it can serve; JDEP is a dead listing whose only series ends 2026-04-29.
+  [CP ✓ 2026-09-15]
+- `HTTP 429` is frequent under backfill load and absorbed by retries with backoff; `410` on
+  `/secdef/strikes` means a malformed request. [CP ✓ 2026-09-10]
+- Option price history is unavailable ("No historical market data available"); futures contract
+  history is available (GC 123 daily bars, delayed 600 s); an empty series is not an error.
+  [MCP ✓ 2026-08-23/24]
+
+### Portfolio
+
+- The ledger's `BASE` row reads `currency: "BASE"` **and** `secondkey: "BASE"`; the base
+  currency is the per-currency row whose `exchangerate` is exactly 1 (EUR; USD 0.8612968);
+  `netliquidationvalue` is a float while per-currency amounts arrive as strings.
+  [CP ✓ 2026-09-10]
+- `get_pa_allocation` ignores its currency and returns base-currency figures under another label:
+  read allocation in base currency only. [MCP ✓ 2026-08-23]
+
+### Futures (data only)
+
+- The ladder is unsorted (front month ninth of 34, fourth of 132) and long (CL to 2036); sort by
+  expiry and bound by contract month. KC, NG, TTF and ZS returned no `/trsrv/futures` ladder.
+  [CP ✓ 2026-09-10; CONNECTOR ✓ 2026-09-09]
+
+### The Custom Connector
+
+- An OAuth 2.0 protected resource (RFC 9728 metadata at the URL the challenge names, not the
+  canonical path); `client_credentials` is advertised and wired; it answers a headless
+  container with a token minted elsewhere; registration and token lifetime untested.
+  [CONNECTOR ✓ 2026-09-03]
+
+## Session 3 (2026-10-12): the Client Portal Gateway in a cloud container
+
+Tried in this order, with the paper username and password from the environment:
+
+1. The archive at the download URL is 10,542,956 bytes, SHA-256
+   `2f2d380b2f9424520ff5f9c11fe45e82ef39459329ac056258a3274bea6f76f9`, `Last-Modified` 2023-04-24,
+   build `ibgroup.web.core.iblink.router.clientportal.gw-20230424154245`; the beta archive is of
+   the same date. [CP ✓ 2026-10-12]
+2. The shipped `root/vertx.jks` certificate (`CN=Client Portal Web API`) **expired 2019-05-11** and
+   names no host. A per-install key pair for `localhost` (keytool, SAN `localhost`,
+   `127.0.0.1`), set through `sslCert`/`sslPwd` in `root/conf.yaml`, serves TLS that verifies with
+   hostname checks against the pinned certificate. [CP ✓ 2026-10-12]
+3. The Gateway starts in about 2 s on Java 21 and on Java 11, and answers every API path with
+   `401` before login. [CP ✓ 2026-10-12]
+4. Headless Chromium (Playwright 1.56, build 1194) loads `/sso/Login?forwardTo=22&RL=1&ip2loc=on`
+   in ~1.3 s, trusting the Gateway by its pinned public key
+   (`--ignore-certificate-errors-spki-list`). The form has `input[name=username]`,
+   `input[name=password]`, the paper toggle `label[for=toggle1]` ("Paper trading mode selected",
+   the button turns to "Simulated Login") and the submit `.btn.btn-lg.xyz-button-login`; the page
+   now says "Client Portal is now mobile-optimized". [CP ✓ 2026-10-12]
+5. Filled and submitted at once, the form answered **"Authentication failed"**. Typed key by key
+   with a 5-second pause before submitting, IBKR **accepted the password**: the SRP exchange at
+   `/sso/Authenticator` returned the server proof `M2` with `reached_max_login: false`.
+   [CP ✓ 2026-10-12]
+6. The session never became usable. In nine of ten attempts the `/sso/Dispatcher` step
+   re-rendered the login form with no error; once (Java 11) it went on to
+   `/sso/Dispatcher?hardware_info=…` and showed "Client login succeeds", after which the Gateway's
+   own `/v1/api/sso/validate?gw=1` answered `401` "Access Denied" every three seconds. `tickle`
+   and `iserver/auth/status` stayed `401` throughout. The Gateway's cookie manager keeps IBKR's
+   cookies (`JSESSIONID`, `x-sess-uuid`, `AKA_A2`, `web`, `partnerID`) and passes none to the
+   browser; IBKR issued a fresh `JSESSIONID` mid-flow. Pointing `proxyRemoteHost` at
+   `ndcdyn`/`gdcdyn.interactivebrokers.com` and removing the container's JVM proxy settings
+   (`JAVA_TOOL_OPTIONS`) changed nothing. [CP ✓ 2026-10-12]
+
+So in a cloud container the Gateway route stops at the login: the password is good, the
+Gateway session is not established, and IBKR documents that it does not support automating this
+login. The read-only preflight therefore stopped at its transport step, and no CP market-data
+reading was taken through ObliskIQ this session. What remains to be seen, on the owner's
+machine: VERIFY-LIVE(Gateway headless login on the deployment machine), then every reading the
+Session 3 prompt lists (the US stock, the European ETF, the US and Eurex options with and without
+the owner logged in live, a scanner run, the trading schedule).
+
+The decoders keep lite's live readings as their tests; the new field ids (`7633`, `7638`,
+`7087`, theta `7310` and vega `7311`) are IBKR's table and VERIFY-LIVE(snapshot field ids), as is
+VERIFY-LIVE(secdef search without secType).

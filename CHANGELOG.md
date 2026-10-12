@@ -5,6 +5,41 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.3.0] - 2026-10-12
+
+Session 3 — IBKR read path. Read-only: no order endpoint is touched.
+
+### Added
+
+- `ibkr/transport/`: one transport interface with two implementations chosen by
+  `OBLISK_IBKR_TRANSPORT` — OAuth 1.0a (ported from lite: DH prepend, signed big integer, the
+  live-session-token signature check, renegotiation before expiry) and the Client Portal Gateway
+  (pinned archive, a per-install `localhost` certificate pinned by the client and the browser,
+  a Java-version gate, a headless paper login with Playwright, re-login on session loss; refuses
+  profile `live`).
+- `ibkr/session.py`: the request pipeline with re-arm on 401 and on the lost `/accounts`
+  precondition, re-authentication, no retry on 403, jittered backoff with `Retry-After`, the
+  tickle keepalive, competing-session and session-loss detection with an alert hook.
+- `ibkr/ratelimit.py`: sliding windows per endpoint group below IBKR's published caps, a global
+  window, a concurrency cap, per-group pauses and circuit breakers.
+- `ibkr/errors.py`: errors classified by body, each with its retry advice.
+- `ibkr/client.py`: portfolio (accounts, positions, ledger with the NAV in base currency only,
+  cash per currency), snapshots with the settle loop and declared-unit decoding, history with a
+  probe-chunked walk, contract search with the declared-venue tie-break, contract info, strikes,
+  futures ladders, bond filters, funds, trading rules, algos, the trading schedule and the
+  scanner; `ibkr/identity.py` (conid, venue and currency pinned; ambiguity refused; corrections
+  supersede); `ibkr/guard.py` (the account must be listed and, under paper, paper-prefixed).
+- IBKR's trading schedule as a calendar `ScheduleSource` (`ibkr/schedule_source.py`).
+- `obliskiq preflight --read-only`; without credentials it prints "no credentials" and exits 2.
+- `config/defaults/ibkr.yaml`, `config/defaults/http.yaml`, `paths.ibkr_gateway`,
+  `OBLISK_IBKR_GATEWAY_JAVA_HOME`; `docs/knowledge/ibkr.md`; IBKR fixtures with a sidecar note.
+- Dependencies: `cryptography`, `playwright` (1.56).
+
+### Changed
+
+- `RetryPolicy.from_settings` and a public `retry_after_seconds` in `util/http.py`.
+- Snapshot field ids follow IBKR's field table where lite's differed (DECISIONS D37).
+
 ## [0.2.0] - 2026-10-09
 
 Session 2 — Store, calendars and numerics. No broker access yet.
