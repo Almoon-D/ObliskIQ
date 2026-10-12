@@ -410,7 +410,12 @@ class BrokerSession:
             return
         if status.competing:
             self._emit(SessionAlertKind.COMPETING, "tickle reported a competing session")
-            await self.reauthenticate("a competing session took the brokerage session")
+            try:
+                await self.reauthenticate("a competing session took the brokerage session")
+            except SessionExpiredError as exc:
+                raise CompetingSessionError(
+                    "another connection holds the brokerage session and it could not be reclaimed"
+                ) from exc
             return
         if self._authenticated and not status.authenticated:
             self._emit(
@@ -453,11 +458,4 @@ class BrokerSession:
                         await self.reauthenticate("the keepalive kept failing")
 
 
-__all__ = [
-    "AlertHook",
-    "AuthStatus",
-    "BrokerSession",
-    "CompetingSessionError",
-    "SessionAlert",
-    "SessionAlertKind",
-]
+__all__ = ["AlertHook", "AuthStatus", "BrokerSession", "SessionAlert", "SessionAlertKind"]

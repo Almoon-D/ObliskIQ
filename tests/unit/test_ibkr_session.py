@@ -677,3 +677,23 @@ async def test_account_ids_never_appear_in_a_reauthentication_alert(
     assert ACCOUNT not in str(caught.value)
     assert alerts
     assert all(ACCOUNT not in alert.detail for alert in alerts)
+
+
+@respx.mock
+async def test_a_competing_session_that_cannot_be_reclaimed_raises_competing(
+    make_session, fake_transport
+):
+    from obliskiq.ibkr.errors import CompetingSessionError
+
+    respx.post("https://gw.test/v1/api/tickle").mock(
+        return_value=httpx.Response(
+            200, json={"iserver": {"authStatus": {"authenticated": True, "competing": True}}}
+        )
+    )
+    respx.post("https://gw.test/v1/api/iserver/auth/ssodh/init").mock(
+        return_value=httpx.Response(200, json={"authenticated": False})
+    )
+    session = make_session()
+    with pytest.raises(CompetingSessionError):
+        await session.check_session()
+    assert fake_transport.recovered >= 1
