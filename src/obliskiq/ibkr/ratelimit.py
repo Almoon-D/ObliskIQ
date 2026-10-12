@@ -65,8 +65,12 @@ class SlidingWindow:
         self._instants: deque[float] = deque()
 
     def wait(self, now: float) -> float:
-        """Seconds until one more instant fits; zero when it fits now."""
-        while self._instants and self._instants[0] <= now - self._per_seconds:
+        """Seconds until one more instant fits; zero when it fits now.
+
+        Expiry and the wait are the same expression (``instant + per_seconds - now``), so float
+        rounding can never report a full window as free without also expiring its oldest instant.
+        """
+        while self._instants and self._instants[0] + self._per_seconds - now <= 0:
             self._instants.popleft()
         if len(self._instants) < self._requests:
             return 0.0

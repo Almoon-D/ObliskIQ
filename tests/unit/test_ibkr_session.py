@@ -34,6 +34,7 @@ from obliskiq.ibkr.session import (
     BrokerSession,
     SessionAlert,
     SessionAlertKind,
+    tickle_status,
 )
 from obliskiq.util.http import RetryPolicy
 
@@ -697,3 +698,30 @@ async def test_a_competing_session_that_cannot_be_reclaimed_raises_competing(
     with pytest.raises(CompetingSessionError):
         await session.check_session()
     assert fake_transport.recovered >= 1
+
+
+async def test_a_failing_iserver_accounts_does_not_stop_the_session_opening(session):
+    """Arming is best effort: the market-data call that follows reports the real error."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if rel(request) == ISERVER_ACCOUNTS_PATH:
+            return httpx.Response(403, json={"error": "forbidden"})
+        return httpx.Response(200, json=AUTHENTICATED)
+
+    with mocked() as mock:
+        wire(mock, handler)
+        status = await session.open()
+    assert status is not None
+    assert status.authenticated
+
+
+@pytest.mark.parametrize(
+    "body", [None, [], "ok", {"iserver": None}, {"iserver": {"authStatus": "yes"}}]
+)
+def test_a_tickle_answer_without_an_auth_status_carries_none(body):
+    assert tickle_status(body) is None
+
+
+def test_the_session_exposes_its_transport_and_limiter(session, fake_transport):
+    assert session.transport is fake_transport
+    assert session.limiter.group_for(TICKLE_PATH) == "tickle"

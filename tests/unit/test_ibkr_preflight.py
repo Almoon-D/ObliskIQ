@@ -39,6 +39,16 @@ def _restore_root_logging():
 
 
 @pytest.fixture
+def shipped_settings(shipped_settings):
+    """The shipped settings with no wait between snapshot polls: the walk uses the real clock."""
+    marketdata = shipped_settings.ibkr.marketdata.model_copy(
+        update={"snapshot_settle_delay_seconds": 0.0}
+    )
+    ibkr = shipped_settings.ibkr.model_copy(update={"marketdata": marketdata})
+    return shipped_settings.model_copy(update={"ibkr": ibkr})
+
+
+@pytest.fixture
 def env(monkeypatch) -> Environment:
     for name, value in {
         "OBLISK_IBKR_PROFILE": "paper",
@@ -217,3 +227,41 @@ async def test_an_unset_profile_stops_at_the_transport(
     )
     assert report.failed_step is not None
     assert "OBLISK_IBKR_PROFILE" in report.failed_step.detail
+
+
+@respx.mock
+async def test_an_unauthenticated_brokerage_session_stops_the_walk(
+    env, shipped_settings, fake_transport
+):
+    _mock_read_path(respx.mock)
+    respx.post(f"{BASE}/iserver/auth/ssodh/init").mock(
+        return_value=httpx.Response(200, json={"authenticated": False, "competing": True})
+    )
+    report = await run_read_only(env, shipped_settings, data_dir=None, transport=fake_transport)
+    assert not report.ok
+    assert report.failed_step is not None
+    assert "authenticated" in report.failed_step.detail
+    assert "Stopped at:" in report.render()
+
+
+@respx.mock
+async def test_a_snapshot_without_a_row_for_the_contract_fails_its_step(
+    env, shipped_settings, fake_transport
+):
+    _mock_read_path(respx.mock)
+    respx.get(f"{BASE}/iserver/marketdata/snapshot").mock(return_value=httpx.Response(200, json=[]))
+    report = await run_read_only(env, shipped_settings, data_dir=None, transport=fake_transport)
+    assert report.failed_step is not None
+    assert report.failed_step.name == STEP_SNAPSHOT
+    assert "no row" in report.failed_step.detail
+
+
+@respx.mock
+async def test_history_without_bars_is_reported_not_failed(env, shipped_settings, fake_transport):
+    _mock_read_path(respx.mock)
+    respx.get(f"{BASE}/iserver/marketdata/history").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    report = await run_read_only(env, shipped_settings, data_dir=None, transport=fake_transport)
+    assert report.ok, report.render()
+    assert any(step.detail == "no bars returned" for step in report.steps)

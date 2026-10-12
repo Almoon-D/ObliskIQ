@@ -48,7 +48,10 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 - `docs/knowledge/ibkr.md`: lite's verified findings condensed with their route tags, IBKR's
   documented pacing, changelog, availability codes, field ids, schedule, rules, per-user market
   data and live→paper sharing, and this session's Gateway trial.
-- Tests: TEST_COUNT passing; coverage COVERAGE_MEASURED; floor COVERAGE_FLOOR.
+- Tests: 2,219 passing. Coverage measured 99.45 %; floor raised from 98.9 % to 99.2 %. The
+  concurrency test (200 requests against virtual time, every window checked) found a
+  float-rounding hole in the sliding window — expiry and wait disagreed, so a full per-minute
+  window admitted a burst at one instant — fixed with a regression and a property test.
 
 **Deferred.**
 - The store watermark of the history walk and the per-target retry of lite's backfill: Session 8
@@ -85,7 +88,9 @@ not pass its first sub-step from a cloud container.
 
 **Process.** The harness assigned the branch `claude/magical-bardeen-ct4oql`; GitHub steps of the
 end-of-session protocol ran through the GitHub tools instead of `gh`. Test ports were delegated to
-subagents (OAuth, client and session, field units) and the adversarial tests to `test-breaker`.
+subagents (OAuth, client and session, field units). `test-breaker` and `port-checker` stopped on
+a usage limit before reporting; the adversarial tests (pacing under concurrency, hostile input,
+guard) were then written in the session.
 
 ### Session 2 — Store, calendars and numerics (2026-10-09, v0.2.0)
 

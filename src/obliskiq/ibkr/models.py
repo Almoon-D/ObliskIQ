@@ -10,21 +10,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..domain.base import Conid, CurrencyCode, UtcDatetime
 from ..domain.enums import MarketDataStatus
 
-
-def _finite_decimal(value: Decimal) -> Decimal:
-    if not value.is_finite():
-        raise ValueError("must be a finite amount")
-    return value
-
-
-type Amount = Annotated[Decimal, AfterValidator(_finite_decimal)]
+#: Money as decoded: exact, and finite because the models refuse NaN and infinity.
+type Amount = Decimal
 
 
 class IbkrModel(BaseModel):
