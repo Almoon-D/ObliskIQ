@@ -34,8 +34,10 @@ before writing code around it.
 - Idempotency: the intent id (`uuid7`) is the `cOID`; look it up before any placement.
 - Kill switch: cancels working entry orders and blocks new risk; keeps protective exits.
   `flatten` is a separate, explicit command.
-- **IBKR credentials.** Cloud sessions may hold **paper** credentials (OAuth keys or the
-  paper login the Gateway uses), never live ones, and never set profile `live`. With
+- **IBKR credentials.** Cloud sessions may hold **paper** credentials (the paper login the
+  Gateway uses), never live ones, and never set profile `live`. OAuth keys (`.pem` files)
+  are the live account's only: the `oauth` transport refuses any profile but `live`, and a paper
+  run never looks for or reads them (DECISIONS D42). With
   profile `paper`, every broker write is refused unless the account id has a paper prefix
   from config; profile `live` needs the promotion gate and an owner command (the guards
   live in code, not in prose). Live calls in a session are read-only, except the paper

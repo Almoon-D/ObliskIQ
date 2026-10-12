@@ -9,12 +9,37 @@ from ...config.schema import ObliskConfig
 from ...env import Environment
 from ...errors import EnvVarError
 from ...util.http import RetryPolicy
+from ..errors import ProfileRefusedError
 from .base import Transport, TransportKind
-from .gateway import GatewayTransport
+from .gateway import LIVE_REFUSAL, GatewayTransport
 from .gateway_login import LoginDriver
 from .oauth import OAuthCredentials, OAuthSession, OAuthTransport
 
-__all__ = ["Transport", "TransportKind", "build_transport", "missing_credentials"]
+__all__ = [
+    "Transport",
+    "TransportKind",
+    "build_transport",
+    "missing_credentials",
+    "transport_refusal",
+]
+
+
+def transport_refusal(env: Environment) -> str | None:
+    """Why the selected transport may not run under the selected profile; ``None`` when it may.
+
+    Each transport serves one profile (DECISIONS D42): the Gateway's headless login is for the
+    paper account only (a live login needs the owner's second factor), and the OAuth keys are
+    the live account's, so a paper run never looks for or reads them.
+    """
+    if env.ibkr_transport == TransportKind.GATEWAY.value and env.ibkr_profile == "live":
+        return LIVE_REFUSAL
+    # Anything but an explicit live profile (paper, or none set) is refused: fail closed.
+    if env.ibkr_transport == TransportKind.OAUTH.value and env.ibkr_profile != "live":
+        return (
+            "the OAuth transport and its keys are for the live account only; a paper run uses "
+            "the Gateway (OBLISK_IBKR_TRANSPORT=gateway) and reads no OAuth key"
+        )
+    return None
 
 
 def missing_credentials(env: Environment) -> list[str]:
@@ -65,7 +90,13 @@ def build_transport(
     data_dir: Path,
     login_driver: LoginDriver | None = None,
 ) -> Transport:
-    """The transport ``OBLISK_IBKR_TRANSPORT`` selects, built from the environment."""
+    """The transport ``OBLISK_IBKR_TRANSPORT`` selects, built from the environment.
+
+    A transport refused for the profile raises before any credential is read.
+    """
+    refusal = transport_refusal(env)
+    if refusal is not None:
+        raise ProfileRefusedError(refusal)
     missing = missing_credentials(env)
     if missing:
         raise EnvVarError("cannot reach IBKR: " + ", ".join(missing) + " unset")

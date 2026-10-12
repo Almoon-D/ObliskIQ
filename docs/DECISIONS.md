@@ -65,7 +65,8 @@ negligible tracking cost.
 ### D8 · Two IBKR transports behind one client (§4, §5.12)
 
 OAuth 1.0a where IBKR grants it; otherwise the Client Portal Gateway with automated login,
-unattended in paper (paper logins have no second factor). Evidence: IBKR told the owner on
+unattended in paper (paper logins have no second factor). Narrowed by D42: paper uses the
+Gateway, OAuth is the live account's. Evidence: IBKR told the owner on
 2026-10-08 that OAuth 1.0a is for institutional clients, while lite kept the OAuth route as its
 route of record (`legacy/lite/docs/DECISIONS.md:248-250`) and ran it live on 2026-09-10
 (`…/DECISIONS.md:2124`): 3,832 chain rows, 21 underlyings (`legacy/lite/ROADMAP.legacy.md:127-129`).
@@ -476,7 +477,8 @@ is retried up to `max_attempts`.
 credentials and IBKR documents that it does not support automating this login; whether it holds
 on the owner's machine is the first live check of the deployment. If it does not, the remaining
 routes are OAuth (if IBKR grants it) or a login the owner performs daily — a design question for
-the owner, not something to improvise.
+the owner, not something to improvise. For paper, OAuth is no longer one of them (D42): the
+fallback is the daily login.
 
 ### D35 · Pacing below the published caps
 
@@ -577,3 +579,16 @@ read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees eac
 - **Configuration bounds.** Snapshot batches stay inside IBKR's ceilings (100 conids, 50 fields);
   every endpoint this client calls that IBKR paces on its own must sit in a rate group (the order
   path adds its endpoints in Session 4); a paper prefix starts with `D`.
+
+### D42 · OAuth is the live account's; paper runs use the Gateway (owner, 2026-10-12)
+
+The owner decided that OAuth keys (`.pem` files) are reserved for the live account. The `oauth`
+transport now refuses any profile but `live`, an unset one included (and the Gateway keeps
+refusing profile `live`): one
+check, `transport_refusal`, runs in `build_transport`, the preflight and the CLI **before** any
+credential is read, so a paper run never looks for, asks for or opens an OAuth key. For the same
+reason `Environment` no longer checks at load time that the key paths exist; the live OAuth
+transport looks for them when it loads its keys and refuses a missing file by name (a missing
+key stays an error, never a silent fallback). AGENTS.md, MASTER_PLAN §5.12, `.env.example` and
+SESSION_PROMPTS §A say so: cloud environments hold the paper Gateway login only, never OAuth
+keys. lite ran OAuth on the live username; nothing in ObliskIQ used paper OAuth keys.

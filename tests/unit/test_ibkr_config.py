@@ -18,7 +18,7 @@ from obliskiq.config.schema_ibkr import (
     RateLimitConfig,
 )
 from obliskiq.env import Environment
-from obliskiq.errors import EnvVarError
+from obliskiq.errors import ConfigError, EnvVarError
 from obliskiq.ibkr.errors import ProfileRefusedError
 from obliskiq.ibkr.transport import build_transport, missing_credentials
 from obliskiq.ibkr.transport.base import TransportKind
@@ -245,8 +245,8 @@ def test_the_oauth_transport_is_built_from_its_variables(monkeypatch, shipped_se
     keys = _keys(tmp_path)
     env = _env(
         monkeypatch,
-        OBLISK_IBKR_PROFILE="paper",
-        OBLISK_IBKR_ACCOUNT_ID="DU_PAPER",
+        OBLISK_IBKR_PROFILE="live",
+        OBLISK_IBKR_ACCOUNT_ID="U_LIVE",
         OBLISK_IBKR_TRANSPORT="oauth",
         OBLISK_IBKR_CP_BASE_URL="https://api.ibkr.test",
         OBLISK_IBKR_CONSUMER_KEY="consumer",
@@ -296,3 +296,49 @@ def test_the_gateway_environment_can_never_list_obliskiqs_own_variables(shipped_
     )
     with pytest.raises(ValidationError):
         GatewayConfig.model_validate(data)
+
+
+def test_the_oauth_transport_refuses_profile_paper_before_reading_a_key(
+    monkeypatch, shipped_settings, tmp_path
+):
+    """OAuth keys are the live account's (D42): a paper run is refused, and the key paths,
+    which point at nothing, are never opened."""
+    env = _env(
+        monkeypatch,
+        OBLISK_IBKR_PROFILE="paper",
+        OBLISK_IBKR_ACCOUNT_ID="DU_PAPER",
+        OBLISK_IBKR_TRANSPORT="oauth",
+        OBLISK_IBKR_CP_BASE_URL="https://api.ibkr.test",
+        OBLISK_IBKR_CONSUMER_KEY="consumer",
+        OBLISK_IBKR_ACCESS_TOKEN="token",
+        OBLISK_IBKR_ACCESS_TOKEN_SECRET="c2VjcmV0",
+        OBLISK_IBKR_SIGNATURE_KEY=str(tmp_path / "absent-signature.pem"),
+        OBLISK_IBKR_ENCRYPTION_KEY=str(tmp_path / "absent-encryption.pem"),
+        OBLISK_IBKR_DH_PARAM=str(tmp_path / "absent-dhparam.pem"),
+    )
+    with pytest.raises(ProfileRefusedError, match="live account only"):
+        build_transport(env, shipped_settings, data_dir=tmp_path)
+
+
+def test_live_oauth_with_a_missing_key_file_is_refused_by_name(
+    monkeypatch, shipped_settings, tmp_path
+):
+    """Not looked for at environment load (D42), a missing key is still an error, never a
+    fallback: the live OAuth transport names the file it could not load."""
+    keys = _keys(tmp_path)
+    absent = tmp_path / "rotated-away-signature.pem"
+    env = _env(
+        monkeypatch,
+        OBLISK_IBKR_PROFILE="live",
+        OBLISK_IBKR_ACCOUNT_ID="U_LIVE",
+        OBLISK_IBKR_TRANSPORT="oauth",
+        OBLISK_IBKR_CP_BASE_URL="https://api.ibkr.test",
+        OBLISK_IBKR_CONSUMER_KEY="consumer",
+        OBLISK_IBKR_ACCESS_TOKEN="token",
+        OBLISK_IBKR_ACCESS_TOKEN_SECRET="c2VjcmV0",
+        OBLISK_IBKR_SIGNATURE_KEY=str(absent),
+        OBLISK_IBKR_ENCRYPTION_KEY=keys["encryption"],
+        OBLISK_IBKR_DH_PARAM=keys["dh"],
+    )
+    with pytest.raises(ConfigError, match="rotated-away-signature"):
+        build_transport(env, shipped_settings, data_dir=tmp_path)

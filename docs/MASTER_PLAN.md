@@ -166,7 +166,7 @@ knowledge files.
 | Swap partners on the same index from another issuer. | Off by default; swap partners track a different, highly correlated index (S&P 500 ↔ MSCI USA, MSCI World ↔ FTSE Developed). | Different issuers are not homogeneous under art. 8 RIRPF, which requires "un mismo emisor"; a different index also removes any argument under the general anti-avoidance rule at negligible tracking cost. |
 | Free-threaded Python (3.14t) in production. | Standard CPython 3.14; parallel computation runs through a process pool (`compute.workers` in config); code kept thread-safe; Session 14 benchmarks the backtest on 3.14t and switches only if it is faster with every dependency available. | Simultaneous calculation does not need 3.14t: numpy releases the GIL inside its kernels and a process pool parallelises Python-level loops today. 3.14t is slower single-threaded and not every scientific wheel ships a free-threaded build. |
 | Delayed quotes for everything. | Rejected for options (real-time quotes on the option and its underlying are required); accepted for stocks, ETFs, funds and bonds with safeguards (§5.13). | Option spreads are wide and stale mids misprice. |
-| One authentication route only. | Two transports behind one client: OAuth 1.0a where IBKR grants it, otherwise the Client Portal Gateway with automated login (§5.12). | IBKR told the owner (2026-10-08) that OAuth 1.0a is for institutional clients and retail accounts use the Gateway, although lite ran OAuth live on 2026-09-10. Paper logins have no second factor, so the Gateway can run unattended in paper. |
+| One authentication route only. | Two transports behind one client: the Client Portal Gateway with automated login for paper, OAuth 1.0a for the live account where IBKR grants it (§5.12, DECISIONS D42). | IBKR told the owner (2026-10-08) that OAuth 1.0a is for institutional clients and retail accounts use the Gateway, although lite ran OAuth live on 2026-09-10. Paper logins have no second factor, so the Gateway can run unattended in paper. |
 | "A grid by region or by sector." | One long-format measurement store with three views (§5.7). | Different questions need different axes; one store keeps them consistent. |
 | Assuming the satellite will pick winners most of the time. | The satellite is built to find them; the scoreboard decides how much capital it earns (§5.19). | 58% of US stocks returned less than one-month T-bills over their lifetimes and 4.3% of firms created all the market's net wealth 1926–2016 (Bessembinder 2018): winners exist but are rare, so a selection that misses them lags the index, and skill must be shown before it is funded. |
 | Mining many patterns. | Rejected. Hypotheses come with an economic mechanism, are pre-registered, tested point-in-time out of sample with multiple-testing control, then shadow-graded live before receiving weight (§5.9). | The factor zoo (Harvey, Liu & Zhu 2016); published anomalies decay (McLean & Pontiff 2016). |
@@ -439,11 +439,11 @@ identifiers or balances. `llm` cannot import `decision` or `execution`.
 - **Transport.** The IBKR Client Portal Web API, reached by one of two transports chosen in
   config (`ibkr.transport`), with the same endpoints and client above them:
   - `oauth`: OAuth 1.0a, live session token negotiated and refreshed before expiry
-    (where IBKR grants OAuth to the account);
+    (where IBKR grants OAuth to the account; the live account only, DECISIONS D42);
   - `gateway`: the Client Portal Gateway (IBKR's Java application) on the bot's machine,
     logged in automatically by a headless browser in the style of IBeam (Apache-2.0).
-    Paper logins need no second factor, so this runs unattended in paper; a live login
-    needs the owner's IBKR Mobile approval, decided at promotion.
+    Paper logins need no second factor, so this runs unattended in paper; it refuses
+    profile live, whose login needs the owner's IBKR Mobile approval (DECISIONS D42).
   Both: `/iserver/auth/ssodh/init`, `/tickle` keepalive, re-arm on 401, no retry on 403,
   `/iserver/accounts` before order calls, automatic re-authentication after daily resets.
   The paper account is a different username from the owner's live login, so the owner's
@@ -605,7 +605,7 @@ engine and tax ledger that call them.
 
 | Source | Use | Credential | Status |
 |---|---|---|---|
-| IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | OAuth keys where granted; otherwise the paper username and password for the Gateway's automated login | read path verified live over OAuth (lite); Gateway route and order path new |
+| IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | the paper username and password for the Gateway's automated login (paper); OAuth keys for the live account where granted (DECISIONS D42) | read path verified live over OAuth (lite); Gateway route and order path new |
 | FRED / ALFRED (+ API v2 bulk) | US and global rates, curves, breakevens, credit, CPI, Eurostat HICP redistribution | `FRED_API_KEY` | verified |
 | ECB Data Portal | €STR, deposit rate, FX reference rates, yield curves | none | verified |
 | Bank of Japan Time-Series API | JGB yields, FX, monetary base | none | verify |

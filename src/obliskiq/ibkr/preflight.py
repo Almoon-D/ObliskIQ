@@ -31,7 +31,7 @@ from .guard import AccountGuard
 from .identity import resolve_identity
 from .redact import redact
 from .session import AlertHook, BrokerSession
-from .transport import Transport, build_transport
+from .transport import Transport, build_transport, transport_refusal
 from .transport.oauth import HTTP_OK, OAuthCredentials, OAuthSession
 
 log = get_logger("ibkr.preflight")
@@ -209,14 +209,19 @@ async def run_read_only(
     ibkr = settings.ibkr
     account_id = env.ibkr_account_id.get_secret_value() if env.ibkr_account_id else ""
     known = (account_id,)
+    # Both before any credential is read: a paper run never opens an OAuth key file.
+    if env.ibkr_profile is None:
+        report.add(STEP_TRANSPORT, False, "OBLISK_IBKR_PROFILE is unset")
+        return report
+    refusal = transport_refusal(env) if transport is None else None
+    if refusal is not None:
+        report.add(STEP_TRANSPORT, False, refusal)
+        return report
     if env.ibkr_transport == "oauth" and transport is None:
         report.planned = OAUTH_STEPS + READ_STEPS
         async with httpx.AsyncClient(timeout=ibkr.request_timeout_seconds) as handshake:
             if not await oauth_handshake(env, settings, handshake, report):
                 return report
-    if env.ibkr_profile is None:
-        report.add(STEP_TRANSPORT, False, "OBLISK_IBKR_PROFILE is unset")
-        return report
     guard = AccountGuard(account_id, env.ibkr_profile, tuple(ibkr.paper_account_prefixes))
     try:
         guard.check_prefix()

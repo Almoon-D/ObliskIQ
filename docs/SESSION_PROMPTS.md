@@ -34,7 +34,8 @@ uses.
 
 IBKR answered (2026-10-08) that OAuth 1.0a is for institutional clients and that retail
 accounts reach the Web API through the Client Portal Gateway. The plan therefore supports
-both (MASTER_PLAN §5.12): `oauth` where IBKR grants it, `gateway` otherwise.
+both (MASTER_PLAN §5.12): `gateway` for paper, `oauth` for the live account where IBKR grants
+it (DECISIONS D42).
 
 1. **Paper account:** use the paper account of your **main** username (Settings → Paper
    Trading Account). Note its paper username and account id (it starts with `DU`). No
@@ -48,10 +49,8 @@ both (MASTER_PLAN §5.12): `oauth` where IBKR grants it, `gateway` otherwise.
    delayed quotes with the safeguards in MASTER_PLAN §5.13. Later, only if the scoreboard
    earns it: LSE L1 (GBP 1.00), Bolsa de Madrid Plus L1 (EUR 7.00), Xetra L1 (EUR 16.25),
    Euronext Cash L1 (EUR 89.10), the US network bundles.
-3. **The support ticket:** ask whether OAuth 1.0a can be enabled for your individual
-   account's paper login, mentioning that ObliskIQ-lite-MCP already runs OAuth on your live
-   username. If yes, generate the paper keys in the self-service portal while logged in
-   with the paper credentials. If no, nothing is blocked: the bot uses the Gateway.
+3. **Paper runs use the Gateway.** OAuth keys are for the live account only (DECISIONS
+   D42): no paper OAuth keys are generated or stored, and a paper run never reads any.
 4. Trading permissions for the asset classes and regions the bot may reach (stocks,
    options, bonds, mutual funds; US, Europe, UK, Asia-Pacific) on the account; the paper
    account mirrors them.
@@ -83,19 +82,8 @@ OBLISK_IBKR_GATEWAY_USERNAME=<paper username>
 OBLISK_IBKR_GATEWAY_PASSWORD=<paper password>
 ```
 
-Only if IBKR grants OAuth to the paper login (A.2 step 3), switch the transport and add
-the keys (and the setup script below):
-
-```
-OBLISK_IBKR_TRANSPORT=oauth
-OBLISK_IBKR_CP_BASE_URL=https://api.ibkr.com
-OBLISK_IBKR_CONSUMER_KEY=<paper consumer key>
-OBLISK_IBKR_ACCESS_TOKEN=<paper access token>
-OBLISK_IBKR_ACCESS_TOKEN_SECRET=<paper access token secret>
-OBLISK_IBKR_SIGNATURE_KEY=/tmp/ibkr/signature.pem
-OBLISK_IBKR_ENCRYPTION_KEY=/tmp/ibkr/encryption.pem
-OBLISK_IBKR_DH_PARAM=/tmp/ibkr/dhparam.pem
-```
+OAuth variables and key files are never set in this environment: they are the live
+account's (DECISIONS D42), and the `oauth` transport refuses any profile but `live`.
 
 Optional, added when the session that uses them comes up:
 
@@ -110,39 +98,11 @@ The LLM key names are whatever `config/llm.yaml` declares (Session 16), so addin
 provider later is a YAML entry plus one variable. Not used: `ESTAT_APP_ID` (e-Stat has no
 per-observation release dates) and `MARKETDATA_API_TOKEN` (marketdata.app allows one
 device per account, which cloud sessions cannot hold). No GitHub token: sessions use the
-built-in GitHub access. The OAuth base URL has no path: `https://api.ibkr.com`; the
-Gateway's local address and the OAuth realm are configuration. Whether the Gateway can
-run inside a cloud session (Java plus a headless browser) is settled in Session 3; if it
-cannot, sessions build against fixtures and the live checks run on the machine.
-
-**Setup script** (OAuth only; paste, then replace each `<…>` with the paper key file
-contents):
-
-```bash
-uv python install 3.14 || true
-umask 077
-mkdir -p /tmp/ibkr
-
-cat << 'EOF' > /tmp/ibkr/signature.pem
------BEGIN PRIVATE KEY-----
-<paper signature key>
------END PRIVATE KEY-----
-EOF
-
-cat << 'EOF' > /tmp/ibkr/encryption.pem
------BEGIN PRIVATE KEY-----
-<paper encryption key>
------END PRIVATE KEY-----
-EOF
-
-cat << 'EOF' > /tmp/ibkr/dhparam.pem
------BEGIN DH PARAMETERS-----
-<paper DH parameters>
------END DH PARAMETERS-----
-EOF
-
-chmod 600 /tmp/ibkr/*.pem
-```
+built-in GitHub access. The Gateway's local address is configuration. Session 3 settled that
+the Gateway installs and runs inside a cloud session but its login did not complete there (most
+likely because the session's outbound address changes from one connection to the next;
+`docs/knowledge/ibkr.md`),
+so sessions build against fixtures and the live checks run on the machine.
 
 Without paper credentials, leave the IBKR variables out: sessions then build against
 fixtures and queue live checks.
