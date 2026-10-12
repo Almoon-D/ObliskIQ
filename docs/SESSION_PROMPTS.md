@@ -589,22 +589,27 @@ DELIVERABLES
    used in Session 5. place_idempotent(): looks the cOID up in live orders and trades
    before any placement. Only limit-capped order types can be built; never a plain market
    order.
-4. The clearance lock (the one statement of it; Session 4a and Session 5 refer here):
+4. The clearance lock (the one statement of it; Session 4a, Session 5 and D44 refer here):
    - place, place_idempotent and modify take a PretradeClearance that only the pre-trade
      gate (execution/pretrade.py) issues; a guard test fails if anything else under src/
      constructs it. A clearance is bound to the intent id, the conid and the order's terms
-     (side, quantity, order type, limit and stop prices, tif), is used once, and expires
-     no later than the quote policy's maximum age counted from the quote it was checked
-     against.
-   - It carries the order's class, decided by the gate from the order's verified effect,
-     never from the declared role: an order reduces risk only when it sells a long,
-     managed position for no more than the position minus every other working sell
-     (resting protective stops included). Everything else adds risk. The write boundary
-     reads the class from the clearance.
-   - For an order that reduces risk the gate waives exactly: the kill switch, the daily
-     notional cap, the maximum orders per day, buy-side eligibility, the cash and
-     no-margin check, and approval. Every other check applies. A protective stop-limit is
-     checked against its intent's protective spec instead of the collar.
+     (side, quantity or cash quantity, order type, limit and stop prices, tif, the
+     conversion fields), is used once, and expires no later than the quote policy's
+     maximum age counted from the quote it was checked against.
+   - No short, ever: for each conid, the broker's working sells plus every issued, unused
+     sell clearance never exceed the long position. The gate issues one clearance per
+     conid at a time, and a sell that would breach the bound is refused (`short`).
+   - The clearance carries the order's class, decided from its verified effect, never from
+     its declared role: a sell of a managed long position within that bound reduces risk;
+     every buy and every conversion adds risk. The write boundary and the kill switch read
+     the class from the clearance.
+   - For an order that reduces risk the gate waives exactly: the kill switch, the
+     per-order and daily notional caps, the maximum orders per day, buy-side eligibility,
+     the cash and no-margin check, and approval. Every other check applies. A sell
+     stop-limit that reduces risk is checked against its intent's protective spec instead
+     of the collar.
+   - An exit that needs the protective stop resized (flatten, a partial exit) passes every
+     other check first; the stop is then resized, and restored if the exit is refused.
    - This session ships the gate failing closed: every intent is refused with reason
      `pretrade_unavailable`; Session 4a replaces it with the checks.
    - cancel needs no clearance and is allowed in every mode and with the kill switch ON
@@ -626,25 +631,28 @@ DELIVERABLES
    every mode), and re-checks the paper guard (profile paper ⇒ paper-prefix account)
    before every write.
 8. execution/killswitch.py: file + DB flag + CLI `obliskiq kill on|off`; checked
-   immediately before every placement or modification that adds risk; ON cancels working
-   entry orders and never cancels orders with role protective. `obliskiq flatten
-   --confirm` is separate (Session 4a: its closing orders are cleared by role, kill
-   switch ON included).
+   immediately before every placement or modification that adds risk; ON cancels every
+   working order whose clearance class adds risk (every buy and conversion, whatever its
+   role) and keeps the sells that reduce risk, protective stops among them. `obliskiq
+   flatten --confirm` is separate (Session 4a; its closing orders reduce risk, item 4).
 9. A stateful fake broker built with respx (orders, replies, status, trades, cancels) that
    Session 4a and Session 5 extend.
 10. docs/knowledge/ibkr-orders.md: endpoints, fields and message ids (from ibind and IBKR
     docs), each tagged; live shapes join it in Session 4a or when a paper login works.
 
 TESTS (failure branches are the point), on the stateful fake broker: unknown reply; o354
-with and without a delayed policy and a fresh quote; o354 with a stale quote, with a delayed
-quote beyond the maximum age, and outside the collar; whatif warning; rejection; cancel
-race; crash between place and status (no double placement); duplicate intent; place or
-modify without a clearance refused; a clearance reused, expired or presented for changed
-terms (a moved stop price included) refused; with the kill switch ON, a clearance of class
-reduces-risk passes the write boundary and one that adds risk does not; the shipped gate
-refuses every intent; kill switch while working (entries
-cancelled, protective kept), also while the gate refuses; mode downgrade mid-cycle; a
-cancel after a downgrade to shadow still reaches the broker; a placement the mode does not
+with and without a delayed policy and a fresh quote; o354 with a stale quote, with a
+delayed quote beyond the maximum age, and outside the collar; whatif warning; rejection;
+cancel race; crash between place and status (no double placement); duplicate intent; place
+or modify without a clearance refused; a clearance reused, expired or presented for
+changed terms (a moved stop price included) refused; with the kill switch ON, a clearance
+of class reduces-risk passes the write boundary and one that adds risk does not; with the
+kill switch OFF, an exit beside a resting stop that together exceed the position is
+refused (`short`); two concurrent clearance requests for one conid never together exceed
+the position; the shipped gate refuses every intent; kill switch while working (a working
+protective-role buy and a working conversion cancelled, a working exit sell and the
+protective stop kept), also while the gate refuses; mode downgrade mid-cycle; a cancel
+after a downgrade to shadow still reaches the broker; a placement the mode does not
 permit; live account id under the paper profile → refused at the write boundary.
 
 ACCEPTANCE: every reply-policy branch and write-boundary refusal tested; no plain market
@@ -688,8 +696,8 @@ DELIVERABLES
    skeleton policy that allows only the instruments in config
    `eligibility.skeleton_allowlist`, labelled skeleton and removed in Session 8);
    prohibited categories (futures, futures options, written options, leveraged and inverse
-   products); no short (sell ≤ held; options sell-to-close only); never touch `unmanaged`
-   holdings; no leverage (whatif shows no margin use; cash in the order's currency, read
+   products); no short (Session 4's item 4 bound; options sell-to-close only); never
+   touch `unmanaged` holdings; no leverage (whatif shows no margin use; cash in the order's currency, read
    from Session 3's balances, covers the order and the floor — an order in a currency the
    account does not hold is refused until Session 5 can fund it by conversion); notional
    caps per order and per day; maximum orders per day; the quote policy per asset class
@@ -779,8 +787,9 @@ DELIVERABLES
    missing → re-placed and alerted. Each placement and resize gets its own clearance; a
    stop that sells no more than the position minus the other working sells reduces risk
    and goes through with the kill switch ON (Session 4's item 4). Partial exits (role
-   exit) resize the stop first. Whether a stop may rest outside the tradable window is
-   decided here and recorded in DECISIONS.
+   exit) follow item 4: checked first, then the stop resized, and restored if the exit is
+   refused. Tradability is not waived; this session decides only how long a stop rests at
+   the broker (its tif) and records it in DECISIONS.
 4. execution/executor.py: stage → convert currency if needed → whatif → place_idempotent
    → replies → poll → reprice or cancel → protective exit → reconcile; staged and
    submitted intents resume by cOID after a restart.
@@ -796,14 +805,15 @@ DELIVERABLES
    conversion commissions and stop behaviour in docs/knowledge/ibkr-orders.md as
    [CP ✓ <date>].
 
-TESTS (failure branches): the conversion fails before the trade → the trade is not
-placed; a projected negative balance in a foreign currency → refused; batching across two
-intents; repatriation above the buffer; algo not offered → patient limit; reprice cycle
-then cancel at the window end; partial fill → protective stop resized; a partial exit
-beside the protective stop never oversells; protective stop missing → re-placed, also with
-the kill switch ON; crash after place → resume by cOID without a second order; restart
-with staged and submitted intents; reconciliation drift → freeze; partial broker data →
-not green; the kill switch during a reprice keeps the protective stop.
+TESTS (failure branches): the conversion fails before the trade → the trade is not placed;
+a projected negative balance in a foreign currency → refused; batching across two intents;
+repatriation above the buffer; algo not offered → patient limit; reprice cycle then cancel
+at the window end; partial fill → protective stop resized; a partial exit beside the
+protective stop never oversells; protective stop missing → re-placed, also with the kill
+switch ON; a stop re-placed by the heartbeat while flatten's exit is working never
+oversells; crash after place → resume by cOID without a second order; restart with staged
+and submitted intents; reconciliation drift → freeze; partial broker data → not green; the
+kill switch during a reprice keeps the protective stop.
 
 ACCEPTANCE: every money path tested on its failure branches; the PR lists the live
 findings or the VERIFY-LIVE queued; no plain market order constructible anywhere (test).
@@ -829,7 +839,8 @@ stubs, not plumbing.
 
 READ: legacy/lite/src/obliskiq/collect/{sequence,runlog,status}.py,
 legacy/lite/docs/DECISIONS.md:382-511 "Running unattended";
-legacy/old/ObliskIQ/modules/notifications/{telegram_notifier,run_summary}.py and test_run_summary.py;
+legacy/old/ObliskIQ/modules/notifications/{telegram_notifier,run_summary}.py and
+test_run_summary.py;
 legacy/pulse/src/market_pulse_bot/{text_formatter,notification_backend}.py (badge language
 and message state); legacy/lite/src/obliskiq/{store,collect}/nav.py. Port
 lite's `runtime` keys you consume (legacy/lite/config.yaml:741-751).

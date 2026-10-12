@@ -345,8 +345,8 @@ settles it.
 - Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
   `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
 - Sessions 4 and 4a: the order path reads cash from `IbkrClient.portfolio.cash_balances()`
-  (Decimal per currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis` (`documented_bound`
-  for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read
+  (Decimal per currency), quotes with `market_data_status`, `delay_seconds` and
+  `delay_basis` (`documented_bound` for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read
   until the account guard has passed (D41). Incomplete position or cash reads raise.
 - Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])`,
   passing each venue's `is_business_weekday` as `is_trading_weekday` (the calendars expose it per

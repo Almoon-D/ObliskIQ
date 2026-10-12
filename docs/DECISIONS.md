@@ -625,20 +625,18 @@ intents and their tables, the order client and its idempotency, the reply and qu
 state machine, modes, the kill switch and the paper guard. Session 4a builds the pre-trade
 checks above it, the approval queue, `flatten` and the paper order test. So that no write ever
 exists without a gate, `place` and `modify` take a `PretradeClearance` that only the pre-trade
-gate issues, bound to the intent id and the order's terms, single use and short-lived; Session
-4 ships that gate refusing every intent (`pretrade_unavailable`) and Session 4a replaces it.
-So that the lock never breaks the rule that the kill switch keeps protective exits, the gate
-classes each order by its verified effect, never by its declared role: an order reduces risk
-only when it sells a long, managed position for no more than the position minus every other
-working sell. For such an order it waives exactly the kill switch, the daily caps, buy-side
-eligibility, the cash check and approval; every other check (mandate, unmanaged holdings,
-quote policy, collar or protective spec, tradability, paper guard, mode) still applies. A role
-is never trusted: two sells that are each within the position could together go short.
-`cancel` takes no clearance and is allowed in every mode, so the kill switch works when
-everything else fails. The paper guard, the kill switch and the mode are checked both at
-Session 4's write boundary and as Session 4a reason codes, deliberately: defence in depth. The
-single statement of the rule is Session 4's item 4 in SESSION_PROMPTS. Rejected: shipping the
-write path unlocked for one session (nothing could call it yet, but the lock is cheap and
-stays as an invariant); building the pre-trade checks first (the kill switch's cancels and the
-no-margin whatif need the order client); clearing by declared role (the PR #6 review showed a
-protective stop plus a flatten could oversell).
+gate issues, bound to the intent id and the order's terms, single use and short-lived; Session 4
+ships that gate refusing every intent (`pretrade_unavailable`) and Session 4a replaces it. So
+that the lock never breaks the rule that the kill switch keeps protective exits, the gate
+classes each order by its verified effect, never by its declared role, and waives a fixed list
+of checks for an order that reduces risk; no short is enforced against every working sell and
+every issued clearance, one clearance per conid at a time. A role is never trusted: two sells
+that are each within the position could together go short, and a "protective" buy is still a
+buy. The exact rule, its waivers and its tests are stated once, in Session 4's item 4 of
+SESSION_PROMPTS. `cancel` takes no clearance and is allowed in every mode, so the kill switch
+works when everything else fails. The paper guard, the kill switch and the mode are checked both
+at Session 4's write boundary and as Session 4a reason codes, deliberately: defence in depth.
+Rejected: shipping the write path unlocked for one session (nothing could call it yet, but the
+lock is cheap and stays as an invariant); building the pre-trade checks first (the kill switch's
+cancels and the no-margin whatif need the order client); clearing by declared role (the PR #6
+review showed a protective stop plus a flatten could oversell).
