@@ -97,10 +97,11 @@ def test_a_non_finite_nav_is_absent(ledger, value):
     assert decode_ledger(ledger, base_currency="EUR").nav is None
 
 
-def test_a_cash_row_without_a_readable_balance_is_left_out(ledger):
+def test_a_cash_row_without_a_readable_balance_is_named_as_unreadable(ledger):
     ledger["USD"]["cashbalance"] = "n/a"
     reading = decode_ledger(ledger, base_currency="EUR")
     assert [balance.currency for balance in reading.balances] == ["EUR"]
+    assert reading.unreadable_currencies == ("USD",)
 
 
 @pytest.mark.parametrize("body", [None, [], "BASE", 7])

@@ -13,7 +13,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import asyncio
 import ssl
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -27,15 +28,16 @@ from ..errors import GatewayError, ProfileRefusedError
 from .base import TransportKind
 from .gateway_install import GatewayInstall, ensure_installed
 from .gateway_java import JavaRuntime
-from .gateway_login import LoginDriver, PlaywrightLoginDriver
+from .gateway_login import LoginDriver, LoginOutcome, PlaywrightLoginDriver
 from .gateway_process import GatewayProcess
 
 log = get_logger("ibkr.gateway")
 
 HTTP_OK = 200
 
-#: The Gateway answers this with 200 once logged in and 401 before.
-SESSION_PROBE_PATH = "/v1/api/tickle"
+#: The endpoint, under the API base path, the Gateway answers with 200 once logged in and 401
+#: before.
+SESSION_PROBE_ENDPOINT = "tickle"
 
 
 class GatewayTransport:
@@ -55,6 +57,7 @@ class GatewayTransport:
         java_home: Path | None = None,
         driver: LoginDriver | None = None,
         download_client: httpx.AsyncClient | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if profile != "paper":
             raise ProfileRefusedError(
@@ -65,6 +68,9 @@ class GatewayTransport:
         self._username = username
         self._password = password
         self._base_url = ibkr.gateway.local_address.rstrip("/") + base_path
+        self._probe_path = f"{base_path}/{SESSION_PROBE_ENDPOINT}"
+        self._monotonic = monotonic
+        self._last_login_at: float | None = None
         self._install_dir = install_dir
         self._policy = policy
         self._timeout = timeout_seconds
@@ -116,7 +122,7 @@ class GatewayTransport:
                 verify=install.ssl_context(), timeout=self._timeout, trust_env=False
             ) as client:
                 response = await client.post(
-                    self._ibkr.gateway.local_address.rstrip("/") + SESSION_PROBE_PATH
+                    self._ibkr.gateway.local_address.rstrip("/") + self._probe_path
                 )
         except httpx.HTTPError:
             return False
@@ -125,15 +131,29 @@ class GatewayTransport:
     async def _login(self, install: GatewayInstall) -> None:
         login = self._ibkr.gateway.login
         url = self._ibkr.gateway.local_address.rstrip("/") + login.route
+        interval = login.min_relogin_interval_seconds
+        if self._last_login_at is not None:
+            since = self._monotonic() - self._last_login_at
+            if since < interval:
+                raise GatewayError(
+                    f"the Gateway logged in {since:.0f} s ago; another login waits until "
+                    f"{interval:.0f} s have passed, so repeated logins cannot lock the username"
+                )
         details: list[str] = []
+        self._last_login_at = self._monotonic()
         for attempt in range(1, login.max_attempts + 1):
-            outcome = await self._driver.login(
-                url=url,
-                username=self._username.get_secret_value(),
-                password=self._password.get_secret_value(),
-                spki_pin=install.spki_pin(),
-                ibkr=self._ibkr,
-            )
+            try:
+                outcome = await self._driver.login(
+                    url=url,
+                    username=self._username.get_secret_value(),
+                    password=self._password.get_secret_value(),
+                    spki_pin=install.spki_pin(),
+                    ibkr=self._ibkr,
+                )
+            except Exception as exc:  # a browser that fails is a failed login
+                outcome = LoginOutcome(
+                    False, None, f"the login browser failed: {type(exc).__name__}"
+                )
             if outcome.succeeded and await self._logged_in(install):
                 log.info("Gateway logged in", extra={"attempt": attempt})
                 return
@@ -147,8 +167,8 @@ class GatewayTransport:
         if self._process is None:
             self._process = GatewayProcess(
                 install,
-                local_address=self._ibkr.gateway.local_address,
-                startup_timeout=self._ibkr.gateway.startup_timeout_seconds,
+                ibkr=self._ibkr,
+                readiness_path=self._probe_path,
                 java=self._java,
             )
         if not await self._process.answering():

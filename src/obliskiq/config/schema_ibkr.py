@@ -27,7 +27,23 @@ from .base import FrozenModel
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _FIELD_ID_RE = re.compile(r"[0-9]{1,6}")
-_PREFIX_RE = re.compile(r"[A-Z]{1,4}")
+_PREFIX_RE = re.compile(r"D[A-Z]{0,3}")
+
+#: IBKR's per-request ceilings (changelog 2025-12-10, docs/knowledge/ibkr.md): a configured
+#: batch above them is refused by the API, so the configuration may not ask for one.
+IBKR_MAX_CONIDS_PER_SNAPSHOT = 100
+IBKR_MAX_FIELDS_PER_SNAPSHOT = 50
+
+#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing"): each must sit in a rate
+#: group, or an owner override could leave it paced by the global window alone.
+IBKR_PACED_ENDPOINTS = (
+    "iserver/marketdata/history",
+    "iserver/marketdata/snapshot",
+    "portfolio/accounts",
+    "iserver/scanner/params",
+    "iserver/scanner/run",
+    "tickle",
+)
 
 #: The names the snapshot decoder knows. A field map may only name these.
 type SnapshotFieldName = Literal[
@@ -90,7 +106,8 @@ def _field_id(value: str | None) -> str | None:
 
 def _account_prefix(value: str) -> str:
     if not _PREFIX_RE.fullmatch(value):
-        raise ValueError("must be one to four capital letters, such as DU")
+        # IBKR paper accounts start with D (DU, DF); a live prefix (U, F) is never a paper one.
+        raise ValueError("must be one to four capital letters starting with D, such as DU")
     return value
 
 
@@ -180,6 +197,13 @@ class RateLimitConfig(FrozenModel):
         paths = [path for group in self.groups for path in group.paths]
         if len(paths) != len(set(paths)):
             raise ValueError("an endpoint path belongs to one rate group")
+        unpaced = [
+            endpoint
+            for endpoint in IBKR_PACED_ENDPOINTS
+            if not any(endpoint == p or endpoint.startswith(f"{p}/") for p in paths)
+        ]
+        if unpaced:
+            raise ValueError(f"IBKR paces {', '.join(unpaced)} on its own; each needs a rate group")
         return self
 
 
@@ -189,8 +213,8 @@ class SnapshotField(FrozenModel):
 
 
 class MarketDataConfig(FrozenModel):
-    max_conids_per_snapshot: PositiveInt
-    max_fields_per_snapshot: PositiveInt
+    max_conids_per_snapshot: Annotated[int, Field(ge=1, le=IBKR_MAX_CONIDS_PER_SNAPSHOT)]
+    max_fields_per_snapshot: Annotated[int, Field(ge=1, le=IBKR_MAX_FIELDS_PER_SNAPSHOT)]
     snapshot_settle_retries: PositiveInt
     snapshot_settle_delay_seconds: NonNegativeFloat
     implied_vol_units: Literal["auto", "decimal", "percent"]
@@ -266,6 +290,7 @@ class GatewayLoginConfig(FrozenModel):
     keystroke_delay_ms: NonNegativeInt
     presubmit_wait_seconds: NonNegativeFloat
     max_attempts: PositiveInt
+    min_relogin_interval_seconds: NonNegativeFloat
 
 
 class GatewayConfig(FrozenModel):
@@ -276,6 +301,8 @@ class GatewayConfig(FrozenModel):
     startup_timeout_seconds: PositiveFloat
     java_major_versions: list[PositiveInt] = Field(min_length=1)
     keystore_validity_days: PositiveInt
+    probe_interval_seconds: PositiveFloat
+    stop_grace_seconds: PositiveFloat
     login: GatewayLoginConfig
 
 

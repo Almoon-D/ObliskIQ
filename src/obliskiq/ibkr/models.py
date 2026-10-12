@@ -37,6 +37,9 @@ class Account(IbkrModel):
     def __repr__(self) -> str:
         return f"Account(<masked>, currency={self.currency!r})"
 
+    def __str__(self) -> str:
+        return repr(self)
+
 
 class Position(IbkrModel):
     conid: Conid
@@ -77,13 +80,15 @@ class Ledger(IbkrModel):
     nav_refusal: str | None
     base_currency: CurrencyCode | None
     balances: tuple[CashBalance, ...]
+    #: Currencies whose row carried no readable cash balance: the balances are incomplete.
+    unreadable_currencies: tuple[CurrencyCode, ...] = ()
 
 
 # ── market data ──
 
 
 class LastKind(StrEnum):
-    """What the ``last`` price is: a trade, the previous close (``C``), or halted (``H``)."""
+    """What the ``last`` price is: a trade, the previous close (``C``), or halted (``H``, ``L``)."""
 
     TRADE = "trade"
     PRIOR_CLOSE = "prior_close"

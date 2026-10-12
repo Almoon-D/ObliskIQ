@@ -32,7 +32,7 @@ from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_ibkr import IbkrConfig
 from obliskiq.env import Environment
 from obliskiq.errors import ConfigError, EnvVarError, UpstreamError
-from obliskiq.ibkr.errors import ERROR_EXCERPT_CHARS, AuthError
+from obliskiq.ibkr.errors import ERROR_EXCERPT_CHARS, AuthError, IbkrUpstreamError
 from obliskiq.ibkr.transport.base import TransportKind
 from obliskiq.ibkr.transport.oauth import (
     LiveSessionToken,
@@ -1049,3 +1049,47 @@ def test_ordinary_signing_carries_no_dh_challenge(
         "oauth_signature_method",
         "oauth_signature",
     }
+
+
+async def test_each_retry_is_a_new_signed_request_not_a_replay(
+    respx_mock: Any, session: OAuthSession, credentials: OAuthCredentials, policy: RetryPolicy
+) -> None:
+    """A retried token request carries a fresh nonce and challenge; the answer to the last one
+    is the one verified."""
+    nonces: list[str] = []
+    answer = _ibkr_answers(credentials)
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        nonces.append(_auth_params(request.headers["Authorization"])["oauth_nonce"])
+        if len(nonces) == 1:
+            return httpx.Response(503, text="busy")
+        return answer(request)
+
+    respx_mock.post(TOKEN_URL).mock(side_effect=flaky)
+    retrying = dataclasses.replace(policy, retries=1)
+    async with httpx.AsyncClient() as client:
+        token = await negotiate_live_session_token(session, TOKEN_URL, client, retrying)
+    assert len(nonces) == 2
+    assert nonces[0] != nonces[1]
+    assert session.live_session_token == token
+
+
+async def test_an_unreachable_token_endpoint_is_an_ibkr_upstream_error(
+    respx_mock: Any, session: OAuthSession, policy: RetryPolicy
+) -> None:
+    """The session's repair loop counts and alerts IbkrError; a dead host must be one."""
+    respx_mock.post(TOKEN_URL).mock(side_effect=httpx.ConnectError("refused"))
+    retrying = dataclasses.replace(policy, retries=1)
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(IbkrUpstreamError, match="unreachable after 2 attempts"):
+            await negotiate_live_session_token(session, TOKEN_URL, client, retrying)
+    assert session.live_session_token is None
+
+
+async def test_a_retryable_status_on_the_last_attempt_is_reported(
+    respx_mock: Any, session: OAuthSession, policy: RetryPolicy
+) -> None:
+    respx_mock.post(TOKEN_URL).mock(return_value=httpx.Response(503, text="busy"))
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(AuthError, match="HTTP 503"):
+            await negotiate_live_session_token(session, TOKEN_URL, client, policy)

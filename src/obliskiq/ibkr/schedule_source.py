@@ -18,7 +18,7 @@ XEUR calendar) are skipped, so they do not disagree every day.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime, timedelta
 
 from ..config.schema_ibkr import IbkrConfig
@@ -32,12 +32,17 @@ log = get_logger("ibkr.schedule")
 
 SOURCE_NAME = "ibkr_trading_schedule"
 
-#: Saturday and Sunday in ``date.weekday()`` numbering: never read as a missing session.
-_WEEKEND = frozenset({5, 6})
+#: Whether a venue normally trades on a weekday (the calendars' ``is_business_weekday``): a day
+#: the schedule omits is read as closed only when it is one; a weekend is never a missing session.
+type TradingWeekday = Callable[[str, date], bool]
 
 
 def observations(
-    venue: str, schedule: TradingSchedule, *, missing_is_closed: bool
+    venue: str,
+    schedule: TradingSchedule,
+    *,
+    missing_is_closed: bool,
+    is_trading_weekday: TradingWeekday,
 ) -> dict[date, SessionObservation]:
     """One observation per day the schedule covers: the day's liquid hours, or closed."""
     spans: dict[date, tuple[datetime, datetime]] = {}
@@ -53,7 +58,7 @@ def observations(
     if missing_is_closed and schedule.first_day is not None and schedule.last_day is not None:
         day = schedule.first_day
         while day <= schedule.last_day:
-            if day not in out and day.weekday() not in _WEEKEND:
+            if day not in out and is_trading_weekday(venue, day):
                 out[day] = SessionObservation(
                     venue=venue,
                     day=day,
@@ -69,8 +74,9 @@ def observations(
 class IbkrTradingSchedule:
     """A cache of IBKR's regular sessions per venue (and per registered contract)."""
 
-    def __init__(self, ibkr: IbkrConfig) -> None:
+    def __init__(self, ibkr: IbkrConfig, *, is_trading_weekday: TradingWeekday) -> None:
         self._ibkr = ibkr
+        self._is_trading_weekday = is_trading_weekday
         self._skip = frozenset(ibkr.trading_schedule.skip_venues)
         self._by_venue: dict[str, dict[date, SessionObservation]] = {}
         self._by_conid: dict[int, dict[date, SessionObservation]] = {}
@@ -90,7 +96,10 @@ class IbkrTradingSchedule:
     def update(self, venue: str, schedule: TradingSchedule, *, for_contract: bool = False) -> None:
         """Replace what is known for ``venue`` (or, ``for_contract``, for the schedule's conid)."""
         found = observations(
-            venue, schedule, missing_is_closed=self._ibkr.trading_schedule.missing_weekday_is_closed
+            venue,
+            schedule,
+            missing_is_closed=self._ibkr.trading_schedule.missing_weekday_is_closed,
+            is_trading_weekday=self._is_trading_weekday,
         )
         if for_contract:
             self._by_conid = {**self._by_conid, schedule.conid: found}

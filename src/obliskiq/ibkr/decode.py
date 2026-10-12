@@ -36,6 +36,7 @@ from ..config.schema_ibkr import IbkrConfig, SnapshotField
 from ..domain.enums import MarketDataStatus
 from ..logging_setup import get_logger
 from ..util.numeric import safe_float, safe_int
+from .errors import DecodeError
 from .models import (
     Account,
     Algo,
@@ -78,8 +79,13 @@ PERCENT_TO_DECIMAL = 100.0
 #: Milliseconds per second, for IBKR's epoch-millisecond stamps.
 MS_PER_SECOND = 1000.0
 
-#: Price prefixes IBKR puts on field 31 (IBKR field table: C previous close, H halted).
-PRICE_PREFIXES: Mapping[str, LastKind] = {"C": LastKind.PRIOR_CLOSE, "H": LastKind.HALTED}
+#: Price prefixes IBKR puts on field 31 (IBKR field table: C previous close, H halted; lite read
+#: H and L both as halted bounds).
+PRICE_PREFIXES: Mapping[str, LastKind] = {
+    "C": LastKind.PRIOR_CLOSE,
+    "H": LastKind.HALTED,
+    "L": LastKind.HALTED,
+}
 
 #: The first character of a 6509 availability code (IBKR, "Market Data Availability").
 AVAILABILITY_CODES: Mapping[str, MarketDataStatus] = {
@@ -90,6 +96,10 @@ AVAILABILITY_CODES: Mapping[str, MarketDataStatus] = {
     "N": MarketDataStatus.NONE,  # not subscribed
     "O": MarketDataStatus.NONE,  # the market-data API acknowledgement is not signed
 }
+
+#: A 6509 code: one availability letter, then up to three of the qualifiers IBKR documents
+#: (P snapshot, p consolidated, B book, d performance details).
+_AVAILABILITY_CODE_RE = re.compile(rf"[{''.join(AVAILABILITY_CODES)}][pPBd]{{0,3}}")
 
 #: The ledger's consolidated row, beside the per-currency rows.
 LEDGER_BASE_KEY = "BASE"
@@ -225,12 +235,14 @@ def decode_availability(
     raw = _text(flag)
     if raw is None:
         return None, None, None, None
-    status = AVAILABILITY_CODES.get(raw[0])
-    if status is None:
-        # MCP-style spellings (REALTIME, FROZEN_DELAYED); anything else stays undecoded.
+    if _AVAILABILITY_CODE_RE.fullmatch(raw):
+        status: MarketDataStatus | None = AVAILABILITY_CODES[raw[0]]
+    else:
+        # Route spellings (REALTIME, FROZEN_DELAYED) through the domain enum, whole word only;
+        # anything else stays undecoded.
         status = MarketDataStatus.from_route_flag(raw)
-        if status is None or len(raw) <= 1:
-            return None, raw, None, None
+    if status is None:
+        return None, raw, None, None
     if status is MarketDataStatus.REALTIME:
         return status, raw, 0, DelayBasis.REALTIME
     if status is MarketDataStatus.DELAYED:
@@ -397,15 +409,23 @@ def decode_accounts(body: Any) -> list[Account]:
 
 
 def decode_positions(rows: Any) -> list[Position]:
+    """One page of positions. An empty body is no positions; anything unreadable raises.
+
+    Positions feed reconciliation and the cash checks, so a page with a row that cannot be read
+    is refused whole rather than returned short: a short read would look complete.
+    """
+    if rows is None:
+        return []
+    if not isinstance(rows, list):
+        raise DecodeError("a positions page that is not a list: the positions read is incomplete")
     out: list[Position] = []
-    for row in rows if isinstance(rows, list) else []:
-        if not isinstance(row, Mapping):
-            continue
-        conid = safe_int(row.get("conid"), None)
-        quantity = to_decimal(row.get("position"))
-        if conid is None or conid <= 0 or quantity is None:
-            log.warning("position row without a conid or a quantity; skipped")
-            continue
+    for row in rows:
+        conid = safe_int(row.get("conid"), None) if isinstance(row, Mapping) else None
+        quantity = to_decimal(row.get("position")) if isinstance(row, Mapping) else None
+        if not isinstance(row, Mapping) or conid is None or conid <= 0 or quantity is None:
+            raise DecodeError(
+                "a position row without a conid or a quantity: the positions read is incomplete"
+            )
         out.append(
             Position(
                 conid=conid,
@@ -449,12 +469,14 @@ def decode_ledger(body: Any, *, base_currency: str) -> Ledger:
     """NAV in the configured base currency only, and cash per currency."""
     ledger = body if isinstance(body, Mapping) else {}
     balances: list[CashBalance] = []
+    unreadable: list[str] = []
     for key, entry in ledger.items():
         code = currency_code(key)
         if code is None or not isinstance(entry, Mapping):
             continue
         cash = to_decimal(entry.get("cashbalance"))
         if cash is None:
+            unreadable.append(code)
             continue
         balances.append(
             CashBalance(currency=code, cash=cash, settled_cash=to_decimal(entry.get("settledcash")))
@@ -480,7 +502,13 @@ def decode_ledger(body: Any, *, base_currency: str) -> Ledger:
         )
     else:
         nav = NavReading(nav=value, currency=identified)
-    return Ledger(nav=nav, nav_refusal=refusal, base_currency=identified, balances=tuple(balances))
+    return Ledger(
+        nav=nav,
+        nav_refusal=refusal,
+        base_currency=identified,
+        balances=tuple(balances),
+        unreadable_currencies=tuple(sorted(unreadable)),
+    )
 
 
 # ── contracts ──

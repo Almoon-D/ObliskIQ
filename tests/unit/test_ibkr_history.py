@@ -18,6 +18,7 @@ BASE = "https://gw.test/v1/api"
 HISTORY = f"{BASE}/iserver/marketdata/history"
 CONID = 756733
 LATEST = date(2026, 10, 9)
+RECENT = start_time(LATEST)
 
 
 def _ms(day: date) -> int:
@@ -151,11 +152,11 @@ async def test_a_route_serving_the_whole_window_needs_no_chunking(reader):
     _route(respx.mock, fake)
     earliest = LATEST - timedelta(days=60)
     history = await reader.daily_between(CONID, earliest=earliest, latest=LATEST)
-    starts = [call for call in fake.calls if "startTime" in call]
+    walk = [call for call in fake.calls if call.get("startTime") not in (None, RECENT)]
     assert history.bars[0].start.date() <= earliest + timedelta(days=3)
-    # The recent window covered it: the walk asked for nothing further back... except the probe.
-    assert all(call.get("startTime") is None for call in fake.calls[:1])
-    assert len(starts) <= 1
+    # The recent window covered it: it ends at `latest`, and the walk asked for at most one more.
+    assert fake.calls[0]["startTime"] == RECENT
+    assert len(walk) <= 1
 
 
 @respx.mock
@@ -189,7 +190,7 @@ async def test_the_chunk_ceiling_bounds_a_runaway_walk(reader, shipped_settings)
     fake = HistoryRoute(first=date(1990, 1, 1), cap=5)
     _route(respx.mock, fake)
     await reader.daily_between(CONID, earliest=date(1995, 1, 1), latest=LATEST)
-    walk = [call for call in fake.calls if "startTime" in call]
+    walk = [call for call in fake.calls if call.get("startTime") not in (None, RECENT)]
     assert len(walk) == shipped_settings.ibkr.history.max_chunks
 
 
@@ -201,7 +202,7 @@ async def test_a_refused_window_is_asked_again_for_half_of_it(reader):
     history = await reader.daily_between(
         CONID, earliest=LATEST - timedelta(days=730), latest=LATEST
     )
-    periods = [call["period"] for call in fake.calls if "startTime" not in call]
+    periods = [call["period"] for call in fake.calls if call.get("startTime") == RECENT]
     assert periods[:3] == ["730d", "365d", "182d"]
     assert history.bars
 
@@ -238,3 +239,34 @@ async def test_a_walk_that_returns_the_same_bars_stops(reader):
     )
     assert len(history.bars) == 5
     assert route.call_count == 3, "recent window, probe, one walk step"
+
+
+@respx.mock
+async def test_a_window_ending_in_the_past_is_anchored_at_its_end(reader):
+    """Review round 1: the first request had no startTime, so it was anchored at today and
+    served bars after ``latest``."""
+    fake = HistoryRoute(first=date(2010, 1, 1), cap=10_000)
+    _route(respx.mock, fake)
+    latest = LATEST - timedelta(days=90)
+    earliest = latest - timedelta(days=60)
+    history = await reader.daily_between(CONID, earliest=earliest, latest=latest)
+    assert fake.calls[0]["startTime"] == start_time(latest)
+    assert history.bars
+    assert all(earliest <= bar.start.date() <= latest for bar in history.bars)
+
+
+@respx.mock
+async def test_bars_served_outside_the_window_are_left_out(reader):
+    """A route that serves more than was asked for adds nothing outside ``[earliest, latest]``."""
+    served = [LATEST - timedelta(days=offset) for offset in (0, 5, 10, 400)]
+    respx.get(f"{BASE}/iserver/marketdata/history").mock(
+        return_value=httpx.Response(
+            200, json={"data": [{"t": _ms(day), "c": 1.0} for day in served]}
+        )
+    )
+    latest = LATEST - timedelta(days=5)
+    history = await reader.daily_between(CONID, earliest=LATEST - timedelta(days=30), latest=latest)
+    assert [bar.start.date() for bar in history.bars] == [
+        LATEST - timedelta(days=10),
+        latest,
+    ]

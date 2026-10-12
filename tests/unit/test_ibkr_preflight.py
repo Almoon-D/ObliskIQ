@@ -265,3 +265,30 @@ async def test_history_without_bars_is_reported_not_failed(env, shipped_settings
     report = await run_read_only(env, shipped_settings, data_dir=None, transport=fake_transport)
     assert report.ok, report.render()
     assert any(step.detail == "no bars returned" for step in report.steps)
+
+
+@pytest.mark.parametrize(("ok", "expected"), [(True, 0), (False, 1)])
+def test_with_credentials_the_cli_prints_the_masked_report_and_its_verdict(
+    config_dir, monkeypatch, ok, expected
+):
+    from obliskiq.cli import app as cli_app
+
+    for name, value in {
+        "OBLISK_IBKR_PROFILE": "paper",
+        "OBLISK_IBKR_ACCOUNT_ID": ACCOUNT,
+        "OBLISK_IBKR_TRANSPORT": "gateway",
+        "OBLISK_IBKR_GATEWAY_USERNAME": "paper-user",
+        "OBLISK_IBKR_GATEWAY_PASSWORD": "paper-pass",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    async def walked(env, settings, *, data_dir):
+        report = PreflightReport()
+        report.add(STEP_GUARD, ok, f"account {ACCOUNT} checked")
+        return report
+
+    monkeypatch.setattr(cli_app, "run_read_only", walked)
+    status, out, _ = _run("--config-dir", str(config_dir), "preflight", "--read-only")
+    assert ACCOUNT not in out, "the account id is masked"
+    assert "IBKR read-only preflight" in out
+    assert status == expected

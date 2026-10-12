@@ -7,6 +7,7 @@ The real browser login against IBKR's page is exercised only by the live trial
 import datetime as dt
 import hashlib
 import io
+import re
 import ssl
 import stat
 import zipfile
@@ -22,6 +23,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from pydantic import SecretStr
 
+from obliskiq.config import load_config
+from obliskiq.config.schema_ibkr import IbkrConfig
 from obliskiq.ibkr.errors import GatewayError, ProfileRefusedError
 from obliskiq.ibkr.transport import gateway as gateway_module
 from obliskiq.ibkr.transport.gateway import GatewayTransport
@@ -96,6 +99,8 @@ def java_home(tmp_path: Path) -> Path:
     _script(home / "bin" / "java", "echo 'openjdk version \"11.0.32.1\" 2026-08-18' >&2\n")
     _script(
         home / "bin" / "keytool",
+        f'echo "$@" >> "{tmp_path / "keytool-args"}"\n'
+        f'[ -n "$GATEWAY_KEYSTORE_PASSWORD" ] && echo set >> "{tmp_path / "keytool-env"}"\n'
         'case "$1" in\n'
         '  -genkeypair) for a; do [ "$prev" = "-keystore" ] && : > "$a"; prev=$a; done ;;\n'
         f'  -exportcert) for a; do [ "$prev" = "-file" ] && cp "{pem}" "$a"; prev=$a; done ;;\n'
@@ -193,6 +198,9 @@ async def test_the_install_downloads_verifies_and_pins_its_own_certificate(
     assert context.verify_mode is ssl.CERT_REQUIRED
     assert len(install.spki_pin()) == 44
     assert existing_install(ibkr, tmp_path / "gw") == install
+    (password,) = re.findall(r'sslPwd: "([^"]+)"', conf)
+    assert password not in (tmp_path / "keytool-args").read_text(), "not on the command line"
+    assert (tmp_path / "keytool-env").read_text().split() == ["set", "set"]
 
 
 @respx.mock
@@ -272,6 +280,14 @@ def test_a_java_home_without_the_tool_is_refused(tmp_path):
         JavaRuntime(tmp_path).tool("keytool")
 
 
+def test_child_processes_get_none_of_obliskiqs_variables(java_home, monkeypatch):
+    monkeypatch.setenv("OBLISK_IBKR_GATEWAY_PASSWORD", "paper-pass")
+    monkeypatch.setenv("OBLISK_IBKR_ACCESS_TOKEN_SECRET", "secret")
+    env = JavaRuntime(java_home).environment()
+    assert not [name for name in env if name.startswith("OBLISK_")]
+    assert "paper-pass" not in env.values()
+
+
 def test_the_runtime_comes_first_on_the_launcher_path(java_home):
     env = JavaRuntime(java_home).environment()
     assert env["JAVA_HOME"] == str(java_home)
@@ -291,13 +307,26 @@ def _install(tmp_path: Path, run: str) -> GatewayInstall:
     return GatewayInstall(root=root, cert_path=cert)
 
 
+READINESS = "/v1/api/tickle"
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _gateway(address: str, *, startup: float, stop_grace: float | None = None) -> IbkrConfig:
+    """The shipped IBKR settings with the Gateway at another address and a short startup."""
+    ibkr = load_config(ROOT / "config").settings.ibkr
+    update: dict[str, Any] = {"local_address": address, "startup_timeout_seconds": startup}
+    if stop_grace is not None:
+        update["stop_grace_seconds"] = stop_grace
+    return ibkr.model_copy(update={"gateway": ibkr.gateway.model_copy(update=update)})
+
+
 async def test_a_gateway_already_serving_is_used_and_never_stopped(
     tmp_path, java_home, monkeypatch
 ):
     process = GatewayProcess(
         _install(tmp_path, "exit 9\n"),
-        local_address="https://localhost:59999",
-        startup_timeout=2.0,
+        ibkr=_gateway("https://localhost:59999", startup=2.0),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
 
@@ -313,8 +342,8 @@ async def test_a_gateway_already_serving_is_used_and_never_stopped(
 async def test_a_gateway_that_exits_while_starting_is_reported(tmp_path, java_home):
     process = GatewayProcess(
         _install(tmp_path, "exit 3\n"),
-        local_address="https://localhost:59998",
-        startup_timeout=5.0,
+        ibkr=_gateway("https://localhost:59998", startup=5.0),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
     with pytest.raises(GatewayError, match="exited with status 3"):
@@ -324,8 +353,8 @@ async def test_a_gateway_that_exits_while_starting_is_reported(tmp_path, java_ho
 async def test_a_gateway_that_never_answers_times_out_and_is_stopped(tmp_path, java_home):
     process = GatewayProcess(
         _install(tmp_path, "sleep 30\n"),
-        local_address="https://localhost:59997",
-        startup_timeout=1.5,
+        ibkr=_gateway("https://localhost:59997", startup=1.5),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
     with pytest.raises(GatewayError, match="did not answer"):
@@ -338,8 +367,8 @@ async def test_a_started_gateway_is_stopped_with_its_process_group(
 ):
     process = GatewayProcess(
         _install(tmp_path, "sleep 30\n"),
-        local_address="https://localhost:59996",
-        startup_timeout=5.0,
+        ibkr=_gateway("https://localhost:59996", startup=5.0),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
     calls = {"n": 0}
@@ -358,8 +387,8 @@ async def test_a_started_gateway_is_stopped_with_its_process_group(
 async def test_a_probe_through_the_pinned_certificate_fails_closed(tmp_path, java_home):
     process = GatewayProcess(
         _install(tmp_path, "exit 0\n"),
-        local_address="https://localhost:1",
-        startup_timeout=1.0,
+        ibkr=_gateway("https://localhost:1", startup=1.0),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
     assert await process.answering() is False
@@ -399,7 +428,8 @@ class FakeDriver:
 class FakeProcess:
     instances: ClassVar[list[FakeProcess]] = []
 
-    def __init__(self, install, *, local_address, startup_timeout, java) -> None:
+    def __init__(self, install, *, ibkr, readiness_path, java) -> None:
+        self.readiness_path = readiness_path
         self.serving = False
         self.starts = 0
         self.stops = 0
@@ -431,7 +461,13 @@ def transport_for(shipped_settings, tmp_path, monkeypatch, policy):
     monkeypatch.setattr(gateway_module, "GatewayProcess", FakeProcess)
     monkeypatch.setattr(JavaRuntime, "require", java_ok)
 
-    def build(driver: FakeDriver, sessions: list[bool], profile: str = "paper") -> GatewayTransport:
+    def build(
+        driver: FakeDriver,
+        sessions: list[bool],
+        profile: str = "paper",
+        clock: list[float] | None = None,
+    ) -> GatewayTransport:
+        now = clock if clock is not None else [0.0]
         transport = GatewayTransport(
             shipped_settings.ibkr,
             profile=profile,  # type: ignore[arg-type]
@@ -442,6 +478,7 @@ def transport_for(shipped_settings, tmp_path, monkeypatch, policy):
             policy=policy,
             timeout_seconds=1.0,
             driver=driver,
+            monotonic=lambda: now[0],
         )
         answers = list(sessions)
 
@@ -522,6 +559,41 @@ async def test_recover_logs_in_again_and_close_stops_the_process(transport_for):
     assert FakeProcess.instances[0].stops == 1
 
 
+async def test_a_relogin_inside_the_interval_is_refused_without_a_login(
+    transport_for, shipped_settings
+):
+    """In the cloud failure mode (password accepted, no session) a repair loop would log in
+    every few minutes; logins are spaced so repeats cannot lock the username."""
+    interval = shipped_settings.ibkr.gateway.login.min_relogin_interval_seconds
+    clock = [0.0]
+    driver = FakeDriver([LoginOutcome(True, True, "logged in")] * 2)
+    transport = transport_for(driver, [False, True, False, False, True], clock=clock)
+    await transport.prepare()
+    clock[0] = interval / 2
+    with pytest.raises(GatewayError, match="another login waits"):
+        await transport.recover()
+    assert len(driver.calls) == 1
+    clock[0] = interval
+    await transport.recover()
+    assert len(driver.calls) == 2
+
+
+async def test_a_login_browser_that_crashes_is_a_failed_login(transport_for):
+    class CrashingDriver(FakeDriver):
+        async def login(self, **kwargs: Any) -> LoginOutcome:
+            self.calls.append(kwargs)
+            raise RuntimeError("chromium crashed")
+
+    transport = transport_for(CrashingDriver([]), [False])
+    with pytest.raises(GatewayError, match="the login browser failed: RuntimeError"):
+        await transport.prepare()
+
+
+def test_the_gateway_probes_the_configured_api_path(transport_for, shipped_settings):
+    transport = transport_for(FakeDriver([]), [])
+    assert transport._probe_path == f"{shipped_settings.ibkr.base_path}/tickle"
+
+
 async def test_the_password_never_reaches_an_error(transport_for):
     driver = FakeDriver([LoginOutcome(False, False, "the login did not succeed (x)")])
     transport = transport_for(driver, [False])
@@ -561,8 +633,8 @@ async def test_the_session_probe_reads_200_as_logged_in(tmp_path, shipped_settin
 async def test_a_serving_gateway_answers_the_readiness_probe(tmp_path, java_home):
     process = GatewayProcess(
         _install(tmp_path, "exit 0\n"),
-        local_address="https://localhost:59995",
-        startup_timeout=1.0,
+        ibkr=_gateway("https://localhost:59995", startup=1.0),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
     respx.get("https://localhost:59995/v1/api/tickle").mock(return_value=httpx.Response(401))
@@ -570,13 +642,10 @@ async def test_a_serving_gateway_answers_the_readiness_probe(tmp_path, java_home
 
 
 async def test_a_gateway_ignoring_sigterm_is_killed(tmp_path, java_home, monkeypatch):
-    from obliskiq.ibkr.transport import gateway_process
-
-    monkeypatch.setattr(gateway_process, "_STOP_GRACE_SECONDS", 0.5)
     process = GatewayProcess(
         _install(tmp_path, "trap '' TERM\nwhile true; do sleep 0.1; done\n"),
-        local_address="https://localhost:59994",
-        startup_timeout=5.0,
+        ibkr=_gateway("https://localhost:59994", startup=5.0, stop_grace=0.5),
+        readiness_path=READINESS,
         java=JavaRuntime(java_home),
     )
     calls = {"n": 0}

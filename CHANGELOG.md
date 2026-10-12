@@ -39,6 +39,9 @@ Session 3 — IBKR read path. Read-only: no order endpoint is touched.
 
 - `RetryPolicy.from_settings` and a public `retry_after_seconds` in `util/http.py`.
 - Snapshot field ids follow IBKR's field table where lite's differed (DECISIONS D37).
+- Read paths fail closed where lite skipped: an unreadable position row, a positions pager that
+  reaches its cap and an unreadable cash balance raise; the history walk is anchored at the end
+  of its window (D41).
 
 ## [0.2.0] - 2026-10-09
 

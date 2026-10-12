@@ -22,9 +22,9 @@ import respx
 
 from obliskiq.domain.enums import MarketDataStatus
 from obliskiq.ibkr.client import IbkrClient, MarketData, Secdef
-from obliskiq.ibkr.errors import AccountGuardError
+from obliskiq.ibkr.errors import AccountGuardError, DecodeError
 from obliskiq.ibkr.guard import AccountGuard
-from obliskiq.ibkr.models import ContractMatch
+from obliskiq.ibkr.models import Account, ContractMatch
 from obliskiq.ibkr.session import BrokerSession
 
 BASE = "https://gw.test/v1/api"
@@ -69,7 +69,10 @@ def session(make_session: Callable[..., BrokerSession]) -> BrokerSession:
 
 @pytest.fixture
 def client(session, shipped_settings, guard) -> IbkrClient:
-    return IbkrClient(session, shipped_settings, guard)
+    """A client whose guard has passed against a listing that holds the configured account."""
+    built = IbkrClient(session, shipped_settings, guard)
+    built.run_guard([Account(account_id=ACCOUNT, currency="EUR", account_type="DEMO")])
+    return built
 
 
 def secdef_with(make_session, ibkr: Any) -> Secdef:
@@ -741,25 +744,51 @@ async def test_positions_page_until_an_empty_page(client):
     assert asked == [f"portfolio/{ACCOUNT}/positions/{page}" for page in range(3)]
 
 
-async def test_positions_stop_at_max_position_pages(make_session, shipped_settings, guard):
+async def test_a_pager_reaching_max_position_pages_is_incomplete_not_short(
+    make_session, shipped_settings, guard
+):
+    """The page cap is a runaway guard: reaching it means the list is incomplete, so the read
+    is refused rather than returned short."""
     pages = 3
     ibkr = with_section(shipped_settings.ibkr, "portfolio", max_position_pages=pages)
     client = IbkrClient(
         make_session(ibkr=ibkr), shipped_settings.model_copy(update={"ibkr": ibkr}), guard
     )
+    client.run_guard([Account(account_id=ACCOUNT, currency="EUR", account_type="DEMO")])
     with mocked() as mock:
         route = mock.route().respond(200, json=[{"conid": 1, "position": 1}])
-        positions = await client.portfolio.positions()
+        with pytest.raises(DecodeError, match="incomplete"):
+            await client.portfolio.positions()
     assert route.call_count == pages
-    assert len(positions) == pages
 
 
-async def test_position_rows_without_a_conid_or_quantity_are_skipped(client):
-    rows = [{"conid": 1}, {"position": 2}, {"conid": 4, "position": "3"}, "junk"]
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [{"conid": 1}, {"conid": 4, "position": "3"}],
+        [{"position": 2}],
+        [{"conid": 4, "position": "3"}, "junk"],
+        [{"conid": 0, "position": 1}],
+        {"error": "not a list"},
+    ],
+)
+async def test_an_unreadable_position_page_is_refused_whole(client, rows):
     with mocked() as mock:
         mock.get(f"portfolio/{ACCOUNT}/positions/0").respond(200, json=rows)
-        positions = await client.portfolio.positions_page(0)
-    assert [(p.conid, p.quantity) for p in positions] == [(4, Decimal("3"))]
+        with pytest.raises(DecodeError, match="incomplete"):
+            await client.portfolio.positions_page(0)
+
+
+async def test_cash_balances_refuse_a_ledger_with_an_unreadable_currency(client):
+    ledger = {
+        "BASE": {"currency": "BASE", "netliquidationvalue": 1.0},
+        "EUR": {"cashbalance": 10, "exchangerate": 1.0},
+        "USD": {"cashbalance": "n/a", "exchangerate": 0.92},
+    }
+    with mocked() as mock:
+        mock.get(f"portfolio/{ACCOUNT}/ledger").respond(200, json=ledger)
+        with pytest.raises(DecodeError, match="USD"):
+            await client.portfolio.cash_balances()
 
 
 async def test_accounts_are_cached_and_refreshed_on_request(client):
@@ -1103,3 +1132,28 @@ def test_no_yahoo_binance_or_coingecko_dependency():
         code = _executable_source(path).lower()
         for host in ("yahoo", "binance", "coingecko", "crumb"):
             assert host not in code, path
+
+
+async def test_no_endpoint_group_is_reachable_before_the_guard_passes(
+    session, shipped_settings, guard
+):
+    client = IbkrClient(session, shipped_settings, guard)
+    for group in ("portfolio", "marketdata", "history", "secdef", "contracts", "scanner"):
+        with pytest.raises(AccountGuardError, match="has not passed"):
+            getattr(client, group)
+
+
+async def test_a_guard_that_fails_at_start_releases_the_session(
+    session, shipped_settings, guard, fake_transport
+):
+    client = IbkrClient(session, shipped_settings, guard)
+    with mocked() as mock:
+        mock.post("iserver/auth/ssodh/init").respond(200, json={"authenticated": True})
+        mock.get("iserver/accounts").respond(200, json={"accounts": []})
+        mock.get("portfolio/accounts").respond(200, json=[{"id": "DU_OTHER"}])
+        with pytest.raises(AccountGuardError, match="not among"):
+            async with client:
+                pass
+    assert fake_transport.closed == 1, "the transport opened for the start is released"
+    with pytest.raises(AccountGuardError):
+        _ = client.portfolio

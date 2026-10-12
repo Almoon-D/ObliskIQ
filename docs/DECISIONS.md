@@ -543,3 +543,29 @@ domain models Session 4 adds; money (cash, NAV, positions) is `Decimal`, and an 
 cannot hold is absent. The NAV is read only in the configured base currency and refused, never
 converted, otherwise. Positions, cash and NAV are never printed by the preflight. Configuration is
 read through `self._ibkr.<section>.<key>` chains so the unread-key scan sees each key.
+
+### D41 · Fail-closed reads, session repair and pacing (Session 3 review)
+
+- **Incomplete portfolio reads raise.** A positions page with a row that has no conid or quantity,
+  a page that is not a list, and a pager that reaches `portfolio.max_position_pages` raise
+  `DecodeError`; `cash_balances()` raises when a currency's balance is unreadable (the ledger
+  names them in `unreadable_currencies`). lite skipped such rows with a warning; a short read
+  would look complete to reconciliation and the no-negative-cash rule.
+- **Endpoint groups open only after the account guard.** `IbkrClient` raises
+  `AccountGuardError` for any group read before `start()` (or `accounts()` then `run_guard()`)
+  has passed, and a failed start releases the session.
+- **Repairs.** Any failure inside re-authentication counts as one failed attempt (not only
+  `IbkrError`), so the attempts, the alert and the lost-session state always follow; the
+  keepalive survives any failure. One repair runs at a time: concurrent requests that failed
+  before it finished retry instead of repairing again or failing. The OAuth token request signs
+  each retry afresh (a resent nonce is a replay). The Gateway logs in again at most once per
+  `gateway.login.min_relogin_interval_seconds`, so a repair loop cannot lock the username.
+- **Pacing.** A request waiting for its window holds no concurrency permit; a slot and a permit
+  are taken together, so the recorded instant stays the sending instant.
+- **History.** `daily_between` anchors its first request at `latest` (lite's was anchored at the
+  request time) and returns only bars inside `[earliest, latest]`.
+- **Availability codes.** The 6509 first-letter rule applies only to 6509-shaped codes; spelled
+  flags go through the domain enum as whole words (`DELAYED_FROZEN` is frozen). The `L` price
+  prefix reads as halted, as lite read it.
+- **Configuration bounds.** Snapshot batches stay inside IBKR's ceilings (100 conids, 50 fields);
+  every endpoint IBKR paces on its own must sit in a rate group; a paper prefix starts with `D`.

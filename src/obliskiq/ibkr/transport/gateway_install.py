@@ -150,9 +150,13 @@ def patch_conf(conf: Path, *, port: int, keystore: str, password: str) -> None:
     conf.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-async def _run(*args: str) -> None:
+#: The variable that hands keytool the keystore password.
+KEYSTORE_PASSWORD_ENV = "GATEWAY_KEYSTORE_PASSWORD"
+
+
+async def _run(*args: str, env: dict[str, str]) -> None:
     process = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env
     )
     output, _ = await process.communicate()
     if process.returncode != 0:
@@ -169,16 +173,21 @@ async def generate_keystore(
     keystore = root / "root" / KEYSTORE_FILE
     cert = root / CERT_FILE
     keystore.unlink(missing_ok=True)
+    # The password reaches keytool through its environment, never its command line, which any
+    # local user can read in the process list.
+    env = {**java.environment(), KEYSTORE_PASSWORD_ENV: password}
     await _run(
         keytool, "-genkeypair", "-alias", KEY_ALIAS, "-keyalg", "RSA",
         "-keysize", str(KEY_SIZE_BITS), "-validity", str(validity_days),
         "-dname", "CN=localhost", "-ext", "SAN=dns:localhost,ip:127.0.0.1",
         "-keystore", str(keystore), "-storetype", "JKS",
-        "-storepass", password, "-keypass", password,
+        "-storepass:env", KEYSTORE_PASSWORD_ENV, "-keypass:env", KEYSTORE_PASSWORD_ENV,
+        env=env,
     )  # fmt: skip
     await _run(
         keytool, "-exportcert", "-rfc", "-alias", KEY_ALIAS, "-keystore", str(keystore),
-        "-storepass", password, "-file", str(cert),
+        "-storepass:env", KEYSTORE_PASSWORD_ENV, "-file", str(cert),
+        env=env,
     )  # fmt: skip
     keystore.chmod(_PRIVATE_MODE)
     return cert

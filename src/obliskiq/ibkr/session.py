@@ -28,6 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import asyncio
 import contextlib
 from collections.abc import Callable, Iterable, Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -36,6 +37,7 @@ from typing import Any
 import httpx
 
 from ..config.schema_ibkr import IbkrConfig
+from ..errors import ObliskError
 from ..logging_setup import get_logger
 from ..util.http import RetryPolicy, retry_after_seconds
 from .errors import (
@@ -49,9 +51,14 @@ from .errors import (
 )
 from .ratelimit import Clock, RateLimiter, SystemClock
 from .redact import redact
-from .transport.base import Transport
+from .transport.base import Transport, TransportKind
 
 log = get_logger("ibkr.session")
+
+#: Set while this task is repairing a session: its own requests must not start another repair.
+#: A context variable, not a flag on the session, so a concurrent request in another task still
+#: waits for the repair and retries instead of failing at once.
+_REPAIRING: ContextVar[bool] = ContextVar("ibkr_session_repairing", default=False)
 
 SSODH_INIT_PATH = "iserver/auth/ssodh/init"
 AUTH_STATUS_PATH = "iserver/auth/status"
@@ -135,7 +142,10 @@ class BrokerSession:
         self._owns_http = http is None
         self._alert = alert
         self._known_ids = frozenset(i for i in known_ids if i)
-        self._arming = False
+        # One repair at a time; the generation counts finished repairs, so a request that saw a
+        # failure before another task's repair finished retries instead of repairing again.
+        self._repair_lock = asyncio.Lock()
+        self._repairs = 0
         self._authenticated = False
         self._tickle_task: asyncio.Task[None] | None = None
 
@@ -171,6 +181,9 @@ class BrokerSession:
             self._http = httpx.AsyncClient(
                 verify=self._transport.verify(),
                 timeout=self._ibkr.request_timeout_seconds,
+                # The Gateway is on this machine behind a pinned certificate: a proxy from the
+                # environment must not carry those calls. OAuth goes to IBKR and may need one.
+                trust_env=self._transport.kind is not TransportKind.GATEWAY,
             )
         if self._ibkr.session.ssodh_init_on_connect:
             return await self.init_brokerage_session()
@@ -197,7 +210,16 @@ class BrokerSession:
             raise IbkrUpstreamError("the broker session is used before open()")
         url = f"{self._transport.base_url}/{path.lstrip('/')}"
         async with self._limiter.slot(path) as group:
-            headers = await self._transport.headers(method, url, query)
+            try:
+                headers = await self._transport.headers(method, url, query)
+            except IbkrError:
+                raise
+            except ObliskError as exc:
+                self._limiter.failure(group)
+                raise IbkrUpstreamError(
+                    f"{self.redact(label)}: the transport could not sign the request "
+                    f"({type(exc).__name__})"
+                ) from exc
             try:
                 response = await self._http.request(
                     method, url, params=dict(query) or None, json=json_body, headers=headers
@@ -241,6 +263,7 @@ class BrokerSession:
         rearmed = False
         reauthenticated = False
         while True:
+            generation = self._repairs
             try:
                 response, group = await self._send(method, path, query, json_body, name)
             except IbkrUpstreamError as exc:
@@ -263,14 +286,16 @@ class BrokerSession:
                     self._limiter.failure(group)
                     if error.retry_after is not None:
                         self._limiter.pause(group, error.retry_after)
-            if error.retry is RetryAdvice.REARM and not self._arming:
+            if error.retry is RetryAdvice.REARM and not _REPAIRING.get():
                 if not rearmed:
                     rearmed = True
-                    await self.rearm()
+                    await self.rearm(after=generation)
                     continue
                 if not reauthenticated:
                     reauthenticated = True
-                    await self.reauthenticate(f"{self.redact(name)} kept failing: {error}")
+                    await self.reauthenticate(
+                        f"{self.redact(name)} kept failing: {error}", after=generation
+                    )
                     continue
             if error.retry is RetryAdvice.BACKOFF and attempt < self._policy.retries:
                 delay = error.retry_after or self._policy.delay_for(attempt)
@@ -325,42 +350,65 @@ class BrokerSession:
         if isinstance(body, Mapping):
             self.add_known_ids(str(a) for a in body.get("accounts") or [] if a)
 
-    async def rearm(self) -> None:
+    async def rearm(self, *, after: int | None = None) -> None:
         """Re-open the session after it dropped: ``ssodh/init``, then both accounts endpoints.
 
         Failures are swallowed: the caller repeats the real request, whose own error says far
-        more. Guarded against recursion, since these requests go through the same pipeline.
+        more. One repair runs at a time; ``after`` is the repair count the caller saw before its
+        request failed, and a repair finished since then makes this one unnecessary.
         """
-        if self._arming:
-            return
-        self._arming = True
-        try:
-            with contextlib.suppress(IbkrError):
-                body = await self.request(
-                    "POST",
-                    SSODH_INIT_PATH,
-                    params={
-                        "publish": "true",
-                        "compete": "true" if self._ibkr.session.compete else "false",
-                    },
-                )
-                self._authenticated = AuthStatus.from_body(body).authenticated
-            for path in (ISERVER_ACCOUNTS_PATH, PORTFOLIO_ACCOUNTS_PATH):
+        async with self._repair_lock:
+            if after is not None and self._repairs != after:
+                return
+            token = _REPAIRING.set(True)
+            try:
                 with contextlib.suppress(IbkrError):
-                    await self.request("GET", path)
-            log.info("re-armed the brokerage session", extra={"authenticated": self._authenticated})
-        finally:
-            self._arming = False
+                    body = await self.request(
+                        "POST",
+                        SSODH_INIT_PATH,
+                        params={
+                            "publish": "true",
+                            "compete": "true" if self._ibkr.session.compete else "false",
+                        },
+                    )
+                    self._authenticated = AuthStatus.from_body(body).authenticated
+                for path in (ISERVER_ACCOUNTS_PATH, PORTFOLIO_ACCOUNTS_PATH):
+                    with contextlib.suppress(IbkrError):
+                        await self.request("GET", path)
+                log.info(
+                    "re-armed the brokerage session", extra={"authenticated": self._authenticated}
+                )
+            finally:
+                _REPAIRING.reset(token)
+                self._repairs += 1
 
-    async def reauthenticate(self, reason: str) -> AuthStatus:
-        """Log the transport in again and re-open the session; alert either way."""
+    async def reauthenticate(self, reason: str, *, after: int | None = None) -> AuthStatus:
+        """Log the transport in again and re-open the session; alert either way.
+
+        ``after`` as for :meth:`rearm`: a repair finished since the caller's failure is taken as
+        the answer, and the caller retries.
+        """
+        async with self._repair_lock:
+            if after is not None and self._repairs != after:
+                # Repaired by a concurrent request meanwhile: report the state it left.
+                return AuthStatus.from_body({"authenticated": self._authenticated})
+            token = _REPAIRING.set(True)
+            try:
+                return await self._reauthenticate(reason)
+            finally:
+                _REPAIRING.reset(token)
+                self._repairs += 1
+
+    async def _reauthenticate(self, reason: str) -> AuthStatus:
         session = self._ibkr.session
         last: Exception | None = None
         for attempt in range(1, session.reauthenticate_attempts + 1):
             try:
                 await self._transport.recover()
-                status = await self._init_without_rearm()
-            except IbkrError as exc:
+                status = await self.init_brokerage_session()
+            except Exception as exc:
+                # A transport fault that is not an IbkrError (a browser that will not launch, a
+                # bug) must still count, alert and leave the session marked unauthenticated.
                 last = exc
             else:
                 if status.authenticated:
@@ -377,13 +425,6 @@ class BrokerSession:
         detail = f"{reason}; re-authentication failed: {self.redact(str(last))}"
         self._emit(SessionAlertKind.REAUTHENTICATION_FAILED, detail)
         raise SessionExpiredError(detail) from last
-
-    async def _init_without_rearm(self) -> AuthStatus:
-        self._arming = True
-        try:
-            return await self.init_brokerage_session()
-        finally:
-            self._arming = False
 
     async def auth_status(self) -> AuthStatus:
         return AuthStatus.from_body(await self.request("POST", AUTH_STATUS_PATH))
@@ -446,15 +487,20 @@ class BrokerSession:
             try:
                 await self.check_session()
                 failures = 0
-            except IbkrError as exc:
+            except Exception as exc:  # the keepalive must outlive any one failure
                 failures += 1
                 log.warning(
                     "keepalive failed",
-                    extra={"consecutive_failures": failures, "error": self.redact(str(exc))},
+                    extra={
+                        "consecutive_failures": failures,
+                        "error_type": type(exc).__name__,
+                        "error": self.redact(str(exc)),
+                    },
                 )
                 if failures >= session.tickle_failure_grace:
                     failures = 0
-                    with contextlib.suppress(IbkrError):
+                    # reauthenticate alerts on failure itself; the loop goes on either way.
+                    with contextlib.suppress(Exception):
                         await self.reauthenticate("the keepalive kept failing")
 
 

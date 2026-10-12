@@ -17,21 +17,13 @@ from pathlib import Path
 
 import httpx
 
+from ...config.schema_ibkr import IbkrConfig
 from ...logging_setup import get_logger
 from ..errors import GatewayError
 from .gateway_install import CONF_FILE, RUN_SCRIPT, GatewayInstall
 from .gateway_java import JavaRuntime
 
 log = get_logger("ibkr.gateway.process")
-
-#: The path probed for readiness. Any status means the Gateway is serving.
-READINESS_PATH = "/v1/api/tickle"
-
-#: Seconds between readiness probes, and the timeout of one probe.
-_PROBE_INTERVAL_SECONDS = 1.0
-
-#: Seconds a stopping Gateway is given before it is killed.
-_STOP_GRACE_SECONDS = 10.0
 
 LOG_FILE = "gateway-stdout.log"
 
@@ -43,14 +35,15 @@ class GatewayProcess:
         self,
         install: GatewayInstall,
         *,
-        local_address: str,
-        startup_timeout: float,
+        ibkr: IbkrConfig,
+        readiness_path: str,
         java: JavaRuntime,
     ) -> None:
         self._install = install
         self._java = java
-        self._address = local_address.rstrip("/")
-        self._timeout = startup_timeout
+        # Any status on this path means the Gateway is serving; before login it answers 401.
+        self._readiness_url = ibkr.gateway.local_address.rstrip("/") + readiness_path
+        self._ibkr = ibkr
         self._process: asyncio.subprocess.Process | None = None
 
     @property
@@ -61,9 +54,11 @@ class GatewayProcess:
         """Is a Gateway serving on the configured address, verified by the pinned certificate?"""
         try:
             async with httpx.AsyncClient(
-                verify=self._install.ssl_context(), timeout=_PROBE_INTERVAL_SECONDS, trust_env=False
+                verify=self._install.ssl_context(),
+                timeout=self._ibkr.gateway.probe_interval_seconds,
+                trust_env=False,
             ) as client:
-                await client.get(self._address + READINESS_PATH)
+                await client.get(self._readiness_url)
         except httpx.HTTPError:
             return False
         return True
@@ -87,7 +82,8 @@ class GatewayProcess:
                 start_new_session=True,
             )
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + self._timeout
+        timeout = self._ibkr.gateway.startup_timeout_seconds
+        deadline = loop.time() + timeout
         while loop.time() < deadline:
             if self._process.returncode is not None:
                 raise GatewayError(
@@ -97,9 +93,9 @@ class GatewayProcess:
             if await self.answering():
                 log.info("Gateway started")
                 return
-            await asyncio.sleep(_PROBE_INTERVAL_SECONDS)
+            await asyncio.sleep(self._ibkr.gateway.probe_interval_seconds)
         await self.stop()
-        raise GatewayError(f"the Gateway did not answer within {self._timeout:.0f} s")
+        raise GatewayError(f"the Gateway did not answer within {timeout:.0f} s")
 
     async def stop(self) -> None:
         """Stop the Gateway if this process started it."""
@@ -109,7 +105,7 @@ class GatewayProcess:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGTERM)
         try:
-            await asyncio.wait_for(process.wait(), timeout=_STOP_GRACE_SECONDS)
+            await asyncio.wait_for(process.wait(), timeout=self._ibkr.gateway.stop_grace_seconds)
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)

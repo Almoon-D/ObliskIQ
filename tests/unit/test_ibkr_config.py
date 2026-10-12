@@ -261,3 +261,28 @@ def test_the_oauth_transport_is_built_from_its_variables(monkeypatch, shipped_se
     assert transport.kind is TransportKind.OAUTH
     assert transport.base_url == "https://api.ibkr.test/v1/api"
     assert transport.verify() is True
+
+
+@pytest.mark.parametrize("prefix", ["U", "F", "DU1", "XU"])
+def test_a_live_or_malformed_prefix_is_never_a_paper_prefix(shipped_settings, prefix):
+    with pytest.raises(ValidationError, match="starting with D"):
+        IbkrConfig.model_validate(_with(shipped_settings.ibkr, paper_account_prefixes=[prefix]))
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        ({"max_conids_per_snapshot": 101}, "max_conids_per_snapshot"),
+        ({"max_fields_per_snapshot": 51}, "max_fields_per_snapshot"),
+    ],
+)
+def test_snapshot_batches_stay_inside_ibkrs_ceilings(shipped_settings, changes, field):
+    with pytest.raises(ValidationError, match=field):
+        MarketDataConfig.model_validate(_with(shipped_settings.ibkr.marketdata, **changes))
+
+
+def test_an_override_cannot_drop_a_paced_endpoints_group(shipped_settings):
+    data = _dump(shipped_settings.ibkr.ratelimit)
+    data["groups"] = [group for group in data["groups"] if group["name"] != "history"]
+    with pytest.raises(ValidationError, match="iserver/marketdata/history"):
+        RateLimitConfig.model_validate(data)

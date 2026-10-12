@@ -48,7 +48,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 - `docs/knowledge/ibkr.md`: lite's verified findings condensed with their route tags, IBKR's
   documented pacing, changelog, availability codes, field ids, schedule, rules, per-user market
   data and live→paper sharing, and this session's Gateway trial.
-- Tests: 2,219 passing. Coverage measured 99.45 %; floor raised from 98.9 % to 99.2 %. The
+- Tests: 2,268 passing. Coverage measured 99.53 %; floor raised from 98.9 % to 99.3 %. The
   concurrency test (200 requests against virtual time, every window checked) found a
   float-rounding hole in the sliding window — expiry and wait disagreed, so a full per-minute
   window admitted a burst at one instant — fixed with a regression and a property test.
@@ -79,12 +79,21 @@ preflight reads after it.
 
 **Contradictions with the prompt, decided and recorded.** The prompt's `ibkr/errors.py` sits beside
 the shared `obliskiq/errors.py`; IBKR's error classes subclass `UpstreamError` there. The
-"third ScheduleSource" is the first registered one: Session 2 built the protocol and the library
-and synthetic schedules, not other sources. Lite's `accept_first_on_no_exact_match: true` would
+"third ScheduleSource" is the first source built on Session 2's protocol beside the library and
+synthetic schedules; registering it with the calendars is Session 6's (follow-up below). Lite's `accept_first_on_no_exact_match: true` would
 contradict "ambiguous resolution refused" and is `false` (D37). The live step (prompt item 10) could
 not pass its first sub-step from a cloud container.
 
-**Review.** REVIEW_SUMMARY
+**Review.** Round 1 (fresh `reviewer`): one blocking finding — re-authentication and the
+keepalive stopped silently on failures that were not `IbkrError` (an unreachable OAuth token
+endpoint, a browser that would not launch) — and fourteen non-blocking. All were fixed in the PR
+(D41): any failure now counts, alerts and leaves the session marked lost; a waiting request holds
+no concurrency permit (a tickle no longer queues behind scanner requests); incomplete position and
+cash reads raise; the endpoint groups open only after the account guard; concurrent 401s share one
+repair; OAuth retries are signed afresh; Gateway re-logins are spaced; secrets stay out of child
+processes and command lines; schema bounds for IBKR's ceilings, paced endpoints and paper
+prefixes; `daily_between` honours `latest`; 6509 codes and spelled flags each decode by their own
+rule; the `L` price prefix is read as lite read it.
 
 **Process.** The harness assigned the branch `claude/magical-bardeen-ct4oql`; GitHub steps of the
 end-of-session protocol ran through the GitHub tools instead of `gh`. Test ports were delegated to
@@ -256,14 +265,14 @@ settles it.
   (D34). Decide, before Session 6 runs the bot on a machine: try the Gateway login there (Session
   6/19 checks it first), ask IBKR again about OAuth for the paper login, or accept a daily manual
   login. Until then sessions build against fixtures.
-- Session 8: a request waiting for its group's window holds a concurrency permit, so a slow
-  group (`scanner_params`, `portfolio_accounts`) can idle a permit other groups could use. Pacing
-  is unaffected; revisit the limiter's throughput with the collectors.
 - Session 4: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per
   currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis` (`documented_bound`
-  for delayed quotes, D38), and calls `IbkrClient.start()` so the account guard runs first.
-- Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])` and
-  refresh it from one reference conid per venue; pass the session's alert hook to Telegram.
+  for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read
+  until the account guard has passed (D41). Incomplete position or cash reads raise.
+- Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])`,
+  passing each venue's `is_business_weekday` as `is_trading_weekday` (the calendars expose it per
+  venue), and refresh it from one reference conid per venue; pass the session's alert hook to
+  Telegram.
 - Session 8: the route tag for `source` columns (lite refused unknown routes) belongs to the
   collectors that write rows; the history walk gains its store watermark there.
 - Session 19: the deployment image needs Java 11 for the Gateway (`ibkr.gateway.java_major_versions`)

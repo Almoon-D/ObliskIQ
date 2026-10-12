@@ -108,8 +108,8 @@ ibkr:
       - {name: bid, id: "84"}             # [CP ✓ 2026-09-10]
       - {name: ask, id: "86"}             # [CP ✓ 2026-09-10]
       - {name: volume, id: "87"}          # [CP ✓ 2026-09-10]; 87_raw carries the exact count
-      - {name: open_interest, id: "7638"} # IBKR field table; lite's 7089 is option VOLUME (DECISIONS)
-      - {name: implied_vol, id: "7633"}   # the strike's IV per IBKR's table; lite's 7283 is the underlying's
+      - {name: open_interest, id: "7638"} # IBKR field table (DECISIONS D37)
+      - {name: implied_vol, id: "7633"}   # the strike's own IV, IBKR field table (D37)
       - {name: delta, id: "7308"}
       - {name: gamma, id: "7309"}
       - {name: vega, id: "7311"}
@@ -121,7 +121,7 @@ ibkr:
       - {name: ask, id: "86"}
       - {name: volume, id: "87"}
       - {name: implied_vol, id: "7283"}        # [CP ✓ 2026-09-10]: 30-day at-the-money IV, "%"
-      - {name: historical_vol_30d, id: "7087"} # 7284 is deprecated in favour of 7087 (IBKR table)
+      - {name: historical_vol_30d, id: "7087"} # IBKR field table (D37)
       - {name: implied_vol_percentile, id: null}  # no Client Portal id exists
       - {name: dividend_yield, id: null}          # withheld, then deprecated (changelog 2026-01-06)
       - {name: market_data_status, id: "6509"}
@@ -133,7 +133,7 @@ ibkr:
   secdef:
     # Exact ticker first, then the declared listing venue breaks the tie. lite.
     exact_ticker_match_first: true
-    # lite took the first row when nothing matched exactly; an ambiguous resolution is refused now.
+    # Without an exact match nothing is chosen: an ambiguous resolution is refused (D37).
     accept_first_on_no_exact_match: false
     # IBKR removed `secType` from /iserver/secdef/search (changelog 2026-09-09); the wanted type is
     # matched against each row's sections instead.
@@ -178,6 +178,10 @@ ibkr:
     # The shipped certificate expired in 2019 and names no host, so each install generates its own
     # key pair for localhost; clients pin that certificate.
     keystore_validity_days: 825
+    # Seconds between readiness probes while the Gateway starts (and one probe's timeout), and
+    # the grace a stopping Gateway gets before it is killed.
+    probe_interval_seconds: 1.0
+    stop_grace_seconds: 10.0
     login:
       route: /sso/Login?forwardTo=22&RL=1&ip2loc=on
       username_selector: "input[name=username]"
@@ -193,6 +197,10 @@ ibkr:
       keystroke_delay_ms: 60
       presubmit_wait_seconds: 5.0
       max_attempts: 2
+      # A repair may log in again only this long after the previous login: repeated logins in
+      # the failure mode seen in the cloud (password accepted, no session) risk locking the
+      # username. Inside the interval a repair fails at once and the session alerts.
+      min_relogin_interval_seconds: 600.0
 
   # `obliskiq preflight`: the stock it reads end to end.
   preflight:

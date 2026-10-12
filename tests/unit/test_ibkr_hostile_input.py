@@ -13,8 +13,9 @@ import pytest
 from pydantic import ValidationError
 
 from obliskiq.ibkr import decode
+from obliskiq.ibkr.errors import DecodeError
 from obliskiq.ibkr.guard import AccountGuard
-from obliskiq.ibkr.models import LastKind, Position
+from obliskiq.ibkr.models import Account, LastKind, Position
 
 WRONG_SHAPES: list[Any] = [None, "", "error", 0, 1.5, True, [], {}, [None, 1, "x"], {"x": [1]}]
 
@@ -72,6 +73,7 @@ def test_impossible_timestamps_are_absent(raw):
         (101.5, (101.5, LastKind.TRADE)),
         ("C101.5", (101.5, LastKind.PRIOR_CLOSE)),
         ("H101.5", (101.5, LastKind.HALTED)),
+        ("L9.5", (9.5, LastKind.HALTED)),
         ("X101.5", (None, None)),
         ("C", (None, None)),
         ("Cnan", (None, None)),
@@ -82,7 +84,9 @@ def test_prices_carry_their_prefix_and_refuse_unknown_ones(raw, expected):
     assert decode.decode_price(raw) == expected
 
 
-@pytest.mark.parametrize("flag", [None, "", "  ", "?", "Q", 7])
+@pytest.mark.parametrize(
+    "flag", [None, "", "  ", "?", "Q", 7, "REALTIME_X", "Dx", "RPBdd", "NOT_REALTIME", "Delayed?"]
+)
 def test_an_unknown_availability_flag_is_kept_raw_and_undecoded(flag, shipped_settings):
     status, raw, delay, basis = decode.decode_availability(
         flag, delayed_bound_seconds=shipped_settings.ibkr.marketdata.delayed_quote_bound_seconds
@@ -91,6 +95,30 @@ def test_an_unknown_availability_flag_is_kept_raw_and_undecoded(flag, shipped_se
     assert delay is None
     assert basis is None
     assert raw in (None, str(flag).strip())
+
+
+@pytest.mark.parametrize(
+    ("flag", "status"),
+    [
+        ("DPB", "delayed"),
+        ("ZBd", "frozen"),
+        ("Y", "frozen"),
+        ("N", "none"),
+        ("REALTIME", "realtime"),
+        ("DELAYED_FROZEN", "frozen"),
+        ("Delayed-Frozen", "frozen"),
+        ("delayed", "delayed"),
+    ],
+)
+def test_codes_and_route_spellings_each_decode_by_their_own_rule(flag, status, shipped_settings):
+    """A 6509 code by its first letter; a spelled-out flag as a whole word, so DELAYED_FROZEN is
+    frozen (the stricter claim), never delayed by its first letter."""
+    decoded, raw, _, _ = decode.decode_availability(
+        flag, delayed_bound_seconds=shipped_settings.ibkr.marketdata.delayed_quote_bound_seconds
+    )
+    assert decoded is not None
+    assert decoded.value == status
+    assert raw == flag
 
 
 def test_a_crossed_book_is_flagged_and_has_no_mid(shipped_settings, fields):
@@ -130,7 +158,11 @@ def test_every_decoder_survives_a_wrong_shape(body, shipped_settings):
     bound = shipped_settings.ibkr.marketdata.delayed_quote_bound_seconds
     assert decode.decode_history(1, body, delayed_bound_seconds=bound).bars == ()
     assert decode.decode_accounts(body) == []
-    assert decode.decode_positions(body) == []
+    if body is None or body == []:
+        assert decode.decode_positions(body) == []
+    else:
+        with pytest.raises(DecodeError):
+            decode.decode_positions(body)
     assert decode.decode_search(body) == []
     assert decode.decode_contract_info(1, body).conid == 1
     assert decode.decode_algos(body) == ()
@@ -199,3 +231,9 @@ def test_the_guard_never_shows_the_account_id_in_its_repr():
     guard = AccountGuard(account_id="DU12345", profile="paper", paper_prefixes=("DU",))
     assert "12345" not in repr(guard)
     assert "paper" in repr(guard)
+
+
+def test_an_account_never_prints_its_id():
+    account = Account(account_id="DU12345", currency="EUR", account_type="DEMO")
+    for shown in (repr(account), str(account), f"{account}", f"{account!s}"):
+        assert "12345" not in shown

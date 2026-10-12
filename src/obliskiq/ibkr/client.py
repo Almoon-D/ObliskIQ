@@ -18,7 +18,7 @@ Every method is a read; nothing here places, modifies or confirms an order.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from ..config.schema import ObliskConfig
@@ -43,6 +43,7 @@ from .decode import (
     decode_trading_schedule,
     field_map,
 )
+from .errors import AccountGuardError, DecodeError
 from .guard import AccountGuard
 from .history import HistoryReader
 from .models import (
@@ -111,15 +112,19 @@ class Portfolio:
     async def positions(self) -> list[Position]:
         """Every page of positions; the pager stops on an empty page.
 
-        ``portfolio.max_position_pages`` is a runaway guard, not a limit on the portfolio.
+        ``portfolio.max_position_pages`` is a runaway guard, not a limit on the portfolio: a
+        pager that reaches it without an empty page raises rather than return a short list.
         """
         out: list[Position] = []
-        for page in range(self._ibkr.portfolio.max_position_pages):
+        pages = self._ibkr.portfolio.max_position_pages
+        for page in range(pages):
             rows = await self.positions_page(page)
             if not rows:
-                break
+                return out
             out.extend(rows)
-        return out
+        raise DecodeError(
+            f"positions still arriving after {pages} pages: the positions read is incomplete"
+        )
 
     async def ledger(self) -> Ledger:
         body = await self._session.request(
@@ -131,7 +136,14 @@ class Portfolio:
         return (await self.ledger()).nav
 
     async def cash_balances(self) -> tuple[CashBalance, ...]:
-        return (await self.ledger()).balances
+        """Cash per currency; raises when any currency's balance could not be read."""
+        ledger = await self.ledger()
+        if ledger.unreadable_currencies:
+            raise DecodeError(
+                "the ledger carries no readable cash balance for "
+                f"{', '.join(ledger.unreadable_currencies)}: the cash read is incomplete"
+            )
+        return ledger.balances
 
 
 class MarketData:
@@ -395,30 +407,84 @@ class Scanner:
 
 
 class IbkrClient:
-    """The read client: session, guard and endpoint groups."""
+    """The read client: session, guard and endpoint groups.
+
+    The endpoint groups are reachable only once the account guard has passed (``start``, or
+    ``accounts`` then ``run_guard``): before that every one of them raises, so nothing reads
+    the broker for an account the guard has not accepted.
+    """
 
     def __init__(self, session: BrokerSession, settings: ObliskConfig, guard: AccountGuard):
         ibkr = settings.ibkr
         self.session = session
         self.guard = guard
         session.add_known_ids([guard.account_id])
-        self.portfolio = Portfolio(session, ibkr, guard.account_id, settings.account.base_currency)
-        self.marketdata = MarketData(session, ibkr)
-        self.history = HistoryReader(
+        self._portfolio = Portfolio(session, ibkr, guard.account_id, settings.account.base_currency)
+        self._marketdata = MarketData(session, ibkr)
+        self._history = HistoryReader(
             session, ibkr, calendar_days_per_year=settings.numerics.bsm.day_count_basis
         )
-        self.secdef = Secdef(session, ibkr)
-        self.contracts = Contracts(session)
-        self.scanner = Scanner(session)
-        self._started = False
+        self._secdef = Secdef(session, ibkr)
+        self._contracts = Contracts(session)
+        self._scanner = Scanner(session)
+        self._guarded = False
+
+    def _require_guard(self) -> None:
+        if not self._guarded:
+            raise AccountGuardError(
+                f"the account guard has not passed for {self.guard.masked}; nothing is read "
+                "before it"
+            )
+
+    @property
+    def portfolio(self) -> Portfolio:
+        self._require_guard()
+        return self._portfolio
+
+    @property
+    def marketdata(self) -> MarketData:
+        self._require_guard()
+        return self._marketdata
+
+    @property
+    def history(self) -> HistoryReader:
+        self._require_guard()
+        return self._history
+
+    @property
+    def secdef(self) -> Secdef:
+        self._require_guard()
+        return self._secdef
+
+    @property
+    def contracts(self) -> Contracts:
+        self._require_guard()
+        return self._contracts
+
+    @property
+    def scanner(self) -> Scanner:
+        self._require_guard()
+        return self._scanner
+
+    async def accounts(self, *, refresh: bool = False) -> list[Account]:
+        """The accounts this login may use: the one read the guard needs before it passes."""
+        return await self._portfolio.accounts(refresh=refresh)
+
+    def run_guard(self, accounts: Iterable[Account]) -> None:
+        """Check the configured account against ``accounts``; on success the groups open."""
+        self.guard.check(account.account_id for account in accounts)
+        self._guarded = True
 
     async def start(self) -> AuthStatus | None:
-        """Open the session and run the account guard; refuses to start when it fails."""
+        """Open the session and run the account guard; refuses to start when it fails, and
+        releases the session it opened."""
         self.guard.check_prefix()
-        status = await self.session.open()
-        accounts = await self.portfolio.accounts()
-        self.guard.check(account.account_id for account in accounts)
-        self._started = True
+        try:
+            status = await self.session.open()
+            self.run_guard(await self.accounts())
+        except BaseException:
+            await self.aclose()
+            raise
         log.info("IBKR client started", extra={"account": self.guard.masked})
         return status
 

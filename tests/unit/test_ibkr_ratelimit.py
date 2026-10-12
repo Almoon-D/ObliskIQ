@@ -279,3 +279,48 @@ def test_float_rounding_never_reports_a_full_window_as_free():
     if window.wait(now) <= 0:
         window.record(now)
     assert window.wait(now) > 0
+
+
+async def test_a_tickle_never_waits_behind_another_groups_window(ibkr, fake_clock):
+    """Review round 1: requests queued for a slow window (scanner parameters, one per 16 min)
+    held every concurrency permit, and the keepalive tickle went out 960 s late."""
+    limiter = RateLimiter(ibkr, fake_clock)
+    start = fake_clock.monotonic()
+    waiters = ibkr.ratelimit.max_concurrency + 1
+    sent: dict[str, list[float]] = defaultdict(list)
+
+    async def one(path: str) -> None:
+        async with limiter.slot(path):
+            sent[path].append(fake_clock.monotonic())
+
+    scanner = [asyncio.create_task(one("/iserver/scanner/params")) for _ in range(waiters)]
+    await asyncio.sleep(0)
+    await one("/tickle")
+    assert sent["/tickle"] == [start]
+    for task in scanner:
+        task.cancel()
+    await asyncio.gather(*scanner, return_exceptions=True)
+
+
+async def test_a_full_house_waits_for_a_permit_then_sends(ibkr, fake_clock):
+    limiter = RateLimiter(ibkr, fake_clock)
+    cap = ibkr.ratelimit.max_concurrency
+    release = asyncio.Event()
+    in_flight = 0
+    peak = 0
+
+    async def hold() -> None:
+        nonlocal in_flight, peak
+        async with limiter.slot("/iserver/secdef/search"):
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await release.wait()
+            in_flight -= 1
+
+    holders = [asyncio.create_task(hold()) for _ in range(cap + 2)]
+    for _ in range(50):
+        await asyncio.sleep(0)
+    assert peak == cap, "no more than the cap in flight while the others wait"
+    release.set()
+    await asyncio.gather(*holders)
+    assert limiter.sent(DEFAULT_GROUP) == cap + 2

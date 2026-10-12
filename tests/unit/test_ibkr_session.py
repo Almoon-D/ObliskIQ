@@ -15,6 +15,7 @@ import httpx
 import pytest
 import respx
 
+from obliskiq.errors import UpstreamError
 from obliskiq.ibkr.errors import (
     AuthError,
     DecodeError,
@@ -725,3 +726,110 @@ def test_a_tickle_answer_without_an_auth_status_carries_none(body):
 def test_the_session_exposes_its_transport_and_limiter(session, fake_transport):
     assert session.transport is fake_transport
     assert session.limiter.group_for(TICKLE_PATH) == "tickle"
+
+
+# ── failures that are not IbkrError (review round 1, B1) ──
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [UpstreamError("token endpoint unreachable"), RuntimeError("chromium did not launch")],
+)
+async def test_reauthentication_counts_any_failure_alerts_and_marks_the_session_lost(
+    session, alerts, fake_transport, shipped_settings, failure
+):
+    with mocked() as mock:
+        mock.route().respond(200, json=AUTHENTICATED)
+        await session.open()
+    assert session.authenticated
+    fake_transport.fail_recover = failure
+    with pytest.raises(SessionExpiredError):
+        await session.reauthenticate("the brokerage session was lost")
+    assert fake_transport.recovered == shipped_settings.ibkr.session.reauthenticate_attempts
+    assert [alert.kind for alert in alerts] == [SessionAlertKind.REAUTHENTICATION_FAILED]
+    assert session.authenticated is False
+
+
+async def test_the_keepalive_outlives_a_failure_that_is_not_an_ibkr_error(
+    make_session, fake_transport, fake_clock, shipped_settings
+):
+    """A transport fault of another type must not end the keepalive task."""
+    grace = shipped_settings.ibkr.session.tickle_failure_grace
+    session = make_session()
+    tickles: list[float] = []
+
+    async def failing_headers(method: str, url: str, params: Any) -> dict[str, str]:
+        if url.endswith(TICKLE_PATH):
+            tickles.append(fake_clock.monotonic())
+            raise RuntimeError("signing broke")
+        return {"Accept": "application/json"}
+
+    fake_transport.headers = failing_headers  # type: ignore[method-assign]
+    with mocked() as mock:
+        mock.route().respond(200, json=AUTHENTICATED)
+        await session.open()
+        await session.start_keepalive()
+        await _run_until(lambda: len(tickles) > grace)
+        await session.stop_keepalive()
+    assert len(tickles) > grace, "the keepalive kept tickling after the failures"
+    assert fake_transport.recovered >= 1, "the grace led to a repair"
+
+
+async def test_a_transport_that_cannot_sign_is_an_upstream_error_and_backs_off(
+    session, fake_transport, shipped_settings
+):
+    async def unreachable(method: str, url: str, params: Any) -> dict[str, str]:
+        raise UpstreamError("token endpoint unreachable")
+
+    fake_transport.headers = unreachable  # type: ignore[method-assign]
+    with mocked() as mock:
+        route = mock.route().respond(200, json={})
+        with pytest.raises(IbkrUpstreamError, match="could not sign"):
+            await session.request("GET", "iserver/accounts")
+    assert route.call_count == 0
+    assert session.limiter.breaker_state("default").value == "closed"
+
+
+async def test_gateway_calls_ignore_proxy_settings_from_the_environment(
+    shipped_settings, fake_transport, fake_clock
+):
+    """The Gateway is local and pinned: a proxy variable must not carry its calls."""
+    session = BrokerSession(
+        fake_transport,
+        with_session(shipped_settings.ibkr, ssodh_init_on_connect=False),
+        RetryPolicy.from_settings(shipped_settings.http),
+        clock=fake_clock,
+    )
+    await session.open()
+    assert session._http is not None
+    assert session._http._trust_env is False
+    await session.aclose()
+
+
+async def test_concurrent_401s_wait_for_one_repair_and_all_succeed(session):
+    """Review round 1: with a bare flag, a second request failing while the first re-armed
+    raised at once; now it waits for the repair under way and retries."""
+    inits = 0
+    armed = False
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal inits, armed
+        await asyncio.sleep(0)  # every request is in flight before any answer arrives
+        if rel(request) == SSODH_INIT_PATH:
+            inits += 1
+            armed = True
+            return httpx.Response(200, json=AUTHENTICATED)
+        if rel(request) in (ISERVER_ACCOUNTS_PATH, PORTFOLIO_ACCOUNTS_PATH):
+            return httpx.Response(200, json={"accounts": [ACCOUNT]})
+        if not armed:
+            return httpx.Response(401, json={"error": "not authenticated"})
+        return httpx.Response(200, json={"ok": True})
+
+    with mocked() as mock:
+        wire(mock, handler)
+        await session.open()
+        armed = False
+        inits = 0
+        results = await asyncio.gather(*(session.get(SNAPSHOT) for _ in range(5)))
+    assert results == [{"ok": True}] * 5
+    assert inits == 1, "one repair served every concurrent request"

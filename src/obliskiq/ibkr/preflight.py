@@ -256,12 +256,11 @@ async def _walk(
         return "authenticated" + competing
 
     async def accounts() -> str:
-        found = await client.portfolio.accounts()
+        found = await client.accounts()
         return f"{len(found)} account(s) listed for this login"
 
     async def guard() -> str:
-        found = await client.portfolio.accounts()
-        client.guard.check(account.account_id for account in found)
+        client.run_guard(await client.accounts())
         return f"account {client.guard.masked} under profile {client.guard.profile}"
 
     async def positions() -> str:

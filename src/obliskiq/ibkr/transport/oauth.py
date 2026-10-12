@@ -30,7 +30,7 @@ import secrets
 import ssl
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Self
 from urllib.parse import quote, urlsplit
@@ -41,10 +41,10 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from ...config.schema_ibkr import IbkrConfig
 from ...env import Environment
-from ...errors import ConfigError, EnvVarError
+from ...errors import ConfigError, EnvVarError, UpstreamError
 from ...logging_setup import get_logger
 from ...util.http import RetryPolicy, request_with_retry
-from ..errors import AuthError, excerpt
+from ..errors import AuthError, IbkrUpstreamError, excerpt
 from .base import TransportKind
 
 log = get_logger("ibkr.oauth")
@@ -375,9 +375,30 @@ async def negotiate_live_session_token(
     client: httpx.AsyncClient,
     policy: RetryPolicy,
 ) -> LiveSessionToken:
-    """Run the DH exchange and install the verified token on ``oauth``."""
-    headers, _challenge = oauth.build_live_session_token_request(url)
-    response = await request_with_retry(client, "POST", url, policy=policy, headers=headers)
+    """Run the DH exchange and install the verified token on ``oauth``.
+
+    Each attempt is a new signed request (fresh nonce, timestamp and DH challenge): resending
+    the same signed headers would be a replay. A host that stays unreachable raises
+    :class:`IbkrUpstreamError`, so the session's repair loop counts and alerts it.
+    """
+    once = replace(policy, retries=0)
+    response: httpx.Response | None = None
+    for attempt in range(policy.retries + 1):
+        headers, _challenge = oauth.build_live_session_token_request(url)
+        try:
+            response = await request_with_retry(client, "POST", url, policy=once, headers=headers)
+        except UpstreamError as exc:
+            if attempt >= policy.retries:
+                raise IbkrUpstreamError(
+                    f"/oauth/live_session_token was unreachable after {attempt + 1} attempts"
+                ) from exc
+        else:
+            if response.status_code not in policy.retry_status_codes:
+                break
+        if attempt < policy.retries:
+            await asyncio.sleep(policy.delay_for(attempt))
+    if response is None:  # pragma: no cover - the final attempt either raised or answered
+        raise IbkrUpstreamError("/oauth/live_session_token gave no answer")
     if response.status_code != HTTP_OK:
         raise AuthError(
             f"/oauth/live_session_token returned HTTP {response.status_code}: "

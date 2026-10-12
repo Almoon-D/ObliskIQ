@@ -144,11 +144,13 @@ class HistoryReader:
     ) -> History:
         """Daily bars from ``earliest`` to ``latest``: the recent window, then a backward walk.
 
-        The result holds what IBKR served, deduplicated and sorted; it may start later than
-        ``earliest`` (the instrument's history is shorter, or the walk stopped making progress).
+        The result holds what IBKR served inside ``[earliest, latest]``, deduplicated and sorted;
+        it may start later than ``earliest`` (the instrument's history is shorter, or the walk
+        stopped making progress). The first request asks for the whole window ending at
+        ``latest`` (a route may serve it all; a refusal steps down); the walk covers the rest.
         """
         recent = await self._stepping_down(
-            conid, (latest - earliest).days, exchange=exchange, start=None
+            conid, (latest - earliest).days, exchange=exchange, start=start_time(latest)
         )
         collected: dict[datetime, HistoryBar] = {bar.start: bar for bar in recent.bars}
         chunk = await self.chunk_days(conid, exchange=exchange) if collected else 0
@@ -172,7 +174,12 @@ class HistoryReader:
                 log.info("the backward walk stopped making progress")
                 break
             cursor = reached - timedelta(days=1)
-        bars = tuple(sorted(collected.values(), key=lambda bar: bar.start))
+        bars = tuple(
+            sorted(
+                (bar for bar in collected.values() if earliest <= bar.start.date() <= latest),
+                key=lambda bar: bar.start,
+            )
+        )
         return History(
             conid=conid,
             bars=bars,

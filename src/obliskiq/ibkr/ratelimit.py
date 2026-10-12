@@ -7,9 +7,10 @@ request is sent, never discovered from a 429:
 * every request takes a slot from the global windows and from its endpoint group's windows
   (history has two: per second and per minute); a slot is reserved atomically, so concurrent
   callers can never jointly exceed a window;
-* at most ``max_concurrency`` requests are in flight; the slot is reserved only once a request
-  holds a concurrency permit, so a reserved request is sent at once and the recorded instant is
-  the sending instant;
+* at most ``max_concurrency`` requests are in flight; a slot is reserved together with a
+  concurrency permit, so a reserved request is sent at once and the recorded instant is the
+  sending instant, while a request still waiting for its window holds no permit and cannot
+  delay other groups (a ``/tickle`` never waits behind a scanner request);
 * a ``Retry-After`` pauses the whole group, not just the request that carried it;
 * a group that keeps failing opens its circuit: requests to it fail fast for a pause, then one
   probe is let through, and its outcome closes or re-opens the circuit.
@@ -155,8 +156,10 @@ class RateLimiter:
     def __init__(self, ibkr: IbkrConfig, clock: Clock | None = None) -> None:
         self._clock: Clock = clock if clock is not None else SystemClock()
         self._global = _windows(ibkr.ratelimit.global_windows)
-        self._permits = asyncio.Semaphore(ibkr.ratelimit.max_concurrency)
-        self._lock = asyncio.Lock()
+        self._max_in_flight = ibkr.ratelimit.max_concurrency
+        self._in_flight = 0
+        # Guards the windows and the in-flight count; notified when a request finishes.
+        self._changed = asyncio.Condition()
         self._routes: list[tuple[str, str]] = []
         self._groups: dict[str, _Group] = {}
         for group in [*ibkr.ratelimit.groups, None]:
@@ -193,29 +196,40 @@ class RateLimiter:
         Raises :class:`CircuitOpenError` without waiting when the group's circuit is open.
         """
         group = self._groups[self.group_for(path)]
-        async with self._permits:
+        async with self._changed:
             while True:
-                async with self._lock:
-                    now = self._clock.monotonic()
-                    group.breaker.admit(group.name, now)
-                    wait = max(
-                        [window.wait(now) for window in (*self._global, *group.windows)]
-                        + [group.paused_until - now]
-                    )
-                    if wait <= 0:
-                        for window in (*self._global, *group.windows):
-                            window.record(now)
-                        group.sent += 1
-                        break
-                    # Not sending yet: a probe admitted above is released for the next attempt.
-                    group.breaker.probing = False
-                await self._clock.sleep(wait)
-            try:
-                yield group.name
-            finally:
-                # The probe's outcome is reported by success() or failure(); an outcome that is
-                # neither (a request IBKR rejected as malformed) lets the next request probe.
+                now = self._clock.monotonic()
+                group.breaker.admit(group.name, now)
+                wait = max(
+                    [window.wait(now) for window in (*self._global, *group.windows)]
+                    + [group.paused_until - now]
+                )
+                if wait <= 0 and self._in_flight < self._max_in_flight:
+                    for window in (*self._global, *group.windows):
+                        window.record(now)
+                    group.sent += 1
+                    self._in_flight += 1
+                    break
+                # Not sending yet: a probe admitted above is released for the next attempt.
                 group.breaker.probing = False
+                if wait > 0:
+                    # Wait for the window without holding the lock or a permit.
+                    self._changed.release()
+                    try:
+                        await self._clock.sleep(wait)
+                    finally:
+                        await self._changed.acquire()
+                else:
+                    await self._changed.wait()  # every permit is in use: wait for one to free
+        try:
+            yield group.name
+        finally:
+            # The probe's outcome is reported by success() or failure(); an outcome that is
+            # neither (a request IBKR rejected as malformed) lets the next request probe.
+            group.breaker.probing = False
+            async with self._changed:
+                self._in_flight -= 1
+                self._changed.notify_all()
 
     def pause(self, group: str, seconds: float) -> None:
         """Hold every request to ``group`` for ``seconds`` (a ``Retry-After``)."""
