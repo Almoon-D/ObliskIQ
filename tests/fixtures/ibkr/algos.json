@@ -1,0 +1,7 @@
+{"algos": [
+  {"name": "Adaptive", "id": "Adaptive", "parameters": [
+    {"guiRank": 1, "defaultValue": "Normal", "name": "Adaptive order priority/urgency", "id": "adaptivePriority",
+     "legalStrings": ["Urgent", "Normal", "Patient"], "required": "true", "valueClassName": "String"}]},
+  {"name": "VWAP", "id": "Vwap", "parameters": [
+    {"guiRank": 1, "minValue": 0.01, "maxValue": 50, "name": "Max Percentage", "id": "maxPctVol", "valueClassName": "Double"}]}
+]}

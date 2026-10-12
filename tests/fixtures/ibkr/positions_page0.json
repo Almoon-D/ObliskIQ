@@ -1,0 +1,28 @@
+[
+  {
+    "acctId": "DU_PAPER",
+    "conid": 756733,
+    "contractDesc": "SPY",
+    "position": 2.0,
+    "mktPrice": 671.2,
+    "mktValue": 1342.4,
+    "currency": "USD",
+    "avgCost": 650.1,
+    "avgPrice": 650.1,
+    "assetClass": "STK",
+    "listingExchange": "ARCA",
+    "ticker": "SPY"
+  },
+  {
+    "acctId": "DU_PAPER",
+    "conid": 117589399,
+    "contractDesc": "ASML",
+    "position": 1,
+    "mktPrice": "1,512.40",
+    "mktValue": "1,512.40",
+    "currency": "EUR",
+    "avgCost": 1490,
+    "assetClass": "STK",
+    "listingExchange": "AEB"
+  }
+]

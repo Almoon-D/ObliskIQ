@@ -1,0 +1,7 @@
+{
+  "scan_type_list": [{"display_name": "Top % Gainers", "code": "TOP_PERC_GAIN", "instruments": ["STK", "ETF.EQ.US"]}],
+  "instrument_list": [{"display_name": "US Stocks", "type": "STK", "filters": ["priceAbove"]}],
+  "filter_list": [{"group": "Price", "display_name": "Price Above", "code": "priceAbove", "type": "non-range"}],
+  "location_tree": [{"display_name": "US Stocks", "type": "STK",
+                     "locations": [{"display_name": "Major US", "type": "STK.US.MAJOR", "locations": []}]}]
+}

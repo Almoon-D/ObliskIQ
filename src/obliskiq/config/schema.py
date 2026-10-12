@@ -27,6 +27,7 @@ from .schema_calendars import (
     VenueConfig,
 )
 from .schema_costs import CostsConfig
+from .schema_ibkr import HttpConfig, IbkrConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
@@ -71,6 +72,7 @@ class PathsConfig(FrozenModel):
     settings_audit_log: DataFileName
     database: DataFileName
     manual_incidents: DataFileName
+    ibkr_gateway: DataFileName
 
 
 class StoreConfig(FrozenModel):
@@ -105,6 +107,8 @@ class ObliskConfig(FrozenModel):
     lunch_breaks: dict[Mic, LunchBreakConfig]
     seasonal_closes: dict[Mic, SeasonalCloseConfig]
     ibkr_exchanges: dict[IbkrExchangeCode, IbkrExchangeConfig]
+    http: HttpConfig
+    ibkr: IbkrConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -125,6 +129,10 @@ class ObliskConfig(FrozenModel):
             f"ibkr_exchanges.{code}.venue: {entry.venue} is not a venue declared in venues"
             for code, entry in sorted(self.ibkr_exchanges.items())
             if entry.venue not in known
+        ]
+        problems += [
+            f"ibkr.trading_schedule.skip_venues: {mic} is not a venue declared in venues"
+            for mic in sorted(set(self.ibkr.trading_schedule.skip_venues) - known)
         ]
         problems += [
             f"seasonal_closes.{mic}: a synthetic calendar has no library close to replace"

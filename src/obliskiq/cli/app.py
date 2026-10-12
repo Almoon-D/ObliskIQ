@@ -9,6 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import argparse
+import asyncio
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -19,6 +20,8 @@ from .. import __version__
 from ..config import LoadedConfig, load_config
 from ..env import Environment, default_env_file, load_environment
 from ..errors import ConfigError, EnvVarError
+from ..ibkr.preflight import run_read_only
+from ..ibkr.transport import missing_credentials
 from ..jurisdiction import (
     SHIPPED_POLICY_KINDS,
     JurisdictionProfile,
@@ -29,6 +32,8 @@ from ..logging_setup import configure_logging
 
 EXIT_OK = 0
 EXIT_INVALID = 1
+#: The preflight found no IBKR credentials in the environment: nothing was attempted.
+EXIT_NO_CREDENTIALS = 2
 
 #: Longest value ``settings show`` prints in full; longer ones (a list of phase windows) are cut.
 VALUE_LIMIT = 48
@@ -40,6 +45,7 @@ class Loaded:
 
     config: LoadedConfig
     profile: JurisdictionProfile
+    env: Environment
 
 
 type Handler = Callable[[Loaded, TextIO], int]
@@ -52,7 +58,7 @@ def load_all(config_dir: Path, env: Environment) -> Loaded:
     configure_logging(settings.logging.level, settings.logging.format)
     profile = load_profile(config_dir, settings.jurisdiction)
     check_declared_policies(profile, SHIPPED_POLICY_KINDS)
-    return Loaded(config=loaded, profile=profile)
+    return Loaded(config=loaded, profile=profile, env=env)
 
 
 def _config_validate(loaded: Loaded, out: TextIO) -> int:
@@ -82,6 +88,20 @@ def _settings_show(loaded: Loaded, out: TextIO) -> int:
     for key, value, source in rows:
         print(f"{key:<{key_width}}  {value:<{value_width}}  {source}", file=out)
     return EXIT_OK
+
+
+def _preflight(loaded: Loaded, out: TextIO) -> int:
+    """``preflight --read-only``: walk the IBKR read path and report each step."""
+    env = loaded.env
+    missing = missing_credentials(env)
+    if missing:
+        print("no credentials", file=out)
+        print(f"  unset: {', '.join(missing)}", file=out)
+        return EXIT_NO_CREDENTIALS
+    report = asyncio.run(run_read_only(env, loaded.config.settings, data_dir=env.data_dir))
+    account = env.ibkr_account_id.get_secret_value() if env.ibkr_account_id else ""
+    print(report.render((account,)), file=out)
+    return EXIT_OK if report.ok else EXIT_INVALID
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,6 +137,18 @@ def build_parser() -> argparse.ArgumentParser:
         "show", help="print every effective setting and where its value comes from"
     )
     show.set_defaults(handler=_settings_show)
+
+    preflight = commands.add_parser(
+        "preflight", help="check the IBKR connection end to end (read-only)"
+    )
+    preflight.add_argument(
+        "--read-only",
+        action="store_true",
+        required=True,
+        help="read only: authentication, accounts, guard, positions, cash, a snapshot, history, "
+        "contract rules, algos and the trading schedule for one stock; no order endpoint",
+    )
+    preflight.set_defaults(handler=_preflight)
     return parser
 
 

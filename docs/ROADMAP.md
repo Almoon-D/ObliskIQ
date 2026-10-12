@@ -9,8 +9,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 |---|---|---|---|---|
 | 1 | Foundation | scaffold, docs, owner settings and defaults, jurisdiction registry, CI, releases, legacy snapshot | done | v0.1.0 |
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference, costs | done | v0.2.0 |
-| 3 | IBKR read path | OAuth, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, live preflight | next | |
-| 4 | Order path and safety rails | intents, order client, reply policy, pre-trade checks, paper guard, modes, kill switch, live order test | planned | |
+| 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0 |
+| 4 | Order path and safety rails | intents, order client, reply policy, pre-trade checks, paper guard, modes, kill switch, live order test | next | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots, `es` tax policy, TWR | planned | |
@@ -30,6 +30,88 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 21 | Research: first pattern batch | pre-registered tests of §5.9; passes go to shadow | any time after 18 | |
 
 ## Session log
+
+### Session 3 — IBKR read path (2026-10-12, v0.3.0)
+
+**Landed.**
+- `ibkr/transport/`: the `Transport` protocol; OAuth 1.0a ported from lite (renegotiation inside
+  the refresh margin and on recovery); the Client Portal Gateway — pinned archive (size and
+  SHA-256), a per-install `localhost` certificate pinned by the client (hostname checks on) and
+  by the browser (SPKI), a Java-version gate, process control, a Playwright paper login, re-login
+  on session loss, profile `live` refused (DECISIONS D33, D34).
+- `ibkr/session.py` (re-arm, re-authenticate, 403 never retried, backoff with `Retry-After`,
+  tickle keepalive, competing and lost sessions alerted), `ibkr/ratelimit.py` (D35),
+  `ibkr/errors.py` (D36), `ibkr/guard.py`, `ibkr/redact.py`, `ibkr/client.py` with
+  `decode.py`/`models.py`/`history.py` (D37, D38, D40), `ibkr/identity.py`,
+  `ibkr/schedule_source.py` (D39), `ibkr/preflight.py` and `obliskiq preflight --read-only`.
+- Configuration: `ibkr.yaml`, `http.yaml`, `paths.ibkr_gateway`; `OBLISK_IBKR_GATEWAY_JAVA_HOME`.
+- `docs/knowledge/ibkr.md`: lite's verified findings condensed with their route tags, IBKR's
+  documented pacing, changelog, availability codes, field ids, schedule, rules, per-user market
+  data and live→paper sharing, and this session's Gateway trial.
+- Tests: 2,279 passing. Coverage measured 99.58 %; floor raised from 98.9 % to 99.4 %. The
+  concurrency test (200 requests against virtual time, every window checked) found a
+  float-rounding hole in the sliding window — expiry and wait disagreed, so a full per-minute
+  window admitted a burst at one instant — fixed with a regression and a property test.
+
+**Deferred.**
+- The store watermark of the history walk and the per-target retry of lite's backfill: Session 8
+  (collectors). Lite's `test_a_permanent_no_data_error_is_not_retried_per_target_either` and the
+  route `SOURCE` tag go with them.
+- Lite's `test_hostile_input.py` cases on server tools (exits, entries, external positions, IV
+  percentile records): Sessions 7 and 15, with those tools. The hostile-input cases of the read
+  path are in `tests/unit/test_ibkr_hostile_input.py`.
+- Lite's universe sync (`test_collect_conid_supersede.py`): the supersession rule is ported in
+  `ibkr/identity.py`; the sync that calls it is Session 8.
+
+**Live findings** (`docs/knowledge/ibkr.md`, "Session 3"). The Gateway was tried in this cloud
+container: it installs from the pinned archive, runs on Java 21 and 11, serves TLS with the pinned
+per-install certificate, and the headless form login gets IBKR to accept the paper password (SRP
+proof returned) once keys are typed with a pause — but the Gateway session was never
+established (`/sso/Dispatcher` re-rendered the login in nine of ten attempts; the tenth reached
+"Client login succeeds" and then `sso/validate` answered 401 "Access Denied"). IBKR documents that
+it does not support automating this login. The read-only preflight therefore stopped at its
+transport step; no snapshot, history, rule, algo, schedule or scanner reading was taken through
+ObliskIQ, and the "owner logged in live elsewhere" comparison could not be run. Every one is
+queued below.
+
+**VERIFY-LIVE.** See the queue: the Gateway login on the deployment machine and everything the
+preflight reads after it.
+
+**Contradictions with the prompt, decided and recorded.** The prompt's `ibkr/errors.py` sits beside
+the shared `obliskiq/errors.py`; IBKR's error classes subclass `UpstreamError` there. The
+"third ScheduleSource" is the first source built on Session 2's protocol beside the library and
+synthetic schedules; registering it with the calendars is Session 6's (follow-up below). Lite's
+`accept_first_on_no_exact_match: true` would contradict "ambiguous resolution refused" and is
+`false` (D37). The live step (prompt item 10) could not pass its first sub-step from a cloud
+container.
+
+**Review.** Round 1 (fresh `reviewer`): one blocking finding — re-authentication and the
+keepalive stopped silently on failures that were not `IbkrError` (an unreachable OAuth token
+endpoint, a browser that would not launch) — and fourteen non-blocking. All were fixed in the PR
+(D41): any failure now counts, alerts and leaves the session marked lost; a waiting request holds
+no concurrency permit (a tickle no longer queues behind scanner requests); incomplete position and
+cash reads raise; the endpoint groups open only after the account guard; concurrent 401s share one
+repair; OAuth retries are signed afresh; Gateway re-logins are spaced; secrets stay out of child
+processes and command lines; schema bounds for IBKR's ceilings, paced endpoints and paper
+prefixes; `daily_between` honours `latest`; 6509 codes and spelled flags each decode by their own
+rule; the `L` price prefix is read as lite read it. Round 2 (fresh `reviewer` on the delta): no
+blocking finding; eleven non-blocking, fixed in the PR (signing failures not retried twice and
+counted by the breaker; OAuth `Retry-After`; alert hooks run outside the repair context; an
+environment allowlist for the Gateway's child processes; a deferred re-login stops the attempts
+and says when; non-object ledger rows named unreadable; tests for each) or recorded (the order
+path's paced endpoints, Session 4; the daily bar stamp per venue, VERIFY-LIVE). Round 3 (fresh
+`reviewer` on that delta, the last round): no blocking finding; eight non-blocking, six fixed in
+the PR (a token endpoint busy to the end is an upstream fault counted by the breaker; the
+deferral message; `OBLISK_*` never allowed in the child environment, `JDK_JAVA_OPTIONS` added;
+the login browser gets the allowlisted environment; the VERIFY-LIVE code marker; docs) and two
+recorded as follow-ups below (token negotiation inside the limiter slot; retrying a deferred
+repair from the keepalive).
+
+**Process.** The harness assigned the branch `claude/magical-bardeen-ct4oql`; GitHub steps of the
+end-of-session protocol ran through the GitHub tools instead of `gh`. Test ports were delegated to
+subagents (OAuth, client and session, field units). `test-breaker` and `port-checker` stopped on
+a usage limit before reporting; the adversarial tests (pacing under concurrency, hostile input,
+guard) were then written in the session.
 
 ### Session 2 — Store, calendars and numerics (2026-10-09, v0.2.0)
 
@@ -165,30 +247,58 @@ settles it.
 | Item | Added | Settled by |
 |---|---|---|
 | IBKR exchange codes → venues (23 codes in `ibkr_exchanges`, including `FTA`, `CDE`, `AMEX`, `BATS`, `LSEETF`) | 2 | 8 (conids) |
-| Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | 3 (trading schedules) |
-| SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | 3 |
-| B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | 3 |
-| XEUR session hours versus single-stock option hours (options use `common_windows`) | 2 | 3 |
-| IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | 3 |
+| Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | first session with a working login |
+| SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | first session with a working login |
+| B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | first session with a working login |
+| XEUR session hours versus single-stock option hours (options use `common_windows`) | 2 | first session with a working login |
+| IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | first session with a working login |
 | Order window 30 min after the open and 15 before the close | 2 | 18 (TCA) |
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
 | Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`) | 2 | library upgrade; 6 (digest) |
-| IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept | 2 | 3 |
+| IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | first session with a working login |
 | US stock, US option and Eurex option commission schedules | 2 | 4 (paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 9 (bond rule) |
 | Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
+| Client Portal Gateway headless paper login on the deployment machine (failed in the cloud container, docs/knowledge/ibkr.md) | 3 | 6 (machine run), 19 |
+| `obliskiq preflight --read-only` end to end on paper (every step after the transport) | 3 | first session with a working login |
+| Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | first session with a working login |
+| One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | first session with a working login |
+| Snapshot field ids from IBKR's table: 7633 strike IV, 7638 open interest, 7087 historical vol, 7310 theta, 7311 vega | 3 | first session with a working login |
+| `/iserver/secdef/search` without `secType` still returns sections | 3 | first session with a working login |
+| `/contract/trading-schedule` shape, holidays omitted, and agreement with the calendars (closes the Session 2 phase-window, SGX, B3 and XEUR rows) | 3 | first session with a working login |
+| `/iserver/auth/ssodh/init` with `publish`/`compete` as query parameters through the Gateway (lite used them over OAuth) | 3 | first session with a working login |
+| `ssoExpires` and the daily reset as seen by the keepalive | 3 | 6 |
+| The daily bar's `t` stamp per venue (the history window is filtered on the UTC date of the bar start; a venue stamping before UTC midnight would shift by a day) | 3 | 8 |
+| Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | first session with a working login |
 
 ## Follow-ups
 
-- Session 3: `ScheduleSource` is synchronous and cache-backed (refresh asynchronously;
-  `observe()` only reads); `None` means "no information", not "closed". Register IBKR's
-  trading schedule as the third source and record the endpoint and format in
-  `docs/knowledge/ibkr.md`.
-- Session 3: IBKR's trading schedule will disagree with the library's XEUR hours (08:00–22:00) on
-  open and close every day, because Eurex option-product hours differ; every date-critical XEUR
-  query would then block. Register the IBKR schedule per product (option hours) or compare
-  regular hours of the equity venues only, and record the decision.
+- **Owner:** the Client Portal Gateway login could not be automated from a cloud container
+  (D34). Decide, before Session 6 runs the bot on a machine: try the Gateway login there (Session
+  6/19 checks it first), ask IBKR again about OAuth for the paper login, or accept a daily manual
+  login. Until then sessions build against fixtures.
+- Session 4: OAuth token negotiation runs inside `headers()`, inside the limiter slot, and honours
+  `Retry-After`; a token outage can hold every concurrency permit for minutes, and each of
+  `rearm`'s sub-requests renegotiates. Before the order path and kill switch share the limiter,
+  ensure the token outside the slot and stop `rearm` at the first `TransportUnavailableError`.
+- Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
+  failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the
+  keepalive repair once it passes and fail reads fast, without a new alert, before then.
+- Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
+  `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
+- Session 4: the order path reads cash from `IbkrClient.portfolio.cash_balances()` (Decimal per
+  currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis` (`documented_bound`
+  for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint groups refuse every read
+  until the account guard has passed (D41). Incomplete position or cash reads raise.
+- Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])`,
+  passing each venue's `is_business_weekday` as `is_trading_weekday` (the calendars expose it per
+  venue), and refresh it from one reference conid per venue; pass the session's alert hook to
+  Telegram.
+- Session 8: the route tag for `source` columns (lite refused unknown routes) belongs to the
+  collectors that write rows; the history walk gains its store watermark there.
+- Session 19: the deployment image needs Java 11 for the Gateway (`ibkr.gateway.java_major_versions`)
+  and `playwright install chromium` matching Playwright 1.56.
 - Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
   stamped with a period-end reference date, and the whole batch rolls back; relax or split it
   with the first live macro route.
@@ -212,7 +322,6 @@ settles it.
   grid cell live now that the universe is configuration.
 - Session 11: add a column-targeted writer for the solved implied volatility (snapshot upserts
   replace the whole row); add a date-leading index on `bars` if a cross-sectional read needs it.
-- Session 3: the route enum that the `source` columns lack (lite refused unknown routes).
 - A migration is forward-only: a later session that changes a table adds `002_*.sql`; it never
   edits `001_core.sql`.
 - **Owner:** confirm the repository settings listed in the Session 1 log entry.

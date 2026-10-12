@@ -1,0 +1,65 @@
+{
+  "exchange_time_zone": "US/Eastern",
+  "schedules": {
+    "20261008": {
+      "extended_hours": [
+        {
+          "cancel_daily_orders": true,
+          "opening": 1791446400,
+          "closing": 1791504000
+        }
+      ],
+      "liquid_hours": [
+        {
+          "opening": 1791466200,
+          "closing": 1791489600
+        }
+      ]
+    },
+    "20261009": {
+      "extended_hours": [
+        {
+          "cancel_daily_orders": true,
+          "opening": 1791532800,
+          "closing": 1791590400
+        }
+      ],
+      "liquid_hours": [
+        {
+          "opening": 1791552600,
+          "closing": 1791576000
+        }
+      ]
+    },
+    "20261012": {
+      "extended_hours": [
+        {
+          "cancel_daily_orders": true,
+          "opening": 1791792000,
+          "closing": 1791849600
+        }
+      ],
+      "liquid_hours": [
+        {
+          "opening": 1791811800,
+          "closing": 1791835200
+        }
+      ]
+    },
+    "20261013": {
+      "extended_hours": [
+        {
+          "cancel_daily_orders": true,
+          "opening": 1791878400,
+          "closing": 1791936000
+        }
+      ],
+      "liquid_hours": [
+        {
+          "opening": 1791898200,
+          "closing": 1791921600
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "BASE": {
+    "currency": "BASE",
+    "secondkey": "BASE",
+    "exchangerate": 1,
+    "cashbalance": 10512.33,
+    "settledcash": 10512.33,
+    "netliquidationvalue": 11170.338885808784,
+    "stockmarketvalue": 658.0,
+    "acctcode": "DU_PAPER",
+    "key": "LedgerList",
+    "timestamp": 1791796172
+  },
+  "EUR": {
+    "currency": "EUR",
+    "exchangerate": 1,
+    "cashbalance": 10000.0,
+    "settledcash": 10000.0,
+    "netliquidationvalue": 10000.0,
+    "acctcode": "DU_PAPER",
+    "key": "LedgerList"
+  },
+  "USD": {
+    "currency": "USD",
+    "exchangerate": 0.8612968,
+    "cashbalance": "594.50",
+    "settledcash": "594.50",
+    "netliquidationvalue": 1358.92,
+    "acctcode": "DU_PAPER",
+    "key": "LedgerList"
+  }
+}

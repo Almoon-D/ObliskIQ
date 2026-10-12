@@ -8,3 +8,6 @@ paths:
   # config/manual-incidents.example.yaml. Read by the calendars; a malformed file blocks every
   # venue until it is fixed.
   manual_incidents: manual-incidents.yaml
+  # The Client Portal Gateway's install: the verified archive unpacked, its per-install keystore
+  # and pinned certificate, and the Gateway's own logs (transport `gateway` only).
+  ibkr_gateway: ibkr-gateway

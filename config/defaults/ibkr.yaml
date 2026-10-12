@@ -1,0 +1,218 @@
+# The IBKR Client Portal Web API: transports, session, pacing, market-data decoding, history,
+# contract search, the trading-schedule cross-check, the Client Portal Gateway and the preflight.
+#
+# Values marked "lite" are ObliskIQ-lite-MCP's (config.yaml `ibkr.cp_api`, @b1ebd49), several of
+# them measured live there; docs/knowledge/ibkr.md carries the measurements and the IBKR pages the
+# other values come from. A changed lite value has a docs/DECISIONS.md entry.
+ibkr:
+  # Appended to the transport's origin (https://api.ibkr.com for OAuth, the Gateway's local
+  # address). lite.
+  base_path: /v1/api
+  # Seconds before one request attempt is abandoned. lite.
+  request_timeout_seconds: 20.0
+  # Under profile `paper` every account id in use must start with one of these; IBKR paper
+  # accounts start with DU. Anything else refuses to start.
+  paper_account_prefixes: [DU]
+
+  # OAuth 1.0a (transport `oauth`). lite; verified live there [CP ✓ 2026-09-10].
+  oauth:
+    realm: limited_poa
+    signature_method_rsa: RSA-SHA256      # the live-session-token request
+    signature_method_hmac: HMAC-SHA256    # every call once a live session token exists
+    live_session_token_path: /oauth/live_session_token
+    live_session_token_ttl_seconds: 82800           # ~23 h; IBKR issues 24 h
+    live_session_token_refresh_margin_seconds: 1800 # renegotiate this long before expiry
+    dh_prime_bits_min: 1024
+    nonce_bytes: 16
+    user_agent: obliskiq
+
+  # The brokerage session above either transport.
+  session:
+    ssodh_init_on_connect: true   # lite
+    # `compete: true` on /iserver/auth/ssodh/init takes the brokerage session over from another
+    # connection of the same username. The paper username is the bot's alone, so a competing
+    # session is another copy of the bot or a manual paper login: it is reclaimed and alerted.
+    compete: true
+    # IBKR asks for a tickle about every 60 s; 45 keeps a margin. lite.
+    tickle_interval_seconds: 45.0
+    # Consecutive failed tickles before the session is re-established. lite.
+    tickle_failure_grace: 3
+    # Re-authentication after a daily reset, a competing session or a lost login: attempts and
+    # the pause between them.
+    reauthenticate_attempts: 3
+    reauthenticate_pause_seconds: 5.0
+
+  # Pacing. IBKR's published limits (docs/knowledge/ibkr.md, "Pacing"): 10 requests a second
+  # globally; history 10/s and 50/min; snapshot 10/s; /portfolio/accounts one per 5 s; scanner
+  # parameters one per 15 min; scanner runs and /tickle one a second. A violation puts the IP in a
+  # 15-minute penalty box, so every window below sits under the published cap rather than on it.
+  # An owner override replaces the whole `groups` list.
+  ratelimit:
+    # Requests in flight at once, across every group.
+    max_concurrency: 4
+    global_windows:
+      - {requests: 9, per_seconds: 1.0}
+    groups:
+      - name: history
+        paths: ["iserver/marketdata/history"]
+        windows: [{requests: 9, per_seconds: 1.0}, {requests: 45, per_seconds: 60.0}]
+      - name: snapshot
+        paths: ["iserver/marketdata/snapshot"]
+        windows: [{requests: 9, per_seconds: 1.0}]
+      - name: portfolio_accounts
+        paths: ["portfolio/accounts", "portfolio/subaccounts"]
+        windows: [{requests: 1, per_seconds: 6.0}]
+      - name: scanner_params
+        paths: ["iserver/scanner/params"]
+        windows: [{requests: 1, per_seconds: 960.0}]
+      - name: scanner_run
+        paths: ["iserver/scanner/run"]
+        windows: [{requests: 1, per_seconds: 1.2}]
+      - name: tickle
+        paths: ["tickle"]
+        windows: [{requests: 1, per_seconds: 1.2}]
+    # Consecutive failures (429, 5xx, transport) that open a group's circuit, and how long it stays
+    # open before one probe request is let through.
+    breaker_failure_threshold: 5
+    breaker_open_seconds: 60.0
+
+  marketdata:
+    # MEASURED in lite [CP ✓ 2026-09-10]: 150 conids in one request answered HTTP 429
+    # {"error":"Exceed number of conids"}, 100 was accepted; IBKR's changelog (2025-12-10) states
+    # the same 100 and a limit of 50 fields.
+    max_conids_per_snapshot: 100
+    max_fields_per_snapshot: 50
+    # A cold subscription answers a skeleton first; poll until a PRICE arrives. Measured in lite
+    # [CP ✓ 2026-09-15]: prices arrived after 4.8-7.0 s, so ten polls a second apart.
+    snapshot_settle_retries: 10
+    snapshot_settle_delay_seconds: 1.0
+    # Units are declared, never guessed from magnitude. auto: a '%' suffix means percent, otherwise
+    # the fallback. lite; CP serves implied vol as "13.126%" [CP ✓ 2026-09-10].
+    implied_vol_units: auto           # auto | decimal | percent
+    implied_vol_units_fallback: decimal
+    implied_vol_max_plausible: 5.0
+    # IBKR serves -1.0 for "no implied vol"; volatility has no negative branch. lite.
+    implied_vol_min_plausible: 0.0
+    delta_max_plausible: 1.0
+    dividend_yield_units: auto        # auto | decimal | percent
+    dividend_yield_units_fallback: percent
+    dividend_yield_max_plausible: 0.25
+    # A delayed quote is relayed 15-20 minutes late (IBKR, "Market Data Availability"); the
+    # snapshot does not say by how much, so a delayed quote carries this documented upper bound,
+    # labelled as a bound, never as a measurement.
+    delayed_quote_bound_seconds: 1200
+    # Field ids per decoded name. A null id is "no verified id": neither requested nor decoded, so
+    # the value stays absent rather than holding a guess. An override replaces the whole list.
+    snapshot_fields:            # option contracts and anything else
+      - {name: last, id: "31"}            # [CP ✓ 2026-09-10]
+      - {name: bid, id: "84"}             # [CP ✓ 2026-09-10]
+      - {name: ask, id: "86"}             # [CP ✓ 2026-09-10]
+      - {name: volume, id: "87"}          # [CP ✓ 2026-09-10]; 87_raw carries the exact count
+      - {name: open_interest, id: "7638"} # IBKR field table (DECISIONS D37)
+      - {name: implied_vol, id: "7633"}   # the strike's own IV, IBKR field table (D37)
+      - {name: delta, id: "7308"}
+      - {name: gamma, id: "7309"}
+      - {name: vega, id: "7311"}
+      - {name: theta, id: "7310"}
+      - {name: market_data_status, id: "6509"}  # [CP ✓ 2026-09-10]
+    underlying_snapshot_fields:
+      - {name: last, id: "31"}
+      - {name: bid, id: "84"}
+      - {name: ask, id: "86"}
+      - {name: volume, id: "87"}
+      - {name: implied_vol, id: "7283"}        # [CP ✓ 2026-09-10]: 30-day at-the-money IV, "%"
+      - {name: historical_vol_30d, id: "7087"} # IBKR field table (D37)
+      - {name: implied_vol_percentile, id: null}  # no Client Portal id exists
+      - {name: dividend_yield, id: null}          # withheld, then deprecated (changelog 2026-01-06)
+      - {name: market_data_status, id: "6509"}
+
+  portfolio:
+    # A runaway guard on the positions pager, not a limit on the portfolio. lite.
+    max_position_pages: 100
+
+  secdef:
+    # Exact ticker first, then the declared listing venue breaks the tie. lite.
+    exact_ticker_match_first: true
+    # Without an exact match nothing is chosen: an ambiguous resolution is refused (D37).
+    accept_first_on_no_exact_match: false
+    # IBKR removed `secType` from /iserver/secdef/search (changelog 2026-09-09); the wanted type is
+    # matched against each row's sections instead.
+    send_sec_type: false
+
+  history:
+    # IBKR documents at most 1000 points per call; the chunk size is probed instead of trusted.
+    # The probe asks for this span of calendar days; the bars that come back size the chunk.
+    # lite collectors.backfill: measured 257 bars for 400 days [CP ✓ 2026-09-10].
+    probe_request_days: 400
+    chunk_days: 365
+    max_chunks: 12
+    # A refused span is asked again for half of it, down to this floor (BOVA11, lite 2026-09-15).
+    span_stepdown_min_days: 30
+    # Sessions in a year, to turn the probe's bar count into calendar days (with
+    # numerics.bsm.day_count_basis). lite data.trading_days_per_year; IBKR annualises with sqrt(252).
+    sessions_per_year: 252
+
+  trading_schedule:
+    # Venues whose IBKR schedule is a product's hours rather than the venue's: Eurex options trade
+    # different hours from the XEUR calendar, so comparing them would disagree every day.
+    skip_venues: [XEUR]
+    # IBKR omits non-trading days from the schedule it returns: a weekday missing inside the
+    # returned span reads as closed. VERIFY-LIVE(trading schedule omits holidays).
+    missing_weekday_is_closed: true
+
+  # The Client Portal Gateway (transport `gateway`): IBKR's Java application, logged in by a
+  # headless browser with the paper username and password. Paper only.
+  gateway:
+    # The download is not versioned by URL: the pin is the archive's SHA-256 and size, read
+    # 2026-10-12 (build 20230424154245, Last-Modified 2023-04-24). A different archive is refused.
+    download_url: https://download2.interactivebrokers.com/portal/clientportal.gw.zip
+    sha256: 2f2d380b2f9424520ff5f9c11fe45e82ef39459329ac056258a3274bea6f76f9
+    size_bytes: 10542956
+    # Where the Gateway listens, on this machine only.
+    local_address: https://localhost:5000
+    startup_timeout_seconds: 60.0
+    # Java major versions the Gateway may run on. On Java 21 this build accepts the password and
+    # then re-renders the login instead of opening the session; on Java 11 the same login succeeds
+    # [CP ✓ 2026-10-12]. The Gateway's own guide names OpenJDK 11. Another version is refused.
+    java_major_versions: [11]
+    # The shipped certificate expired in 2019 and names no host, so each install generates its own
+    # key pair for localhost; clients pin that certificate.
+    keystore_validity_days: 825
+    # Seconds between readiness probes while the Gateway starts (and one probe's timeout), and
+    # the grace a stopping Gateway gets before it is killed.
+    probe_interval_seconds: 1.0
+    stop_grace_seconds: 10.0
+    # The only variables the Gateway's JVM, the JDK tools and the login browser inherit: what a
+    # shell, Java and a proxy need. Everything else (broker, bot and data-source credentials)
+    # stays out; ObliskIQ's own OBLISK_* variables can never be listed. A proxy URL listed here
+    # passes with any credentials it embeds.
+    inherited_environment:
+      [PATH, HOME, USER, LANG, LC_ALL, TZ, TMPDIR, JAVA_TOOL_OPTIONS, JDK_JAVA_OPTIONS,
+       HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy]
+    login:
+      route: /sso/Login?forwardTo=22&RL=1&ip2loc=on
+      username_selector: "input[name=username]"
+      password_selector: "input[name=password]"
+      paper_toggle_selector: "label[for=toggle1]"
+      submit_selector: ".btn.btn-lg.xyz-button-login"
+      error_selector: ".xyz-errormessage"
+      success_text: Client login succeeds
+      page_timeout_seconds: 30.0
+      success_timeout_seconds: 45.0
+      # Typed one key at a time with a pause before submitting: submitted at once, the form
+      # answered "Authentication failed" [CP ✓ 2026-10-12]; IBeam waits 5 s too.
+      keystroke_delay_ms: 60
+      presubmit_wait_seconds: 5.0
+      max_attempts: 2
+      # A repair may log in again only this long after the previous login: repeated logins in
+      # the failure mode seen in the cloud (password accepted, no session) risk locking the
+      # username. Inside the interval a repair fails at once and the session alerts.
+      min_relogin_interval_seconds: 600.0
+
+  # `obliskiq preflight`: the stock it reads end to end.
+  preflight:
+    symbol: SPY
+    listing_exchange: ARCA
+    currency: USD
+    history_period: 1m
+    history_bar: 1d

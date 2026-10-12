@@ -1,0 +1,5 @@
+{"contracts": [
+  {"server_id": "0", "column_name": "Trades", "symbol": "AMD", "conidex": "4391", "con_id": 4391,
+   "available_chart_periods": "#R|1", "company_name": "ADVANCED MICRO DEVICES", "scan_data": "163.773K",
+   "contract_description_1": "AMD", "listing_exchange": "NASDAQ.NMS", "sec_type": "STK"}
+], "scan_data_column_name": "Trades"}
