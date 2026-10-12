@@ -14,8 +14,8 @@ over OAuth 1.0a.
 3. `docs/DECISIONS.md` — why things are as they are; what was rejected. The entries that
    cite your §§ or touch your modules, and the previous session's.
 4. `docs/ROADMAP.md` — the latest session-log entry, and the Follow-ups and Live
-   verification queue (short; act on the items that name your session or a condition it
-   meets, such as the first session with a working login).
+   verification queue (act on the items that name your session or a condition it meets,
+   such as the first session with a working login).
 5. `docs/knowledge/` — observed broker and data-source behaviour, tagged by route and date:
    the files your work touches.
 
@@ -162,8 +162,8 @@ Where `gh` is missing or unauthenticated, the environment's GitHub tools do the 
    has not seen the work: give it the PR number and the session number (a feature or
    maintenance session gives its acceptance criteria instead); it reads the diff
    (`git diff origin/main...HEAD`) and the prompt (`make prompt S=<N>`) itself. Ask for
-   blocking and non-blocking findings on correctness, money-path safety,
-   mandate and eligibility violations, hardcoded values, point-in-time leaks, failure-branch
+   blocking and non-blocking findings on correctness, money-path safety, mandate and
+   eligibility violations, hardcoded values, point-in-time leaks, failure-branch
    tests, cleanliness (dead code, debug prints, stray files, TODOs without an issue,
    commented-out code, version narratives, secrets) and docs consistency. Post the findings
    with `gh pr comment`. Tick the template checklist yourself.

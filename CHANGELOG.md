@@ -27,7 +27,9 @@ Sessions 4 and 4a (D44). Process and documents only; no runtime code changes.
   `MASTER_PLAN` by section.
 - SESSION_PROMPTS: Session 4 becomes Session 4 (order path, kill switch and modes, behind a
   fail-closed pre-trade clearance) and Session 4a (pre-trade rails, approval queue, `flatten`,
-  paper order test); later prompts pin frozen legacy ranges; §B asks for auto mode and a fresh
+  paper order test). The clearance classes each order by its verified effect: an order that
+  reduces risk passes with the kill switch ON under every other check, and `cancel` works in
+  every mode; later prompts pin frozen legacy ranges; §B asks for auto mode and a fresh
   session for follow-ups. MASTER_PLAN §10 and the ROADMAP follow the split.
 
 ## [0.3.1] - 2026-10-12

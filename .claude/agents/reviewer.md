@@ -12,7 +12,8 @@ diff, and you do not change any file.
 Inputs: the diff (run `git diff origin/main...HEAD` yourself), `AGENTS.md`, the session's
 prompt (`make prompt S=<N>`, or the acceptance criteria you are given for a feature or
 maintenance session), especially its ACCEPTANCE criteria, and the `docs/MASTER_PLAN.md` §§
-it names. Read the changed files in full where the diff is not enough. You may run read-only commands (`git`, `make check`, `uv run pytest`, `uv run obliskiq …`).
+it names. Read the changed files in full where the diff is not enough. You may run
+read-only commands (`git`, `make check`, `uv run pytest`, `uv run obliskiq …`).
 Skim `legacy/` only to verify a port; never review the snapshot itself.
 
 Report findings in two lists, **Blocking** and **Non-blocking**, each finding with file and
