@@ -14,9 +14,9 @@ import pytest
 from obliskiq.errors import UpstreamError
 from obliskiq.util.http import (
     RetryPolicy,
-    _retry_after_seconds,
     get_with_retry,
     request_with_retry,
+    retry_after_seconds,
 )
 
 URL = "https://x.test/y"
@@ -162,14 +162,14 @@ async def test_a_dated_retry_after_is_read_as_well_as_a_delta(fast_policy, slept
 def test_a_naive_dated_retry_after_is_read_as_utc(policy):
     when = datetime.now(UTC) + timedelta(seconds=30)
     naive = when.strftime("%a, %d %b %Y %H:%M:%S -0000")
-    seconds = _retry_after_seconds(httpx.Response(429, headers={"Retry-After": naive}), policy)
+    seconds = retry_after_seconds(httpx.Response(429, headers={"Retry-After": naive}), policy)
     assert seconds == pytest.approx(30.0, abs=2.0)
 
 
 def test_a_servers_wait_is_capped_by_its_own_ceiling_not_by_our_backoff(policy):
     """max_delay_seconds bounds the backoff WE choose; an explicit instruction is bounded
     by its own, higher ceiling."""
-    seconds = _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "600"}), policy)
+    seconds = retry_after_seconds(httpx.Response(429, headers={"Retry-After": "600"}), policy)
     assert seconds == pytest.approx(policy.retry_after_max_seconds)
     assert seconds > policy.max_delay_seconds
 
@@ -177,7 +177,7 @@ def test_a_servers_wait_is_capped_by_its_own_ceiling_not_by_our_backoff(policy):
 @pytest.mark.parametrize(("header", "expected"), [("soon-ish", None), ("-5", 0.0), ("", None)])
 def test_retry_after_edge_cases(policy, header, expected):
     response = httpx.Response(429, headers={"Retry-After": header} if header else {})
-    assert _retry_after_seconds(response, policy) == expected
+    assert retry_after_seconds(response, policy) == expected
 
 
 async def test_retry_works_for_any_verb(fast_policy, respx_mock):

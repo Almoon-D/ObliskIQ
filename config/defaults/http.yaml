@@ -1,0 +1,17 @@
+# The shared HTTP retry policy: transport failures and retryable statuses are retried with capped,
+# jittered exponential backoff. Values are ObliskIQ-lite-MCP's (config.yaml `http`, @b1ebd49).
+http:
+  # Seconds before one request attempt is abandoned.
+  timeout_seconds: 15.0
+  # Retries after the first attempt.
+  retries: 3
+  # Backoff before retry n is base_delay * 2^n, capped at max_delay, plus up to jitter.
+  base_delay_seconds: 0.4
+  max_delay_seconds: 8.0
+  jitter_seconds: 0.4
+  retry_status_codes: [429, 500, 502, 503, 504]
+  # A Retry-After the SERVER asked for is capped separately and much higher than
+  # max_delay_seconds: clamping an explicit 429 wait to our own backoff ceiling means retrying long
+  # before the upstream said to, which is how a rate limit becomes a longer ban. Still a ceiling, so
+  # a mistaken or hostile header cannot park the bot for hours.
+  retry_after_max_seconds: 120.0

@@ -88,6 +88,9 @@ class Environment(BaseSettings):
     ibkr_gateway_password: SecretStr | None = Field(
         default=None, validation_alias="OBLISK_IBKR_GATEWAY_PASSWORD"
     )
+    ibkr_gateway_java_home: Path | None = Field(
+        default=None, validation_alias="OBLISK_IBKR_GATEWAY_JAVA_HOME"
+    )
 
     # IBKR: OAuth 1.0a.
     ibkr_cp_base_url: str | None = Field(default=None, validation_alias="OBLISK_IBKR_CP_BASE_URL")
@@ -143,6 +146,16 @@ class Environment(BaseSettings):
         resolved = value.expanduser()
         if not resolved.is_file():
             raise ValueError(f"points at a file that does not exist: {resolved}")
+        return resolved
+
+    @field_validator("ibkr_gateway_java_home")
+    @classmethod
+    def _java_home_has_java(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
+        resolved = value.expanduser()
+        if not (resolved / "bin" / "java").is_file():
+            raise ValueError(f"names no Java runtime (no bin/java under {resolved})")
         return resolved
 
     @field_validator("config_dir", "data_dir")

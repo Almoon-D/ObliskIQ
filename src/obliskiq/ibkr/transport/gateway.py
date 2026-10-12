@@ -1,0 +1,174 @@
+"""Transport ``gateway``: IBKR's Client Portal Gateway on this machine, logged in headlessly.
+
+``prepare`` installs the pinned Gateway (once), starts it unless one is serving, and logs it in
+with the paper username and password unless it already holds a session. Requests then go to the
+Gateway's local address, verified against its per-install certificate; the Gateway adds the
+session itself, so no request is signed. ``recover`` restarts a dead Gateway and logs in again.
+
+It refuses profile ``live``: a live login needs the owner's second factor on IBKR Mobile, which
+an unattended process can never supply, so the Gateway never holds a live session here.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+"""
+
+import asyncio
+import ssl
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any, Literal
+
+import httpx
+from pydantic import SecretStr
+
+from ...config.schema_ibkr import IbkrConfig
+from ...logging_setup import get_logger
+from ...util.http import RetryPolicy
+from ..errors import GatewayError, ProfileRefusedError
+from .base import TransportKind
+from .gateway_install import GatewayInstall, ensure_installed
+from .gateway_java import JavaRuntime
+from .gateway_login import LoginDriver, PlaywrightLoginDriver
+from .gateway_process import GatewayProcess
+
+log = get_logger("ibkr.gateway")
+
+HTTP_OK = 200
+
+#: The Gateway answers this with 200 once logged in and 401 before.
+SESSION_PROBE_PATH = "/v1/api/tickle"
+
+
+class GatewayTransport:
+    """The Client Portal Gateway, installed, started and logged in on demand."""
+
+    def __init__(
+        self,
+        ibkr: IbkrConfig,
+        *,
+        profile: Literal["paper", "live"],
+        username: SecretStr,
+        password: SecretStr,
+        base_path: str,
+        install_dir: Path,
+        policy: RetryPolicy,
+        timeout_seconds: float,
+        java_home: Path | None = None,
+        driver: LoginDriver | None = None,
+        download_client: httpx.AsyncClient | None = None,
+    ) -> None:
+        if profile != "paper":
+            raise ProfileRefusedError(
+                "the Client Portal Gateway is paper-only here: a live login needs the owner's "
+                "second factor, so profile live never logs in through it"
+            )
+        self._ibkr = ibkr
+        self._username = username
+        self._password = password
+        self._base_url = ibkr.gateway.local_address.rstrip("/") + base_path
+        self._install_dir = install_dir
+        self._policy = policy
+        self._timeout = timeout_seconds
+        self._driver: LoginDriver = driver if driver is not None else PlaywrightLoginDriver()
+        self._download_client = download_client
+        self._java = JavaRuntime(java_home)
+        self._install: GatewayInstall | None = None
+        self._process: GatewayProcess | None = None
+        self._lock = asyncio.Lock()
+
+    @property
+    def kind(self) -> TransportKind:
+        return TransportKind.GATEWAY
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    def verify(self) -> ssl.SSLContext | bool:
+        if self._install is None:
+            raise GatewayError("the Gateway transport is used before prepare()")
+        return self._install.ssl_context()
+
+    async def _ensure_install(self) -> GatewayInstall:
+        if self._install is None:
+            await self._java.require(self._ibkr.gateway.java_major_versions)
+            if self._download_client is not None:
+                self._install = await ensure_installed(
+                    self._ibkr,
+                    self._install_dir,
+                    client=self._download_client,
+                    policy=self._policy,
+                    java=self._java,
+                )
+            else:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    self._install = await ensure_installed(
+                        self._ibkr,
+                        self._install_dir,
+                        client=client,
+                        policy=self._policy,
+                        java=self._java,
+                    )
+        return self._install
+
+    async def _logged_in(self, install: GatewayInstall) -> bool:
+        try:
+            async with httpx.AsyncClient(
+                verify=install.ssl_context(), timeout=self._timeout, trust_env=False
+            ) as client:
+                response = await client.post(
+                    self._ibkr.gateway.local_address.rstrip("/") + SESSION_PROBE_PATH
+                )
+        except httpx.HTTPError:
+            return False
+        return response.status_code == HTTP_OK
+
+    async def _login(self, install: GatewayInstall) -> None:
+        login = self._ibkr.gateway.login
+        url = self._ibkr.gateway.local_address.rstrip("/") + login.route
+        details: list[str] = []
+        for attempt in range(1, login.max_attempts + 1):
+            outcome = await self._driver.login(
+                url=url,
+                username=self._username.get_secret_value(),
+                password=self._password.get_secret_value(),
+                spki_pin=install.spki_pin(),
+                ibkr=self._ibkr,
+            )
+            if outcome.succeeded and await self._logged_in(install):
+                log.info("Gateway logged in", extra={"attempt": attempt})
+                return
+            details.append(outcome.detail if not outcome.succeeded else "no session after login")
+            if outcome.credentials_accepted is False:
+                break  # a refused password is not retried: repeats can lock the username
+        raise GatewayError("the Gateway's headless login failed: " + " | ".join(details))
+
+    async def _start_and_login(self) -> None:
+        install = await self._ensure_install()
+        if self._process is None:
+            self._process = GatewayProcess(
+                install,
+                local_address=self._ibkr.gateway.local_address,
+                startup_timeout=self._ibkr.gateway.startup_timeout_seconds,
+                java=self._java,
+            )
+        if not await self._process.answering():
+            await self._process.start()
+        if not await self._logged_in(install):
+            await self._login(install)
+
+    async def prepare(self) -> None:
+        async with self._lock:
+            await self._start_and_login()
+
+    async def headers(self, method: str, url: str, params: Mapping[str, Any]) -> dict[str, str]:
+        del method, url, params  # the Gateway adds the session itself; nothing is signed
+        return {"Accept": "application/json"}
+
+    async def recover(self) -> None:
+        async with self._lock:
+            log.warning("re-establishing the Gateway session")
+            await self._start_and_login()
+
+    async def aclose(self) -> None:
+        if self._process is not None:
+            await self._process.stop()

@@ -1,0 +1,463 @@
+"""The brokerage session above either transport: one request pipeline and its repairs.
+
+Every request goes rate limiter → transport headers → HTTP → :func:`~obliskiq.ibkr.errors.classify`,
+and each failure is handled by the advice its class carries:
+
+* **back off** (429, other 5xx, a transport failure): jittered exponential backoff from the
+  ``http`` policy, ``Retry-After`` honoured and applied to the whole endpoint group; each failure
+  counts toward the group's circuit breaker.
+* **re-arm** (401, or ``HTTP 500 {"error":"Please query /accounts first"}``): the brokerage session
+  dropped. Re-open it — ``/iserver/auth/ssodh/init`` FIRST, then both accounts endpoints — and
+  repeat the call once. Measured in lite [CP ✓ 2026-09-10]: calling the accounts endpoints alone
+  cleared nothing across nine attempts, while ``ssodh/init`` restored the session at once; a bare
+  401 31 minutes into a run with ~22 h left on the token was the same drop. If the repeat fails
+  too, the transport logs in again (renegotiate the token, or re-run the Gateway login) and the
+  call is repeated once more; then it raises.
+* **never** (403, a no-data body, a malformed request, an undecodable body): raised at once.
+
+``/tickle`` keeps the session alive on a configured interval and reads its ``competing`` and
+``authenticated`` flags. A competing session (another connection took the username) and a session
+that stopped being authenticated (IBKR's daily reset, a logout, a timeout) are re-established
+automatically, and each is reported through the ``alert`` hook.
+
+Account ids never appear in a log line or message: paths are redacted before they are named.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+"""
+
+import asyncio
+import contextlib
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+
+import httpx
+
+from ..config.schema_ibkr import IbkrConfig
+from ..logging_setup import get_logger
+from ..util.http import RetryPolicy, retry_after_seconds
+from .errors import (
+    CompetingSessionError,
+    DecodeError,
+    IbkrError,
+    IbkrUpstreamError,
+    RetryAdvice,
+    SessionExpiredError,
+    classify,
+)
+from .ratelimit import Clock, RateLimiter, SystemClock
+from .redact import redact
+from .transport.base import Transport
+
+log = get_logger("ibkr.session")
+
+SSODH_INIT_PATH = "iserver/auth/ssodh/init"
+AUTH_STATUS_PATH = "iserver/auth/status"
+TICKLE_PATH = "tickle"
+ISERVER_ACCOUNTS_PATH = "iserver/accounts"
+PORTFOLIO_ACCOUNTS_PATH = "portfolio/accounts"
+
+
+class SessionAlertKind(StrEnum):
+    COMPETING = "competing_session"
+    SESSION_LOST = "session_lost"
+    REAUTHENTICATED = "reauthenticated"
+    REAUTHENTICATION_FAILED = "reauthentication_failed"
+
+
+@dataclass(frozen=True)
+class SessionAlert:
+    """Something the owner should hear about the broker session."""
+
+    kind: SessionAlertKind
+    detail: str
+    at: datetime
+
+
+type AlertHook = Callable[[SessionAlert], None]
+
+
+@dataclass(frozen=True)
+class AuthStatus:
+    """``/iserver/auth/status`` (also nested in ``/tickle``). A missing flag reads as false."""
+
+    authenticated: bool
+    competing: bool
+    connected: bool
+    message: str
+    fail: str
+
+    @classmethod
+    def from_body(cls, body: Any) -> AuthStatus:
+        data = body if isinstance(body, Mapping) else {}
+        return cls(
+            authenticated=data.get("authenticated") is True,
+            competing=data.get("competing") is True,
+            connected=data.get("connected") is True,
+            message=str(data.get("message") or ""),
+            fail=str(data.get("fail") or ""),
+        )
+
+
+def tickle_status(body: Any) -> AuthStatus | None:
+    """The auth status a ``/tickle`` answer carries, or ``None`` when it carries none."""
+    if not isinstance(body, Mapping):
+        return None
+    iserver = body.get("iserver")
+    if not isinstance(iserver, Mapping) or not isinstance(iserver.get("authStatus"), Mapping):
+        return None
+    return AuthStatus.from_body(iserver["authStatus"])
+
+
+class BrokerSession:
+    """One brokerage session: the request pipeline, its repairs and the keepalive."""
+
+    def __init__(
+        self,
+        transport: Transport,
+        ibkr: IbkrConfig,
+        policy: RetryPolicy,
+        *,
+        limiter: RateLimiter | None = None,
+        clock: Clock | None = None,
+        http: httpx.AsyncClient | None = None,
+        alert: AlertHook | None = None,
+        known_ids: Iterable[str] = (),
+    ) -> None:
+        self._transport = transport
+        self._ibkr = ibkr
+        self._policy = policy
+        self._clock: Clock = clock if clock is not None else SystemClock()
+        self._limiter = limiter if limiter is not None else RateLimiter(ibkr, self._clock)
+        self._http = http
+        self._owns_http = http is None
+        self._alert = alert
+        self._known_ids = frozenset(i for i in known_ids if i)
+        self._arming = False
+        self._authenticated = False
+        self._tickle_task: asyncio.Task[None] | None = None
+
+    # ── lifecycle ──
+
+    @property
+    def transport(self) -> Transport:
+        return self._transport
+
+    @property
+    def limiter(self) -> RateLimiter:
+        return self._limiter
+
+    @property
+    def clock(self) -> Clock:
+        return self._clock
+
+    @property
+    def authenticated(self) -> bool:
+        return self._authenticated
+
+    def add_known_ids(self, ids: Iterable[str]) -> None:
+        """Account ids learnt from IBKR, masked in every message from now on."""
+        self._known_ids = self._known_ids | frozenset(i for i in ids if i)
+
+    def redact(self, text: str) -> str:
+        return redact(text, self._known_ids)
+
+    async def open(self) -> AuthStatus | None:
+        """Prepare the transport, open the HTTP client and, when configured, the session."""
+        await self._transport.prepare()
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                verify=self._transport.verify(),
+                timeout=self._ibkr.request_timeout_seconds,
+            )
+        if self._ibkr.session.ssodh_init_on_connect:
+            return await self.init_brokerage_session()
+        return None
+
+    async def aclose(self) -> None:
+        await self.stop_keepalive()
+        if self._owns_http and self._http is not None:
+            await self._http.aclose()
+            self._http = None
+        await self._transport.aclose()
+
+    # ── the request pipeline ──
+
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        query: Mapping[str, Any],
+        json_body: Any,
+        label: str,
+    ) -> tuple[httpx.Response, str]:
+        if self._http is None:
+            raise IbkrUpstreamError("the broker session is used before open()")
+        url = f"{self._transport.base_url}/{path.lstrip('/')}"
+        async with self._limiter.slot(path) as group:
+            headers = await self._transport.headers(method, url, query)
+            try:
+                response = await self._http.request(
+                    method, url, params=dict(query) or None, json=json_body, headers=headers
+                )
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                self._limiter.failure(group)
+                raise IbkrUpstreamError(
+                    f"{self.redact(label)}: the request failed at the transport layer "
+                    f"({type(exc).__name__})"
+                ) from exc
+        return response, group
+
+    def _decode(self, response: httpx.Response, label: str) -> Any:
+        if not response.content:
+            return None
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise DecodeError(
+                f"{self.redact(label)} returned a body that is not JSON",
+                status=response.status_code,
+            ) from exc
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        json_body: Any = None,
+        label: str | None = None,
+    ) -> Any:
+        """Issue one request and return its decoded JSON body (``None`` for an empty body).
+
+        ``label`` names the call in logs and errors; pass a template such as
+        ``portfolio/{account}/ledger`` for any path that carries an account id.
+        """
+        name = label if label is not None else path
+        query = {key: value for key, value in (params or {}).items() if value is not None}
+        attempt = 0
+        rearmed = False
+        reauthenticated = False
+        while True:
+            try:
+                response, group = await self._send(method, path, query, json_body, name)
+            except IbkrUpstreamError as exc:
+                error: IbkrError = exc
+                group = ""
+            else:
+                wait = retry_after_seconds(response, self._policy)
+                found = classify(
+                    response.status_code,
+                    response.text,
+                    endpoint=name,
+                    retry_after=wait,
+                    known_ids=self._known_ids,
+                )
+                if found is None:
+                    self._limiter.success(group)
+                    return self._decode(response, name)
+                error = found
+                if error.retry is RetryAdvice.BACKOFF:
+                    self._limiter.failure(group)
+                    if error.retry_after is not None:
+                        self._limiter.pause(group, error.retry_after)
+            if error.retry is RetryAdvice.REARM and not self._arming:
+                if not rearmed:
+                    rearmed = True
+                    await self.rearm()
+                    continue
+                if not reauthenticated:
+                    reauthenticated = True
+                    await self.reauthenticate(f"{self.redact(name)} kept failing: {error}")
+                    continue
+            if error.retry is RetryAdvice.BACKOFF and attempt < self._policy.retries:
+                delay = error.retry_after or self._policy.delay_for(attempt)
+                log.warning(
+                    "ibkr request failed; backing off",
+                    extra={"endpoint": self.redact(name), "attempt": attempt + 1, "delay": delay},
+                )
+                attempt += 1
+                await self._clock.sleep(delay)
+                continue
+            raise error
+
+    async def get(self, path: str, **params: Any) -> Any:
+        return await self.request("GET", path, params=params)
+
+    # ── the brokerage session ──
+
+    async def init_brokerage_session(self) -> AuthStatus:
+        """``POST /iserver/auth/ssodh/init``, then the ``/iserver/accounts`` precondition.
+
+        ``publish`` and ``compete`` go as query parameters, the form lite ran live
+        [CP ✓ 2026-09-10]; ``compete`` takes the session over from another connection.
+        """
+        body = await self.request(
+            "POST",
+            SSODH_INIT_PATH,
+            params={
+                "publish": "true",
+                "compete": "true" if self._ibkr.session.compete else "false",
+            },
+        )
+        status = AuthStatus.from_body(body)
+        self._authenticated = status.authenticated
+        log.info(
+            "brokerage session init",
+            extra={"authenticated": status.authenticated, "competing": status.competing},
+        )
+        if status.competing:
+            self._emit(SessionAlertKind.COMPETING, "ssodh/init reported a competing session")
+        if status.authenticated:
+            await self._arm_accounts()
+        return status
+
+    async def _arm_accounts(self) -> None:
+        """``/iserver/accounts``, which the ``/iserver`` market-data routes will not serve
+        without. A failure is logged, not raised: the call that follows reports it precisely."""
+        try:
+            body = await self.request("GET", ISERVER_ACCOUNTS_PATH)
+        except IbkrError as exc:
+            log.warning("iserver/accounts failed", extra={"error": self.redact(str(exc))})
+            return
+        if isinstance(body, Mapping):
+            self.add_known_ids(str(a) for a in body.get("accounts") or [] if a)
+
+    async def rearm(self) -> None:
+        """Re-open the session after it dropped: ``ssodh/init``, then both accounts endpoints.
+
+        Failures are swallowed: the caller repeats the real request, whose own error says far
+        more. Guarded against recursion, since these requests go through the same pipeline.
+        """
+        if self._arming:
+            return
+        self._arming = True
+        try:
+            with contextlib.suppress(IbkrError):
+                body = await self.request(
+                    "POST",
+                    SSODH_INIT_PATH,
+                    params={
+                        "publish": "true",
+                        "compete": "true" if self._ibkr.session.compete else "false",
+                    },
+                )
+                self._authenticated = AuthStatus.from_body(body).authenticated
+            for path in (ISERVER_ACCOUNTS_PATH, PORTFOLIO_ACCOUNTS_PATH):
+                with contextlib.suppress(IbkrError):
+                    await self.request("GET", path)
+            log.info("re-armed the brokerage session", extra={"authenticated": self._authenticated})
+        finally:
+            self._arming = False
+
+    async def reauthenticate(self, reason: str) -> AuthStatus:
+        """Log the transport in again and re-open the session; alert either way."""
+        session = self._ibkr.session
+        last: Exception | None = None
+        for attempt in range(1, session.reauthenticate_attempts + 1):
+            try:
+                await self._transport.recover()
+                status = await self._init_without_rearm()
+            except IbkrError as exc:
+                last = exc
+            else:
+                if status.authenticated:
+                    self._emit(SessionAlertKind.REAUTHENTICATED, reason)
+                    return status
+                last = SessionExpiredError("ssodh/init did not report an authenticated session")
+            log.warning(
+                "re-authentication attempt failed",
+                extra={"attempt": attempt, "error": self.redact(str(last))},
+            )
+            if attempt < session.reauthenticate_attempts:
+                await self._clock.sleep(session.reauthenticate_pause_seconds)
+        self._authenticated = False
+        detail = f"{reason}; re-authentication failed: {self.redact(str(last))}"
+        self._emit(SessionAlertKind.REAUTHENTICATION_FAILED, detail)
+        raise SessionExpiredError(detail) from last
+
+    async def _init_without_rearm(self) -> AuthStatus:
+        self._arming = True
+        try:
+            return await self.init_brokerage_session()
+        finally:
+            self._arming = False
+
+    async def auth_status(self) -> AuthStatus:
+        return AuthStatus.from_body(await self.request("POST", AUTH_STATUS_PATH))
+
+    async def tickle(self) -> Any:
+        return await self.request("POST", TICKLE_PATH)
+
+    def _emit(self, kind: SessionAlertKind, detail: str) -> None:
+        alert = SessionAlert(kind=kind, detail=self.redact(detail), at=datetime.now(UTC))
+        log.warning("broker session alert", extra={"kind": kind.value, "detail": alert.detail})
+        if self._alert is None:
+            return
+        try:
+            self._alert(alert)
+        except Exception:
+            log.exception("session alert hook failed")
+
+    # ── keepalive ──
+
+    async def check_session(self) -> None:
+        """One keepalive step: tickle, then repair a competing or lost session."""
+        status = tickle_status(await self.tickle())
+        if status is None:
+            return
+        if status.competing:
+            self._emit(SessionAlertKind.COMPETING, "tickle reported a competing session")
+            await self.reauthenticate("a competing session took the brokerage session")
+            return
+        if self._authenticated and not status.authenticated:
+            self._emit(
+                SessionAlertKind.SESSION_LOST,
+                "tickle reported the session unauthenticated (a daily reset, a logout or a "
+                "timeout)",
+            )
+            await self.reauthenticate("the brokerage session was lost")
+
+    async def start_keepalive(self) -> None:
+        if self._tickle_task is not None:
+            return
+        self._tickle_task = asyncio.create_task(self._keepalive_loop())
+
+    async def stop_keepalive(self) -> None:
+        task, self._tickle_task = self._tickle_task, None
+        if task is None:
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    async def _keepalive_loop(self) -> None:
+        session = self._ibkr.session
+        failures = 0
+        while True:
+            await self._clock.sleep(session.tickle_interval_seconds)
+            try:
+                await self.check_session()
+                failures = 0
+            except IbkrError as exc:
+                failures += 1
+                log.warning(
+                    "keepalive failed",
+                    extra={"consecutive_failures": failures, "error": self.redact(str(exc))},
+                )
+                if failures >= session.tickle_failure_grace:
+                    failures = 0
+                    with contextlib.suppress(IbkrError):
+                        await self.reauthenticate("the keepalive kept failing")
+
+
+__all__ = [
+    "AlertHook",
+    "AuthStatus",
+    "BrokerSession",
+    "CompetingSessionError",
+    "SessionAlert",
+    "SessionAlertKind",
+]

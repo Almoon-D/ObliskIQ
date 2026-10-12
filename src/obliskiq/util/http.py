@@ -19,10 +19,11 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
+from ..config.schema_ibkr import HttpConfig
 from ..errors import UpstreamError
 from ..logging_setup import get_logger
 
@@ -43,6 +44,19 @@ class RetryPolicy:
     #: ``max_delay_seconds``, which bounds our own backoff.
     retry_after_max_seconds: float
 
+    @classmethod
+    def from_settings(cls, http: HttpConfig) -> Self:
+        """The policy the ``http`` section of the configuration declares."""
+        return cls(
+            retries=http.retries,
+            base_delay_seconds=http.base_delay_seconds,
+            max_delay_seconds=http.max_delay_seconds,
+            jitter_seconds=http.jitter_seconds,
+            timeout_seconds=http.timeout_seconds,
+            retry_status_codes=frozenset(http.retry_status_codes),
+            retry_after_max_seconds=http.retry_after_max_seconds,
+        )
+
     def delay_for(self, attempt: int) -> float:
         """Exponential backoff with jitter, capped. ``attempt`` is zero-based."""
         raw = self.base_delay_seconds * 2.0**attempt
@@ -50,7 +64,7 @@ class RetryPolicy:
         return capped + random.uniform(0.0, self.jitter_seconds)
 
 
-def _retry_after_seconds(response: httpx.Response, policy: RetryPolicy) -> float | None:
+def retry_after_seconds(response: httpx.Response, policy: RetryPolicy) -> float | None:
     """The wait the server asked for, in seconds, or ``None``.
 
     RFC 9110 allows delta-seconds and an HTTP-date, and upstreams use both. The wait is
@@ -143,7 +157,7 @@ async def request_with_retry(
                     extra={"method": method, "url": url, "status": response.status_code},
                 )
                 return response
-            retry_after = _retry_after_seconds(response, policy)
+            retry_after = retry_after_seconds(response, policy)
             log.warning(
                 "http retryable status, retrying",
                 extra={
