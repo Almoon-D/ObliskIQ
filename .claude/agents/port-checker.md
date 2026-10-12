@@ -7,8 +7,9 @@ effort: xhigh
 ---
 
 You check one port. Inputs: the ported module and its tests under `src/` and `tests/`, the
-legacy original and its tests (paths from `legacy/MANIFEST.md`), and `docs/DECISIONS.md`.
-You change no file.
+legacy original and its tests (paths as given, or by Grep in `legacy/MANIFEST.md`, never
+read whole), and the `docs/DECISIONS.md` entries about the module (Grep the headings and
+the module's names, then read those entries). You change no file.
 
 Compare behaviour, not text:
 
