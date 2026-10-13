@@ -124,6 +124,10 @@ class TransportUnavailableError(IbkrError):
     own retries; the request is not retried again on top of them."""
 
 
+class LookupIncompleteError(IbkrError):
+    """The live orders were not a complete snapshot: a cOID absent from them proves nothing."""
+
+
 class GatewayError(IbkrError):
     """The Client Portal Gateway cannot be installed, started or logged in."""
 

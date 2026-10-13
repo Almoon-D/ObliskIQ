@@ -1,4 +1,5 @@
-"""The shape of ``001_core.sql`` and the constraints that keep a bad row out.
+"""The shape of the migrations (``001_core.sql``, ``002_orders.sql``) and the constraints that
+keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
 saying so. Each CHECK has a row it must refuse.
@@ -55,6 +56,44 @@ SHAPE = {
         "steps_completed:INTEGER!=0, exit_code:INTEGER, detail:TEXT"
     ),
     "schema_migrations": ("name:TEXT*, checksum:TEXT!, applied_at:TEXT!"),
+    # 002_orders
+    "account_reads": "read_id:INTEGER*, kind:TEXT!, observed_at:TEXT!",
+    "broker_orders": (
+        "order_id:TEXT*, coid:TEXT, intent_id:TEXT, conid:INTEGER, side:TEXT, sec_type:TEXT, "
+        "order_type:TEXT, status:TEXT!, total_quantity:TEXT, filled_quantity:TEXT, "
+        "remaining_quantity:TEXT, average_price:TEXT, tif:TEXT, observed_at:TEXT!"
+    ),
+    "cash_snap": "read_id:INTEGER!*, currency:TEXT!*, cash:TEXT!, settled_cash:TEXT",
+    "clearances": (
+        "clearance_id:TEXT*, intent_id:TEXT!, action:TEXT!, order_id:TEXT, conid:INTEGER!, "
+        "side:TEXT!, quantity:TEXT, terms_digest:TEXT!, effect:TEXT!, clearance:TEXT!, "
+        "issued_at:TEXT!, expires_at:TEXT!, used_at:TEXT"
+    ),
+    "fills": (
+        "execution_id:TEXT*, intent_id:TEXT, coid:TEXT, conid:INTEGER!, side:TEXT!, "
+        "quantity:TEXT!, price:TEXT!, commission:TEXT, executed_at:TEXT!, simulated:INTEGER!"
+    ),
+    "holding_assignments": (
+        "assignment_id:INTEGER*, conid:INTEGER!, owner:TEXT!, assigned_by:TEXT!, "
+        "assigned_at:TEXT!, reason:TEXT!"
+    ),
+    "intent_events": (
+        "intent_id:TEXT!*, seq:INTEGER!*, at:TEXT!, from_state:TEXT, to_state:TEXT!, detail:TEXT!"
+    ),
+    "intents": (
+        "intent_id:TEXT*, coid:TEXT!, sleeve:TEXT!, thesis_id:TEXT, role:TEXT!, conid:INTEGER!, "
+        "side:TEXT!, terms:TEXT!, reason:TEXT!, mode:TEXT!, approval_required:INTEGER!, "
+        "created_at:TEXT!, expires_at:TEXT!, parent_id:TEXT, protective_id:TEXT, state:TEXT!, "
+        "updated_at:TEXT!"
+    ),
+    "killswitch": "change_id:INTEGER*, at:TEXT!, state:TEXT!, actor:TEXT!, reason:TEXT!",
+    "mode_audit": (
+        "change_id:INTEGER*, at:TEXT!, from_mode:TEXT!, to_mode:TEXT!, direction:TEXT!, "
+        "actor:TEXT!, reason:TEXT!"
+    ),
+    "positions_snap": (
+        "read_id:INTEGER!*, conid:INTEGER!*, quantity:TEXT!, average_cost:TEXT, currency:TEXT"
+    ),
     "snapshots": (
         "snapshot_date:TEXT!*, conid:INTEGER!*, last:REAL, bid:REAL, ask:REAL, "
         "volume:INTEGER, implied_vol:REAL, implied_vol_source:TEXT, "
@@ -76,6 +115,17 @@ INDEXES = {
     "ix_runs_session",
     "ix_snapshots_conid_date",
     "ux_run_steps_position",
+    # 002_orders
+    "ix_account_reads_kind_time",
+    "ix_broker_orders_coid",
+    "ix_broker_orders_intent",
+    "ix_clearances_intent",
+    "ix_clearances_open",
+    "ix_fills_conid_time",
+    "ix_fills_intent",
+    "ix_holding_assignments_conid",
+    "ix_intents_conid_state",
+    "ix_intents_state",
 }
 
 STAMP = "2026-10-09T22:30:00Z"

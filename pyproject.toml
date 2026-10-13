@@ -113,6 +113,8 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]
+# Shared test helpers (the fake broker) are plain modules, not tests.
+pythonpath = ["tests/support"]
 norecursedirs = [
     ".*", "*.egg", "*.egg-info", "_darcs", "build", "CVS", "dist", "node_modules", "venv",
     "{arch}", "__pycache__", "legacy",

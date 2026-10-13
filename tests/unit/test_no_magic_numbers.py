@@ -124,3 +124,65 @@ def test_a_lowercase_module_variable_is_not_a_constant():
 
 def test_structural_literals_and_booleans_are_accepted():
     assert offending_literals("def f(x):\n    return x[0] * 2 - 1 + 0.5 if True else -1\n") == []
+
+
+# ── the money decisions take only listed protocol constants (DECISIONS D50) ──
+
+#: Packages where a module-level constant does not pass on its name alone: each numeric one must
+#: be listed in :data:`PROTOCOL_CONSTANTS` with the protocol or unit fact it names.
+ALLOWLISTED_PACKAGES = ("execution", "decision")
+
+#: The protocol and unit constants those packages hold, by module, with the fact each names.
+PROTOCOL_CONSTANTS: dict[str, dict[str, str]] = {
+    "execution/quotes.py": {"SECONDS_PER_HOUR": "seconds in an hour (a unit)"},
+}
+
+
+def numeric_constant_names(source: str) -> set[str]:
+    """Module-level UPPER_CASE names whose value holds a number."""
+    names: set[str] = set()
+    for node in ast.parse(source).body:
+        targets = (
+            list(node.targets)
+            if isinstance(node, ast.Assign)
+            else [node.target]
+            if isinstance(node, ast.AnnAssign)
+            else []
+        )
+        upper = [t.id for t in targets if isinstance(t, ast.Name) and t.id.lstrip("_").isupper()]
+        numeric = any(
+            isinstance(child, ast.Constant)
+            and isinstance(child.value, int | float)
+            and not isinstance(child.value, bool)
+            for child in ast.walk(node)
+        )
+        if upper and numeric:
+            names.update(upper)
+    return names
+
+
+def test_money_decision_constants_are_listed_protocol_facts():
+    unlisted: dict[str, set[str]] = {}
+    for package in ALLOWLISTED_PACKAGES:
+        for path in sorted((SOURCE_DIR / package).rglob("*.py")):
+            module = path.relative_to(SOURCE_DIR).as_posix()
+            names = numeric_constant_names(path.read_text(encoding="utf-8"))
+            extra = names - set(PROTOCOL_CONSTANTS.get(module, {}))
+            if extra:
+                unlisted[module] = extra
+    assert not unlisted, (
+        f"numeric module constants in a money-decision package that are not listed protocol "
+        f"facts: {unlisted}. A tunable belongs in config/; a protocol or unit fact is listed in "
+        "PROTOCOL_CONSTANTS with what it names."
+    )
+
+
+def test_every_listed_protocol_constant_still_exists():
+    for module, names in PROTOCOL_CONSTANTS.items():
+        found = numeric_constant_names((SOURCE_DIR / module).read_text(encoding="utf-8"))
+        assert set(names) <= found, module
+
+
+def test_the_constant_scan_finds_numeric_constants_only():
+    source = "LIMIT = 0.15\nNAME = 'x'\nPAIR: tuple[int, int] = (1, 2)\nflag = 3\nOK = True\n"
+    assert numeric_constant_names(source) == {"LIMIT", "PAIR"}

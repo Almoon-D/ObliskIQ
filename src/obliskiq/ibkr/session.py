@@ -258,11 +258,16 @@ class BrokerSession:
         params: Mapping[str, Any] | None = None,
         json_body: Any = None,
         label: str | None = None,
+        retry: bool = True,
     ) -> Any:
         """Issue one request and return its decoded JSON body (``None`` for an empty body).
 
         ``label`` names the call in logs and errors; pass a template such as
         ``portfolio/{account}/ledger`` for any path that carries an account id.
+
+        ``retry=False`` sends the request at most once and raises its first failure, with no
+        backoff, re-arm or re-authentication: a write that may have reached the broker is never
+        repeated behind the caller's back (the order path looks its cOID up instead).
         """
         name = label if label is not None else path
         query = {key: value for key, value in (params or {}).items() if value is not None}
@@ -293,6 +298,8 @@ class BrokerSession:
                     self._limiter.failure(group)
                     if error.retry_after is not None:
                         self._limiter.pause(group, error.retry_after)
+            if not retry:
+                raise error
             if error.retry is RetryAdvice.REARM and not _REPAIRING.get():
                 if not rearmed:
                     rearmed = True

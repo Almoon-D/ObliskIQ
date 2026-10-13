@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 import pytest
+import respx
 from hypothesis import settings
 
 from obliskiq.calendars.service import Calendars
@@ -407,3 +408,26 @@ def make_session(
         )
 
     return build
+
+
+@pytest.fixture
+async def order_rig(
+    make_session: Callable[..., BrokerSession],
+    shipped_settings: ObliskConfig,
+    tmp_path: Path,
+) -> Any:
+    """The order path over the fake broker (``tests/support``), in paper mode."""
+    from fake_broker import FakeBroker
+    from order_rig import build_rig
+
+    with respx.mock(assert_all_called=False) as router:
+        broker = FakeBroker(router)
+        rig = await build_rig(
+            settings=shipped_settings,
+            session=make_session(),
+            broker=broker,
+            tmp_path=tmp_path,
+        )
+        await rig.to_paper()
+        yield rig
+        await rig.aclose()
