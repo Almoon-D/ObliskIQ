@@ -13,8 +13,10 @@ It must work when everything else fails, so (DECISIONS D48):
   cancelled; a sell is kept unless the store knows it as a conversion, a buy or an order the gate
   cleared as adding risk. An order the store cannot classify — the store unreadable, or an order
   the bot did not place — is classed from the broker's live order alone (a buy, a conversion or
-  an order of unreadable side is cancelled, a sell kept). While ON the sweep repeats every
-  ``sweep_interval_seconds``, so an order in flight at the switch, or listed late, is caught.
+  an order of unreadable side is cancelled, a sell kept). A live-order row that cannot be read
+  at all is cancelled by its id, and one without an id is reported; one bad row never stops the
+  others. While ON the sweep repeats every ``sweep_interval_seconds``, so an order in flight at
+  the switch, or listed late, is caught; no failure, a failing report hook included, ends it.
   Cancels need no clearance and run in every mode; only the paper guard applies.
 * **Turning it off** clears both flags and fails loudly if either stays set.
 
@@ -33,7 +35,7 @@ from pathlib import Path
 from typing import Final
 
 from ..config.schema import ObliskConfig
-from ..domain.orders import BrokerOrder, IntentRole, KillSwitchRecord, OrderSide, RiskEffect
+from ..domain.orders import BrokerOrder, KillSwitchRecord, OrderSide, RiskEffect
 from ..errors import ExecutionError
 from ..ibkr.errors import IbkrError
 from ..ibkr.orders import OrderClient, is_live
@@ -56,11 +58,18 @@ def kill_switch_path(data_dir: Path) -> Path:
 
 
 def file_flag_on(data_dir: Path) -> bool:
-    """Whether the file flag is set; a file that cannot be checked counts as set."""
+    """Whether the file flag is set; a file that cannot be checked counts as set.
+
+    ``Path.exists`` would read an unreadable entry (a permission refusal, a symlink loop) as
+    absent, so the entry is ``stat``-ed: only a missing file reads as off.
+    """
     try:
-        return kill_switch_path(data_dir).exists()
+        kill_switch_path(data_dir).stat()
+    except FileNotFoundError:
+        return False
     except OSError:
         return True
+    return True
 
 
 def set_file_flag(data_dir: Path, *, actor: str, reason: str, at: datetime) -> None:
@@ -186,16 +195,24 @@ class KillSwitch:
         except Exception:
             return False, True  # the store is unavailable: a sell at the broker is kept
         intent = stored.intent
-        if intent.role is IntentRole.CONVERSION or intent.side is not OrderSide.SELL:
+        if intent.terms.conversion or intent.side is not OrderSide.SELL:
             return True, False
         if effect is None:
             return False, True
         return effect is RiskEffect.ADDS, False
 
+    async def _cancel(self, client: OrderClient, order_id: str) -> str | None:
+        """Cancel one order; the reason it failed, or ``None``."""
+        try:
+            answer = await client.cancel(order_id)
+        except Exception as exc:  # any failure is reported; the next sweep tries again
+            return f"{order_id} ({type(exc).__name__})"
+        return None if answer.error is None else f"{order_id} ({answer.error})"
+
     async def sweep(self, client: OrderClient) -> SweepReport:
         """Cancel every live order that adds risk; keep the sells that reduce it."""
         try:
-            live = await client.live_orders()
+            live = await client.live_order_rows()
         except IbkrError as exc:
             return SweepReport(error=f"the live orders could not be read ({type(exc).__name__})")
         cancelled: list[str] = []
@@ -203,24 +220,29 @@ class KillSwitch:
         failed: list[str] = []
         by_broker: list[str] = []
         working = [order for order in live.orders if is_live(order)]
+        targets: list[str] = []
         for order in working:
             cancel, broker_only = await self._cancel_verdict(order)
             if broker_only:
                 by_broker.append(order.order_id)
-            if not cancel:
-                kept.append(order.order_id)
-                continue
-            try:
-                answer = await client.cancel(order.order_id)
-            except IbkrError as exc:
-                failed.append(f"{order.order_id} ({type(exc).__name__})")
-                continue
-            if answer.error is not None:
-                failed.append(f"{order.order_id} ({answer.error})")
+            if cancel:
+                targets.append(order.order_id)
             else:
-                cancelled.append(order.order_id)
+                kept.append(order.order_id)
+        for order_id in live.unreadable:
+            if order_id is None:
+                failed.append("a live order whose id cannot be read")
+            else:
+                by_broker.append(order_id)
+                targets.append(order_id)  # nothing proves it reduces risk
+        for order_id in targets:
+            failure = await self._cancel(client, order_id)
+            if failure is None:
+                cancelled.append(order_id)
+            else:
+                failed.append(failure)
         report = SweepReport(
-            listed=len(working),
+            listed=len(working) + len(live.unreadable),
             cancelled=tuple(cancelled),
             kept=tuple(kept),
             failed=tuple(failed),
@@ -232,6 +254,19 @@ class KillSwitch:
         )
         return report
 
+    async def _pass(
+        self, client: OrderClient, on_report: Callable[[SweepReport], None] | None
+    ) -> None:
+        if not await self.is_on():
+            return
+        report = await self.sweep(client)
+        if on_report is None:
+            return
+        try:
+            on_report(report)
+        except Exception:
+            log.exception("the kill switch's report hook failed; the sweep goes on")
+
     async def run(
         self,
         client: OrderClient,
@@ -239,11 +274,14 @@ class KillSwitch:
         *,
         on_report: Callable[[SweepReport], None] | None = None,
     ) -> None:
-        """Sweep while the switch is on, every ``sweep_interval_seconds``, until ``stop``."""
+        """Sweep while the switch is on, every ``sweep_interval_seconds``, until ``stop``.
+
+        A pass that fails for any reason is logged and the next one runs on schedule.
+        """
         while not stop.is_set():
-            if await self.is_on():
-                report = await self.sweep(client)
-                if on_report is not None:
-                    on_report(report)
+            try:
+                await self._pass(client, on_report)
+            except Exception:
+                log.exception("a kill switch pass failed; the next one runs on schedule")
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=self._interval)

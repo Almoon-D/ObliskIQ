@@ -38,8 +38,11 @@ shape is VERIFY-LIVE.
 - `config/defaults/execution.yaml`: lite's `discipline` keys the order path reads, and
   `execution` (modes, orders, reply policy, quote policy, collar, kill switch).
 - The stateful fake broker and order rig in `tests/support/`, guard tests (only the gate
-  constructs or records a clearance; only the order client spells the write endpoints; only
-  limit-capped order types are reachable) and `docs/knowledge/ibkr-orders.md`.
+  constructs or records a clearance; only the order client spells the write endpoints and only
+  the write boundary places or modifies; only limit-capped order types are reachable; the
+  order path's state reads are the listed ones) and `docs/knowledge/ibkr-orders.md`.
+- Schema triggers: a clearance is spent once and never changed or deleted; an intent's identity
+  never changes.
 
 ### Changed
 

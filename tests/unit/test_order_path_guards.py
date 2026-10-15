@@ -119,16 +119,18 @@ def test_the_write_endpoints_live_in_the_order_client() -> None:
     assert holders == {ORDER_CLIENT}
 
 
-def test_only_the_write_boundary_places() -> None:
-    callers = {
+def _callers(attribute: str) -> set[str]:
+    return {
         module
         for module, tree in _modules().items()
         for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute)
-        and node.attr == "place_idempotent"
-        and module != ORDER_CLIENT
+        if isinstance(node, ast.Attribute) and node.attr == attribute and module != ORDER_CLIENT
     }
-    assert callers == {"execution/boundary.py"}
+
+
+def test_only_the_write_boundary_places_or_modifies() -> None:
+    assert _callers("place_idempotent") == {"execution/boundary.py"}
+    assert _callers("modify") == {"execution/boundary.py"}
 
 
 def test_no_market_order_type_is_spelled_in_the_order_client() -> None:

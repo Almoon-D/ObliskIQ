@@ -64,6 +64,13 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   constructs or records a clearance; only the order client spells the write endpoints; no order
   type but `LMT` and `STOP_LIMIT` is reachable (a property over generated terms).
 - `docs/knowledge/ibkr-orders.md`: endpoints, fields and message ids, tagged.
+- Review round 1 hardening: the kill switch's file flag is `stat`-ed (an uncheckable file is
+  ON), its sweep reads live orders row by row and its loop survives any failure; a declined
+  placement whose cleanup is unverified stays `submitted`; any 5xx is unknown; order ids are
+  digits only; the boundary refuses an expired intent, an intent of another mode and a modify
+  of another intent's order; a cancel needs the paper guard alone; an entry buys; triggers keep
+  a clearance spent once and an intent's identity fixed; a structural test pins D46's state
+  reads; the fake broker invalidates an open warning on any other request.
 - Session 4 follow-ups closed: the order path's paced endpoints in the rate groups; the
   transport readied outside the pacing slot and a re-arm that stops at a dead transport (D53);
   `run_read_only` tested through its own `build_transport` (OAuth and Gateway); the
@@ -385,6 +392,8 @@ settles it.
 | Routing by `conidex` for a non-SMART venue | 4 | 4a (paper order test) |
 | Currency conversion fields `isCcyConv` and `fxQty` (the reference's prose says `fxQTY`) | 4 | 5 |
 | What a cancel of an order that has just filled answers | 4 | 4a (paper order test) |
+| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | 4a (paper order test), 5 |
+| Whether a `/tickle` between a warning and its answer invalidates the warning | 4 | 4a (paper order test) |
 
 ## Follow-ups
 
@@ -398,6 +407,10 @@ settles it.
 - Session 4a: `holding_assignments` holds the registry, but nothing writes `unmanaged` yet; the
   gate refuses a conid held without a sleeve, and Session 5's reconciliation registers what the
   bot did not open.
+- Session 5: one process places a given intent (D47); if the executor ever retries from more
+  than one process, add a per-intent placement lease in the store. The kill switch classes a
+  sell by its intent's latest spent clearance (`spent_effect`); reconciliation should class it
+  by the terms the broker accepted, so a spent-then-declined modify cannot reclassify an order.
 - Session 5: the executor moves intents to `expired` at `expires_at` (and cancels a working
   order first), writes `positions_snap`, `cash_snap` and fills from reconciliation, assigns a new
   holding to its sleeve on its first fill, and runs `ShadowFiller` in shadow mode.

@@ -474,3 +474,60 @@ async def test_a_decline_whose_cancel_fails_says_so(order_rig: Any, failure: str
     result = await _place(order_rig, stored, await order_rig.clear(stored.intent), _decline_all)
     assert result.status is PlacementStatus.DECLINED
     assert "cancelling the listed order failed" in result.detail
+
+
+@pytest.mark.parametrize("order_id", ["-1", "", "12a", "1 2"])
+async def test_an_order_id_that_is_not_digits_is_never_sent(order_rig: Any, order_id: str) -> None:
+    with pytest.raises(WriteRefusedError) as refused:
+        await order_rig.client.cancel(order_id)
+    assert refused.value.code == "order_id_invalid"
+    with pytest.raises(WriteRefusedError):
+        await order_rig.client.status(order_id)
+    stored = await order_rig.intent()
+    with pytest.raises(WriteRefusedError):
+        await order_rig.client.modify(
+            order_id=order_id,
+            coid=stored.coid,
+            terms=stored.intent.terms,
+            clearance=await order_rig.clear(
+                stored.intent, action=ClearanceAction.MODIFY, order_id="1"
+            ),
+            decide=_confirm_all,
+            last_check=_ok,
+        )
+    assert order_rig.broker.cancels == []
+    assert order_rig.broker.modifies == []
+
+
+async def test_a_no_data_body_under_a_5xx_is_still_unknown(order_rig: Any) -> None:
+    stored = await order_rig.intent()
+    order_rig.broker.respond_next = httpx.Response(
+        500, json={"error": "Contract details are not available"}
+    )
+    result = await _place(order_rig, stored, await order_rig.clear(stored.intent))
+    assert result.status is PlacementStatus.UNKNOWN
+
+
+async def test_the_live_orders_row_by_row(order_rig: Any) -> None:
+    good = order_rig.broker.add_order(side="BUY")
+    order_rig.broker.rewrite_live_rows = lambda rows: [*rows, {"orderId": 7, "status": ""}]
+    rows = await order_rig.client.live_order_rows()
+    assert [o.order_id for o in rows.orders] == [good.order_id]
+    assert rows.unreadable == ("7",)
+
+
+async def test_another_request_while_a_warning_is_open_makes_the_outcome_unknown(
+    order_rig: Any,
+) -> None:
+    """A keepalive or a sweep read between a warning and its answer invalidates the warning
+    at IBKR: the confirmation then fails and the outcome is unknown, never assumed."""
+    order_rig.broker.questions = deque([(["o10153"], "cap")])
+    stored = await order_rig.intent()
+
+    def read_in_between(question: Question) -> ReplyVerdict:
+        with httpx.Client() as other:
+            other.get("https://gw.test/v1/api/iserver/account/orders")
+        return ReplyVerdict(True, "confirm")
+
+    result = await _place(order_rig, stored, await order_rig.clear(stored.intent), read_in_between)
+    assert result.status is PlacementStatus.UNKNOWN

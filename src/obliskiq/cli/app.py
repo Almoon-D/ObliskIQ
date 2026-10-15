@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import argparse
 import asyncio
+import sqlite3
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -143,13 +144,15 @@ def _kill_on_flags(env: Environment, loaded: Loaded | None, reason: str, out: Te
                 record = KillSwitchRecord(at=at, on=True, actor=OWNER_ACTOR, reason=reason)
                 repo.record_kill_switch(store, record)
             database_set = True
-        except (StoreError, OSError) as exc:
+        except (StoreError, OSError, sqlite3.Error) as exc:
             problems.append(f"the database flag could not be written: {exc}")
     if not (file_set or database_set):
         print("kill switch NOT set: " + "; ".join(problems), file=out)
         return EXIT_INVALID
     print(
-        "kill switch ON: orders that add risk are blocked and working ones are cancelled", file=out
+        "kill switch ON: orders that add risk are blocked; the running service cancels the "
+        "working ones",
+        file=out,
     )
     for problem in problems:
         print(f"  warning: {problem}", file=out)
@@ -183,7 +186,7 @@ def _kill_status(loaded: Loaded, out: TextIO) -> int:
         with open_store(loaded.config.settings, data_dir) as store:
             latest = repo.latest_kill_switch(store)
         database = "on" if latest is not None and latest.on else "off"
-    except StoreError, OSError:
+    except StoreError, OSError, sqlite3.Error:
         database = "unreadable"
     on = file_on or database != "off"
     print(f"kill switch {'ON' if on else 'OFF'}", file=out)
@@ -343,7 +346,7 @@ def run(
         return EXIT_INVALID
     try:
         return handler(Loaded(loaded.config, loaded.profile, loaded.env, args), stdout)
-    except (EnvVarError, StoreError) as exc:
+    except (EnvVarError, StoreError, sqlite3.Error) as exc:
         print(f"obliskiq: {exc}", file=stderr)
         return EXIT_INVALID
 

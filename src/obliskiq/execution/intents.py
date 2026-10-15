@@ -1,6 +1,7 @@
 """New intents: an id from ``uuid.uuid7()`` and lite's discipline rules.
 
-lite's ``discipline`` block, as the order path reads it: entries are limit orders
+An entry buys (a sell that opens would be a short or a written option, which the mandate
+forbids). lite's ``discipline`` block, as the order path reads it: entries are limit orders
 (``entry_order_type: limit_only`` — a patient limit or an algo with a limit cap, never a
 stop-limit), and an exit or a protective stop gives one of ``exit_reasons_allowed``.
 
@@ -15,6 +16,7 @@ from ..domain.orders import (
     ExecutionMode,
     IntentRole,
     OrderIntent,
+    OrderSide,
     OrderTerms,
     Sleeve,
 )
@@ -45,6 +47,8 @@ def new_intent(
 ) -> OrderIntent:
     """A proposed intent with a fresh uuid7, refused when it breaks lite's discipline."""
     discipline = settings.discipline
+    if role is IntentRole.ENTRY and terms.side is OrderSide.SELL:
+        raise IntentRefusedError("an entry buys: a sell would open a short or write an option")
     if (
         role is IntentRole.ENTRY
         and discipline.entry_order_type == "limit_only"

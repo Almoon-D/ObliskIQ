@@ -82,11 +82,22 @@ async def test_a_database_read_that_hangs_counts_as_on(order_rig: Any) -> None:
 def test_a_file_flag_that_cannot_be_checked_counts_as_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def refuse(self: Path, *args: Any, **kwargs: Any) -> bool:
+    # A symlink loop: ``Path.exists`` would read it as absent, ``stat`` raises ELOOP.
+    kill_switch_path(tmp_path).symlink_to(KILL_SWITCH_FILE)
+    assert file_flag_on(tmp_path) is True
+    other = tmp_path / "other"
+    other.mkdir()
+
+    def refuse(self: Path, *args: Any, **kwargs: Any) -> Any:
         raise PermissionError("no access")
 
-    monkeypatch.setattr(Path, "exists", refuse)
-    assert file_flag_on(tmp_path) is True
+    monkeypatch.setattr(Path, "stat", refuse)
+    assert file_flag_on(other) is True
+
+
+def test_a_missing_file_flag_is_off(tmp_path: Path) -> None:
+    assert file_flag_on(tmp_path) is False
+    assert file_flag_on(tmp_path / "no-such-directory") is False
 
 
 async def test_one_flag_that_cannot_be_written_still_turns_it_on(order_rig: Any) -> None:
@@ -298,7 +309,7 @@ async def test_a_sweep_that_cannot_read_the_orders_reports_it(order_rig: Any) ->
     async def fail() -> Any:
         raise IbkrUpstreamError("down")
 
-    order_rig.client.live_orders = fail
+    order_rig.client.live_order_rows = fail
     report = await order_rig.kill.sweep(order_rig.client)
     assert report.error is not None
     assert report.cancelled == ()
@@ -347,3 +358,57 @@ async def test_the_loop_runs_without_a_report_hook(order_rig: Any) -> None:
     await asyncio.wait_for(
         asyncio.gather(order_rig.kill.run(order_rig.client, stop), stop_when_cancelled()), 5
     )
+
+
+async def test_one_unreadable_row_does_not_stop_the_sweep(order_rig: Any) -> None:
+    buy = order_rig.broker.add_order(side="BUY")
+    odd = order_rig.broker.add_order(side="SELL")
+
+    def corrupt(rows: list[Any]) -> list[Any]:
+        for row in rows:
+            if row["orderId"] == int(odd.order_id):
+                row["conid"] = 0  # fails validation
+        return [*rows, {"status": "Submitted", "side": "BUY"}, "not an object"]
+
+    order_rig.broker.rewrite_live_rows = corrupt
+    report = await order_rig.kill.sweep(order_rig.client)
+    # The unreadable sell is cancelled too: nothing proves it reduces risk.
+    assert set(report.cancelled) == {buy.order_id, odd.order_id}
+    assert len(report.failed) == 2
+    assert odd.order_id in report.classed_by_broker
+
+
+async def test_a_cancel_that_raises_anything_is_a_failed_cancel(order_rig: Any) -> None:
+    order = order_rig.broker.add_order(side="BUY")
+
+    async def refuse(order_id: str) -> Any:
+        raise RuntimeError("the paper guard or anything else")
+
+    order_rig.client.cancel = refuse
+    report = await order_rig.kill.sweep(order_rig.client)
+    assert report.failed == (f"{order.order_id} (RuntimeError)",)
+
+
+async def test_the_loop_survives_a_failing_hook_and_a_failing_pass(order_rig: Any) -> None:
+    order_rig.broker.add_order(side="BUY")
+    await order_rig.kill.turn_on(actor="owner", reason="drill")
+    order_rig.kill._interval = 0.001
+    stop = asyncio.Event()
+    passes = 0
+    original = order_rig.kill.sweep
+
+    async def flaky(client: Any) -> Any:
+        nonlocal passes
+        passes += 1
+        if passes == 2:
+            raise RuntimeError("an unexpected failure inside a pass")
+        if passes >= 4:
+            stop.set()
+        return await original(client)
+
+    def broken_hook(report: Any) -> None:
+        raise RuntimeError("telegram is down")
+
+    order_rig.kill.sweep = flaky
+    await asyncio.wait_for(order_rig.kill.run(order_rig.client, stop, on_report=broken_hook), 5)
+    assert passes >= 4

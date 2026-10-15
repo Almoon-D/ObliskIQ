@@ -118,3 +118,40 @@ def test_the_scan_for_sql_catches_each_statement_kind() -> None:
         assert sql_strings(statement), statement
     for harmless in ('q = "select one"', 'q = "Update"', 'q = "the SELECT keyword"'):
         assert sql_strings(harmless) == [], harmless
+
+
+# ── the order path's state reads (DECISIONS D46) ──
+
+#: Reads in ``store/orders.py`` that read the system's own state whole, by design: a time bound
+#: could only hide a newer row (a kill switch, a downgrade, a spent clearance) and fail open.
+STATE_READS = {
+    "get_intent",
+    "intent_by_coid",
+    "intents_in_states",
+    "intent_history",
+    "get_clearance",
+    "spent_effect",
+    "intent_for_order",
+    "broker_orders_for_intent",
+    "fills_for_intent",
+    "latest_mode_change",
+    "latest_kill_switch",
+    "holding_assignment",
+}
+
+#: Names that write in ``store/orders.py``.
+ORDER_WRITE_PREFIXES = ("insert_", "transition_", "record_", "upsert_", "spend_", "assign_")
+
+
+def test_every_order_path_read_is_bounded_or_a_listed_state_read() -> None:
+    from obliskiq.store import orders
+
+    functions = public_functions(orders)
+    reads = {
+        name: function
+        for name, function in functions.items()
+        if not name.startswith(ORDER_WRITE_PREFIXES) and name not in STATE_READS
+    }
+    assert unbounded_reads(reads) == []
+    assert set(functions) >= STATE_READS, "a listed state read no longer exists"
+    assert {"positions_as_of", "cash_as_of"} <= set(reads), "the account snapshots keep as_of"

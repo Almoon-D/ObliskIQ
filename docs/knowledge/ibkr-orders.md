@@ -86,7 +86,10 @@ Fields ObliskIQ sends (`ibkr/orders.py: order_body`), from the reference and ibi
   invalidates it, and confirming it afterwards times out with HTTP 503. After one confirmation
   further warnings may follow. `confirmed: false` declines and discards the order.
   [DOC 2026-10-13] [ibind 0.2.2] So ObliskIQ places one order at a time and decides from what
-  the clearance recorded, reading nothing while a warning is open.
+  the clearance recorded, reading nothing while a warning is open. Its own keepalive (`/tickle`)
+  and the kill switch's sweep run beside a placement and could still invalidate a warning; the
+  confirmation then fails and the outcome is reported as unknown. VERIFY-LIVE(whether a tickle
+  invalidates an open warning).
 - Suppression (`/iserver/questions/suppress`) accepts a warning automatically for every later
   order. ObliskIQ never suppresses; `OrderClient.reset_suppressed()` re-enables any a user
   suppressed, so no warning bypasses the reply policy. [DOC 2026-10-13]
@@ -150,7 +153,10 @@ declined until the policy changes. VERIFY-LIVE(warning ids on a stop-limit modif
   `Inactive`, `PendingSubmit`, `PreSubmitted`, `Submitted`, `PendingCancel`, `PreCancelled`,
   `WarnState` → still working (an execution can still arrive while a cancel is pending);
   `Filled` → filled; `Cancelled` → cancelled ("could occur unexpectedly when the destination
-  has rejected your order"). Any other status is read as working. [DOC 2026-10-13]
+  has rejected your order"). Any other status is read as working. IBKR's `Inactive` can also be
+  an order the destination rejected after acknowledging it; read as working, such an intent
+  waits for Session 5's reconciliation. VERIFY-LIVE(Inactive after acknowledgement).
+  [DOC 2026-10-13]
 
 ## Preview (whatif)
 
@@ -164,6 +170,6 @@ affected by message suppression. [DOC 2026-10-13]
 
 `{"msg": "Request was submitted", "order_id", "conid", "account"}`; `conid` is `-1` for an
 order cancelled at once; an unknown order answers `{"error": "OrderID 1 doesn't exist"}`.
-`orderId` `-1` cancels **every** open order — ObliskIQ never sends it. What a cancel of an
+`orderId` `-1` cancels **every** open order — ObliskIQ sends only all-digit ids, so never `-1`. What a cancel of an
 order that has just filled answers is not documented; ObliskIQ reads the order's status after
 every cancel. VERIFY-LIVE(cancel of a filled order). [DOC 2026-10-13]

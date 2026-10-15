@@ -103,7 +103,9 @@ async def test_a_clearance_for_changed_terms_is_refused(order_rig: Any) -> None:
 
 
 async def test_an_altered_copy_of_a_clearance_is_refused(order_rig: Any) -> None:
-    stored = await order_rig.intent(terms(side=OrderSide.SELL))
+    stored = await order_rig.intent(
+        terms(side=OrderSide.SELL), role=IntentRole.EXIT, reason="target"
+    )
     clearance = await order_rig.clear(stored.intent)
     forged = clearance.model_copy(update={"effect": RiskEffect.REDUCES})
     assert await _refused(order_rig, stored, forged) == "clearance_altered"
@@ -118,8 +120,11 @@ async def test_a_clearance_for_another_intent_is_refused(order_rig: Any) -> None
 
 async def test_the_shipped_gate_refuses_every_intent(order_rig: Any) -> None:
     gate = PretradeGate()
-    for side in OrderSide:
-        stored = await order_rig.intent(terms(side=side))
+    for side, role, reason in (
+        (OrderSide.BUY, IntentRole.ENTRY, "entry"),
+        (OrderSide.SELL, IntentRole.EXIT, "target"),
+    ):
+        stored = await order_rig.intent(terms(side=side), role=role, reason=reason)
         for action, order_id in ((ClearanceAction.PLACE, None), (ClearanceAction.MODIFY, "1")):
             answer = await gate.clear(stored.intent, action=action, order_id=order_id)
             assert isinstance(answer, PretradeRefusal)
@@ -645,3 +650,104 @@ def test_broker_statuses_map_to_intent_states() -> None:
     assert state_for(order("Submitted", "3")) is IntentState.PARTIALLY_FILLED
     for status in ("Submitted", "PreSubmitted", "PendingSubmit", "Inactive", "WarnState", "?"):
         assert state_for(order(status)) is IntentState.WORKING
+
+
+# ── review round 1: defence in depth at the boundary ──
+
+
+async def test_an_expired_intent_is_never_sent(order_rig: Any) -> None:
+    stored = await order_rig.intent()
+    clearance = await order_rig.clear(stored.intent, ttl_seconds=7 * 3600)
+    order_rig.clock.advance(6 * 3600)  # the rig's intents expire after six hours
+    assert await _refused(order_rig, stored, clearance) == "intent_expired"
+    assert await _state(order_rig, stored) is IntentState.EXPIRED
+    assert order_rig.broker.placements == []
+
+
+async def test_an_expired_submitted_intent_is_not_retried(order_rig: Any) -> None:
+    order_rig.broker.lose_next_answer = True
+    stored = await order_rig.intent()
+    await order_rig.boundary.place(stored.intent.intent_id, await order_rig.clear(stored.intent))
+    order_rig.clock.advance(6 * 3600)
+    late = await order_rig.clear(stored.intent)
+    assert await _refused(order_rig, stored, late) == "intent_expired"
+    assert await _state(order_rig, stored) is IntentState.SUBMITTED  # it may exist: look it up
+    assert len(order_rig.broker.placements) == 1
+
+
+async def test_an_intent_made_for_another_mode_is_refused(order_rig: Any) -> None:
+    stored = await order_rig.intent()
+    clearance = await order_rig.clear(stored.intent)
+    shadow_intent = stored.intent.model_copy(update={"mode": ExecutionMode.SHADOW})
+    original = order_rig.book.get
+
+    async def get(intent_id: Any) -> Any:
+        found = await original(intent_id)
+        return type(found)(
+            intent=shadow_intent.model_copy(update={"state": found.intent.state}), coid=found.coid
+        )
+
+    order_rig.book.get = get
+    assert await _refused(order_rig, stored, clearance) == "intent_mode"
+    assert order_rig.broker.placements == []
+
+
+async def test_a_modify_must_name_an_order_of_its_intent(order_rig: Any) -> None:
+    stored, order_id = await _working_stop(order_rig)
+    _, other_order = await _working_stop(order_rig)
+    moved = terms(side=OrderSide.SELL, stop="97", limit="96")
+    clearance = await order_rig.clear(
+        stored.intent,
+        effect=RiskEffect.REDUCES,
+        action=ClearanceAction.MODIFY,
+        order_id=other_order,
+        order_terms=moved,
+    )
+    with pytest.raises(WriteRefusedError) as refused:
+        await order_rig.boundary.modify(
+            stored.intent.intent_id, order_id=other_order, terms=moved, clearance=clearance
+        )
+    assert refused.value.code == "order_not_intents"
+    assert order_rig.broker.modifies == []
+    assert order_id != other_order
+
+
+async def test_a_modify_of_an_expired_intent_is_refused(order_rig: Any) -> None:
+    stored, order_id = await _working_stop(order_rig)
+    order_rig.clock.advance(6 * 3600)
+    moved = terms(side=OrderSide.SELL, stop="97", limit="96")
+    clearance = await order_rig.clear(
+        stored.intent,
+        effect=RiskEffect.REDUCES,
+        action=ClearanceAction.MODIFY,
+        order_id=order_id,
+        order_terms=moved,
+    )
+    with pytest.raises(WriteRefusedError) as refused:
+        await order_rig.boundary.modify(
+            stored.intent.intent_id, order_id=order_id, terms=moved, clearance=clearance
+        )
+    assert refused.value.code == "intent_expired"
+
+
+async def test_a_cancel_needs_only_the_paper_guard(order_rig: Any) -> None:
+    order = order_rig.broker.add_order(side="BUY")
+    order_rig.modes._profile = "live"  # a mismatch refuses writes, never a cancel
+    answer = await order_rig.boundary.cancel(order.order_id)
+    assert answer.error is None
+
+
+async def test_a_declined_placement_whose_order_may_remain_stays_submitted(
+    order_rig: Any,
+) -> None:
+    order_rig.broker.questions = deque([(["o999"], "unknown")])
+    order_rig.broker.keep_declined = True
+    order_rig.broker.cancel_failure = "503"
+    stored = await order_rig.intent()
+    result = await order_rig.boundary.place(
+        stored.intent.intent_id, await order_rig.clear(stored.intent)
+    )
+    assert result.status is PlacementStatus.DECLINED
+    assert result.cleanup_verified is False
+    assert await _state(order_rig, stored) is IntentState.SUBMITTED
+    assert order_rig.alerts[-1].kind is OrderAlertKind.WARNING_DECLINED

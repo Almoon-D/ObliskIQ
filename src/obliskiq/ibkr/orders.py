@@ -53,7 +53,6 @@ from .errors import (
     CircuitOpenError,
     IbkrError,
     LookupIncompleteError,
-    NoDataPermanentError,
     RateLimitedError,
     RequestRejectedError,
     SessionExpiredError,
@@ -62,6 +61,7 @@ from .errors import (
 from .guard import AccountGuard
 from .order_decode import (
     CancelAnswer,
+    LiveOrderRows,
     LiveOrders,
     PlaceAnswer,
     Placed,
@@ -70,6 +70,7 @@ from .order_decode import (
     UnexpectedAnswer,
     WhatIf,
     decode_cancel,
+    decode_live_order_rows,
     decode_live_orders,
     decode_order_status,
     decode_place_answer,
@@ -95,8 +96,11 @@ LIMIT_CAPPED_ORDER_TYPES: Final = frozenset({"LMT", "STOP_LIMIT"})
 #: The router that needs no ``conidex``: an order for any other venue is routed with one.
 SMART_ROUTER = "SMART"
 
-#: Broker statuses after which an order can no longer trade (IBKR, "Order Status Value").
-FINAL_BROKER_STATUSES: Final = frozenset({"filled", "cancelled"})
+#: Broker statuses after which an order can no longer trade (IBKR, "Order Status Value"),
+#: compared in lower case.
+FILLED_STATUS: Final = "filled"
+CANCELLED_STATUS: Final = "cancelled"
+FINAL_BROKER_STATUSES: Final = frozenset({FILLED_STATUS, CANCELLED_STATUS})
 
 
 def coid_for(intent_id: UUID, max_length: int) -> str:
@@ -225,6 +229,9 @@ class PlacementResult:
     replies: tuple[ReplyRecord, ...] = ()
     detail: str = ""
     lookup: Lookup | None = None
+    #: For a declined placement: whether the broker was seen to list nothing working under the
+    #: cOID afterwards (nothing listed, or every listed order cancelled).
+    cleanup_verified: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,6 +262,13 @@ class OrderClient:
 
     def coid_for(self, intent_id: UUID) -> str:
         return coid_for(intent_id, self._orders.coid_max_length)
+
+    @staticmethod
+    def _order_id(order_id: str) -> str:
+        """An IBKR order id: digits only. ``-1`` (cancel every open order) is never sent."""
+        if not order_id.isdigit():
+            raise WriteRefusedError("order_id_invalid", f"{order_id!r} is not an order id")
+        return order_id
 
     def _account(self) -> str:
         """The account for a write, after the paper guard (profile paper ⇒ paper prefix)."""
@@ -289,9 +303,14 @@ class OrderClient:
         )
         return decode_trades(body)
 
+    async def live_order_rows(self) -> LiveOrderRows:
+        """The live orders row by row, for the kill switch's sweep."""
+        body = await self._session.request("GET", LIVE_ORDERS_PATH)
+        return decode_live_order_rows(body, observed_at=self._now())
+
     async def status(self, order_id: str) -> BrokerOrder:
         body = await self._session.request(
-            "GET", STATUS_PATH.format(order_id=order_id), label=STATUS_PATH
+            "GET", STATUS_PATH.format(order_id=self._order_id(order_id)), label=STATUS_PATH
         )
         return decode_order_status(body, observed_at=self._now())
 
@@ -319,6 +338,7 @@ class OrderClient:
 
     async def cancel(self, order_id: str) -> CancelAnswer:
         """Cancel one order. Needs no clearance; the paper guard still applies."""
+        order_id = self._order_id(order_id)
         account = self._account()
         body = await self._write(
             "DELETE", ORDER_PATH.format(account=account, order_id=order_id), ORDER_PATH
@@ -396,6 +416,7 @@ class OrderClient:
         last_check: LastCheck,
     ) -> PlacementResult:
         """Change a working order to ``terms``; the clearance must name this order and terms."""
+        order_id = self._order_id(order_id)
         account = self._account()
         self._check_binding(clearance, coid=coid, action=ClearanceAction.MODIFY)
         async with self._submitting:
@@ -425,10 +446,11 @@ class OrderClient:
         ) as exc:
             # Refused before the order was processed: nothing exists at the broker.
             return _NotSent(self._session.redact(str(exc)))
-        except (RequestRejectedError, AuthError, NoDataPermanentError) as exc:
+        except (RequestRejectedError, AuthError) as exc:
             return Refused(error=self._session.redact(str(exc)), duplicate=False)
         except IbkrError as exc:
-            # A 5xx, a transport failure mid-flight or an unreadable body: it may exist.
+            # Any 5xx (a no-data body included), a transport failure mid-flight or an
+            # unreadable body: it may exist.
             return UnexpectedAnswer(self._session.redact(str(exc)))
         return decode_place_answer(answer)
 
@@ -494,7 +516,7 @@ class OrderClient:
                         )
                     )
                     if not verdict.confirm:
-                        detail = await self._decline(
+                        detail, verified = await self._decline(
                             answer.reply_id, coid, cancel_listed=cancel_on_decline
                         )
                         return PlacementResult(
@@ -502,6 +524,7 @@ class OrderClient:
                             coid=coid,
                             replies=tuple(replies),
                             detail=f"{verdict.reason}; {detail}",
+                            cleanup_verified=verified,
                         )
                     answer = await self._submit(
                         "POST",
@@ -510,8 +533,11 @@ class OrderClient:
                         {"confirmed": True},
                     )
 
-    async def _decline(self, reply_id: str, coid: str, *, cancel_listed: bool) -> str:
-        """Decline a warning; after a placement, cancel anything listed under the cOID."""
+    async def _decline(self, reply_id: str, coid: str, *, cancel_listed: bool) -> tuple[str, bool]:
+        """Decline a warning; after a placement, cancel anything listed under the cOID.
+
+        Returns what happened and whether nothing working is known to remain at the broker.
+        """
         try:
             await self.reply(reply_id, confirmed=False)
         except IbkrError as exc:
@@ -519,23 +545,26 @@ class OrderClient:
                 "declining a warning failed", extra={"error": self._session.redact(str(exc))}
             )
         if not cancel_listed:
-            return "declined; the order stands as it was before the modify"
+            return "declined; the order stands as it was before the modify", True
         try:
             lookup = await self.find(coid)
         except IbkrError as exc:
-            return f"declined; the cOID could not be looked up afterwards ({type(exc).__name__})"
+            return (
+                f"declined; the cOID could not be looked up afterwards ({type(exc).__name__})",
+                False,
+            )
         live = [order for order in lookup.orders if is_live(order)]
         if not live:
-            return "declined; nothing is listed under the cOID"
+            return "declined; nothing is listed under the cOID", True
         failures = []
         for order in live:
             try:
                 answer = await self.cancel(order.order_id)
-            except IbkrError as exc:
+            except (IbkrError, WriteRefusedError) as exc:
                 failures.append(f"{order.order_id} ({type(exc).__name__})")
                 continue
             if answer.error is not None:
                 failures.append(f"{order.order_id} ({answer.error})")
         if failures:
-            return f"declined; cancelling the listed order failed: {', '.join(failures)}"
-        return f"declined; cancelled {len(live)} listed order(s)"
+            return f"declined; cancelling the listed order failed: {', '.join(failures)}", False
+        return f"declined; cancelled {len(live)} listed order(s)", True

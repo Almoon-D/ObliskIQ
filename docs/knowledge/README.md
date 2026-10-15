@@ -24,6 +24,7 @@ Every finding carries its route and date:
 | `[CP ✓ 2026-09-10]` | verified live through the IBKR Client Portal Web API on that date |
 | `[DOC <date>]` | read in the vendor's documentation on that date, never executed |
 | `[MCP ✓ <date>]`, `[CONNECTOR ✓ <date>]` | verified through IBKR's MCP or Custom Connector routes |
+| `[ibind <version>]` | read in a reference implementation's source at that version, never executed |
 | `[<source> ✓ <date>]` | verified against that data source live |
 | `VERIFY-LIVE(<what>)` | built against fixtures, not yet seen live; also queued in `docs/ROADMAP.md` |
 

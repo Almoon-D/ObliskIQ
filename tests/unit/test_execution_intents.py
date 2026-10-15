@@ -62,3 +62,10 @@ def test_exits_and_stops_give_an_allowed_reason(shipped_settings: ObliskConfig) 
             _new(shipped_settings, role=role, terms=sell, reason="the price moved")
     stop = terms(side=OrderSide.SELL, stop="95", limit="94")
     assert _new(shipped_settings, role=IntentRole.PROTECTIVE, terms=stop, reason="stop")
+
+
+def test_an_entry_buys(shipped_settings: ObliskConfig) -> None:
+    with pytest.raises(IntentRefusedError, match="an entry buys"):
+        _new(shipped_settings, terms=terms(side=OrderSide.SELL))
+    conversion = terms(side=OrderSide.SELL, cash="1000", conversion=True)
+    assert _new(shipped_settings, role=IntentRole.CONVERSION, terms=conversion, reason="fund")

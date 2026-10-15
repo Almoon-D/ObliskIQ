@@ -80,6 +80,15 @@ class LiveOrders:
 
 
 @dataclass(frozen=True, slots=True)
+class LiveOrderRows:
+    """The live orders read row by row (the kill switch's sweep): the rows that decoded, and
+    the order ids of those that did not (``None`` where even the id is unreadable)."""
+
+    orders: tuple[BrokerOrder, ...]
+    unreadable: tuple[str | None, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Impact:
     """One ``{current, change, after}`` block of a whatif, as amounts where they parse."""
 
@@ -212,6 +221,27 @@ def decode_live_orders(body: Any, *, observed_at: datetime) -> LiveOrders:
         raise DecodeError("a live order is not an object: the order read is incomplete")
     orders = tuple(_broker_order(row, observed_at, coid_key="order_ref") for row in rows)
     return LiveOrders(orders=orders, complete=body.get("snapshot") is True)
+
+
+def decode_live_order_rows(body: Any, *, observed_at: datetime) -> LiveOrderRows:
+    """``GET /iserver/account/orders`` row by row: one unreadable row does not hide the others.
+
+    For the kill switch, which must still cancel what it can read; the cOID lookup uses the
+    all-or-nothing :func:`decode_live_orders`.
+    """
+    if not isinstance(body, Mapping) or not isinstance(body.get("orders", []), list):
+        raise DecodeError("the live-orders answer is not an object holding a list of orders")
+    orders: list[BrokerOrder] = []
+    unreadable: list[str | None] = []
+    for row in body.get("orders", []):
+        if not isinstance(row, Mapping):
+            unreadable.append(None)
+            continue
+        try:
+            orders.append(_broker_order(row, observed_at, coid_key="order_ref"))
+        except DecodeError:
+            unreadable.append(_id(row.get("orderId", row.get("order_id"))))
+    return LiveOrderRows(orders=tuple(orders), unreadable=tuple(unreadable))
 
 
 def decode_order_status(body: Any, *, observed_at: datetime) -> BrokerOrder:

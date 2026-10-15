@@ -38,10 +38,10 @@ OWN_ENV_PREFIX = "OBLISK_"
 IBKR_MAX_CONIDS_PER_SNAPSHOT = 100
 IBKR_MAX_FIELDS_PER_SNAPSHOT = 50
 
-#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing") that this client calls or
-#: that share a cap with one it calls (`portfolio/subaccounts` with `portfolio/accounts`): each
-#: must sit in a rate group, or an owner override could leave it paced by the global window
-#: alone.
+#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing") that the clients call,
+#: that share a cap with one they call (`portfolio/subaccounts` with `portfolio/accounts`), or
+#: that the order path reads next (`pnl/partitioned`): each must sit in a rate group, or an owner
+#: override could leave it paced by the global window alone.
 IBKR_PACED_ENDPOINTS = (
     "iserver/marketdata/history",
     "iserver/marketdata/snapshot",

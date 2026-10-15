@@ -197,11 +197,42 @@ def test_the_audit_tables_are_append_only(store: Store, table: str) -> None:
 
 def test_an_unreadable_intent_row_raises(store: Store) -> None:
     intent = _stored(store)
-    store.execute(
-        "UPDATE intents SET sleeve = 'nowhere' WHERE intent_id = ?", (str(intent.intent_id),)
-    )
+    store.execute("UPDATE intents SET terms = '{}' WHERE intent_id = ?", (str(intent.intent_id),))
     with pytest.raises(StoreError):
         repo.get_intent(store, intent.intent_id)
+
+
+def test_an_intents_identity_never_changes(store: Store) -> None:
+    intent = _stored(store)
+    for column, value in (("side", "SELL"), ("conid", 1), ("coid", "x"), ("role", "exit")):
+        with pytest.raises(sqlite3.IntegrityError, match="identity"):
+            store.execute(
+                f"UPDATE intents SET {column} = ? WHERE intent_id = ?",
+                (value, str(intent.intent_id)),
+            )
+
+
+def test_a_clearance_is_spent_once_and_never_changed(store: Store) -> None:
+    intent = _stored(store)
+    clearance = _clearance(intent)
+    repo.record_clearance(store, clearance)
+    key = (str(clearance.clearance_id),)
+    for statement in (
+        "UPDATE clearances SET effect = 'reduces_risk' WHERE clearance_id = ?",
+        "UPDATE clearances SET expires_at = '2030-01-01T00:00:00Z' WHERE clearance_id = ?",
+        "DELETE FROM clearances WHERE clearance_id = ?",
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            store.execute(statement, key)
+    store.execute(
+        "UPDATE clearances SET used_at = '2026-10-13T14:00:01Z' WHERE clearance_id = ?", key
+    )
+    for statement in (
+        "UPDATE clearances SET used_at = NULL WHERE clearance_id = ?",
+        "UPDATE clearances SET used_at = '2026-10-13T14:00:02Z' WHERE clearance_id = ?",
+    ):
+        with pytest.raises(sqlite3.IntegrityError, match="spent once"):
+            store.execute(statement, key)
 
 
 # ── clearances ──

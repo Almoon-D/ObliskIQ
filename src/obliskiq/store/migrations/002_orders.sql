@@ -42,6 +42,14 @@ CREATE TABLE intents (
 );
 
 CREATE INDEX ix_intents_conid_state ON intents (conid, state);
+
+-- What an intent is never changes: only its state, its terms (a modify) and their stamp do.
+CREATE TRIGGER intents_identity_fixed BEFORE UPDATE OF intent_id, coid, sleeve, thesis_id, role,
+    conid, side, reason, mode, approval_required, created_at, expires_at, parent_id,
+    protective_id ON intents
+BEGIN
+    SELECT RAISE(ABORT, 'an intent''s identity never changes');
+END;
 CREATE INDEX ix_intents_state ON intents (state);
 
 -- Every transition, and every fact within a state (from_state = to_state: a modify, a fill, a
@@ -96,6 +104,25 @@ CREATE TABLE clearances (
 );
 
 CREATE INDEX ix_clearances_intent ON clearances (intent_id);
+
+-- A clearance is spent once: used_at is set from NULL and never again, nothing else changes,
+-- and none is deleted.
+CREATE TRIGGER clearances_spent_once BEFORE UPDATE ON clearances
+WHEN OLD.used_at IS NOT NULL OR NEW.used_at IS NULL
+    OR NEW.clearance_id IS NOT OLD.clearance_id OR NEW.intent_id IS NOT OLD.intent_id
+    OR NEW.action IS NOT OLD.action OR NEW.order_id IS NOT OLD.order_id
+    OR NEW.conid IS NOT OLD.conid OR NEW.side IS NOT OLD.side
+    OR NEW.quantity IS NOT OLD.quantity OR NEW.terms_digest IS NOT OLD.terms_digest
+    OR NEW.effect IS NOT OLD.effect OR NEW.clearance IS NOT OLD.clearance
+    OR NEW.issued_at IS NOT OLD.issued_at OR NEW.expires_at IS NOT OLD.expires_at
+BEGIN
+    SELECT RAISE(ABORT, 'a clearance is spent once and never changed');
+END;
+
+CREATE TRIGGER clearances_no_delete BEFORE DELETE ON clearances
+BEGIN
+    SELECT RAISE(ABORT, 'a clearance is never deleted');
+END;
 CREATE INDEX ix_clearances_open ON clearances (conid, side) WHERE used_at IS NULL;
 
 -- ───────────────────────────── what the broker reported ─────────────────────────────

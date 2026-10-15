@@ -657,8 +657,9 @@ read-back of a recorded clearance is the one exception). The gate records each c
 `clearances` table. The order client spends it in `StoreClearanceLedger`: the clearance
 presented must equal the stored one field for field, so a `model_copy` with another effect,
 quote or expiry is refused, and one `UPDATE … WHERE used_at IS NULL AND expires_at > now AND`
-every binding matches spends it, so two processes cannot both use it. The cOID ties the write
-to the clearance's intent. A clearance is spent after the cOID lookup and the caller's last
+every binding matches spends it, so two processes cannot both use it; triggers make "spent once,
+never changed, never deleted" a schema rule, and fix an intent's identity (only its state and
+terms move). The cOID ties the write to the clearance's intent. A clearance is spent after the cOID lookup and the caller's last
 check, immediately before the send; a placement the lookup finds is reported, not sent, and
 keeps its clearance. Session 4's gate refuses every intent (`pretrade_unavailable`), so no write
 can happen until Session 4a's checks exist. Rejected: an HMAC-signed token checked in memory (it
@@ -672,7 +673,10 @@ switch — and a time bound on them can only hide a row: a kill switch or a down
 second ahead of a reader's clock would read as absent, which fails open. So `store/orders.py`
 reads that state whole, and the mode and the kill switch by their latest row **by insertion**,
 not by stamp. Account snapshots (positions and cash) are measurements and keep `as_of`; a read
-header (`account_reads`) separates an empty account from no read at all.
+header (`account_reads`) separates an empty account from no read at all. A structural test lists
+the state reads exempt from `as_of` and holds every other read in `store/orders.py` to it. The
+fill and broker-order reads serve the live order path; Session 7's tax lots and returns read
+fills through a bounded read of their own.
 
 ### D47 · A write is sent once; an unknown outcome is looked up, never repeated
 
@@ -680,20 +684,27 @@ header (`account_reads`) separates an empty account from no read at all.
 re-authentication behind the caller's back. The order client sorts every answer into: placed;
 already placed (the cOID lookup found it); a duplicate cOID refusal (the order exists); refused
 (an error body, HTTP 400 or 403); not sent (an open circuit, a transport that could not sign,
-HTTP 401 or 429); or **unknown** (a 5xx, a transport failure mid-flight, a body that is not
-JSON). An unknown or not-sent intent stays `submitted` and the owner is alerted; the next
-attempt needs a fresh clearance and looks the cOID up first. The lookup needs a live-orders list
+HTTP 401 or 429); or **unknown** (any 5xx, a no-data body included, a transport failure
+mid-flight, a body that is not JSON). An unknown or not-sent intent stays `submitted` and the
+owner is alerted; the next attempt needs a fresh clearance and looks the cOID up first. Order
+ids are digits: `-1`, which cancels every open order, is never sent. The lookup needs a live-orders list
 IBKR marks as a complete snapshot, and the trades of `execution.orders.trades_lookup_days`
 (IBKR serves seven); an incomplete list refuses the placement. IBKR invalidates an open warning
 as soon as any other request is sent, so one placement runs at a time and the reply decider uses
 only what the clearance recorded. A declined warning on a **placement** is followed by a lookup
-and a cancel of anything listed under the cOID; a declined **modify** leaves the order as it
-was, because cancelling it could strip a position of its protective stop. Both alert.
+and a cancel of anything listed under the cOID; the intent is rejected only when that cleanup
+is seen to succeed, and otherwise stays `submitted`. A declined **modify** leaves the order as
+it was, because cancelling it could strip a position of its protective stop. Both alert. One
+process places a given intent: two processes holding two clearances for the same `submitted`
+intent could both pass the lookup, and only IBKR's duplicate-cOID refusal (VERIFY-LIVE) would
+stop the second; Session 5's executor owns retries, and `flatten` (4a) makes its own intents.
 
 ### D48 · The kill switch fails closed and needs nothing but a data directory
 
 Two flags, either one turns it on: the file `KILL_SWITCH` in the data directory and the latest
-row of `killswitch`. A file that cannot be checked, a database that cannot be read within
+row of `killswitch`. The file is `stat`-ed, not tested with `Path.exists` (which reads a
+permission refusal or a symlink loop as absent): a file that cannot be checked, a database that
+cannot be read within
 `execution.kill_switch.store_timeout_seconds` or any other failure reads as ON — the inverse of
 the legacy `MonitoringSuite.should_halt_reflexivity`, which allowed trading when its check
 failed (legacy/old/ObliskIQ/modules/execution/monitoring_suite.py). The file's name is fixed in
@@ -704,8 +715,13 @@ service's sweep does the cancelling: every `sweep_interval_seconds` while ON it 
 orders, cancels every buy, conversion (`secType CASH`) or order of unreadable side, keeps a sell
 unless the store knows it as a conversion, a buy or an order the gate cleared as adding risk, and
 classes from the broker alone what the store cannot (the store unreadable, an order the bot did
-not place). The write boundary checks the switch again immediately before each send of an order
-that adds risk. Turning it off clears both flags and fails while either stays set.
+not place). The sweep reads the live orders row by row: a row that cannot be read is cancelled by
+its id, one without an id is reported, and one bad row never stops the others (the cOID lookup
+keeps the all-or-nothing read). No failure ends the loop: a failing pass or report hook is
+logged and the next pass runs on schedule; a cancel that raises anything is a failed cancel,
+retried next pass. A cancel needs only the paper guard, whatever the mode or profile pairing.
+The write boundary checks the switch again immediately before each send of an order that adds
+risk. Turning it off clears both flags and fails while either stays set.
 
 ### D49 · The reply policy, the quote policy and the collar
 
@@ -749,10 +765,14 @@ needs profile `paper`, and its audit row records the promotion criteria as untes
 Downgrades are always allowed and audited. A writing mode needs its profile (`paper` with
 profile paper, the live levels with profile live) and the account guard's profile must be the
 modes' profile; the boundary reads the mode from the store before each write and again
-immediately before the send, so a downgrade by another process stops the next write.
+immediately before the send, so a downgrade by another process stops the next write. An intent
+is written only in the mode it was made for, never after its `expires_at` (a staged one that has
+expired becomes `expired`), and a modify must name an order placed for its intent.
 
 ### D52 · Smaller choices of the order path
 
+- **An entry buys.** A sell that opens would be a short or a written option: an `entry` sell is
+  refused when the intent is made (I2 in 4a's gate is the real guard).
 - **Discipline.** lite's `entry_order_type: limit_only` (an entry may be a limit or an algo with a
   limit cap, never a stop-limit) and `exit_reasons_allowed`, applied to exits **and** protective
   stops (a protective stop is an exit order). The other `discipline` keys are Session 4a's or

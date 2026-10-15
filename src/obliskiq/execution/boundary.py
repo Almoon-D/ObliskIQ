@@ -3,9 +3,11 @@
 Before a placement or a modify, and again immediately before it is sent (the order client's last
 check, after the cOID lookup):
 
-1. **Mode.** The current mode, read from the store, must permit writes under this profile
-   (``shadow`` never does; ``paper`` needs profile ``paper``; the live levels profile ``live``).
-   A mode that cannot be read refuses.
+1. **Mode.** The current mode, read from the store, must be the intent's and permit writes
+   under this profile (``shadow`` never does; ``paper`` needs profile ``paper``; the live levels
+   profile ``live``), and the account guard must run under the same profile. A mode that cannot
+   be read refuses. An expired intent is never sent, and a modify must name an order placed for
+   its intent.
 2. **Paper guard.** Under profile ``paper`` the account must carry a paper prefix.
 3. **Kill switch**, for an order that adds risk (I3, I4): ON refuses it. Every order adds risk
    except a sell the gate cleared as reducing it (the clearance model refuses that effect on a
@@ -30,6 +32,7 @@ from uuid import UUID
 
 from ..domain.orders import (
     BrokerOrder,
+    ExecutionMode,
     IntentState,
     OrderTerms,
     PretradeClearance,
@@ -39,7 +42,13 @@ from ..errors import WriteRefusedError
 from ..ibkr.errors import AccountGuardError, IbkrError
 from ..ibkr.guard import AccountGuard
 from ..ibkr.order_decode import CancelAnswer
-from ..ibkr.orders import OrderClient, PlacementResult, PlacementStatus
+from ..ibkr.orders import (
+    CANCELLED_STATUS,
+    FILLED_STATUS,
+    OrderClient,
+    PlacementResult,
+    PlacementStatus,
+)
 from ..logging_setup import get_logger
 from ..store import orders as repo
 from ..store.orders import StoredIntent
@@ -78,9 +87,9 @@ type OrderAlertHook = Callable[[OrderAlert], None]
 def state_for(order: BrokerOrder) -> IntentState:
     """The intent state a broker report stands for. Anything not final is still working."""
     status = order.status.strip().lower()
-    if status == "filled":
+    if status == FILLED_STATUS:
         return IntentState.FILLED
-    if status == "cancelled":
+    if status == CANCELLED_STATUS:
         return IntentState.CANCELLED
     if (order.filled_quantity or Decimal(0)) > 0:
         return IntentState.PARTIALLY_FILLED
@@ -121,19 +130,15 @@ class WriteBoundary:
     # ── the checks ──
 
     def _paper_guard(self) -> None:
-        if self._modes.profile != self._guard.profile:
-            raise WriteRefusedError(
-                "profile_mismatch",
-                f"the modes run under profile {self._modes.profile}, the account guard under "
-                f"{self._guard.profile}",
-            )
+        """Profile paper ⇒ a paper-prefix account: the one check a cancel needs."""
         try:
             self._guard.check_prefix()
         except AccountGuardError as exc:
             raise WriteRefusedError("paper_guard", str(exc)) from None
 
-    async def check_write(self, *, adds_risk: bool) -> None:
-        """Mode, paper guard and, for an order that adds risk, the kill switch."""
+    async def check_write(self, *, adds_risk: bool, intent_mode: ExecutionMode) -> None:
+        """Mode (the intent's, permitted under this profile), paper guard and, for an order
+        that adds risk, the kill switch."""
         try:
             mode = await self._modes.current()
         except Exception as exc:
@@ -143,6 +148,17 @@ class WriteBoundary:
         refusal = write_refusal(mode, self._modes.profile)
         if refusal is not None:
             raise WriteRefusedError("mode_forbids_write", refusal)
+        if mode is not intent_mode:
+            raise WriteRefusedError(
+                "intent_mode",
+                f"the intent was made for {intent_mode.value}; the mode is {mode.value}",
+            )
+        if self._modes.profile != self._guard.profile:
+            raise WriteRefusedError(
+                "profile_mismatch",
+                f"the modes run under profile {self._modes.profile}, the account guard under "
+                f"{self._guard.profile}",
+            )
         self._paper_guard()
         if adds_risk and await self._kill.is_on():
             raise WriteRefusedError("kill_switch_on", "the kill switch blocks orders that add risk")
@@ -159,9 +175,14 @@ class WriteBoundary:
             raise WriteRefusedError(
                 "intent_state", f"an intent in state {intent.state.value} is not placed"
             )
-        risky = adds_risk(clearance)
-        await self.check_write(adds_risk=risky)
         first_attempt = intent.state is IntentState.STAGED
+        if self._now() >= intent.expires_at:
+            if first_attempt:
+                await self._book.advance(intent_id, IntentState.EXPIRED, "expired before sending")
+            raise WriteRefusedError("intent_expired", "the intent expired before it was sent")
+        risky = adds_risk(clearance)
+        mode = intent.mode
+        await self.check_write(adds_risk=risky, intent_mode=mode)
         if first_attempt:
             await self._book.advance(intent_id, IntentState.SUBMITTED, "sending to the broker")
         try:
@@ -170,7 +191,7 @@ class WriteBoundary:
                 terms=intent.terms,
                 clearance=clearance,
                 decide=self._replies.decider(clearance, self._now),
-                last_check=lambda: self.check_write(adds_risk=risky),
+                last_check=lambda: self.check_write(adds_risk=risky, intent_mode=mode),
             )
         except WriteRefusedError as exc:
             if first_attempt:
@@ -211,8 +232,15 @@ class WriteBoundary:
             raise WriteRefusedError(
                 "modify_changes_order", "a modify keeps the instrument, the side and the kind"
             )
+        if await self._worker.run(repo.intent_for_order, order_id) != intent_id:
+            raise WriteRefusedError(
+                "order_not_intents", f"order {order_id} was not placed for this intent"
+            )
+        if self._now() >= intent.expires_at:
+            raise WriteRefusedError("intent_expired", "the intent has expired")
         risky = adds_risk(clearance)
-        await self.check_write(adds_risk=risky)
+        mode = intent.mode
+        await self.check_write(adds_risk=risky, intent_mode=mode)
         try:
             result = await self._client.modify(
                 order_id=order_id,
@@ -220,7 +248,7 @@ class WriteBoundary:
                 terms=terms,
                 clearance=clearance,
                 decide=self._replies.decider(clearance, self._now),
-                last_check=lambda: self.check_write(adds_risk=risky),
+                last_check=lambda: self.check_write(adds_risk=risky, intent_mode=mode),
             )
         except WriteRefusedError as exc:
             await self._book.fact(intent_id, f"modify refused: {exc}")
@@ -330,11 +358,15 @@ class WriteBoundary:
             target = self._state_from_lookup(intent.terms, result)
             await self._move(intent_id, target, "found at the broker under its cOID")
             return
-        if status in (PlacementStatus.REJECTED, PlacementStatus.DECLINED):
+        if status is PlacementStatus.REJECTED or (
+            status is PlacementStatus.DECLINED and result.cleanup_verified
+        ):
             await self._book.advance(
                 intent_id, IntentState.REJECTED, f"{status.value}: {result.detail}"
             )
-        else:  # duplicate, not sent, unknown: the intent stays submitted, its cOID to be looked up
+        else:
+            # Duplicate, not sent, unknown, or declined with an order perhaps still listed: the
+            # intent stays submitted, its cOID to be looked up.
             await self._book.fact(intent_id, f"{status.value}: {result.detail}")
         self._alert_for(intent_id, result)
 

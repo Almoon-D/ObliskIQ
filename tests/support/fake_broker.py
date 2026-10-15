@@ -4,7 +4,8 @@ It keeps orders, warnings, trades and cancels the way the Client Portal Web API 
 (docs/knowledge/ibkr-orders.md) and lets a test script the awkward cases: warnings to answer, a
 refusal, a reused cOID, an answer lost after the order was taken, an order listed late, a
 live-orders list that is not a complete snapshot, a fill that races a cancel. Sessions 4a and 5
-extend it. Shapes are IBKR's documented ones, not live captures (VERIFY-LIVE).
+extend it. Like IBKR, any request other than the reply invalidates an open warning. Shapes
+are IBKR's documented ones, not live captures (VERIFY-LIVE).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -12,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 import re
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -98,6 +100,8 @@ class FakeBroker:
         self.listing_delay = 0
         #: Whether the live-orders answer is a complete snapshot.
         self.snapshot = True
+        #: Rewrites the live-orders rows before they are answered (malformed rows, for tests).
+        self.rewrite_live_rows: Callable[[list[Any]], list[Any]] | None = None
         #: The next cancel arrives after the order has filled.
         self.fill_before_cancel = False
         #: Cancels are refused with this error, or fail with a 503 when ``"503"``.
@@ -125,26 +129,38 @@ class FakeBroker:
 
     # ── wiring ──
 
+    def _invalidating(
+        self, handler: Callable[..., httpx.Response]
+    ) -> Callable[..., httpx.Response]:
+        """IBKR invalidates an open warning as soon as any other request arrives."""
+
+        def handle(request: httpx.Request, **params: str) -> httpx.Response:
+            self._pending.clear()
+            return handler(request, **params)
+
+        return handle
+
     def _mount(self, router: respx.MockRouter) -> None:
         account = rf"{re.escape(BASE)}/iserver/account/(?P<account>[^/]+)"
-        router.post(url__regex=rf"{account}/orders/whatif$").mock(side_effect=self._whatif)
-        router.post(url__regex=rf"{account}/orders$").mock(side_effect=self._place)
-        router.post(url__regex=rf"{account}/order/{_ID}$").mock(side_effect=self._modify)
-        router.delete(url__regex=rf"{account}/order/{_ID}$").mock(side_effect=self._cancel)
+        other = self._invalidating
+        router.post(url__regex=rf"{account}/orders/whatif$").mock(side_effect=other(self._whatif))
+        router.post(url__regex=rf"{account}/orders$").mock(side_effect=other(self._place))
+        router.post(url__regex=rf"{account}/order/{_ID}$").mock(side_effect=other(self._modify))
+        router.delete(url__regex=rf"{account}/order/{_ID}$").mock(side_effect=other(self._cancel))
         router.post(url__regex=rf"{re.escape(BASE)}/iserver/reply/{_ID}$").mock(
             side_effect=self._reply
         )
         router.get(url__regex=rf"{re.escape(BASE)}/iserver/account/orders(\?.*)?$").mock(
-            side_effect=self._live_orders
+            side_effect=other(self._live_orders)
         )
         router.get(url__regex=rf"{re.escape(BASE)}/iserver/account/trades(\?.*)?$").mock(
-            side_effect=self._trades
+            side_effect=other(self._trades)
         )
         router.get(url__regex=rf"{re.escape(BASE)}/iserver/account/order/status/{_ID}$").mock(
-            side_effect=self._status
+            side_effect=other(self._status)
         )
         router.post(url=f"{BASE}/iserver/questions/suppress/reset").mock(
-            side_effect=self._suppress_reset
+            side_effect=other(self._suppress_reset)
         )
 
     # ── state a test arranges ──
@@ -323,7 +339,10 @@ class FakeBroker:
                 order.hidden_reads -= 1
                 continue
             rows.append(order.row())
-        return httpx.Response(200, json={"orders": rows, "snapshot": self.snapshot})
+        answer: list[Any] = rows
+        if self.rewrite_live_rows is not None:
+            answer = self.rewrite_live_rows(rows)
+        return httpx.Response(200, json={"orders": answer, "snapshot": self.snapshot})
 
     def _trades(self, request: httpx.Request) -> httpx.Response:
         self.trade_reads += 1

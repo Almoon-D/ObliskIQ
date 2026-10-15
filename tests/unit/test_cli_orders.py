@@ -161,3 +161,23 @@ def test_a_store_failure_is_reported_without_a_traceback(
     status, _, err = _run("kill", "off", "--reason", "r")
     assert status == EXIT_INVALID
     assert "cannot open" in err
+
+
+def test_kill_status_survives_a_raw_database_error(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sqlite3
+
+    import obliskiq.cli.app as app
+
+    def broken(store: object) -> None:
+        raise sqlite3.OperationalError("database disk image is malformed")
+
+    _run("kill", "on")
+    monkeypatch.setattr(app.repo, "latest_kill_switch", broken)
+    status, out, _ = _run("kill", "status")
+    assert status == EXIT_OK
+    assert "unreadable" in out
+    status, _, err = _run("kill", "off", "--reason", "r")
+    assert status == EXIT_INVALID
+    assert "malformed" in err
