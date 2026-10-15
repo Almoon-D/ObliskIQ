@@ -10,8 +10,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 1 | Foundation | scaffold, docs, owner settings and defaults, jurisdiction registry, CI, releases, legacy snapshot | done | v0.1.0 |
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference, costs | done | v0.2.0 |
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
-| 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | next | |
-| 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | planned | |
+| 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
+| 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | next | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots, `es` tax policy, TWR | planned | |
@@ -31,6 +31,60 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 21 | Research: first pattern batch | pre-registered tests of §5.9; passes go to shadow | any time after 18 | |
 
 ## Session log
+
+### Session 4 — Order path, kill switch and modes (2026-10-13 → 2026-10-15, v0.4.0)
+
+**Landed.**
+- `domain/orders.py`: `OrderIntent` (uuid7 id, sleeve, thesis, role, terms, reason, mode,
+  approval, expiry, parent and protective links, state), `OrderTerms` whose every price policy
+  carries a limit (limit, stop-limit, algo with a limit cap) and whose digest binds a clearance,
+  `PretradeClearance`, `QuoteEvidence`, `IntentEvent`, `BrokerOrder`, `Fill`, `Position`,
+  `CashBalance`, `HoldingAssignment`, `ModeChange`, `KillSwitchRecord`.
+- Migration `002_orders.sql`: intents, intent events (append-only), clearances, broker orders,
+  fills, account reads with position and cash snapshots, the mode audit and the kill switch
+  (append-only), and the holdings registry (append-only). `store/orders.py` reads the system's
+  own state whole (D46); `store/worker.py` runs the store on one thread for async callers.
+- `ibkr/orders.py` and `ibkr/order_decode.py`: whatif, `place_idempotent` (paper guard, binding,
+  cOID lookup in a complete live-orders snapshot and the trades, last check, clearance spent,
+  one send), the warning loop, reply, modify, cancel, status, live orders, trades, reset of
+  suppressed warnings, conversion fields (`isCcyConv`, `fxQty`), the cOID short form (D45, D47).
+- `execution/`: the state machine and intent book with property tests; lite's discipline
+  (`intents.py`); the quote policy per asset class and the collar (`quotes.py`); the reply policy
+  (`replies.py`); modes (`modes.py`); the kill switch with its sweep (`killswitch.py`); the
+  pre-trade gate refusing every intent (`pretrade.py`); the clearance ledger (`ledger.py`); the
+  write boundary (`boundary.py`); shadow fills with the cost model (`shadow.py`).
+- `obliskiq kill on|off|status` (`kill on` works without a loadable configuration) and
+  `obliskiq mode show|set`.
+- The stateful fake broker (`tests/support/fake_broker.py`) and the order rig, with the tests the
+  prompt lists: unknown reply; `o354` under each condition; whatif warning; rejection; cancel
+  race; crash between place and status; duplicate intent and cOID; every I1 refusal; I4 at the
+  boundary and in the sweep (protective-role buy and conversion cancelled, exit sell and stop
+  kept, gate refusing, store unavailable, listed late); a downgrade mid-cycle; a cancel after a
+  downgrade to shadow; a live account under the paper profile. Guard tests: only the gate
+  constructs or records a clearance; only the order client spells the write endpoints; no order
+  type but `LMT` and `STOP_LIMIT` is reachable (a property over generated terms).
+- `docs/knowledge/ibkr-orders.md`: endpoints, fields and message ids, tagged.
+- Session 4 follow-ups closed: the order path's paced endpoints in the rate groups; the
+  transport readied outside the pacing slot and a re-arm that stops at a dead transport (D53);
+  `run_read_only` tested through its own `build_transport` (OAuth and Gateway); the
+  magic-number guard's allowlist for money decisions (D50).
+
+**Reply message ids and their tests** (`execution.reply_policy`, D49):
+`o10153` any order, `o10331` stop-limit only, `o10164` and `o10223` cash quantity only
+(`tests/unit/test_execution_replies.py`); `o354` under the quote policy and the collar
+(`test_no_market_data_*` there, and end to end in `test_ibkr_orders.py` and
+`test_execution_boundary.py`); every other id, and a warning without one, declined
+(`test_an_id_outside_the_policy_is_declined`, `test_a_warning_without_an_id_is_declined`,
+`test_an_unknown_warning_is_declined_cancelled_and_alerted`).
+
+**SESSION_PROMPTS edits.** Session 4a's READ names the files of Session 4's code it reads.
+
+**Deferred.** I2 (no short) and I5 (no unprotected exit) are enforced by Session 4a's gate; the
+`clearances` table carries conid, side and quantity for its reservations. Nothing calls
+`OrderClient.reset_suppressed()` or runs the kill switch's sweep loop yet (Session 6's service).
+
+**Live findings.** None: no IBKR call was made (the paper Gateway login does not complete from a
+cloud container). Every order shape is VERIFY-LIVE below.
 
 ### Reading budget and the Session 4 split (2026-10-12, v0.3.2)
 
@@ -325,27 +379,40 @@ settles it.
 | `ssoExpires` and the daily reset as seen by the keepalive | 3 | 6 |
 | The daily bar's `t` stamp per venue (the history window is filtered on the UTC date of the bar start; a venue stamping before UTC midnight would shift by a day) | 3 | 8 |
 | Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | first session with a working login |
+| Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | 4a (paper order test) |
+| The cOID: maximum length, `order_ref` in live orders and trades, the duplicate-cOID refusal and its window | 4 | 4a (paper order test) |
+| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | 4a (paper order test), 5 |
+| Routing by `conidex` for a non-SMART venue | 4 | 4a (paper order test) |
+| Currency conversion fields `isCcyConv` and `fxQty` (the reference's prose says `fxQTY`) | 4 | 5 |
+| What a cancel of an order that has just filled answers | 4 | 4a (paper order test) |
 
 ## Follow-ups
 
+- Session 4a: the gate is the only issuer of `PretradeClearance` and the only caller of
+  `store.orders.record_clearance` (guard tests); it sets the clearance's expiry from the quote it
+  checked, its effect by I3 (the boundary passes a reducing sell through the kill switch on that
+  effect alone), and its quote evidence and sigma (the reply policy decides `o354` from them).
+  I2 counts uncleared-but-unspent and spent-but-unlisted sells from `clearances` (conid, side,
+  quantity, `used_at`) beside the working orders; the boundary already refuses a spent, expired,
+  altered or rebound clearance.
+- Session 4a: `holding_assignments` holds the registry, but nothing writes `unmanaged` yet; the
+  gate refuses a conid held without a sleeve, and Session 5's reconciliation registers what the
+  bot did not open.
+- Session 5: the executor moves intents to `expired` at `expires_at` (and cancels a working
+  order first), writes `positions_snap`, `cash_snap` and fills from reconciliation, assigns a new
+  holding to its sleeve on its first fill, and runs `ShadowFiller` in shadow mode.
+- Session 6: the service calls `OrderClient.reset_suppressed()` once before its first placement,
+  runs `KillSwitch.run` (its reports and `OrderAlert`s to Telegram) and downgrades the mode on the
+  failures the plan names.
 - **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
   the live account's, D42). Its login did not complete from a cloud container (most likely the
   outbound address changing per connection), so the first live run is on the deployment
   machine (Session 6/19 checks it first); until then sessions build against fixtures. If the
   login fails there too, the fallback is a daily manual login.
-- Session 4: tests that run `run_read_only` through its own `build_transport` (no injected
-  transport): live OAuth with a passing (mocked) handshake, and the Gateway with a data directory
-  and an injected login driver (review of v0.3.1).
-- Session 4: OAuth token negotiation runs inside `headers()`, inside the limiter slot, and honours
-  `Retry-After`; a token outage can hold every concurrency permit for minutes, and each of
-  `rearm`'s sub-requests renegotiates. Before the order path and kill switch share the limiter,
-  ensure the token outside the slot and stop `rearm` at the first `TransportUnavailableError`.
 - Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
   failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the
   keepalive repair once it passes and fail reads fast, without a new alert, before then.
-- Session 4: add the order path's self-paced endpoints (`iserver/account/orders`, `trades`,
-  `pnl/partitioned`) to `IBKR_PACED_ENDPOINTS` and to the rate groups.
-- Sessions 4 and 4a: the order path reads cash from `IbkrClient.portfolio.cash_balances()`
+- Session 4a: the order path reads cash from `IbkrClient.portfolio.cash_balances()`
   (Decimal per currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis`
   (`documented_bound` for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint
   groups refuse every read until the account guard has passed (D41). Incomplete position or cash
@@ -391,9 +458,6 @@ settles it.
   (`legacy/lite/pyproject.toml`, `legacy/lite/requirements.txt`,
   `legacy/pulse/pyproject.toml`), so Dependabot alerts may name them until Session 20
   deletes `legacy/`; they are never installed.
-- Session 4 (first thresholds in a decision path): the magic-number guard accepts any
-  module-level UPPER_CASE constant; decide whether decision paths take only an explicit
-  allowlist of protocol and unit constants (a DECISIONS entry either way).
 - Session 19: a release created with `GITHUB_TOKEN` does not trigger `on: release`
   workflows, so the image build must be a job in `release.yml` (as its prompt says).
 - Release workflow: when a pending run is replaced by a newer push to `main`, the replaced

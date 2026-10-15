@@ -40,7 +40,10 @@ the observation that settled it.
 - `ibkr.md` — the Client Portal Web API: pacing, sessions, field ids, units, search, history,
   the ledger, the trading schedule, the Client Portal Gateway, lite's live readings and
   Session 3's Gateway trial.
+- `ibkr-orders.md` — the order endpoints, the order body, the cOID, warnings and their message
+  ids with the reply policy, answers and errors, live orders, status, trades, whatif and
+  cancel, as IBKR documents them and ibind implements them; live shapes join it with the paper
+  order test.
 
-More files are added by the sessions that verify them (`ibkr-orders.md`,
-`ibkr-capabilities.md`, `macro-sources.md`, `tax-es.md`, …); none is written ahead of the
-evidence.
+More files are added by the sessions that verify them (`ibkr-capabilities.md`,
+`macro-sources.md`, `tax-es.md`, …); none is written ahead of the evidence.

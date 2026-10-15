@@ -684,7 +684,8 @@ eligibility, holdings, cash, caps, quote policy, calendars, kill switch, mode an
 approval — and every refusal carries a reason code.
 
 READ: Session 4's code (the write boundary, the clearance, the quote policy and collar, the
-fake broker) and docs/knowledge/ibkr-orders.md; Session 3's cash and quote reads; Session
+fake broker: execution/{boundary,pretrade,ledger,quotes,replies}.py, store/orders.py,
+tests/support/{fake_broker,order_rig}.py) and docs/knowledge/ibkr-orders.md; Session 3's cash and quote reads; Session
 2's Calendars (docs/knowledge/calendars.md). Port lite's `instruments` keys you consume
 (prohibited categories, the futures-options switch, the leveraged and inverse markers:
 legacy/lite/config.yaml:270-332) and any `discipline` keys Session 4 left
