@@ -393,7 +393,7 @@ async def test_a_mode_that_cannot_be_read_refuses(order_rig: Any) -> None:
 async def test_a_live_account_under_the_paper_profile_is_refused(order_rig: Any) -> None:
     stored = await order_rig.intent()
     clearance = await order_rig.clear(stored.intent)
-    object.__setattr__(order_rig.guard, "account_id", "U7654321")
+    object.__setattr__(order_rig.guard, "account_id", "U_LIVE_TEST")
     assert await _refused(order_rig, stored, clearance) == "paper_guard"
     with pytest.raises(WriteRefusedError) as refused:
         await order_rig.boundary.cancel("1")

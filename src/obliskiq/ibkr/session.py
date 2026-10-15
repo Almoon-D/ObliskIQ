@@ -213,20 +213,17 @@ class BrokerSession:
         if self._http is None:
             raise IbkrUpstreamError("the broker session is used before open()")
         url = f"{self._transport.base_url}/{path.lstrip('/')}"
+        # The transport readies itself (an OAuth token exchange) before the request holds a
+        # pacing slot and a concurrency permit, so a slow exchange blocks no other request.
+        try:
+            await self._transport.refresh()
+        except UpstreamError as exc:
+            raise self._transport_failure(exc, self._limiter.group_for(path), label) from exc
         async with self._limiter.slot(path) as group:
             try:
                 headers = await self._transport.headers(method, url, query)
             except UpstreamError as exc:
-                # A refusal (a failed token signature check) passes through as it is. A transport
-                # that could not reach its own upstream has retried already: counted once, and
-                # not retried again by this request's backoff.
-                if isinstance(exc, IbkrError) and not isinstance(exc, IbkrUpstreamError):
-                    raise
-                self._limiter.failure(group)
-                raise TransportUnavailableError(
-                    f"{self.redact(label)}: the transport could not sign the request "
-                    f"({type(exc).__name__})"
-                ) from exc
+                raise self._transport_failure(exc, group, label) from exc
             try:
                 response = await self._http.request(
                     method, url, params=dict(query) or None, json=json_body, headers=headers
@@ -238,6 +235,17 @@ class BrokerSession:
                     f"({type(exc).__name__})"
                 ) from exc
         return response, group
+
+    def _transport_failure(self, exc: UpstreamError, group: str, label: str) -> IbkrError:
+        """What a transport failure becomes. A refusal (a failed token signature check) stays
+        as it is. A transport that could not reach its own upstream has retried already: it is
+        counted once against the group and not retried again by the request's backoff."""
+        if isinstance(exc, IbkrError) and not isinstance(exc, IbkrUpstreamError):
+            return exc
+        self._limiter.failure(group)
+        return TransportUnavailableError(
+            f"{self.redact(label)}: the transport could not sign the request ({type(exc).__name__})"
+        )
 
     def _decode(self, response: httpx.Response, label: str) -> Any:
         if not response.content:
@@ -376,25 +384,39 @@ class BrokerSession:
                 return
             token = _REPAIRING.set(True)
             try:
-                with contextlib.suppress(IbkrError):
-                    body = await self.request(
-                        "POST",
-                        SSODH_INIT_PATH,
-                        params={
-                            "publish": "true",
-                            "compete": "true" if self._ibkr.session.compete else "false",
-                        },
-                    )
-                    self._authenticated = AuthStatus.from_body(body).authenticated
-                for path in (ISERVER_ACCOUNTS_PATH, PORTFOLIO_ACCOUNTS_PATH):
-                    with contextlib.suppress(IbkrError):
-                        await self.request("GET", path)
-                log.info(
-                    "re-armed the brokerage session", extra={"authenticated": self._authenticated}
-                )
+                await self._rearm_steps()
+            except TransportUnavailableError as exc:
+                # Every further step would wait on the same unreachable transport.
+                log.warning("re-arm stopped", extra={"error": self.redact(str(exc))})
             finally:
                 _REPAIRING.reset(token)
                 self._repairs += 1
+
+    async def _rearm_steps(self) -> None:
+        """``ssodh/init``, then both accounts endpoints. A step's own failure is swallowed;
+        a transport that cannot sign requests stops the sequence."""
+        try:
+            body = await self.request(
+                "POST",
+                SSODH_INIT_PATH,
+                params={
+                    "publish": "true",
+                    "compete": "true" if self._ibkr.session.compete else "false",
+                },
+            )
+            self._authenticated = AuthStatus.from_body(body).authenticated
+        except TransportUnavailableError:
+            raise
+        except IbkrError:
+            pass
+        for path in (ISERVER_ACCOUNTS_PATH, PORTFOLIO_ACCOUNTS_PATH):
+            try:
+                await self.request("GET", path)
+            except TransportUnavailableError:
+                raise
+            except IbkrError:
+                continue
+        log.info("re-armed the brokerage session", extra={"authenticated": self._authenticated})
 
     async def reauthenticate(self, reason: str, *, after: int | None = None) -> AuthStatus:
         """Log the transport in again and re-open the session; alert either way.

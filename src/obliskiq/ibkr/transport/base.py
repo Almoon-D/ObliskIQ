@@ -38,6 +38,11 @@ class Transport(Protocol):
         Gateway. Raises when it cannot."""
         ...
 
+    async def refresh(self) -> None:
+        """Ready the next request before it takes a pacing slot (OAuth renegotiates a token
+        inside its refresh margin; the Gateway needs nothing). Raises when it cannot."""
+        ...
+
     async def headers(self, method: str, url: str, params: Mapping[str, Any]) -> dict[str, str]:
         """Headers for one request (OAuth signs it; the Gateway needs none)."""
         ...

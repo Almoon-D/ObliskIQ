@@ -20,7 +20,7 @@ import httpx
 import respx
 
 BASE = "https://gw.test/v1/api"
-ACCOUNT = "DU1234567"
+ACCOUNT = "DUTEST1"
 
 _ID = r"(?P<id>[^/?]+)"
 

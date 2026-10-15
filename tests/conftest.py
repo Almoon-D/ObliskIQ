@@ -345,6 +345,7 @@ class FakeTransport:
     def __init__(self, base_url: str = "https://gw.test/v1/api") -> None:
         self._base_url = base_url
         self.prepared = 0
+        self.refreshed = 0
         self.recovered = 0
         self.closed = 0
         self.fail_recover: Exception | None = None
@@ -362,6 +363,9 @@ class FakeTransport:
 
     async def prepare(self) -> None:
         self.prepared += 1
+
+    async def refresh(self) -> None:
+        self.refreshed += 1
 
     async def headers(self, method: str, url: str, params: Any) -> dict[str, str]:
         return {"Accept": "application/json"}

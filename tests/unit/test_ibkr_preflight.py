@@ -2,14 +2,13 @@
 the account id masked and no balance printed."""
 
 import io
-import json
 import logging
-from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 import respx
+from read_path import mock_read_path
 
 from obliskiq.cli.app import EXIT_NO_CREDENTIALS, run
 from obliskiq.env import Environment
@@ -23,14 +22,7 @@ from obliskiq.ibkr.preflight import (
 from obliskiq.ibkr.transport import missing_credentials, transport_refusal
 
 BASE = "https://gw.test/v1/api"
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ibkr"
 ACCOUNT = "DU_PAPER"
-SPY = 756733
-STK = [{"secType": "STK"}]
-
-
-def _fixture(name: str) -> Any:
-    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 @pytest.fixture(autouse=True)
@@ -63,66 +55,7 @@ def env(monkeypatch) -> Environment:
 
 
 def _mock_read_path(router: respx.MockRouter, *, accounts: Any = None) -> None:
-    router.post(f"{BASE}/iserver/auth/ssodh/init").mock(
-        return_value=httpx.Response(200, json={"authenticated": True, "competing": False})
-    )
-    router.get(f"{BASE}/iserver/accounts").mock(
-        return_value=httpx.Response(200, json={"accounts": [ACCOUNT]})
-    )
-    router.get(f"{BASE}/portfolio/accounts").mock(
-        return_value=httpx.Response(
-            200, json=accounts if accounts is not None else _fixture("accounts.json")
-        )
-    )
-    router.get(f"{BASE}/portfolio/{ACCOUNT}/positions/0").mock(
-        return_value=httpx.Response(200, json=_fixture("positions_page0.json"))
-    )
-    router.get(f"{BASE}/portfolio/{ACCOUNT}/positions/1").mock(
-        return_value=httpx.Response(200, json=[])
-    )
-    router.get(f"{BASE}/portfolio/{ACCOUNT}/ledger").mock(
-        return_value=httpx.Response(200, json=_fixture("ledger.json"))
-    )
-    router.post(f"{BASE}/iserver/secdef/search").mock(
-        return_value=httpx.Response(
-            200,
-            json=[
-                {"conid": "999", "symbol": "SPY", "description": "MEXI", "sections": STK},
-                {"conid": str(SPY), "symbol": "SPY", "description": "ARCA", "sections": STK},
-            ],
-        )
-    )
-    router.get(f"{BASE}/iserver/contract/{SPY}/info").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "con_id": SPY,
-                "symbol": "SPY",
-                "currency": "USD",
-                "valid_exchanges": "SMART,ARCA",
-            },
-        )
-    )
-    router.get(f"{BASE}/iserver/marketdata/snapshot").mock(
-        return_value=httpx.Response(
-            200,
-            json=[{"conid": SPY, "31": "C671.20", "84": "671.19", "86": "671.21", "6509": "DPB"}],
-        )
-    )
-    router.get(f"{BASE}/iserver/marketdata/history").mock(
-        return_value=httpx.Response(
-            200, json={"data": [{"t": 1791552600000, "o": 1, "h": 2, "l": 0.5, "c": 1.5, "v": 9}]}
-        )
-    )
-    router.post(f"{BASE}/iserver/contract/rules").mock(
-        return_value=httpx.Response(200, json=_fixture("rules.json"))
-    )
-    router.get(f"{BASE}/iserver/contract/{SPY}/algos").mock(
-        return_value=httpx.Response(200, json=_fixture("algos.json"))
-    )
-    router.get(f"{BASE}/contract/trading-schedule").mock(
-        return_value=httpx.Response(200, json=_fixture("trading_schedule.json"))
-    )
+    mock_read_path(router, base=BASE, account=ACCOUNT, accounts=accounts)
 
 
 @respx.mock

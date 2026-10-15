@@ -32,6 +32,7 @@ from .identity import resolve_identity
 from .redact import redact
 from .session import AlertHook, BrokerSession
 from .transport import Transport, build_transport, transport_refusal
+from .transport.gateway_login import LoginDriver
 from .transport.oauth import HTTP_OK, OAuthCredentials, OAuthSession
 
 log = get_logger("ibkr.preflight")
@@ -203,8 +204,13 @@ async def run_read_only(
     data_dir: Path | None,
     transport: Transport | None = None,
     alert: AlertHook | None = None,
+    login_driver: LoginDriver | None = None,
 ) -> PreflightReport:
-    """Walk the read path. Never raises for an expected failure: it reports it."""
+    """Walk the read path. Never raises for an expected failure: it reports it.
+
+    ``transport`` replaces the one the environment selects; ``login_driver`` replaces the
+    Gateway's headless browser inside the transport this builds.
+    """
     report = PreflightReport()
     ibkr = settings.ibkr
     account_id = env.ibkr_account_id.get_secret_value() if env.ibkr_account_id else ""
@@ -228,7 +234,9 @@ async def run_read_only(
         if transport is None:
             if data_dir is None and env.ibkr_transport == "gateway":
                 raise ObliskError("OBLISK_DATA_DIR must be set: the Gateway is installed there")
-            transport = build_transport(env, settings, data_dir=data_dir or Path())
+            transport = build_transport(
+                env, settings, data_dir=data_dir or Path(), login_driver=login_driver
+            )
     except ObliskError as exc:
         report.add(STEP_GUARD if "paper account" in str(exc) else STEP_TRANSPORT, False, str(exc))
         return report

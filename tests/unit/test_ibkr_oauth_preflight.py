@@ -364,3 +364,47 @@ async def test_the_report_never_prints_the_prepend_itself(
     assert env.ibkr_access_token_secret is not None
     assert env.ibkr_access_token_secret.get_secret_value() not in rendered
     assert CONSUMER_KEY not in rendered
+
+
+# ── the whole walk through the transport it builds itself (Session 4) ──
+
+
+async def test_a_live_oauth_walk_builds_its_own_transport(
+    respx_mock: Any,
+    make_env: Callable[..., Environment],
+    shipped_settings: ObliskConfig,
+    token_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Handshake, then the read path over the OAuth transport ``build_transport`` made; mocked
+    end to end, nothing injected."""
+    from read_path import mock_read_path
+
+    from obliskiq.ibkr.preflight import READ_STEPS, run_read_only
+
+    account = "U_LIVE_TEST"
+    for name, value in {
+        "OBLISK_IBKR_PROFILE": "live",
+        "OBLISK_IBKR_TRANSPORT": "oauth",
+        "OBLISK_IBKR_ACCOUNT_ID": account,
+    }.items():
+        monkeypatch.setenv(name, value)
+    env = make_env()
+    marketdata = shipped_settings.ibkr.marketdata.model_copy(
+        update={"snapshot_settle_delay_seconds": 0.0}
+    )
+    settings = shipped_settings.model_copy(
+        update={"ibkr": shipped_settings.ibkr.model_copy(update={"marketdata": marketdata})}
+    )
+    route = respx_mock.post(token_url).mock(side_effect=_ibkr_answers)
+    listed = [{"id": account, "accountId": account, "currency": "EUR", "type": "INDIVIDUAL"}]
+    mock_read_path(
+        respx_mock, base=ORIGIN + shipped_settings.ibkr.base_path, account=account, accounts=listed
+    )
+    report = await run_read_only(env, settings, data_dir=None)
+    assert report.ok, report.render()
+    assert [step.name for step in report.steps] == [*OAUTH_STEPS, *READ_STEPS]
+    assert route.call_count == 2, "the handshake, then the transport's own exchange"
+    signed = [call.request for call in respx_mock.calls if "iserver" in str(call.request.url)]
+    assert signed
+    assert all("oauth_signature" in request.headers["Authorization"] for request in signed)

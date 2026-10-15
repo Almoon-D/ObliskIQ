@@ -708,3 +708,46 @@ async def test_an_injected_download_client_is_used(transport_for, monkeypatch, t
         transport._download_client = client
         await transport.prepare()
         assert seen["client"] is client
+
+
+# ── the read-only preflight through the transport it builds itself (Session 4) ──
+
+
+async def test_the_preflight_builds_and_logs_in_its_own_gateway(
+    transport_for, shipped_settings, tmp_path, monkeypatch
+):
+    from read_path import mock_read_path
+
+    from obliskiq.env import Environment
+    from obliskiq.ibkr.preflight import READ_STEPS, run_read_only
+
+    # Installs the fakes (install, process, Java, the session probe); the walk builds its own
+    # transport. The probe answers: logged out, then logged in after the login, and still
+    # logged in when the session opens.
+    transport_for(FakeDriver([]), [False, True, True])
+    for name, value in {
+        "OBLISK_IBKR_PROFILE": "paper",
+        "OBLISK_IBKR_ACCOUNT_ID": "DU_PAPER",
+        "OBLISK_IBKR_TRANSPORT": "gateway",
+        "OBLISK_IBKR_GATEWAY_USERNAME": "paper-user",
+        "OBLISK_IBKR_GATEWAY_PASSWORD": "paper-pass",
+    }.items():
+        monkeypatch.setenv(name, value)
+    marketdata = shipped_settings.ibkr.marketdata.model_copy(
+        update={"snapshot_settle_delay_seconds": 0.0}
+    )
+    settings = shipped_settings.model_copy(
+        update={"ibkr": shipped_settings.ibkr.model_copy(update={"marketdata": marketdata})}
+    )
+    driver = FakeDriver([LoginOutcome(True, True, "logged in")])
+    base = shipped_settings.ibkr.gateway.local_address + shipped_settings.ibkr.base_path
+    with respx.mock(assert_all_called=False) as router:
+        mock_read_path(router, base=base, account="DU_PAPER")
+        report = await run_read_only(
+            Environment(_env_file=None), settings, data_dir=tmp_path, login_driver=driver
+        )
+    assert report.ok, report.render()
+    assert [step.name for step in report.steps] == list(READ_STEPS)
+    assert len(driver.calls) == 1, "the injected driver logged the built Gateway in"
+    assert FakeProcess.instances[-1].starts == 1
+    assert FakeProcess.instances[-1].stops == 1, "the Gateway this run started is stopped"
