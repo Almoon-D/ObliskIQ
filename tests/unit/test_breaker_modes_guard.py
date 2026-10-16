@@ -25,7 +25,7 @@ from obliskiq.domain.orders import (
 from obliskiq.errors import WriteRefusedError
 from obliskiq.ibkr.orders import PlacementStatus
 
-_NOT_PAPER = ["U1234567", "du1234567", " DU1234567", "XDU1234567", "D-U1234567", "F1234567", "UDU1"]
+_NOT_PAPER = ["U_LIVE_TEST", "dutest1", " DUTEST1", "XDUTEST1", "D-UTEST1", "F_LIVE_TEST", "UDU1"]
 
 
 async def _working_sell(rig: Any) -> tuple[Any, str]:
