@@ -56,16 +56,12 @@ def test_the_collar_is_the_base_for_a_real_time_quote_and_widens_with_the_delay(
     quotes: QuotePolicy, shipped_settings: ObliskConfig
 ) -> None:
     collar = shipped_settings.execution.collar
-    assert quotes.collar_fraction(sigma=None, delay_seconds=0) == Decimal(
-        repr(collar.base_fraction)
-    )
+    assert quotes.collar_fraction(sigma=0.3, delay_seconds=0) == Decimal(repr(collar.base_fraction))
     year = collar.sessions_per_year * collar.session_hours * 3600
     expected = collar.base_fraction + collar.sigma_multiplier * 0.3 * math.sqrt(1200 / year)
     widened = quotes.collar_fraction(sigma=0.3, delay_seconds=1200)
-    assert widened is not None
     assert float(widened) == pytest.approx(expected)
-    assert widened > quotes.collar_fraction(sigma=0.3, delay_seconds=60)  # type: ignore[operator]
-    assert quotes.collar_fraction(sigma=None, delay_seconds=1200) is None
+    assert widened > quotes.collar_fraction(sigma=0.3, delay_seconds=60)
 
 
 def test_the_collar_bounds_how_far_a_limit_reaches_through_the_reference(
@@ -129,9 +125,7 @@ def test_a_collar_past_its_ceiling_is_refused(
     implausible = quotes.within_collar(terms(limit="100.5"), DELAYED, sigma=50.0)
     assert not implausible.ok
     assert "ceiling" in implausible.reason
-    fraction = quotes.collar_fraction(sigma=50.0, delay_seconds=1200)
-    assert fraction is not None
-    assert float(fraction) > ceiling
+    assert float(quotes.collar_fraction(sigma=50.0, delay_seconds=1200)) > ceiling
 
 
 def test_a_delayed_quote_claiming_no_delay_still_needs_a_sigma(quotes: QuotePolicy) -> None:

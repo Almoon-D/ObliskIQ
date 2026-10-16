@@ -82,7 +82,6 @@ def stock_rule(shipped_settings: ObliskConfig) -> RealtimePreferred:
 
 def _band(settings: ObliskConfig, delay: int) -> tuple[Decimal, Decimal]:
     fraction = QuotePolicy(settings).collar_fraction(sigma=SIGMA, delay_seconds=delay)
-    assert fraction is not None
     return REFERENCE * (1 - fraction), REFERENCE * (1 + fraction)
 
 

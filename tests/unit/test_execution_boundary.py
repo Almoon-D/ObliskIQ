@@ -764,6 +764,27 @@ async def test_an_intent_that_expires_during_the_lookup_is_not_sent(order_rig: A
     assert await _state(order_rig, stored) is IntentState.EXPIRED
 
 
+async def test_a_retry_that_expires_during_the_lookup_stays_submitted(order_rig: Any) -> None:
+    order_rig.broker.lose_next_answer = True
+    stored = await order_rig.intent()
+    await order_rig.boundary.place(stored.intent.intent_id, await order_rig.clear(stored.intent))
+    retry = await order_rig.clear(stored.intent)
+    find = order_rig.client.find
+
+    async def find_then_expire(*args: Any, **kwargs: Any) -> Any:
+        found = await find(*args, **kwargs)
+        order_rig.clock.advance(6 * 3600)
+        return found
+
+    order_rig.broker.orders.clear()  # the lost placement never reached the book: nothing found
+    order_rig.client.find = find_then_expire
+    with pytest.raises(WriteRefusedError) as refused:
+        await order_rig.boundary.place(stored.intent.intent_id, retry)
+    assert refused.value.code == "intent_expired"
+    assert await _state(order_rig, stored) is IntentState.SUBMITTED  # it may exist: look it up
+    assert len(order_rig.broker.placements) == 1
+
+
 async def test_a_placements_warning_is_not_confirmed_once_the_intent_has_expired(
     order_rig: Any,
 ) -> None:
@@ -776,6 +797,8 @@ async def test_a_placements_warning_is_not_confirmed_once_the_intent_has_expired
     assert "intent_expired" in result.detail
     assert not any(confirmed for _, confirmed in order_rig.broker.replies)
     assert order_rig.broker.live() == []
+    # Sent but declined, and seen gone: rejected, as any declined placement.
+    assert await _state(order_rig, stored) is IntentState.REJECTED
 
 
 async def test_a_modifys_warning_is_not_confirmed_once_the_intent_has_expired(

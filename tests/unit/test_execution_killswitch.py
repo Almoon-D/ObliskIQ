@@ -284,6 +284,38 @@ async def test_a_hung_store_delays_no_cancel_of_a_buy_and_is_waited_on_once(
     assert reads == [True]  # the buy was already cancelled; one timeout, then the broker decides
 
 
+async def test_after_a_store_failure_a_pass_keeps_its_sells_and_the_next_reads_again(
+    order_rig: Any,
+) -> None:
+    sells = [
+        (
+            await _place(
+                order_rig,
+                terms(side=OrderSide.SELL),
+                role=IntentRole.EXIT,
+                reason="target",
+                effect=RiskEffect.ADDS,
+            )
+        )[1]
+        for _ in range(2)
+    ]
+    real = order_rig.kill._worker
+    failures = [StoreError("the store blinked")]
+
+    class Blink:
+        async def run(self, function: Any, *args: Any, **kwargs: Any) -> Any:
+            if failures:
+                raise failures.pop()
+            return await real.run(function, *args, **kwargs)
+
+    order_rig.kill._worker = Blink()
+    first = await order_rig.kill.sweep(order_rig.client)
+    assert first.cancelled == ()
+    assert set(first.kept) == set(sells)  # classed from the broker after the failure (D48)
+    second = await order_rig.kill.sweep(order_rig.client)
+    assert set(second.cancelled) == set(sells)
+
+
 async def test_the_sweep_works_while_the_gate_refuses_everything(order_rig: Any) -> None:
     stored, buy_id = await _place(
         order_rig, terms(), role=IntentRole.ENTRY, reason="entry", effect=RiskEffect.ADDS
