@@ -12,25 +12,85 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
-| 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | next | |
-| 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest | planned | |
-| 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots, `es` tax policy, TWR | planned | |
-| 8 | Universe and market-data collectors | global universe, stock candidates, venue profiles, eligibility policy, collectors, research history | planned | |
-| 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, bond rule, swap partners, vehicle selector | planned | |
-| 10 | Macro, positioning, insiders and events | point-in-time macro, COT, Form 4, Polymarket, Kalshi, GDELT, RSS, incident feeds | planned | |
-| 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve | planned | |
-| 12 | Engines and gates | option surface, options sleeve, fx, commodity, risk engine, gates | planned | |
-| 13 | Core engine | pre-registration, fixed risk budgeting, environments, tax-aware trend tilt, rebalancing | planned | |
-| 14 | Core backtest and verdict | after-tax walk-forward harness, single verdict run, promoted variant | planned | |
-| 15 | Satellite engine | Hunter components, measured independence, entry rules, lifecycle, triggers, pattern registry | planned | |
-| 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | planned | |
-| 17 | Decision layer | expression selection, two-regime sizing, whole-book risk, breakers, inertia, intents | planned | |
-| 18 | Scoreboard, patterns, capital and promotion | TWR attribution, TCA, grading, calibration, shadow patterns, capital allocation, promotion | planned | |
+| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
+| 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | next | |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | planned | |
+| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
+| 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
+| 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
+| 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
+| 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | planned | |
+| 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | planned | |
+| 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
+| 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
+| 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
+| 13 | Core engine | the variants 4c registered, risk budgeting where they need it, tax-aware trend tilt, rebalancing | planned | |
+| 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
+| 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series | planned | |
+| 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents | planned | |
+| 18 | Scoreboard, patterns, capital and promotion | TWR attribution, TCA, grading, calibration, twins and monitoring, capital by evidence, promotion | planned | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | planned | |
+| 19a | Capacity and scale | bonds, baskets, mutual funds, capacity limits, venues and currencies, tax at scale, every activation condition | planned | |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | planned | |
-| 21 | Research: first pattern batch | pre-registered tests of §5.9; passes go to shadow | any time after 18 | |
+| 21 | Research: second batch | H3, H6, H9, the Hunter's components and agreement rule, batch-1 candidates not chosen | any time after 4d (Hunter parts after 15) | |
+
+There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Design review (owner request, 2026-10-16, v0.5.1)
+
+A red-team of the plan against the code and the legacy evidence, challenged twice by two other
+reviewers; process and documents only, no runtime code changes. DECISIONS D60–D71.
+
+**Decided.**
+- The objective (D60): the annualised after-tax log growth of liquidation value within the
+  owner's drawdown limit, tax simulated as it arises and the rest paid at liquidation; an
+  accumulating global equity ETF bought and held and a global 60/40 scored under the same rule,
+  as references and a possible outcome, not the destination. Tax is a cost, not a principle.
+  Research is separate from authorisation: 4c reports a frontier and the owner's drawdown
+  tolerance picks the variant before Session 13; the aspiration (30–50 % a year or more) is
+  reported as a distance, never a gate.
+- Evidence first (D61): Sessions 4b (research harness), 4c (core verdict) and 4d (one selection
+  hypothesis) before Session 5; T1 on the deployment machine in parallel; Session 14 absorbed
+  into 4c; Session 13 builds 4c's variant; Session 19a builds what pays at larger capital
+  (owner: implemented before 1.0.0); Session 21 is the second research batch. No engine deleted,
+  no capital budget moved before evidence.
+- The decision rule (D62): not evaluable; sufficient (L ≥ θ); insufficient (U < θ, negative
+  when U < 0); inconclusive (L < θ ≤ U, positive when L > 0) — exhaustive and mutually
+  exclusive; power reported beside it.
+- The protocol (D63): pre-registered combinations with a mechanism, tested beside their
+  components and counted; dependence explicit; minimum samples in effective observations; a
+  break-even cost multiplier against a declared cost uncertainty.
+- Research code (D64): the harness under every rule of `src/`; exploration outside the coverage
+  floor and never evidence.
+- Capital follows evidence; live results are monitored through a twin with alpha-spending
+  boundaries, and a breach reduces risk rather than declaring a verdict (D65).
+- Activation conditions instead of NAV thresholds; an absolute position floor (D66).
+- Gap-aware protective exits and sizing, attached orders probed, reconciliation grace; no
+  market-order escalation (D67).
+- T1 before Session 6; the TWS API with IBC as the fallback if it fails (D68).
+- Gaps fixed by later sessions: European commissions (4b), currency-gain tax (7), hedged share
+  classes and look-through (8, 9, 17), lite's caps restated per sleeve (17) (D69).
+- LLM-derived evidence is forward only, so a minimal EventExtractor starts H7's clock in
+  Session 10 (D70); the first research batches (D71).
+- Session 19a is kept at the owner's request against two reviewers' proposal to build each
+  capability when it first activates: built last, behind its conditions, in a fixed order
+  (D66).
+
+**Withdrawn from the review's first rounds.** Cutting components on the strength of the legacy
+record (absence of evidence, not evidence against); "a weekly 188-name panel calibrates
+quickly" (it counted predictions; n_eff decides); a fixed "costs doubled" check and a
+six-of-seven-days pass mark for T1 (no stated uncertainty or failure rate behind them); VIX as
+a gate for three-to-six-month and single-name options; tax minimisation as a principle.
+
+**SESSION_PROMPTS edits.** §A.5 (T1) added; §A.3, §B, §C and §E follow the new sequence;
+Sessions 4b, 4c, 4d, 19a added; Sessions 5–13 and 15–21 edited as listed in D61–D71; Session 14
+removed.
+
+**Owner, before Session 13.** A point on Session 4c's frontier: the drawdown tolerance, the
+probability of breaching it and the horizon (MASTER_PLAN §11). No research session waits for
+it.
 
 ### Session 4a — Pre-trade rails (2026-10-16, v0.5.0)
 
@@ -438,48 +498,61 @@ settles it.
 | Item | Added | Settled by |
 |---|---|---|
 | IBKR exchange codes → venues (23 codes in `ibkr_exchanges`, including `FTA`, `CDE`, `AMEX`, `BATS`, `LSEETF`) | 2 | 8 (conids) |
-| Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | first session with a working login |
-| SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | first session with a working login |
-| B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | first session with a working login |
-| XEUR session hours versus single-stock option hours (options use `common_windows`) | 2 | first session with a working login |
-| IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | first session with a working login |
+| Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | T1 or the first command list after it |
+| SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | T1 or the first command list after it |
+| B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | T1 or the first command list after it |
+| XEUR session hours versus single-stock option hours (options use `common_windows`) | 2 | T1 or the first command list after it |
+| IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | T1 or the first command list after it |
 | Order window 30 min after the open and 15 before the close | 2 | 18 (TCA) |
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
 | Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`) | 2 | library upgrade; 6 (digest) |
-| IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | first session with a working login |
-| US stock, US option and Eurex option commission schedules | 2 | the paper order test's first run (6, 19), 18 (TCA) |
-| US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 9 (bond rule) |
+| IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | T1 or the first command list after it |
+| US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
+| US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
 | Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
-| Client Portal Gateway headless paper login on the deployment machine (failed in the cloud container, docs/knowledge/ibkr.md) | 3 | 6 (machine run), 19 |
-| `obliskiq preflight --read-only` end to end on paper (every step after the transport) | 3 | first session with a working login |
-| Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | first session with a working login |
-| One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | first session with a working login |
-| Snapshot field ids from IBKR's table: 7633 strike IV, 7638 open interest, 7087 historical vol, 7310 theta, 7311 vega | 3 | first session with a working login |
-| `/iserver/secdef/search` without `secType` still returns sections | 3 | first session with a working login |
-| `/contract/trading-schedule` shape, holidays omitted, and agreement with the calendars (closes the Session 2 phase-window, SGX, B3 and XEUR rows) | 3 | first session with a working login |
-| `/iserver/auth/ssodh/init` with `publish`/`compete` as query parameters through the Gateway (lite used them over OAuth) | 3 | first session with a working login |
+| Client Portal Gateway headless paper login on the deployment machine (failed in the cloud container, docs/knowledge/ibkr.md) | 3 | T1 |
+| `obliskiq preflight --read-only` end to end on paper (every step after the transport) | 3 | T1 or the first command list after it |
+| Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | T1 or the first command list after it |
+| One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | T1 or the first command list after it |
+| Snapshot field ids from IBKR's table: 7633 strike IV, 7638 open interest, 7087 historical vol, 7310 theta, 7311 vega | 3 | T1 or the first command list after it |
+| `/iserver/secdef/search` without `secType` still returns sections | 3 | T1 or the first command list after it |
+| `/contract/trading-schedule` shape, holidays omitted, and agreement with the calendars (closes the Session 2 phase-window, SGX, B3 and XEUR rows) | 3 | T1 or the first command list after it |
+| `/iserver/auth/ssodh/init` with `publish`/`compete` as query parameters through the Gateway (lite used them over OAuth) | 3 | T1 or the first command list after it |
 | `ssoExpires` and the daily reset as seen by the keepalive | 3 | 6 |
 | The daily bar's `t` stamp per venue (the history window is filtered on the UTC date of the bar start; a venue stamping before UTC midnight would shift by a day) | 3 | 8 |
-| Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | first session with a working login |
-| Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | the paper order test's first run (6, 19) |
-| The cOID: maximum length, `order_ref` in live orders and trades, the duplicate-cOID refusal and its window | 4 | the paper order test's first run (6, 19) |
-| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | the paper order test's first run (6, 19), 5 |
-| Routing by `conidex` for a non-SMART venue | 4 | the paper order test's first run (6, 19) |
+| Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | T1 or the first command list after it |
+| Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | T1 (the paper order test) |
+| The cOID: maximum length, `order_ref` in live orders and trades, the duplicate-cOID refusal and its window | 4 | T1 (the paper order test) |
+| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | T1 (the paper order test), 5 |
+| Routing by `conidex` for a non-SMART venue | 4 | T1 (the paper order test) |
 | Currency conversion fields `isCcyConv` and `fxQty` (the reference's prose says `fxQTY`) | 4 | 5 |
-| What a cancel of an order that has just filled answers | 4 | the paper order test's first run (6, 19) |
-| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | the paper order test's first run (6, 19), 5 |
-| Whether a `/tickle` between a warning and its answer invalidates the warning | 4 | the paper order test's first run (6, 19) |
-| `obliskiq preflight --paper-order-test` end to end: identity, rules, algos, quote, whatif, place, replies, the cOID listed, status, cancel; record the shapes in docs/knowledge/ibkr-orders.md | 4a | 6 (machine run), 19 |
-| The skeleton allowlist's conids: EXV1 89005163 on IBIS, FCX 8158 on NYSE (the paper order test resolves them) | 4a | the paper order test's first run (6, 19); 8 |
-| Whether a whatif registers its cOID (the gate previews with its own) | 4a | the paper order test's first run (6, 19) |
-| Whatif margin fields on a paper margin account, and the currency in its amount strings | 4a | the paper order test's first run (6, 19) |
+| What a cancel of an order that has just filled answers | 4 | T1 (the paper order test) |
+| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | T1 (the paper order test), 5 |
+| Whether a `/tickle` between a warning and its answer invalidates the warning | 4 | T1 (the paper order test) |
+| `obliskiq preflight --paper-order-test` end to end: identity, rules, algos, quote, whatif, place, replies, the cOID listed, status, cancel; record the shapes in docs/knowledge/ibkr-orders.md | 4a | T1 |
+| The skeleton allowlist's conids: EXV1 89005163 on IBIS, FCX 8158 on NYSE (the paper order test resolves them) | 4a | T1 (the paper order test); 8 |
+| Whether a whatif registers its cOID (the gate previews with its own) | 4a | T1 (the paper order test) |
+| Whatif margin fields on a paper margin account, and the currency in its amount strings | 4a | T1 (the paper order test) |
 | How long the positions read lags a fill; whether the trades lag the live orders' `filledQuantity` | 4a | 5 (stop-limit tests) |
 | The live orders show a modify or a cancel at once (the exit coordinator clears the exit on the next read) | 4a | 5 (stop-limit tests) |
 | Positions closed during the day listed at zero | 4a | 5 |
+| IBKR's attached orders: an entry with a child stop-limit linked by `parentId`, accepted and linked | review | 5 |
+| The lag between a fill and the positions and trades reads, for the reconciliation grace period | review | 5 |
+| A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | 5 |
+| A fresh unattended Gateway login after IBKR's daily reset on the machine | review | T1 |
 
 ## Follow-ups
 
+- **Owner, before Session 13:** choose a point on Session 4c's frontier — the drawdown
+  tolerance, the probability of breaching it, the horizon — recorded in DECISIONS (D60).
+  Before Session 10: an LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
+  limit for protective exits (off by default, D67), buying option-surface history for H8
+  (D71).
+- Session 4b: European commission rows (Xetra, LSE, Euronext, Borsa Italiana, SIX) so the cost
+  model prices UCITS orders and shadow fills them (D69); the tax engine moves here from
+  Session 7.
+- Session 5: the executor gives the cost model the listing venue, never `SMART` (D67).
 - Session 5: `holding_assignments` holds the registry and the gate refuses a conid held without a
   sleeve; reconciliation registers what the bot did not open as `unmanaged`, and the executor
   assigns a new holding to its sleeve on its first fill (until then the next order on it is
@@ -527,9 +600,10 @@ settles it.
   failures the plan names.
 - **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
   the live account's, D42). Its login did not complete from a cloud container (most likely the
-  outbound address changing per connection), so the first live run is on the deployment
-  machine (Session 6/19 checks it first); until then sessions build against fixtures. If the
-  login fails there too, the fallback is a daily manual login.
+  outbound address changing per connection), so the first live run is T1 on the deployment
+  machine (SESSION_PROMPTS §A.5), beside Sessions 4b–4d; until then sessions build against
+  fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
+  and a daily manual login (D68).
 - Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
   failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the
   keepalive repair once it passes and fail reads fast, without a new alert, before then.

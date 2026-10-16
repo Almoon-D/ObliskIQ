@@ -51,8 +51,8 @@ Trend has the stronger evidence (Moskowitz, Ooi & Pedersen 2012); bands-only is 
 
 Rejected: adding to long options after the move confirms, which pays a higher premium for the
 same convexity, and delayed quotes for options, whose wide spreads make stale mids misprice
-(MASTER_PLAN §4, lines 163 and 168). Pyramiding is for shares only; stocks, ETFs, funds and
-bonds accept delayed quotes within a maximum age.
+(MASTER_PLAN §4, the rows on adding to long options and on delayed quotes). Pyramiding is for
+shares only; stocks, ETFs, funds and bonds accept delayed quotes within a maximum age.
 
 ### D7 · Bonds by a computed rule; swap partners on a different index (§4, §5.3, §5.16)
 
@@ -933,3 +933,261 @@ contract's size increment at `limit_offset_fraction` (5 %) below the bid rounded
 contract's tick, and counts a US stock refused by the cash check (`currency_not_held`) when the paper
 account holds no dollars as the expected outcome. Its report masks the account and prints no balance
 or position.
+
+## Design review (owner request, 2026-10-16)
+
+A red-team of the plan against the code and the legacy evidence, challenged twice by two other
+reviewers. Nothing in the repository measures an edge yet: the inherited verdicts concern other
+specifications (v1 and v1.1: momentum on 102 US large caps with a regime overlay, 2016–2026,
+`legacy/old/ObliskIQ/docs/STRATEGY_V1_1_VERDICT.md`), the Hunter's zero firings were a data gap
+by the legacy's own account (`legacy/old/ObliskIQ/docs/ASYMMETRY_HUNTER.md` §9), and the purged
+pattern library is unverified, not false (D14). The entries below therefore separate defects
+found in the repository from hypotheses that need evidence, and keep the system's ambition.
+
+### D60 · The objective: after-tax log growth under a drawdown limit (§1)
+
+The system maximises the long-run growth of after-tax wealth. The primary statistic is the
+annualised log growth of the account's **liquidation value**, net of costs, subject to a limit
+on the peak-to-trough drawdown of mark-to-market NAV, expressed as a largest acceptable
+probability of breaching it. **Tax is simulated as it arises**: every realised gain or loss goes
+through the lot engine (FIFO, the two-month rule, offsets, carry-forward), each tax year's tax
+is paid out of the portfolio at the profile's payment date in the following year, and
+withholding on income is taken when the income is received; at the end of the horizon the
+remaining positions are sold and the tax on that sale is paid. Rotation therefore pays its tax
+when it happens, and deferral keeps only the benefit it really has. Distributions are compared
+by their median log growth under a block bootstrap, with the 5th percentile of terminal wealth
+reported beside it; the drawdown limit filters candidates rather than entering the score. Two
+references are scored under the same rule: a global accumulating UCITS equity ETF bought and
+held, and a global 60/40. They are yardsticks and a possible outcome, never the destination: the
+system keeps its aim of finding asymmetric opportunities. Tax is a cost inside the simulation,
+not a principle; the test decides when realising a gain pays.
+
+**Research is separate from authorisation.** No research session waits for the owner's numbers:
+Session 4c reports a frontier — for each drawdown limit and probability on a pre-registered
+grid, the variant with the highest median after-tax log growth that respects it, and its outcome
+against the equity reference. Choosing the variant that receives capital is the owner's
+authorisation: the owner's drawdown tolerance picks a point on the frontier, recorded here
+before Session 13 builds it. The owner's stated aspiration, relayed on 2026-10-16, is 30–50 % a
+year or more — an aspiration, not a promise and not a gate; reports show each variant's distance
+from it. For scale: with 40 % volatility, 30 % compound growth needs an arithmetic mean near
+38 % a year, which no documented premium approaches; reaching it depends on a selection edge
+still to be found and on concentration the drawdown tolerance must allow.
+
+Evidence: Session 13's gate compared the core with a 60/40 on Sharpe and drawdown, which an
+unlevered variant can pass while compounding less than the equity reference; an unlevered risk
+balance weights by risk, not by growth (two assets of 16 % and 5 % volatility at equal risk hold
+about 24 % equity). Rejected: mean terminal wealth (dominated by its tails); Sharpe against the
+60/40 as the gate; after-tax wealth without liquidation (it counts a deferred tax as a gain);
+deferring all tax to the horizon (it would hide rotation's tax cost); minimising realised gains
+as a rule of its own; blocking research on the owner's risk numbers.
+
+### D61 · Evidence first: the research track and the session sequence (§10)
+
+Sessions 4b (research harness), 4c (the core verdict) and 4d (one selection hypothesis) run
+before Session 5, and the owner runs T1 on the deployment machine in parallel (D68). A historical
+test needs none of Sessions 5–12, so waiting for them delayed the result that decides what to
+build. Session 14 is absorbed into 4c: work an earlier entry gives to Session 14 (D30's inference
+keys, D31's pricing of both legs) belongs to 4c, and D9's benchmark of 3.14t is dropped because
+no decision depends on it (standard CPython stays). Session 13 builds the variant the owner picks from 4c's frontier.
+Session 19a builds what pays only at larger capital (D66). Session 21 is the second research
+batch. Session 5 runs as written plus D67's additions: it is independent of the strategy, and
+any outcome that trades US instruments or holds shares with stops needs its currency manager and
+protective exits. No engine is deleted and no capital budget (MASTER_PLAN §11 row 2) moves before
+evidence exists; Sessions 8–18 build what a registered hypothesis or a safety rule consumes and
+put the rest behind activation conditions (D66). Rejected: cutting engines on the strength of
+the legacy record, which is absence of evidence about them, not evidence against them.
+
+### D62 · The decision rule for a pre-registered test (§5.9)
+
+A test estimates one effect β, its pre-registered primary metric (net of costs and tax), with a
+two-sided interval [L, U] at level 1 − 2α, α = 0.05 by default, Bonferroni-adjusted across the
+tests of its confirmation run. θ > 0 is the smallest net effect worth the layer's added risk and
+complexity, stated with its justification in the pre-registration, which the owner can amend
+before it merges; the merge fixes it. Before inference the data must pass the pre-registered
+adequacy checks (point in time, coverage, survivorship measured); if they fail, the outcome is
+**not evaluable** and nothing is concluded. Otherwise exactly one of:
+
+- **sufficient** — L ≥ θ: an effect worth having is shown;
+- **insufficient** — U < θ: an effect worth having is ruled out (labelled *negative* when U < 0);
+- **inconclusive** — L < θ ≤ U (labelled *positive* when L > 0, *sign uncertain* otherwise).
+
+The three are exhaustive and mutually exclusive for any L ≤ U. Power is a label, not an outcome:
+the pre-registration states the power to detect θ (target 0.8) and the effect detectable at that
+power; an inconclusive result under low power is reported as such and never read as evidence
+against. Actions: sufficient → shadow, then an exploration budget (D65); inconclusive positive →
+shadow at zero weight, forward evidence pooled by the pre-registered method; other inconclusive →
+archived, or collected forward when that is cheap; insufficient → retired with its record; not
+evaluable → data work or archived. Rejected: categories that overlapped or left gaps (an interval
+above zero whose estimate is below θ fitted none or two of the earlier ones), a separate
+"anti-predictive" outcome (it is a label of insufficient), and reading "detectable effect above θ"
+as untestable (it means low power for θ; a larger effect can still show).
+
+### D63 · How a test is run: protocol, combinations, dependence and robustness (§5.9)
+
+Each batch is pre-registered in its own PR (AGENTS.md session workflow) from
+`research/preregistrations/TEMPLATE.md`: mechanism, universe, data and their point-in-time status,
+primary metric, horizon, θ, power, the adjustment, robustness checks and the trial budget.
+Exploration runs on a development sample and records every trial in the trial registry; at most
+the pre-registered number of candidates goes to one confirmation run on a locked sample (a later
+period and, where data allow, another region), and every trial counts in the deflated Sharpe.
+
+**Combinations.** A combination is tested when it is pre-registered with the mechanism that makes
+the interaction matter, beside its components on the same sample, and counted as a trial; it is
+never found by search. The Hunter's k-of-n agreement is such a combination and is tested as one,
+beside its components. Rejected: requiring each component to pass before its combination is
+tested, which could discard an edge that exists only conditionally.
+
+**Dependence.** Cross-sectional effects are a monthly series (Fama–MacBeth) with Newey–West lags
+at least the horizon; events are clustered by date; intervals come from a block bootstrap. A
+minimum sample is stated in effective observations, not counts: n predictions per period whose
+outcomes correlate on average by ρ carry about n_eff = n / (1 + (n − 1)ρ) per non-overlapping
+period (188 weekly names at ρ = 0.2 carry about five; at ρ = 0.05, about eighteen), with ρ
+estimated from history by the harness before Session 18 fixes any minimum. The earlier claim
+that a weekly 188-name panel would calibrate quickly is withdrawn: it counted predictions.
+
+**Robustness.** The sign holds in every pre-registered subperiod; a placebo (the signal lagged past
+its horizon, or random event dates) fails; the break-even cost multiplier — the factor on costs at
+which the estimate falls to θ — is reported and must exceed the cost uncertainty the
+pre-registration declares (the friction tiers in `costs.yaml` are labelled assumptions, so by
+default the next tier up; measured costs use their transaction-cost interval). Rejected: a fixed
+"costs doubled" check, whose factor stood for no stated uncertainty.
+
+### D64 · Research code: one harness under the full rules; exploration outside (AGENTS.md)
+
+Code whose output can move capital lives in `src/obliskiq/research/` under every rule of `src/`
+(strict types, import contracts, the coverage floor), with tests of data correctness (units, dates,
+release dates, duplicates), point in time (a test perturbs every observation after `as_of` and finds
+every output unchanged), computation (hand-computed fixtures for the metrics, tax, costs,
+intervals, power and n_eff) and reproducibility (input hashes and seeds in every report).
+Exploratory scripts live in `research/explore/`, outside the coverage floor, and are never
+evidence: only a run of the harness on a merged, locked pre-registration counts. Rejected:
+excluding research from the coverage floor wholesale, which would also have dropped the tests that
+keep its numbers right.
+
+### D65 · Capital follows evidence; live results are monitored, not used as proof (§5.19)
+
+A live record confirms a moderate edge only slowly (t ≈ IR·√years: about 16 years at an
+information ratio of 0.5 for t = 2), so a layer's capital follows its research outcome (D62) and
+live results serve as a monitor. A layer earns an exploration budget only with a sufficient
+outcome, within the owner's ceiling; its size is the owner's tolerance for a bet not yet confirmed
+live, a risk decision recorded as such. An increase needs the pre-registered pooled re-test
+(history plus the live twin) to remain sufficient, and an owner command.
+
+Each active layer has a **twin**: the same signals on the same dates, simulated with the cost
+model. The live-minus-twin gap measures implementation and cost; the twin against the backtest's
+predictive distribution for the elapsed time measures decay or chance. Both are reviewed monthly
+from activation against one-sided boundaries whose false-alarm probability over the planned looks
+is held at the pre-registered level by an alpha-spending function. A gap beyond its boundary
+freezes the layer's new entries and opens an operational investigation; a twin below its boundary
+reduces the layer to shadow at zero weight and opens a research review; a layer is retired only by
+a new pre-registered test. Monitoring cannot tell decay from bad luck in a short sample, so it
+reduces risk and never declares a verdict. Replaces §5.19's step rule on the live lower confidence
+bound. Rejected: changing the statistical gate as if that created evidence; a sequential test on
+live P&L as the proof of skill.
+
+### D66 · Activation conditions and scale (§2, §5.3, §5.11)
+
+A capability runs when a condition computed from configuration holds, never above a NAV threshold
+key, as the bond rule already does: a satellite sleeve when its hypothesis is sufficient and its
+budget over the absolute position floor gives the pre-registered minimum of concurrent positions;
+the options sleeve when H8 (an option against a share with a stop, for a sufficient signal) is
+sufficient and the sleeve buys the pre-registered number of median premiums within the friction
+gate; an execution venue when a sufficient hypothesis selects instruments there, the permission is
+verified and its market-data cost stays within the pre-registered share of the expected benefit; a
+data source when a registered hypothesis, a component or a safety rule consumes it; an LLM role in
+shadow within its cost share of NAV, and live only with a sufficient H7. lite's
+`positions.min_size_pct_nav` becomes an absolute floor derived from commissions, as lite's own
+`option_sleeve.min_premium_base_currency` is (Session 17): a floor in percent of NAV caps a 20 %
+satellite at four positions at any capital. Capabilities that pay only at larger capital — direct
+bonds and bills, stock baskets, mutual funds, further venues and working currencies, capacity
+limits from average daily value, the upper tax brackets and foreign-asset reporting — are built in
+Session 19a, before the red-team, so 1.0.0 carries them (owner, 2026-10-16). The owner chose this
+over building each one when its condition first holds, which two reviewers proposed: an account
+that grows past a threshold should not wait for a build session. The cost is kept down by order —
+nothing at larger capital is built before the evidence-driven sessions — and by form: each
+capability sits behind its activation condition, stays off until it holds, and is held working by
+the NAV-ladder tests that show it turning on exactly when its condition holds. Within 19a the order
+is bonds and bills, mutual funds, capacity limits, tax at scale, venues and currencies, then
+baskets; a session that cannot finish them with quality splits under AGENTS.md.
+
+### D67 · Protective exits and sizing under gaps (§5.11, §5.12)
+
+A stop-limit becomes a limit order when it triggers; in a gap through its limit it does not fill, so
+the loss at the stop is not a maximum loss. Shares are sized by a **gap-adjusted loss**: the stop
+distance plus a pre-registered quantile of the instrument's overnight-gap distribution, wider across
+earnings dates (Sessions 11 and 17). The protective spec's limit offset follows the instrument's
+volatility and gap distribution rather than one fixed fraction (Session 5). A triggered stop that
+does not fill is repriced toward the bid in steps, each through the gate, which clears it as
+reducing risk. A limit deep enough to act as a market order is the owner's decision, off by
+default, and recorded here if taken. Session 5 probes IBKR's attached orders (a child stop-limit
+linked by `parentId`) on paper; if the Web API supports them, the clearance covers the entry and
+its stop as one package (an I1 and I5 decision for that session), closing the window between a fill
+and its stop. Reconciliation waits a configured grace period for IBKR's reporting lag before it
+calls drift, and the executor gives the cost model the listing venue, never `SMART` (Session 5).
+Rejected: escalating an exit to a market order (AGENTS.md's hard rule; the kill switch never
+liquidates, D48, and `flatten` is a separate command).
+
+### D68 · The deployment machine first (T1), and the transport's fallback (§5.12, §7)
+
+The owner runs T1 (SESSION_PROMPTS §A.5) on the deployment machine before Session 6: the Gateway
+installed, an unattended login on two different days (the second a fresh login after IBKR's daily
+reset), `obliskiq preflight --read-only`, then `--paper-order-test`, and the masked reports pasted
+into a short session that records them. Two days are the least evidence that the login works
+unattended and works again after a reset; the in-process re-login is Session 6's keepalive.
+Reliability is measured afterwards, over L1's ten sessions and L2's eight weeks, where no failure
+bounds the daily failure rate at about 30 % and 7.5 % (rule of three, 95 %), and every failed
+re-login alerts within one heartbeat: protective stops rest at the broker, so a lost session costs
+cycles, not protection. If the unattended login cannot complete on the machine, the owner chooses
+between a TWS API with IBC spike and a daily manual login. D15 rejected ib_async and TWS because
+they need an interactive login; the Client Portal Gateway needs one too (IBKR does not support
+automating it, `docs/knowledge/ibkr.md`), so that rejection rests on the REST surface and lite's
+verified port, and the alternative stays open. Rejected: a fixed six-of-seven-days pass mark,
+which tested no stated failure rate.
+
+### D69 · Gaps in configuration and tax (§5.3, §5.4, §5.16)
+
+- No commission schedule covers a European venue (`costs.yaml` has US shares and options, Eurex
+  options and bonds), so the cost model returns `no_schedule` for every UCITS core order and a
+  shadow fill refuses it (`execution/shadow.py`). Session 4b adds IBKR's schedules for the venues
+  the core's vehicles trade on, each with a source and `verify_live`.
+- Gains and losses on foreign-currency balances are not modelled. Session 7 keeps currency lots
+  under the TaxPolicy, with the Spanish treatment confirmed from an official source.
+- Currency-hedged share classes and look-through exposure (country, sector and currency of an
+  ETF's holdings) are undefined: Session 8 describes both, Session 9 ranks hedged classes as
+  distinct vehicles, Session 17's caps read look-through exposure. Whether a hedge inside a UCITS
+  share class fits the mandate is the owner's call (MASTER_PLAN §11).
+- lite's position caps were set for a mandate of 95 % stock selection and 5 % options; in a 70/20/5
+  book their meaning changes (a 25 % initial position exceeds a 20 % satellite). Session 17 restates
+  each against the sleeve it governs.
+
+### D70 · Evidence from an LLM-derived signal is forward only (§5.10)
+
+A model trained after a news item can carry what followed it, so an LLM-derived signal backtested
+on history before the model's training cutoff is contaminated (Glasserman & Lin 2023 measure this
+look-ahead bias in GPT sentiment). Only outputs produced live and stamped when produced count as
+evidence, so the clock that matters is calendar time. A minimal EventExtractor therefore starts in
+Session 10, with the first news collectors: one configured provider, the `ExtractedEvent` schema,
+outputs stamped and stored with the model id and prompt hash, a budget cap, and nothing that
+consumes them. H7's pre-registration (do extracted event features add to the price signal) merges
+before its first live run. Session 16 builds the rest of the layer on that stored series without
+breaking it; a change of model or prompt starts a new labelled segment. Without a configured
+provider key the extractor is queued and the clock starts when one exists. Every role is
+measurable for extraction quality by its evaluation set; none has a measured link to returns.
+Rejected: waiting for the whole LLM layer before the first stamped output.
+
+### D71 · The first research batches (§5.9)
+
+Batch 1 is the core verdict (4c) and one selection hypothesis (4d), chosen by a data audit among H1
+(cross-asset and country momentum through UCITS), H2 (insider-purchase clusters, SEC Form 4) and H4
+(a stock-level composite: nearness to the 52-week high, 12-1 momentum with a crash guard,
+profitability). The audit measures point-in-time coverage and the share of names lost to
+survivorship. Among candidates with adequate data the preference is H2, then H4, then H1, because
+the satellite's purpose is single-name asymmetry and H1 overlaps the core. H5 (whether a stop adds
+value to the chosen signal, Kaminski & Lo 2014) is that batch's registered secondary test. Batch 2
+(Session 21): H3 forced selling (spin-offs, index deletions), H6 conditioning the core's risk on the
+variance risk premium, the excess bond premium and trend, H9 hedging pressure in COT for commodity
+ETCs, the Hunter's components and their agreement rule, and the candidates batch 1 did not choose.
+H8 (an option against a share with a stop, for a sufficient signal) needs option-surface history:
+the chain collector stores it from Session 8, and buying history is the owner's decision. A
+VIX-based simulation is exploration only: VIX is a 30-day S&P 500 measure and represents neither
+three-to-six-month nor single-name options.
