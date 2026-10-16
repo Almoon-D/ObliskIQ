@@ -5,6 +5,61 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.5.0] - 2026-10-16
+
+Session 4a — Pre-trade rails. The pre-trade gate replaces Session 4's refuse-everything gate:
+no order reaches the broker unless every check passes, and every refusal carries a reason code.
+No IBKR call was made (the paper Gateway login does not complete from a cloud container); the
+paper order test is built and tested against the fake broker and queued VERIFY-LIVE.
+
+### Added
+
+- `execution/pretrade.py`: the gate, still the only issuer of a clearance. It works from the
+  stored intent and checks, in three stages that each report every failure: the intent and the
+  write asked for; the paper guard, the mode, the kill switch, the instrument, prohibited
+  products, buy-side eligibility (the mandatory close of an option on an ineligible ETP),
+  approval and the calendars' act-now view (an option also inside the windows its venues share,
+  date-critical inside its mandatory-close window); the broker reads, the quote policy and the
+  collar (a protective stop against its spec); and, in one store transaction with the
+  clearance, the holdings registry, no short (I2), the cash in the order's currency against
+  every open commitment and the floor, no borrowing by the whatif's own cost, and the caps. 42
+  reason codes (`Reason`), each tested with its positive control. A clearance carries the
+  order's notional and expires with the earliest quote it rests on.
+- Class by effect (I3): an order that reduces risk waives exactly the kill switch, the caps,
+  the order count, buy-side eligibility, the cash check and approval. An option close refused
+  for want of a real-time quote alerts the owner.
+- `execution/exposure.py`: the position (the lower of the broker's read and the store's after
+  every reported fill) and every sell that could still reach the broker, in any process.
+- `execution/exits.py`: the exit coordinator (I5). An exit's other checks pass before its
+  protective stop is cut; the stop is restored (modified back, or placed again) when the exit is
+  refused, cancelled or expires; a failed restore alerts and is retried.
+- `execution/flatten.py` and `obliskiq flatten --confirm`: closing orders for every managed
+  position, at the bid, through the coordinator; they pass with the kill switch on.
+- `execution/approvals.py` and `obliskiq approvals list|approve|reject`: the approval queue, off
+  by default, per sleeve (`execution.approval.sleeves`).
+- `execution/paper_test.py` and `obliskiq preflight --paper-order-test`: per configured
+  instrument, the contract confirmed by search, rules, algos, a quote, a whatif, then one buy
+  that cannot fill, its status, its replies and the cOID in the live orders, and a cancel.
+- `execution/account.py` (the gate's broker reads), `execution/instruments.py` (the instrument
+  directory and the prohibited categories), `execution/runtime.py` (the order path a command
+  opens).
+- `jurisdiction/eligibility.py`: the `EligibilityPolicy` protocol and the skeleton policy, which
+  `config/jurisdictions/es.yaml` selects until Session 8.
+- Migration `003_pretrade.sql`: `approvals` (append-only) and `stop_resizes`.
+- `config/defaults/instruments.yaml` (lite's `instruments` keys and `tenor.mandatory_close_trading_days`),
+  `config/defaults/eligibility.yaml` (the skeleton allowlist), and `execution.pretrade`,
+  `execution.approval`, `execution.flatten` and `ibkr.preflight.paper_order`.
+- The fake broker serves what the gate reads (session, accounts, positions, ledger, snapshots,
+  rules, algos, contract search); the order rig carries the gate over test instruments.
+
+### Changed
+
+- Policy factories take the configuration as well as the profile (`PolicyRegistry.resolve`).
+- The ledger's cash balances carry IBKR's rate to the base currency; a whatif names the currency
+  of its amounts.
+- An import contract keeps `jurisdiction` away from the broker, the network, the store and
+  execution.
+
 ## [0.4.0] - 2026-10-15
 
 Session 4 — Order path, kill switch and modes. Everything at and below the broker-write

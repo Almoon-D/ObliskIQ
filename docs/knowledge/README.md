@@ -43,8 +43,9 @@ the observation that settled it.
   Session 3's Gateway trial.
 - `ibkr-orders.md` — the order endpoints, the order body, the cOID, warnings and their message
   ids with the reply policy, answers and errors, live orders, status, trades, whatif and
-  cancel, as IBKR documents them and ibind implements them; live shapes join it with the paper
-  order test.
+  cancel, as IBKR documents them and ibind implements them, and what the pre-trade gate relies on
+  (the ledger's rates, whatif amounts, position and live-order lag); live shapes join it with the
+  paper order test.
 
 More files are added by the sessions that verify them (`ibkr-capabilities.md`,
 `macro-sources.md`, `tax-es.md`, …); none is written ahead of the evidence.

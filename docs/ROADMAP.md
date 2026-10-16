@@ -11,8 +11,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference, costs | done | v0.2.0 |
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
-| 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | next | |
-| 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | planned | |
+| 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
+| 5 | Execution mechanics | currency manager, pricing, resting stops, executor, reconciliation | next | |
 | 6 | Walking skeleton | service, cycles, static targets → intents → paper → reconcile → digest | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots, `es` tax policy, TWR | planned | |
 | 8 | Universe and market-data collectors | global universe, stock candidates, venue profiles, eligibility policy, collectors, research history | planned | |
@@ -31,6 +31,70 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 21 | Research: first pattern batch | pre-registered tests of §5.9; passes go to shadow | any time after 18 | |
 
 ## Session log
+
+### Session 4a — Pre-trade rails (2026-10-16, v0.5.0)
+
+**Landed.**
+- `execution/pretrade.py`: the pre-trade gate, the only issuer of a clearance, working from the
+  stored intent in three stages (local; broker reads; one store transaction with the clearance)
+  that each report every failure with a reason code (D54). Checks: the intent and the write asked
+  for, conversions (refused until Session 5), the paper guard, the mode, the kill switch, the
+  instrument, prohibited products, buy-side eligibility with the mandatory close, approval, the
+  calendars' act-now view (`tradability` with the order's conid; an option also inside
+  `common_windows` and date-critical inside its mandatory-close window), the positions, live
+  orders and trades, the quote policy and the collar (a protective stop: its spec), the holdings
+  registry, no short (I2), the cash in the order's currency against every open commitment and the
+  floor, no borrowing by the whatif's cost, and the caps per order, per 24 hours and in count. A
+  clearance carries its notional and expires with the earliest quote it rests on.
+- I2 (`execution/exposure.py`, D55), I3 (the waivers, D56) and I5 (`execution/exits.py`, D58): an
+  exit's other checks pass before its protective stop is cut; the stop is restored when the exit
+  is refused, cancelled or expires; a failed restore alerts and is retried at every `settle`.
+- `obliskiq flatten --confirm` (`execution/flatten.py`), `obliskiq approvals list|approve|reject`
+  (`execution/approvals.py`, migration `003_pretrade.sql`), `obliskiq preflight --paper-order-test`
+  (`execution/paper_test.py`), the order path a command opens (`execution/runtime.py`).
+- `jurisdiction/eligibility.py`: `EligibilityPolicy` and the skeleton policy, selected by
+  `config/jurisdictions/es.yaml`; policy factories take the configuration (D57).
+- Config: lite's `instruments` keys and `tenor.mandatory_close_trading_days`
+  (`config/defaults/instruments.yaml`), the skeleton allowlist (`config/defaults/eligibility.yaml`),
+  `execution.pretrade`, `execution.approval`, `execution.flatten`, `ibkr.preflight.paper_order`.
+- The ledger's rate to the base currency per currency; the whatif's currency; an import contract
+  keeping `jurisdiction` off the broker, the store and execution.
+- The fake broker serves the gate's reads; the order rig carries the gate over test instruments
+  (stocks, a UCITS ETF, a US ETF, options on a stock and on the ETF, a leveraged ETF, a future and
+  an option on it).
+
+**Reason codes and their tests.** Every code of `execution.pretrade.Reason` has
+`test_reason_<code>` in `tests/unit/test_pretrade_reasons.py`, each beside its positive control,
+and `test_every_reason_code_has_its_test` holds the module to that: `intent_unknown`,
+`intent_state`, `intent_expired`, `terms_mismatch`, `modify_changes_order`, `order_not_intents`,
+`conversion_unavailable`, `paper_guard`, `mode_unreadable`, `mode_forbids_write`, `intent_mode`,
+`profile_mismatch`, `kill_switch_on`, `instrument_unknown`, `prohibited_product`, `ineligible`,
+`mandatory_close`, `approval_missing`, `venue_not_tradable`, `option_expired`,
+`account_unreadable`, `quote_policy`, `instrument_halted`, `collar`, `protective_spec`,
+`holding_unmanaged`, `holding_unassigned`, `holding_other_sleeve`, `short`, `written_option`,
+`fills_unreconciled`, `currency_not_held`, `fx_rate_unavailable`, `whatif_refused`,
+`margin_use`, `insufficient_cash`, `cash_unaccounted`, `nav_unavailable`, `order_notional_cap`,
+`daily_notional_cap`, `daily_order_cap`. The prompt's cases: stale and delayed quotes, options
+without a real-time quote on the option and on the underlying, the DST window edge, an incident, a
+calendar disagreement near an option's last session but not for a stock, and the option-close
+alert in `test_pretrade_markets.py`; I2 in `test_pretrade_no_short.py` (a sell above the position,
+an exit beside a resting stop, listed late, two processes at once, a modify counted once, a stale
+position after a fill, a conversion not refused as a short); I3 with the kill switch on in
+`test_pretrade_effects.py`; I5 in `test_exits.py`; flatten, the paper order test, approvals, the
+commitments the gate adds up, the CLI and the runtime in their own modules.
+
+**SESSION_PROMPTS edits.** Session 5: the gate refuses every conversion until Session 5 replaces
+`conversion_unavailable`; partial exits go through `ExitCoordinator`, whose `settle` the executor
+calls each cycle. Session 6: the approval CLI is Session 4a's `obliskiq approvals`. Session 8:
+`ConfiguredDirectory` goes with the skeleton allowlist. Session 12: `tenor.mandatory_close_trading_days`
+already lives in `config/defaults/instruments.yaml`.
+
+**Deferred.** Funding by conversion (Session 5): until then an order in a currency the account
+does not hold is refused. Nothing runs `ExitCoordinator.settle` on a schedule yet (Session 5's
+executor, Session 6's service).
+
+**Live findings.** None: no IBKR call was made (the paper Gateway login does not complete from a
+cloud container). The paper order test is queued below for the deployment machine.
 
 ### Session 4 — Order path, kill switch and modes (2026-10-13 → 2026-10-15, v0.4.0)
 
@@ -383,7 +447,7 @@ settles it.
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
 | Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`) | 2 | library upgrade; 6 (digest) |
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | first session with a working login |
-| US stock, US option and Eurex option commission schedules | 2 | 4a (paper order test), 18 (TCA) |
+| US stock, US option and Eurex option commission schedules | 2 | the paper order test's first run (6, 19), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 9 (bond rule) |
 | Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
@@ -398,47 +462,62 @@ settles it.
 | `ssoExpires` and the daily reset as seen by the keepalive | 3 | 6 |
 | The daily bar's `t` stamp per venue (the history window is filtered on the UTC date of the bar start; a venue stamping before UTC midnight would shift by a day) | 3 | 8 |
 | Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | first session with a working login |
-| Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | 4a (paper order test) |
-| The cOID: maximum length, `order_ref` in live orders and trades, the duplicate-cOID refusal and its window | 4 | 4a (paper order test) |
-| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | 4a (paper order test), 5 |
-| Routing by `conidex` for a non-SMART venue | 4 | 4a (paper order test) |
+| Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | the paper order test's first run (6, 19) |
+| The cOID: maximum length, `order_ref` in live orders and trades, the duplicate-cOID refusal and its window | 4 | the paper order test's first run (6, 19) |
+| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | the paper order test's first run (6, 19), 5 |
+| Routing by `conidex` for a non-SMART venue | 4 | the paper order test's first run (6, 19) |
 | Currency conversion fields `isCcyConv` and `fxQty` (the reference's prose says `fxQTY`) | 4 | 5 |
-| What a cancel of an order that has just filled answers | 4 | 4a (paper order test) |
-| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | 4a (paper order test), 5 |
-| Whether a `/tickle` between a warning and its answer invalidates the warning | 4 | 4a (paper order test) |
+| What a cancel of an order that has just filled answers | 4 | the paper order test's first run (6, 19) |
+| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | the paper order test's first run (6, 19), 5 |
+| Whether a `/tickle` between a warning and its answer invalidates the warning | 4 | the paper order test's first run (6, 19) |
+| `obliskiq preflight --paper-order-test` end to end: identity, rules, algos, quote, whatif, place, replies, the cOID listed, status, cancel; record the shapes in docs/knowledge/ibkr-orders.md | 4a | 6 (machine run), 19 |
+| The skeleton allowlist's conids: EXV1 89005163 on IBIS, FCX 8158 on NYSE (the paper order test resolves them) | 4a | the paper order test's first run (6, 19); 8 |
+| Whether a whatif registers its cOID (the gate previews with its own) | 4a | the paper order test's first run (6, 19) |
+| Whatif margin fields on a paper margin account, and the currency in its amount strings | 4a | the paper order test's first run (6, 19) |
+| How long the positions read lags a fill; whether the trades lag the live orders' `filledQuantity` | 4a | 5 (stop-limit tests) |
+| The live orders show a modify or a cancel at once (the exit coordinator clears the exit on the next read) | 4a | 5 (stop-limit tests) |
+| Positions closed during the day listed at zero | 4a | 5 |
 
 ## Follow-ups
 
-- Session 4a: the gate is the only issuer of `PretradeClearance` and the only caller of
-  `store.orders.record_clearance` (guard tests); it sets the clearance's expiry from the quote it
-  checked, its effect by I3 (the boundary passes a reducing sell through the kill switch on that
-  effect alone), and its quote evidence and sigma (the reply policy decides `o354` from them).
-  I2 counts uncleared-but-unspent and spent-but-unlisted sells from `clearances` (conid, side,
-  quantity, `used_at`) beside the working orders; the boundary already refuses a spent, expired,
-  altered or rebound clearance.
-- Session 4a: `holding_assignments` holds the registry, but nothing writes `unmanaged` yet; the
-  gate refuses a conid held without a sleeve, and Session 5's reconciliation registers what the
-  bot did not open.
+- Session 5: `holding_assignments` holds the registry and the gate refuses a conid held without a
+  sleeve; reconciliation registers what the bot did not open as `unmanaged`, and the executor
+  assigns a new holding to its sleeve on its first fill (until then the next order on it is
+  refused, `holding_unassigned`).
+- Session 5: replace the gate's `conversion_unavailable` with funding by conversion and its cash
+  check (the currency sold covers the conversion and its own floor), and count working
+  conversions in the cash commitments; `currency_not_held` then becomes a conversion to plan.
+- Session 5: the executor calls `ExitCoordinator.settle()` each cycle (a `restore_failed` stop is
+  retried there), places partial exits through `ExitCoordinator.place_exit`, and moves a protective
+  stop's spec (stop price, limit offset) onto the intent, replacing
+  `execution.pretrade.protective.max_limit_offset_fraction` as the one rule for every stop.
+- Session 5: `fills_unreconciled` refuses sells of an instrument whose working sell reports fills the
+  store never recorded (older than the trades IBKR serves, say); reconciliation records them.
 - Session 5: one process places a given intent (D47); if the executor ever retries from more
   than one process, add a per-intent placement lease in the store. The kill switch classes a
   sell by the most cautious of its intent's spent clearances (D48); once reconciliation knows
   the terms the broker accepted, it can class by those instead.
-- Session 4a (I5): the boundary refuses every modify outside a writing mode, so a downgrade
-  between a stop's resize and its restore leaves the stop resized (cancel still works); the gate
-  must order the steps so that cannot happen, or restore by other means, and alert on a failed
-  restore itself (a rejected or not-sent modify records a fact but does not alert). The gate sets
-  a clearance's `expires_at` no later than the quote's `observed_at` plus `max_quote_age_seconds`:
-  nothing below it enforces "expiring with the quote".
 - Session 18 (I5): the boundary writes an intent only in the mode it was made for, so an
   automatic `live → live-small` downgrade would freeze every modify of an intent made under
   `live`, stop resizes and restores included. When the live levels can write, let a downgrade
   between two writing modes keep protective modifies of existing intents working.
-- Session 4a: the sweep cancels a live-order row it cannot read (D48), which could strip a
-  protective stop whose row fails validation for another field. Once paper rows are captured,
-  read the raw `side` and `secType` of an unreadable row and keep a readable non-`CASH` sell.
+- First session with captured paper rows (6): the sweep cancels a live-order row it cannot read
+  (D48), which could strip a protective stop whose row fails validation for another field; read
+  the raw `side` and `secType` of an unreadable row and keep a readable non-`CASH` sell.
 - Session 5: the executor moves intents to `expired` at `expires_at` (and cancels a working
   order first), writes `positions_snap`, `cash_snap` and fills from reconciliation, assigns a new
   holding to its sleeve on its first fill, and runs `ShadowFiller` in shadow mode.
+- Session 6: the order path's alert hook (`OrderAlert`: `restore_failed`, `option_close_blocked`
+  and Session 4's kinds) reaches Telegram; `execution/runtime.py` assembles the order path the
+  service runs.
+- Session 8: the universe replaces `ConfiguredDirectory` (the skeleton allowlist's instrument
+  facts) with a directory that describes every instrument, ineligible ones included, so an option
+  on an ineligible ETP and its underlying can both be described; then `eligibility.yaml` goes.
+- Session 12: `tenor.mandatory_close_trading_days` lives in `config/defaults/instruments.yaml`;
+  the rest of lite's `tenor` block joins it. `allow_futures_options` stays false until the
+  never-exercise rule exists.
+- Session 18: calibrate the gate's caps (`execution.pretrade.caps`), the cash floor and the
+  protective spec's limit offset from the transaction-cost analysis.
 - Session 6: the service calls `OrderClient.reset_suppressed()` once before its first placement,
   runs `KillSwitch.run` (its reports and `OrderAlert`s to Telegram) and downgrades the mode on the
   failures the plan names.
@@ -450,11 +529,6 @@ settles it.
 - Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
   failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the
   keepalive repair once it passes and fail reads fast, without a new alert, before then.
-- Session 4a: the order path reads cash from `IbkrClient.portfolio.cash_balances()`
-  (Decimal per currency), quotes with `market_data_status`, `delay_seconds` and `delay_basis`
-  (`documented_bound` for delayed quotes, D38), and calls `IbkrClient.start()`: the endpoint
-  groups refuse every read until the account guard has passed (D41). Incomplete position or cash
-  reads raise.
 - Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])`,
   passing each venue's `is_business_weekday` as `is_trading_weekday` (the calendars expose it per
   venue), and refresh it from one reference conid per venue; pass the session's alert hook to
@@ -466,17 +540,13 @@ settles it.
 - Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
   stamped with a period-end reference date, and the whole batch rolls back; relax or split it
   with the first live macro route.
-- Session 4a: `tradability` and `venue_status` take `conid` as an optional argument and ignore
-  instrument-scoped halts without it; the pre-trade check must pass the order's conid.
-- Session 4a: call the instant view — `Calendars.tradability(venue, at, ...)` — and, for an
-  option, `common_windows` with the underlying's venue; `venue_status` is the planning view.
 - Session 8: pin the IBKR codes with contracts; source holiday lists for the four synthetic
   venues; port lite's realised-volatility estimators (`collect/vol.py`).
 - Session 10: feeds enter through `Calendars.accept_incidents(origin, incidents)`, which
   replaces one origin wholesale; a single-stock halt uses instrument scope.
-- Session 12: lite's `mandatory_close_trading_days` (10) has no key in `config/` yet. Lite's own
-  test expects 2026-06-05 for a 2026-06-19 holiday expiry at N = 10; the new anchor gives
-  2026-06-04, one session more conservative.
+- Session 12: lite's `mandatory_close_trading_days` (10) is `tenor.mandatory_close_trading_days`
+  (Session 4a). Lite's own test expects 2026-06-05 for a 2026-06-19 holiday expiry at N = 10; the
+  new anchor gives 2026-06-04, one session more conservative.
 - Session 12: lite counted "N days back from expiry", excluding the expiry; the anchor is
   now the last tradable session itself, so N sessions including it is `session_before(..., sessions=N-1)`.
 - Dependabot keeps `exchange-calendars` current; its holiday lists lapse every year, and a

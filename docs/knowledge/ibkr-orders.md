@@ -173,3 +173,30 @@ cancelled at once; an unknown order answers `{"error": "OrderID 1 doesn't exist"
 cancels **every** open order — ObliskIQ sends only all-digit ids, so never `-1`. What a cancel of an
 order that has just filled answers is not documented; ObliskIQ reads the order's status after every
 cancel. VERIFY-LIVE(cancel of a filled order). [DOC 2026-10-13]
+
+## What the pre-trade gate relies on (Session 4a)
+
+Nothing below was executed through ObliskIQ: the paper Gateway login does not complete from a
+cloud container (docs/knowledge/ibkr.md), so the paper order test (`obliskiq preflight
+--paper-order-test`) waits for the deployment machine. VERIFY-LIVE(paper order test).
+
+- **Ledger.** Each currency row carries `exchangerate`, the value of one unit in the base currency
+  (the base row's is 1; USD 0.8612968 in a EUR account) [CP ✓ 2026-09-10, docs/knowledge/ibkr.md].
+  The gate converts notional and the cash floor with it, and refuses a currency without one.
+- **Whatif amounts** are display strings naming their currency after the number
+  (`"1,977.60 USD (10 Shares)"`) [DOC 2026-10-13]; the gate refuses a whatif whose cost is in
+  another currency than the order's. Whether a whatif registers its cOID is not documented; the
+  gate previews with a cOID of its own. VERIFY-LIVE(whatif cOID), VERIFY-LIVE(whatif margin fields
+  on a paper margin account: a cash-funded buy may still report an initial-margin change).
+- **Positions after a fill.** IBKR's portfolio is a cache; how long it lags a fill is not
+  documented. The gate takes the lower of the broker's read and the store's (the read before the
+  fill, less the fill). VERIFY-LIVE(position lag after a fill).
+- **Trades versus live orders.** A working sell whose `filledQuantity` exceeds the trades recorded
+  under its cOID refuses further sells of the instrument. VERIFY-LIVE(trades lag behind live
+  orders).
+- **A modify and a cancel in the live orders.** The exit coordinator cuts a protective stop (a
+  modify, or a cancel) and clears the exit on the next live-orders read; it counts the stop at the
+  larger of what the broker lists and what the modify asked. VERIFY-LIVE(live orders show a modify
+  or a cancel at once).
+- **Zero positions.** A position closed during the day may be listed at zero; flatten skips it.
+  VERIFY-LIVE(zero rows in the positions read).
