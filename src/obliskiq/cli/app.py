@@ -39,6 +39,7 @@ from ..ibkr.preflight import run_read_only
 from ..ibkr.transport import missing_credentials, transport_refusal
 from ..jurisdiction import (
     SHIPPED_POLICY_KINDS,
+    TAX_POLICIES,
     JurisdictionProfile,
     check_declared_policies,
     load_profile,
@@ -81,6 +82,8 @@ def load_all(config_dir: Path, env: Environment) -> Loaded:
     configure_logging(settings.logging.level, settings.logging.format)
     profile = load_profile(config_dir, settings.jurisdiction)
     check_declared_policies(profile, SHIPPED_POLICY_KINDS)
+    if TAX_POLICIES.kind in profile.policies:
+        TAX_POLICIES.resolve(profile, settings)  # the tax data must build its policy
     return Loaded(config=loaded, profile=profile, env=env)
 
 

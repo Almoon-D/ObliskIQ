@@ -10,5 +10,6 @@ from typing import Final
 
 from .eligibility import ELIGIBILITY_POLICIES
 from .registry import PolicyKind
+from .tax_policies import TAX_POLICIES
 
-SHIPPED_POLICY_KINDS: Final[tuple[PolicyKind, ...]] = (ELIGIBILITY_POLICIES,)
+SHIPPED_POLICY_KINDS: Final[tuple[PolicyKind, ...]] = (ELIGIBILITY_POLICIES, TAX_POLICIES)

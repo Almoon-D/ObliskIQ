@@ -26,6 +26,7 @@ from ..config.loader import (
 )
 from ..config.schema import Identifier
 from ..domain.base import NonEmptyText
+from .tax_profile import TaxProfile
 
 JURISDICTIONS_DIR = "jurisdictions"
 PROFILE_SUFFIX = ".yaml"
@@ -62,7 +63,8 @@ class JurisdictionProfile(FrozenModel):
 
     ``policies`` maps a policy kind to the id of the registered policy the profile uses for
     it, read-only once loaded. A profile that declares none has nothing to resolve; asking
-    it for a policy fails.
+    it for a policy fails. ``tax`` holds the values the tax policy applies; a profile without
+    it cannot resolve a tax policy.
     """
 
     id: Identifier
@@ -73,6 +75,7 @@ class JurisdictionProfile(FrozenModel):
         AfterValidator(PolicyIds),
         PlainSerializer(dict, return_type=dict[str, str]),
     ] = Field(default_factory=dict, validate_default=True)
+    tax: TaxProfile | None = None
 
 
 def available_profiles(config_dir: Path) -> tuple[str, ...]:

@@ -58,7 +58,8 @@ def test_the_shipped_spanish_profile_loads(repo_root):
     profile = load_profile(repo_root / "config", "es")
     assert profile.id == "es"
     assert profile.name == "Spain"
-    assert profile.policies == {"eligibility": "skeleton"}
+    assert profile.policies == {"eligibility": "skeleton", "tax": "es_irpf"}
+    assert profile.tax is not None
 
 
 def test_available_profiles(config_dir, tmp_path):
@@ -177,8 +178,10 @@ def test_an_unknown_kind_with_no_registries_is_refused():
 
 
 def test_an_unshipped_kind_is_refused_and_the_shipped_ones_listed():
-    with pytest.raises(PolicyError, match=r"no policy kind 'tax' exists \(known: eligibility\)"):
-        check_declared_policies(_profile(tax="es_irpf"), SHIPPED_POLICY_KINDS)
+    with pytest.raises(
+        PolicyError, match=r"no policy kind 'pension' exists \(known: eligibility, tax\)"
+    ):
+        check_declared_policies(_profile(pension="es_plan"), SHIPPED_POLICY_KINDS)
 
 
 def test_the_shipped_profile_declares_only_shipped_policies(repo_root):

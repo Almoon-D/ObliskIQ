@@ -41,6 +41,12 @@ RUNTIME_KEYED = {
     "profile.policies": "policy kind -> policy id, keyed by the registry resolving that kind",
 }
 
+#: Profile sections the code holds by their own name (a typed model passed to a policy), with
+#: the reason: ``profile.tax.payment.day`` is read as ``tax.payment.day``.
+PROFILE_SECTIONS_HELD_BY_NAME = {
+    "tax": "a tax policy is built from the profile's tax section and reads it as `tax`",
+}
+
 #: Sections keyed by data, with the package that must read the fields beneath each key.
 KEYED_MAPPINGS = {
     "venues": "calendars",
@@ -172,7 +178,14 @@ def unread_keys(
             continue
         section = next((s for s in RUNTIME_KEYED if key.startswith(f"{s}.")), None)
         wanted = (section or key).split(".")
-        if not any(_contains(chain, wanted) for chain in chains):
+        options = [wanted]
+        if (
+            wanted[0] == PROFILE_PREFIX
+            and wanted[1:2]
+            and wanted[1] in PROFILE_SECTIONS_HELD_BY_NAME
+        ):
+            options.append(wanted[1:])
+        if not any(_contains(chain, option) for chain in chains for option in options):
             orphans.append(key)
     return orphans
 
@@ -210,6 +223,15 @@ def test_a_namespaced_profile_key_needs_its_namespace():
     assert unread_keys({"profile.name": "x"}, chains) == ["profile.name"]
     chains = attribute_chains("def f(loaded):\n    return loaded.profile.name\n")
     assert unread_keys({"profile.name": "x"}, chains) == []
+
+
+def test_a_profile_section_held_by_name_is_read_without_the_profile():
+    chains = attribute_chains("def f(tax):\n    return tax.payment.day\n")
+    assert unread_keys({"profile.tax.payment.day": "x"}, chains) == []
+    assert unread_keys({"profile.tax.payment.month": "x"}, chains) == ["profile.tax.payment.month"]
+    # Only a listed section: another profile key still needs its namespace.
+    chains = attribute_chains("def f(x):\n    return x.name\n")
+    assert unread_keys({"profile.name": "x"}, chains) == ["profile.name"]
 
 
 def test_a_local_binding_is_resolved():
