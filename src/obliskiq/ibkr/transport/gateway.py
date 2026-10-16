@@ -185,6 +185,9 @@ class GatewayTransport:
         async with self._lock:
             await self._start_and_login()
 
+    async def refresh(self) -> None:
+        """Nothing to renew per request: the Gateway keeps its own session."""
+
     async def headers(self, method: str, url: str, params: Mapping[str, Any]) -> dict[str, str]:
         del method, url, params  # the Gateway adds the session itself; nothing is signed
         return {"Accept": "application/json"}

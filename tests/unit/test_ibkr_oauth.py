@@ -929,6 +929,24 @@ async def test_headers_negotiate_a_token_when_there_is_none(
     assert session.needs_live_session_token() is False
 
 
+async def test_refresh_negotiates_so_the_signing_that_follows_does_not(
+    respx_mock: Any,
+    make_transport: Callable[[httpx.AsyncClient], OAuthTransport],
+    credentials: OAuthCredentials,
+    session: OAuthSession,
+) -> None:
+    """The session readies the transport before a request takes its pacing slot."""
+    route = respx_mock.post(TOKEN_URL).mock(side_effect=_ibkr_answers(credentials))
+    async with httpx.AsyncClient() as client:
+        transport = make_transport(client)
+        await transport.refresh()
+        assert route.call_count == 1
+        await transport.headers("GET", API_URL + "/one", {})
+        await transport.refresh()
+    assert route.call_count == 1
+    assert session.needs_live_session_token() is False
+
+
 async def test_headers_renegotiate_a_token_inside_its_refresh_margin(
     respx_mock: Any,
     make_transport: Callable[[httpx.AsyncClient], OAuthTransport],

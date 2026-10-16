@@ -38,10 +38,10 @@ OWN_ENV_PREFIX = "OBLISK_"
 IBKR_MAX_CONIDS_PER_SNAPSHOT = 100
 IBKR_MAX_FIELDS_PER_SNAPSHOT = 50
 
-#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing") that this client calls or
-#: that share a cap with one it calls (`portfolio/subaccounts` with `portfolio/accounts`): each
-#: must sit in a rate group, or an owner override could leave it paced by the global window
-#: alone. The order path adds its own (orders, trades, P&L) with Session 4.
+#: Endpoints IBKR paces on their own (docs/knowledge/ibkr.md, "Pacing") that the clients call,
+#: that share a cap with one they call (`portfolio/subaccounts` with `portfolio/accounts`), or
+#: that the order path reads next (`pnl/partitioned`): each must sit in a rate group, or an owner
+#: override could leave it paced by the global window alone.
 IBKR_PACED_ENDPOINTS = (
     "iserver/marketdata/history",
     "iserver/marketdata/snapshot",
@@ -50,6 +50,9 @@ IBKR_PACED_ENDPOINTS = (
     "iserver/scanner/params",
     "iserver/scanner/run",
     "tickle",
+    "iserver/account/orders",
+    "iserver/account/trades",
+    "iserver/account/pnl/partitioned",
 )
 
 #: The names the snapshot decoder knows. A field map may only name these.

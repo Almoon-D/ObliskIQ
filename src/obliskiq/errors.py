@@ -74,3 +74,23 @@ class StoreError(ObliskError):
 
 class MigrationError(StoreError):
     """A migration is edited, missing, out of order, unsafe or failed; the store stays as it was."""
+
+
+class ExecutionError(ObliskError):
+    """The order path cannot take a step; nothing was sent that it cannot account for."""
+
+
+class IllegalTransitionError(ExecutionError):
+    """An intent was asked to move to a state its current state cannot reach."""
+
+
+class WriteRefusedError(ExecutionError):
+    """A broker write was refused before anything was sent. ``code`` names the rule."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+
+
+class ModeChangeRefusedError(ExecutionError):
+    """A mode upgrade the rules do not allow (the live levels need the promotion gate)."""

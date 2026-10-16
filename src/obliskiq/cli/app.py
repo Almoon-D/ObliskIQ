@@ -3,6 +3,9 @@
 ``obliskiq config validate`` checks the whole configuration: the expert defaults, the
 owner's panel, the jurisdiction profile it selects and the policies that profile declares.
 ``obliskiq settings show`` prints every effective setting and the file it comes from.
+``obliskiq kill on|off|status`` sets, clears or shows the kill switch; ``kill on`` works even when
+the configuration does not load (it then sets the file flag alone). ``obliskiq mode show|set``
+shows or changes the execution mode (upgrades by this explicit command, audited).
 Any problem is printed for the owner, in plain words, with exit status 1 and no traceback.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -10,16 +13,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import argparse
 import asyncio
+import sqlite3
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TextIO
 
 from .. import __version__
 from ..config import LoadedConfig, load_config
+from ..domain.orders import ExecutionMode, KillSwitchRecord
 from ..env import Environment, default_env_file, load_environment
-from ..errors import ConfigError, EnvVarError
+from ..errors import ConfigError, EnvVarError, ModeChangeRefusedError, StoreError
+from ..execution.killswitch import clear_file_flag, file_flag_on, set_file_flag
+from ..execution.modes import Modes
 from ..ibkr.preflight import run_read_only
 from ..ibkr.transport import missing_credentials, transport_refusal
 from ..jurisdiction import (
@@ -29,6 +36,10 @@ from ..jurisdiction import (
     load_profile,
 )
 from ..logging_setup import configure_logging
+from ..store import open_store
+from ..store import orders as repo
+from ..store.worker import StoreWorker
+from ..util.timeutil import utc_now
 
 EXIT_OK = 0
 EXIT_INVALID = 1
@@ -38,6 +49,9 @@ EXIT_NO_CREDENTIALS = 2
 #: Longest value ``settings show`` prints in full; longer ones (a list of phase windows) are cut.
 VALUE_LIMIT = 48
 
+#: Who the audit names for a change made from the command line.
+OWNER_ACTOR = "owner (command line)"
+
 
 @dataclass(frozen=True)
 class Loaded:
@@ -46,6 +60,7 @@ class Loaded:
     config: LoadedConfig
     profile: JurisdictionProfile
     env: Environment
+    args: argparse.Namespace = field(default_factory=argparse.Namespace)
 
 
 type Handler = Callable[[Loaded, TextIO], int]
@@ -110,6 +125,121 @@ def _preflight(loaded: Loaded, out: TextIO) -> int:
     return EXIT_OK if report.ok else EXIT_INVALID
 
 
+def _kill_on_flags(env: Environment, loaded: Loaded | None, reason: str, out: TextIO) -> int:
+    """Set the file flag and, when the configuration loaded, the database flag."""
+    data_dir = env.require_data_dir()
+    at = utc_now()
+    problems: list[str] = []
+    file_set = database_set = False
+    try:
+        set_file_flag(data_dir, actor=OWNER_ACTOR, reason=reason, at=at)
+        file_set = True
+    except OSError as exc:
+        problems.append(f"the file flag could not be written: {exc}")
+    if loaded is None:
+        problems.append("the configuration did not load, so the database flag was not set")
+    else:
+        try:
+            with open_store(loaded.config.settings, data_dir) as store:
+                record = KillSwitchRecord(at=at, on=True, actor=OWNER_ACTOR, reason=reason)
+                repo.record_kill_switch(store, record)
+            database_set = True
+        except (StoreError, OSError, sqlite3.Error) as exc:
+            problems.append(f"the database flag could not be written: {exc}")
+    if not (file_set or database_set):
+        print("kill switch NOT set: " + "; ".join(problems), file=out)
+        return EXIT_INVALID
+    print(
+        "kill switch ON: orders that add risk are blocked; working ones are cancelled only "
+        "where the service's sweep runs, so check the broker's open orders",
+        file=out,
+    )
+    for problem in problems:
+        print(f"  warning: {problem}", file=out)
+    return EXIT_OK
+
+
+def _kill_on(loaded: Loaded, out: TextIO) -> int:
+    return _kill_on_flags(loaded.env, loaded, loaded.args.reason, out)
+
+
+def _kill_off(loaded: Loaded, out: TextIO) -> int:
+    data_dir = loaded.env.require_data_dir()
+    with open_store(loaded.config.settings, data_dir) as store:
+        record = KillSwitchRecord(
+            at=utc_now(), on=False, actor=OWNER_ACTOR, reason=loaded.args.reason
+        )
+        repo.record_kill_switch(store, record)
+        clear_file_flag(data_dir)
+        latest = repo.latest_kill_switch(store)
+    if file_flag_on(data_dir) or latest is None or latest.on:
+        print("kill switch still ON: a flag could not be cleared", file=out)
+        return EXIT_INVALID
+    print("kill switch OFF", file=out)
+    return EXIT_OK
+
+
+def _kill_status(loaded: Loaded, out: TextIO) -> int:
+    data_dir = loaded.env.require_data_dir()
+    file_on = file_flag_on(data_dir)
+    try:
+        with open_store(loaded.config.settings, data_dir) as store:
+            latest = repo.latest_kill_switch(store)
+        database = "on" if latest is not None and latest.on else "off"
+    except StoreError, OSError, sqlite3.Error:
+        database = "unreadable"
+    on = file_on or database != "off"
+    print(f"kill switch {'ON' if on else 'OFF'}", file=out)
+    print(f"  file flag      {'on' if file_on else 'off'}", file=out)
+    print(f"  database flag  {database}", file=out)
+    return EXIT_OK
+
+
+def _modes(loaded: Loaded) -> tuple[Modes, StoreWorker]:
+    settings = loaded.config.settings
+    data_dir = loaded.env.require_data_dir()
+    worker = StoreWorker(lambda: open_store(settings, data_dir))
+    return Modes(worker, settings, profile=loaded.env.ibkr_profile), worker
+
+
+def _mode_show(loaded: Loaded, out: TextIO) -> int:
+    async def show() -> ExecutionMode:
+        modes, worker = _modes(loaded)
+        try:
+            return await modes.current()
+        finally:
+            await worker.aclose()
+
+    print(f"execution mode {asyncio.run(show()).value}", file=out)
+    return EXIT_OK
+
+
+def _mode_set(loaded: Loaded, out: TextIO) -> int:
+    target = ExecutionMode(loaded.args.mode)
+    reason: str = loaded.args.reason
+
+    async def change() -> str:
+        modes, worker = _modes(loaded)
+        try:
+            current = await modes.current()
+            if target is current:
+                return f"execution mode is already {current.value}"
+            if target.rank > current.rank:
+                await modes.upgrade(target, actor=OWNER_ACTOR, reason=reason)
+            else:
+                await modes.downgrade(target, actor=OWNER_ACTOR, reason=reason)
+            return f"execution mode {current.value} -> {target.value}"
+        finally:
+            await worker.aclose()
+
+    try:
+        print(asyncio.run(change()), file=out)
+    except ModeChangeRefusedError as exc:
+        print(f"refused: {exc}", file=out)
+        return EXIT_INVALID
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="obliskiq",
@@ -155,6 +285,30 @@ def build_parser() -> argparse.ArgumentParser:
         "contract rules, algos and the trading schedule for one stock; no order endpoint",
     )
     preflight.set_defaults(handler=_preflight)
+
+    kill = commands.add_parser("kill", help="the kill switch")
+    kill_actions = kill.add_subparsers(dest="action", required=True, metavar="ACTION")
+    kill_on = kill_actions.add_parser(
+        "on", help="block every order that adds risk and cancel the working ones"
+    )
+    kill_on.add_argument("--reason", default="set from the command line", help="for the audit")
+    kill_on.set_defaults(handler=_kill_on)
+    kill_off = kill_actions.add_parser("off", help="clear the kill switch")
+    kill_off.add_argument("--reason", required=True, help="why it is safe again (audited)")
+    kill_off.set_defaults(handler=_kill_off)
+    kill_actions.add_parser("status", help="show the kill switch").set_defaults(
+        handler=_kill_status
+    )
+
+    mode = commands.add_parser("mode", help="the execution mode")
+    mode_actions = mode.add_subparsers(dest="action", required=True, metavar="ACTION")
+    mode_actions.add_parser("show", help="show the current mode").set_defaults(handler=_mode_show)
+    mode_set = mode_actions.add_parser(
+        "set", help="upgrade (an explicit, audited command) or downgrade the mode"
+    )
+    mode_set.add_argument("mode", choices=[m.value for m in ExecutionMode])
+    mode_set.add_argument("--reason", required=True, help="why (audited)")
+    mode_set.set_defaults(handler=_mode_set)
     return parser
 
 
@@ -170,17 +324,31 @@ def run(
     ``env_file`` is the env file read when ``--env-file`` is not given.
     """
     args = build_parser().parse_args(argv)
+    handler: Handler = args.handler
     try:
         env = load_environment(env_file=args.env_file if args.env_file is not None else env_file)
+    except EnvVarError as exc:
+        print(f"obliskiq: {exc}", file=stderr)
+        return EXIT_INVALID
+    try:
         config_dir: Path = (
             args.config_dir if args.config_dir is not None else (env.resolved_config_dir())
         )
         loaded = load_all(config_dir.expanduser(), env)
     except (ConfigError, EnvVarError) as exc:
         print(f"obliskiq: {exc}", file=stderr)
+        if handler is _kill_on:
+            # The kill switch must work when everything else fails: the file flag alone.
+            try:
+                return _kill_on_flags(env, None, args.reason, stdout)
+            except EnvVarError as missing:
+                print(f"obliskiq: {missing}", file=stderr)
         return EXIT_INVALID
-    handler: Handler = args.handler
-    return handler(loaded, stdout)
+    try:
+        return handler(Loaded(loaded.config, loaded.profile, loaded.env, args), stdout)
+    except (EnvVarError, StoreError, sqlite3.Error) as exc:
+        print(f"obliskiq: {exc}", file=stderr)
+        return EXIT_INVALID
 
 
 def main(argv: Sequence[str] | None = None) -> int:

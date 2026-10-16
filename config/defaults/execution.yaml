@@ -1,0 +1,81 @@
+# The order path below the pre-trade checks: modes, orders, the reply policy, the quote policy
+# and its collar, and the kill switch (MASTER_PLAN §5.12, §5.13).
+#
+# docs/knowledge/ibkr-orders.md carries IBKR's order endpoints and message ids; docs/DECISIONS.md
+# says why each value is what it is. Values marked "lite" are ObliskIQ-lite-MCP's (config.yaml
+# `discipline`, @b1ebd49).
+
+# lite's `discipline` block (legacy/lite/config.yaml:333-350): the keys the order path reads.
+discipline:
+  # Entries are limit orders: a patient limit or an IBKR algo with a limit cap, never a stop.
+  # lite.
+  entry_order_type: limit_only
+  # The only reasons an exit or a protective stop may give. lite.
+  exit_reasons_allowed:
+    [invalidation, target, time_window, zombie, mandatory_close, stop, trailing_stop, override]
+
+execution:
+  modes:
+    # Where a deployment starts when no mode change has been recorded (MASTER_PLAN §5.19: L0).
+    # Only shadow or paper: the live levels are reached by the promotion gate and an owner
+    # command, never by configuration.
+    initial: shadow
+
+  orders:
+    # The longest customer order id (cOID) sent. The intent id is a 36-character uuid7; below 36
+    # a deterministic short form is sent and the mapping kept. IBKR documents no limit:
+    # VERIFY-LIVE(cOID length).
+    coid_max_length: 36
+    # Warning rounds one placement may take before it is declined.
+    max_reply_rounds: 10
+    # Days of trades the cOID lookup reads before a placement (IBKR serves at most 7).
+    trades_lookup_days: 7
+
+  # Which order warnings (`/iserver/reply` message ids) are confirmed, and for which orders. Any
+  # other id is declined, the order cancelled and the owner alerted. `when` narrows an id to the
+  # orders that legitimately raise it: any, stop_limit, cash_quantity or conversion.
+  reply_policy:
+    confirm:
+      # IBKR may cap a marketable order's price: it can only make a fill less likely.
+      - {message_id: o10153, when: any}
+      # The stop-order risk notice, for the stop-limit protective exits.
+      - {message_id: o10331, when: stop_limit}
+      # The cash-quantity notices, for orders sized in money.
+      - {message_id: o10164, when: cash_quantity}
+      - {message_id: o10223, when: cash_quantity}
+    # "No market data": confirmed only under the quote policy and the collar below, never listed
+    # in `confirm`.
+    no_market_data_message_id: o354
+
+  # The quote an order may rest on, per asset class (MASTER_PLAN §5.13). An asset class no rule
+  # names has no quote policy, and its orders are refused. `max_quote_age_seconds` is how long
+  # ago the quote may have been read; `max_delay_seconds` how late a delayed quote may be (IBKR's
+  # documented bound for delayed quotes is 1200 s, DECISIONS D38).
+  quote_policy:
+    - {policy: realtime_required, asset_classes: [option], max_quote_age_seconds: 60}
+    - policy: realtime_preferred
+      asset_classes: [stock, etf, etc, bond]
+      max_quote_age_seconds: 60
+      max_delay_seconds: 1200
+    - {policy: nav_priced, asset_classes: [fund]}
+
+  # How far a limit may reach through the reference price, as a fraction of it:
+  # base_fraction + sigma_multiplier × σ × √(delay in years of trading time). A real-time quote
+  # has no delay and gets the base alone. A judgement, not a measurement: Session 18's
+  # transaction-cost analysis calibrates it.
+  collar:
+    base_fraction: 0.005
+    # The widest collar any quote may give; past it the sigma is implausible and the order is
+    # refused. A judgement.
+    max_fraction: 0.05
+    sigma_multiplier: 2.0
+    # Trading time, for the √(delay) term: sessions a year and hours a session.
+    sessions_per_year: 252
+    session_hours: 6.5
+
+  kill_switch:
+    # How often the sweep reads the live orders while the switch is on. IBKR paces
+    # /iserver/account/orders at one request per 5 s.
+    sweep_interval_seconds: 10.0
+    # How long a read of the switch's database flag may take before the switch counts as on.
+    store_timeout_seconds: 5.0

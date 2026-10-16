@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 import pytest
+import respx
 from hypothesis import settings
 
 from obliskiq.calendars.service import Calendars
@@ -344,6 +345,7 @@ class FakeTransport:
     def __init__(self, base_url: str = "https://gw.test/v1/api") -> None:
         self._base_url = base_url
         self.prepared = 0
+        self.refreshed = 0
         self.recovered = 0
         self.closed = 0
         self.fail_recover: Exception | None = None
@@ -361,6 +363,9 @@ class FakeTransport:
 
     async def prepare(self) -> None:
         self.prepared += 1
+
+    async def refresh(self) -> None:
+        self.refreshed += 1
 
     async def headers(self, method: str, url: str, params: Any) -> dict[str, str]:
         return {"Accept": "application/json"}
@@ -407,3 +412,26 @@ def make_session(
         )
 
     return build
+
+
+@pytest.fixture
+async def order_rig(
+    make_session: Callable[..., BrokerSession],
+    shipped_settings: ObliskConfig,
+    tmp_path: Path,
+) -> Any:
+    """The order path over the fake broker (``tests/support``), in paper mode."""
+    from fake_broker import FakeBroker
+    from order_rig import build_rig
+
+    with respx.mock(assert_all_called=False) as router:
+        broker = FakeBroker(router)
+        rig = await build_rig(
+            settings=shipped_settings,
+            session=make_session(),
+            broker=broker,
+            tmp_path=tmp_path,
+        )
+        await rig.to_paper()
+        yield rig
+        await rig.aclose()

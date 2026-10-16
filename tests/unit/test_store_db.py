@@ -16,6 +16,7 @@ from obliskiq.config import ObliskConfig
 from obliskiq.errors import StoreError
 from obliskiq.store import Store, open_store
 from obliskiq.store.db import MEMORY, _apply_pragmas
+from obliskiq.store.migrations import available_migrations
 
 CORE_TABLES = {
     "bars",
@@ -106,7 +107,8 @@ def test_reopening_an_existing_store_changes_nothing(
     )
     second = open_test_store(path)
     assert second.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 1
-    assert second.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 1
+    applied = second.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+    assert applied == len(available_migrations())
 
 
 def test_a_path_that_cannot_be_opened_is_a_store_error(
@@ -369,10 +371,13 @@ def test_two_processes_starting_on_an_empty_database_migrate_it_once(tmp_path: P
     for thread in threads:
         thread.join()
     assert errors == []
-    assert sorted(len(applied) for applied in results) == [0, 1]
+    # Between them the two apply every migration exactly once.
+    names = sorted(name for applied in results for name in applied)
+    assert names == sorted(path.name for path in available_migrations())
     check = sqlite3.connect(path)
     try:
-        assert check.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] == 1
+        applied_rows = check.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+        assert applied_rows == len(available_migrations())
         assert check.execute("SELECT COUNT(*) FROM instruments").fetchone()[0] == 0
     finally:
         check.close()

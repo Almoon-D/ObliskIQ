@@ -27,6 +27,7 @@ from .schema_calendars import (
     VenueConfig,
 )
 from .schema_costs import CostsConfig
+from .schema_execution import DisciplineConfig, ExecutionConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 
@@ -109,6 +110,8 @@ class ObliskConfig(FrozenModel):
     ibkr_exchanges: dict[IbkrExchangeCode, IbkrExchangeConfig]
     http: HttpConfig
     ibkr: IbkrConfig
+    discipline: DisciplineConfig
+    execution: ExecutionConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:

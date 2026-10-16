@@ -472,8 +472,14 @@ class OAuthTransport:
     async def prepare(self) -> None:
         await self._ensure_token(force=False)
 
+    async def refresh(self) -> None:
+        # Called before the request takes a pacing slot, so a slow or failing token exchange
+        # never holds a concurrency permit.
+        await self._ensure_token(force=False)
+
     async def headers(self, method: str, url: str, params: Mapping[str, Any]) -> dict[str, str]:
-        # Refreshed before expiry: a token inside its refresh margin is renegotiated here.
+        # refresh() already renewed a token inside its margin; this only catches a token that
+        # expired in between.
         await self._ensure_token(force=False)
         return self._oauth.sign_request(method, url, params=params)
 

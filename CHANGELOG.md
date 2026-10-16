@@ -5,6 +5,58 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.4.0] - 2026-10-15
+
+Session 4 — Order path, kill switch and modes. Everything at and below the broker-write
+boundary, locked behind a pre-trade clearance whose gate still refuses every intent (Session 4a
+builds its checks), so no order can reach the broker yet. No IBKR call was made: every order
+shape is VERIFY-LIVE.
+
+### Added
+
+- Order domain (`domain/orders.py`): intents with uuid7 ids, order terms whose every price
+  policy carries a limit (a plain market order cannot be expressed), the pre-trade clearance
+  bound to an intent, an action and the terms' digest, broker orders, fills, positions, cash
+  balances, holding assignments, mode changes and kill-switch records.
+- Migration `002_orders.sql` and `store/orders.py`: intents, an append-only event history,
+  clearances spent once, broker orders, fills, account reads with position and cash snapshots,
+  the mode audit, the kill-switch flag and the holdings registry; `store/worker.py` runs the
+  store on one thread for async callers.
+- IBKR order client (`ibkr/orders.py`, `ibkr/order_decode.py`): whatif, an idempotent placement
+  (the cOID looked up in a complete live-orders snapshot and the trades before anything is
+  sent), the warning loop under a reply policy, modify, cancel, status, live orders, trades,
+  conversion fields, the cOID short form, and the reset of suppressed warnings.
+- `execution/`: the intent state machine with property tests, lite's order discipline, the
+  quote policy per asset class and the collar, the reply policy (`o354` only under the quote
+  policy and inside the collar; unknown warnings declined, cancelled and alerted), modes with
+  audited upgrades and automatic downgrades, the kill switch (file and database flags, a sweep
+  that cancels what adds risk and keeps the sells that reduce it), the fail-closed pre-trade
+  gate, the clearance ledger, the write boundary (mode, paper guard, kill switch, clearance) and
+  shadow fills priced with the cost model.
+- `obliskiq kill on|off|status` (`kill on` works even when the configuration does not load) and
+  `obliskiq mode show|set`.
+- `config/defaults/execution.yaml`: lite's `discipline` keys the order path reads, and
+  `execution` (modes, orders, reply policy, quote policy, collar, kill switch).
+- The stateful fake broker and order rig in `tests/support/`, guard tests (only the gate
+  constructs or records a clearance; only the order client spells the write endpoints and only
+  the write boundary places or modifies; only limit-capped order types are reachable; the
+  order path's state reads are the listed ones) and `docs/knowledge/ibkr-orders.md`.
+- Schema triggers: a clearance is spent once and never changed or deleted; an intent's identity
+  never changes.
+- Adversarial tests (`tests/unit/test_breaker_*.py`, a property file) against the clearance
+  lock, class by effect, the kill switch, the reply policy, modes and the state machine.
+
+### Changed
+
+- `BrokerSession.request(..., retry=False)` sends a write at most once.
+- The transport is readied (an OAuth token renewed) before a request takes its pacing slot, and
+  a re-arm stops at the first request the transport cannot sign (DECISIONS D53).
+- `/iserver/account/orders`, `/trades` and `/pnl/partitioned` each have a rate group at one
+  request per 6 s.
+- `run_read_only` takes a login driver; it is tested end to end through the transport it builds.
+- The magic-number guard requires every numeric constant in `execution` and `decision` to be a
+  listed protocol fact (DECISIONS D50).
+
 ## [0.3.2] - 2026-10-12
 
 Sessions read what their work needs, when it needs it (DECISIONS D43); Session 4 is split into

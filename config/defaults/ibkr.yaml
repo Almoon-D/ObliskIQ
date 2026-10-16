@@ -44,7 +44,8 @@ ibkr:
 
   # Pacing. IBKR's published limits (docs/knowledge/ibkr.md, "Pacing"): 10 requests a second
   # globally; history 10/s and 50/min; snapshot 10/s; /portfolio/accounts one per 5 s; scanner
-  # parameters one per 15 min; scanner runs and /tickle one a second. A violation puts the IP in a
+  # parameters one per 15 min; scanner runs and /tickle one a second; live orders, trades and
+  # partitioned P&L one per 5 s. A violation puts the IP in a
   # 15-minute penalty box, so every window below sits under the published cap rather than on it.
   # An owner override replaces the whole `groups` list.
   ratelimit:
@@ -71,6 +72,16 @@ ibkr:
       - name: tickle
         paths: ["tickle"]
         windows: [{requests: 1, per_seconds: 1.2}]
+      # The order path's reads, each paced by IBKR at one request per 5 s.
+      - name: live_orders
+        paths: ["iserver/account/orders"]
+        windows: [{requests: 1, per_seconds: 6.0}]
+      - name: trades
+        paths: ["iserver/account/trades"]
+        windows: [{requests: 1, per_seconds: 6.0}]
+      - name: pnl
+        paths: ["iserver/account/pnl/partitioned"]
+        windows: [{requests: 1, per_seconds: 6.0}]
     # Consecutive failures (429, 5xx, transport) that open a group's circuit, and how long it stays
     # open before one probe request is let through.
     breaker_failure_threshold: 5

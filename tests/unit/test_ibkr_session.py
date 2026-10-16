@@ -917,3 +917,93 @@ async def test_a_deferred_login_stops_the_attempts_and_says_when(
     assert fake_transport.recovered == 1
     assert fake_clock.slept == []
     assert [alert.kind for alert in alerts] == [SessionAlertKind.REAUTHENTICATION_FAILED]
+
+
+# ── the transport readies itself outside the pacing slot (Session 4) ──
+
+
+async def test_the_transport_is_readied_before_each_request(session, fake_transport):
+    with mocked() as mock:
+        mock.route().respond(200, json={})
+        await session.request("GET", "iserver/accounts")
+        await session.request("GET", "iserver/accounts")
+    assert fake_transport.refreshed == 2
+
+
+async def test_a_readying_failure_is_counted_and_never_sent(
+    session, fake_transport, shipped_settings
+):
+    async def unreachable() -> None:
+        raise IbkrUpstreamError("/oauth/live_session_token was unreachable after 4 attempts")
+
+    fake_transport.refresh = unreachable  # type: ignore[method-assign]
+    threshold = shipped_settings.ibkr.ratelimit.breaker_failure_threshold
+    with mocked() as mock:
+        route = mock.route().respond(200, json={})
+        for _ in range(threshold):
+            with pytest.raises(TransportUnavailableError, match="could not sign"):
+                await session.request("GET", "iserver/accounts")
+    assert route.call_count == 0
+    assert session.limiter.breaker_state("default").value == "open"
+
+
+async def test_a_readying_refusal_passes_through(session, fake_transport):
+    async def refused() -> None:
+        raise AuthError("live session token failed IBKR's signature check")
+
+    fake_transport.refresh = refused  # type: ignore[method-assign]
+    with pytest.raises(AuthError, match="signature check"):
+        await session.request("GET", "iserver/accounts")
+
+
+async def test_a_slow_token_exchange_holds_no_concurrency_permit(
+    make_session, fake_transport, shipped_settings
+):
+    ibkr = shipped_settings.ibkr
+    single = ibkr.model_copy(
+        update={"ratelimit": ibkr.ratelimit.model_copy(update={"max_concurrency": 1})}
+    )
+    session = make_session(ibkr=single)
+    release = asyncio.Event()
+    calls = 0
+
+    async def slow_once() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await release.wait()
+
+    fake_transport.refresh = slow_once  # type: ignore[method-assign]
+    with mocked() as mock:
+        mock.route().respond(200, json={"ok": True})
+        stuck = asyncio.create_task(session.request("GET", "iserver/accounts"))
+        await asyncio.sleep(0)
+        # The only permit is free: another request goes through while the exchange waits.
+        assert await session.request("GET", "iserver/accounts") == {"ok": True}
+        release.set()
+        assert await stuck == {"ok": True}
+
+
+async def test_a_rearm_stops_at_the_first_transport_failure(session, fake_transport):
+    paths: list[str] = []
+    refreshes = 0
+
+    async def failing_after_first() -> None:
+        nonlocal refreshes
+        refreshes += 1
+        if refreshes > 1:
+            raise IbkrUpstreamError("/oauth/live_session_token was unreachable")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(rel(request))
+        return httpx.Response(401)
+
+    fake_transport.refresh = failing_after_first  # type: ignore[method-assign]
+    with mocked() as mock:
+        wire(mock, handler)
+        with pytest.raises(TransportUnavailableError):
+            await session.request("GET", SNAPSHOT)
+    # The 401 led to a re-arm whose first step could not be signed: no accounts call followed,
+    # and the repeat failed the same way at once.
+    assert paths == [SNAPSHOT]
+    assert refreshes == 3
