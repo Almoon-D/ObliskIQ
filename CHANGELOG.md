@@ -9,20 +9,23 @@ pre-release; the release workflow publishes each version's section as its releas
 
 Design review (owner request): evidence before machinery. A red-team of the plan against the
 code and the legacy evidence, challenged twice by two other reviewers, recorded as DECISIONS
-D60–D71. Process and documents only; no runtime code changes.
+D60–D71. Process and documents only: no runtime code changes; `pyproject.toml` and `uv.lock`
+carry only the project's own version, 0.5.0 → 0.5.1, which the release workflow publishes.
 
 ### Changed
 
 - MASTER_PLAN: the objective is the after-tax log growth of liquidation value within the
-  owner's drawdown limit, with an equity reference and a 60/40 scored under the same rule
-  (§1, D60); every capability runs under a computed activation condition, never a NAV
-  threshold (§2, D66); the core's variant, including an equity-dominant one, is selected by an
-  after-tax verdict (§5.4); the research pipeline has a protocol, registered combinations and a
-  decision rule with four mutually exclusive outcomes (§5.9, D62–D64); LLM-derived evidence is
-  forward only (§5.10, D70); sizing uses a gap-adjusted loss and protective exits handle gaps
-  without market orders (§5.11, §5.12, D67); currency gains enter the tax ledger (§5.16, D69);
-  capital follows research evidence and live results are monitored through a twin (§5.19,
-  D65); the transport's fallback is open again (§7, D68); the session sequence (§10).
+  owner's drawdown limit, tax simulated as it arises, with an equity reference and a 60/40
+  scored under the same rule; research reports a frontier and the owner's tolerance picks the
+  variant (§1, D60); every capability runs under a computed activation condition, never a NAV
+  threshold (§2, D66); the core's variants, including an equity-dominant one, are compared
+  after tax on that frontier (§5.4); the research pipeline has a protocol, registered
+  combinations and a decision rule with four mutually exclusive outcomes (§5.9, D62–D64);
+  LLM-derived evidence is forward only, with a minimal extractor from Session 10 (§5.10, D70);
+  sizing uses a gap-adjusted loss and protective exits handle gaps without market orders
+  (§5.11, §5.12, D67); currency gains enter the tax ledger (§5.16, D69); capital follows
+  research evidence and live results are monitored through a twin (§5.19, D65); the
+  transport's fallback is open again (§7, D68); the session sequence (§10).
 - SESSION_PROMPTS: T1, the owner's first run on the deployment machine (§A.5); new Sessions 4b
   (research harness, with the tax engine and European commissions), 4c (core verdict), 4d
   (first selection hypothesis) and 19a (capacity and scale, built before 1.0.0); Session 14

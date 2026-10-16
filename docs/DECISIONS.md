@@ -947,23 +947,39 @@ found in the repository from hypotheses that need evidence, and keep the system'
 ### D60 · The objective: after-tax log growth under a drawdown limit (§1)
 
 The system maximises the long-run growth of after-tax wealth. The primary statistic is the
-annualised log growth of the account's **liquidation value** — every position sold and its tax
-paid at the end of the horizon — net of costs, subject to the owner's limit on the peak-to-trough
-drawdown of mark-to-market NAV, expressed as a largest acceptable probability of breaching it.
-Distributions are compared by their median log growth under a block bootstrap, with the 5th
-percentile of terminal wealth reported beside it; the drawdown limit filters candidates rather
-than entering the score. Two references are scored under the same rule (costs, tax, liquidation
-at the horizon): a global accumulating UCITS equity ETF bought and held, and a global 60/40. They
-are yardsticks and a possible outcome, never the destination: the system keeps its aim of
-finding asymmetric opportunities. Tax is a cost inside the simulation, not a principle; the test
-decides when realising a gain pays. The owner states the return target, the drawdown limit and
-its probability, and the horizon before Session 4c's pre-registration merges (MASTER_PLAN §11).
+annualised log growth of the account's **liquidation value**, net of costs, subject to a limit
+on the peak-to-trough drawdown of mark-to-market NAV, expressed as a largest acceptable
+probability of breaching it. **Tax is simulated as it arises**: every realised gain or loss goes
+through the lot engine (FIFO, the two-month rule, offsets, carry-forward), each tax year's tax
+is paid out of the portfolio at the profile's payment date in the following year, and
+withholding on income is taken when the income is received; at the end of the horizon the
+remaining positions are sold and the tax on that sale is paid. Rotation therefore pays its tax
+when it happens, and deferral keeps only the benefit it really has. Distributions are compared
+by their median log growth under a block bootstrap, with the 5th percentile of terminal wealth
+reported beside it; the drawdown limit filters candidates rather than entering the score. Two
+references are scored under the same rule: a global accumulating UCITS equity ETF bought and
+held, and a global 60/40. They are yardsticks and a possible outcome, never the destination: the
+system keeps its aim of finding asymmetric opportunities. Tax is a cost inside the simulation,
+not a principle; the test decides when realising a gain pays.
+
+**Research is separate from authorisation.** No research session waits for the owner's numbers:
+Session 4c reports a frontier — for each drawdown limit and probability on a pre-registered
+grid, the variant with the highest median after-tax log growth that respects it, and its outcome
+against the equity reference. Choosing the variant that receives capital is the owner's
+authorisation: the owner's drawdown tolerance picks a point on the frontier, recorded here
+before Session 13 builds it. The owner's stated aspiration, relayed on 2026-10-16, is 30–50 % a
+year or more — an aspiration, not a promise and not a gate; reports show each variant's distance
+from it. For scale: with 40 % volatility, 30 % compound growth needs an arithmetic mean near
+38 % a year, which no documented premium approaches; reaching it depends on a selection edge
+still to be found and on concentration the drawdown tolerance must allow.
+
 Evidence: Session 13's gate compared the core with a 60/40 on Sharpe and drawdown, which an
 unlevered variant can pass while compounding less than the equity reference; an unlevered risk
 balance weights by risk, not by growth (two assets of 16 % and 5 % volatility at equal risk hold
 about 24 % equity). Rejected: mean terminal wealth (dominated by its tails); Sharpe against the
 60/40 as the gate; after-tax wealth without liquidation (it counts a deferred tax as a gain);
-minimising realised gains as a rule of its own.
+deferring all tax to the horizon (it would hide rotation's tax cost); minimising realised gains
+as a rule of its own; blocking research on the owner's risk numbers.
 
 ### D61 · Evidence first: the research track and the session sequence (§10)
 
@@ -972,7 +988,7 @@ before Session 5, and the owner runs T1 on the deployment machine in parallel (D
 test needs none of Sessions 5–12, so waiting for them delayed the result that decides what to
 build. Session 14 is absorbed into 4c: work an earlier entry gives to Session 14 (D30's inference
 keys, D31's pricing of both legs) belongs to 4c, and D9's benchmark of 3.14t is dropped because
-no decision depends on it (standard CPython stays). Session 13 builds the variant 4c selects.
+no decision depends on it (standard CPython stays). Session 13 builds the variant the owner picks from 4c's frontier.
 Session 19a builds what pays only at larger capital (D66). Session 21 is the second research
 batch. Session 5 runs as written plus D67's additions: it is independent of the strategy, and
 any outcome that trades US instruments or holds shares with stops needs its currency manager and
@@ -986,10 +1002,10 @@ the legacy record, which is absence of evidence about them, not evidence against
 A test estimates one effect β, its pre-registered primary metric (net of costs and tax), with a
 two-sided interval [L, U] at level 1 − 2α, α = 0.05 by default, Bonferroni-adjusted across the
 tests of its confirmation run. θ > 0 is the smallest net effect worth the layer's added risk and
-complexity, stated with its justification in the pre-registration and approved by the owner with
-it. Before inference the data must pass the pre-registered adequacy checks (point in time,
-coverage, survivorship measured); if they fail, the outcome is **not evaluable** and nothing is
-concluded. Otherwise exactly one of:
+complexity, stated with its justification in the pre-registration, which the owner can amend
+before it merges; the merge fixes it. Before inference the data must pass the pre-registered
+adequacy checks (point in time, coverage, survivorship measured); if they fail, the outcome is
+**not evaluable** and nothing is concluded. Otherwise exactly one of:
 
 - **sufficient** — L ≥ θ: an effect worth having is shown;
 - **insufficient** — U < θ: an effect worth having is ruled out (labelled *negative* when U < 0);
@@ -1085,8 +1101,14 @@ shadow within its cost share of NAV, and live only with a sufficient H7. lite's
 satellite at four positions at any capital. Capabilities that pay only at larger capital — direct
 bonds and bills, stock baskets, mutual funds, further venues and working currencies, capacity
 limits from average daily value, the upper tax brackets and foreign-asset reporting — are built in
-Session 19a, before the red-team, so 1.0.0 carries them (owner, 2026-10-16). A NAV ladder in tests
-shows each capability turning on exactly when its condition holds.
+Session 19a, before the red-team, so 1.0.0 carries them (owner, 2026-10-16). The owner chose this
+over building each one when its condition first holds, which two reviewers proposed: an account
+that grows past a threshold should not wait for a build session. The cost is kept down by order —
+nothing at larger capital is built before the evidence-driven sessions — and by form: each
+capability sits behind its activation condition, stays off until it holds, and is held working by
+the NAV-ladder tests that show it turning on exactly when its condition holds. Within 19a the order
+is bonds and bills, mutual funds, capacity limits, tax at scale, venues and currencies, then
+baskets; a session that cannot finish them with quality splits under AGENTS.md.
 
 ### D67 · Protective exits and sizing under gaps (§5.11, §5.12)
 
@@ -1143,9 +1165,15 @@ which tested no stated failure rate.
 A model trained after a news item can carry what followed it, so an LLM-derived signal backtested
 on history before the model's training cutoff is contaminated (Glasserman & Lin 2023 measure this
 look-ahead bias in GPT sentiment). Only outputs produced live and stamped when produced count as
-evidence. Session 16 pre-registers H7 (do extracted event features add to the price signal) and its
-forward evaluation, and the EventExtractor runs from its first day. Every role is measurable for
-extraction quality by its evaluation set; none has a measured link to returns.
+evidence, so the clock that matters is calendar time. A minimal EventExtractor therefore starts in
+Session 10, with the first news collectors: one configured provider, the `ExtractedEvent` schema,
+outputs stamped and stored with the model id and prompt hash, a budget cap, and nothing that
+consumes them. H7's pre-registration (do extracted event features add to the price signal) merges
+before its first live run. Session 16 builds the rest of the layer on that stored series without
+breaking it; a change of model or prompt starts a new labelled segment. Without a configured
+provider key the extractor is queued and the clock starts when one exists. Every role is
+measurable for extraction quality by its evaluation set; none has a measured link to returns.
+Rejected: waiting for the whole LLM layer before the first stamped output.
 
 ### D71 · The first research batches (§5.9)
 

@@ -821,8 +821,11 @@ DELIVERABLES
      the base currency with ECB rates; coverage and survivorship reports (the share of a
      universe without a price, by year).
    - simulate.py: a monthly walk-forward simulator with delta execution, quant/costs.py on
-     every leg (the listing venue, never SMART) and the tax ledger of item 2; liquidation at the
-     horizon for every portfolio and reference (D60).
+     every leg (the listing venue, never SMART) and the tax ledger of item 2. Tax is simulated
+     as it arises (D60): each realised gain or loss through the lot engine, each tax year's tax
+     paid out of the portfolio at the profile's payment date in the following year (a value
+     es.yaml carries with its source), withholding when income is received; at the horizon
+     the remaining positions are sold and that tax paid, for every portfolio and reference.
    - stats.py: the annualised log growth of liquidation value, drawdowns and the probability of
      breaching a limit, a block bootstrap, Newey–West on a series, the Fama–MacBeth series of a
      cross-sectional effect, power to detect θ and the effect detectable at a given power,
@@ -858,7 +861,9 @@ DELIVERABLES
    DECISIONS.
 
 TESTS (no network): the log growth of a liquidated portfolio, one rebalance, one loss deferral
-and its release, one carry-forward and one year of tax, hand-computed; Newey–West,
+and its release, one carry-forward, one year of tax paid at its payment date and the terminal
+liquidation's tax, hand-computed; a rotating portfolio pays tax during the horizon that a
+buy-and-hold one defers (test); Newey–West,
 Fama–MacBeth, the seeded bootstrap, power and n_eff against closed forms; the decision rule's
 outcomes and labels, and a property test that every interval lands in exactly one outcome; a
 point-in-time test that perturbs every observation after as_of and finds every output
@@ -883,13 +888,13 @@ You are building ObliskIQ, session 4c. AGENTS.md is your operating manual; MASTE
 the design (read §1, §4, §5.2, §5.4, §5.9, §5.16 and DECISIONS D60–D63 carefully). Network is
 open for research data. No IBKR call. Finish with the end-of-session protocol.
 
-PRECONDITION: Session 4b merged, and the owner's objective numbers (the return target, the
-drawdown limit and the probability of breaching it, the horizon; MASTER_PLAN §11) recorded in
-DECISIONS. Otherwise STOP and ask the owner for them.
+PRECONDITION: Session 4b merged. Otherwise STOP. The research does not wait for the owner's
+risk numbers (DECISIONS D60): it reports a frontier, and the owner's drawdown tolerance picks a
+point on it afterwards.
 
 GOAL: the first investment experiment, executed: the core's variants and the two references
-tested once, after tax and liquidation, against the objective, in a reproducible report that
-states each outcome and what the test cannot conclude.
+tested once, after tax, against the objective, in a reproducible report that shows the frontier
+of after-tax growth against drawdown, states each outcome and what the test cannot conclude.
 
 READ: research/preregistrations/TEMPLATE.md; legacy/old/ObliskIQ/docs/STRATEGY_V2_DESIGN.md
 §0 (frozen at commit, amendment voids, single shot) and
@@ -901,15 +906,19 @@ research/preregistrations/core-allocation.md from the template:
 - portfolios: the equity reference and the 60/40 reference (D60); A static risk balance with
   wide bands; B A + the tax-aware trend tilt (12-month TSMOM and a 10-month moving average,
   hysteresis, a scale floor above zero); C a growth-tilted risk budget + the tilt; D an
-  equity-dominant book with the tilt as an overlay to cash, sized to the owner's drawdown
-  limit; every constant;
+  equity-dominant book with the tilt as an overlay to cash, sized to each drawdown limit of
+  the grid below; every constant;
 - each role's long-history proxy in EUR (ECB rates) with its bias; the span (from 2005 at
   least, longer pre-tax history where it exists for the trend overlay's structure); monthly
   walk-forward; costs through quant/costs; tax through es_irpf (FIFO, the two-month rule, swap
-  partners on a different index, offsets, carry-forward); liquidation at the horizon;
+  partners on a different index, offsets, carry-forward) as it arises, each year's tax paid at
+  the profile's payment date, and the remaining positions liquidated and taxed at the
+  horizon;
 - the primary effect per variant: its annualised after-tax log growth minus the equity
-  reference's, with the block-bootstrap interval; the drawdown filter; θ with its
-  justification; Bonferroni across the variants; the power to detect θ and the effect
+  reference's, with the block-bootstrap interval; a grid of drawdown limits and breach
+  probabilities wide enough to bracket a cautious and an aggressive owner, with the
+  owner's stated aspiration (30–50 % a year, D60) reported as a distance, never a gate;
+  θ with its justification; Bonferroni across the variants; the power to detect θ and the effect
   detectable at 0.8, computed before the run; robustness (subperiods, break-even cost
   multiplier against the declared cost range); the rule that variants the test cannot tell
   apart resolve to the simplest, lowest-turnover one;
@@ -920,13 +929,15 @@ the merge.
 Step 2 — The run, once: data through research/data.py with coverage reported; the verdict
 through `obliskiq research run`; research/reports/core-allocation.md (every metric before and
 after tax, a per-year table, bias disclosure, each outcome with its labels and power, what it
-cannot conclude — future superiority, crisis behaviour beyond the episodes in the sample). A
-DECISIONS entry names the variant Session 13 builds (its config key arrives with its consumer).
-If data is unreachable, the outcome is not evaluable and ROADMAP says so — never fabricated.
+cannot conclude — future superiority, crisis behaviour beyond the episodes in the sample) and
+the frontier: for each point of the grid, the variant with the highest median after-tax log
+growth that respects it, with its outcome against the equity reference. The owner's choice of a
+point is an authorisation recorded in DECISIONS afterwards (Session 13's precondition); this
+session does not choose for the owner. If data is unreachable, the outcome is not evaluable and
+ROADMAP says so — never fabricated.
 
 ACCEPTANCE: the pre-registration is on main before the run; the verdict is reproducible by one
-command; the report states each outcome with its labels, power and limits; DECISIONS names the
-variant.
+command; the report states each outcome with its labels, power and limits, and the frontier.
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
@@ -1110,8 +1121,9 @@ DELIVERABLES
 2. capital/ (minimal; Session 7 extends it): `capital.mode: whole_account | cap` and the
    cap in base currency, so a large paper balance behaves like a small account.
 3. A temporary core: config `core.skeleton_targets` (labelled skeleton; removed in Session
-   13) listing 3–4 roles of the variant Session 4c selected, with candidate symbol, venue
-   and currency; conids resolved
+   13) listing 3–4 roles of the variant the owner chose from Session 4c's frontier (the
+   equity reference's vehicles until one is chosen), with candidate symbol, venue and
+   currency; conids resolved
    through secdef and pinned (fixtures in tests; live if paper credentials are present)
    and listed in the skeleton allowlist. UCITS vehicles only, so they will also pass
    eu_priips in Session 8; at least one quoted in a currency other than the base currency,
@@ -1349,7 +1361,7 @@ DELIVERABLES
    quote and accept an order — stocks on each venue, UCITS ETFs and ETCs, US and Eurex
    options; the order types and algos per class; the account's trading permissions. Recorded in docs/knowledge/ibkr-capabilities.md and config; the
    selector never proposes a vehicle whose capability is unverified.
-2. Core role candidates: for every role of the variant Session 4c selected, at least two
+2. Core role candidates: for every role of the variants Session 4c registered, at least two
    eligible UCITS vehicles, currency-hedged share classes ranked as distinct vehicles
    (DECISIONS D69), preferring accumulating share classes and venues the market-data plan
    covers;
@@ -1447,6 +1459,14 @@ DELIVERABLES
    per date; earnings dates (research-grade, labelled).
 8. Source health (ok, stale, failing; last success; rows) feeding status; scheduler hooks
    per source cadence.
+9. A minimal EventExtractor (DECISIONS D70), the start of H7's clock: llm/ with one
+   configured provider (the key name from config; skipped and queued when no key is set), the
+   `ExtractedEvent` schema (entities, region, sector, type, tone, novelty, sources), structured
+   output validated with one retry then fail closed, untrusted text escaped, a monthly budget
+   cap, and every output stored with its item, the time it was produced, the model id and the
+   prompt hash; nothing consumes it. research/preregistrations/llm-events.md, merged in its own
+   PR before the extractor's first live run, registers H7 (do the features add to the price
+   signal), its sample, horizon, θ and evaluation date. The llm import contracts hold.
 
 ACCEPTANCE: each fetcher has fixture tests and a recorded live probe (or VERIFY-LIVE); COT
 and Form 4 are point-in-time (as_of tests); no source without a release-date policy can
@@ -1572,11 +1592,12 @@ You are building ObliskIQ, session 13. AGENTS.md is your operating manual; MASTE
 the design (read §1, §2, §4, §5.2, §5.4, §5.16 and DECISIONS D60, D61 carefully). Money
 paths fail closed. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–12 merged, and Session 4c's report and the DECISIONS entry naming
-the selected variant on main. Otherwise STOP.
+PRECONDITION: Sessions 1–12 merged, Session 4c's report on main, and the owner's choice of a
+point on its frontier (the drawdown tolerance, its probability and the horizon) recorded in
+DECISIONS (D60). Otherwise STOP and ask the owner for that choice.
 
-GOAL: the core as Session 4c's verdict selected it — the variants 4c registered, the
-selected one by default — with tax- and cost-aware rebalancing, built on the same research
+GOAL: the core as the owner's point on Session 4c's frontier selects it — the variants 4c
+registered, the chosen one by default — with tax- and cost-aware rebalancing, built on the same research
 code paths so the live core and the tested core cannot drift apart.
 
 READ: research/preregistrations/core-allocation.md and research/reports/core-allocation.md
@@ -1601,10 +1622,10 @@ DELIVERABLES
   band only, tax-aware execution (losses first; gain-realising reductions only when the
   pre-registered benefit exceeds tax_cost; re-entry through swap partners), cash
   reservations respected, no stop orders, the StrategyValue interface implemented →
-  TargetPortfolio. `core.variant` selects the variant, its default the one 4c selected.
+  TargetPortfolio. `core.variant` selects the variant, its default the owner's choice.
   Remove the Session 6 skeleton targets and their config.
 - A parity test: on a fixture history, engines/core and research/simulate.py produce the
-  same target weights and trades for the selected variant.
+  same target weights and trades for the chosen variant.
 
 ACCEPTANCE: each registered variant produces a TargetPortfolio from fixtures for a small and
 a large account; the parity test holds; risk-budget tests (if built) green against closed
@@ -1745,11 +1766,10 @@ DELIVERABLES
 10. Scheduling: the extractor per collector run; the scout weekly and on event spikes; the
     devil's advocate weekly. Each role runs in shadow within its cost share of NAV and
     influences a decision only when its activation condition holds (DECISIONS D66).
-11. H7, forward only (DECISIONS D70): the EventExtractor's outputs are stamped when
-    produced, from its first day; research/preregistrations/llm-events.md, merged in its
-    own PR before the extractor runs live, registers whether its features add to the price
-    signal and how and when that is evaluated. No backtest of an LLM-derived signal on
-    history counts as evidence.
+11. H7, forward only (DECISIONS D70): extend Session 10's minimal EventExtractor without
+    breaking its stored series (a change of model or prompt starts a new labelled segment);
+    evaluate H7 when its pre-registered sample is reached. No backtest of an LLM-derived
+    signal on history counts as evidence.
 12. LIVE (if a key is configured): one probe and one eval run per configured model,
     recorded.
 
@@ -2017,6 +2037,9 @@ PRECONDITION: Sessions 1–19 merged. Otherwise STOP.
 GOAL: the machine scales with capital: every capability that pays only at larger capital is
 built and turns on by its computed condition, so 1.0.0 serves a small account and a large one
 with the same code and no NAV threshold anywhere.
+The owner requires these in 1.0.0 (DECISIONS D66); each stays off until its condition holds.
+Build in this order — bonds and bills, mutual funds, capacity limits, tax at scale, venues and
+currencies, baskets — and split the session under AGENTS.md rather than rush the tail.
 
 READ: decision/activation.py and decision/vehicle_selector.py and their tests;
 docs/knowledge/ibkr-capabilities.md; quant/costs.py (the bond rows and the impact term).

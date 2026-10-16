@@ -14,19 +14,19 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | next | |
-| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references | planned (needs the owner's objective numbers) | |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | planned | |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | planned | |
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | planned | |
-| 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar | planned | |
+| 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
 | 13 | Core engine | the variants 4c registered, risk budgeting where they need it, tax-aware trend tilt, rebalancing | planned | |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
-| 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles, H7 forward | planned | |
+| 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series | planned | |
 | 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents | planned | |
 | 18 | Scoreboard, patterns, capital and promotion | TWR attribution, TCA, grading, calibration, twins and monitoring, capital by evidence, promotion | planned | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | planned | |
@@ -45,9 +45,12 @@ reviewers; process and documents only, no runtime code changes. DECISIONS D60–
 
 **Decided.**
 - The objective (D60): the annualised after-tax log growth of liquidation value within the
-  owner's drawdown limit; an accumulating global equity ETF bought and held and a global 60/40
-  scored under the same rule, as references and a possible outcome, not the destination. Tax is
-  a cost, not a principle.
+  owner's drawdown limit, tax simulated as it arises and the rest paid at liquidation; an
+  accumulating global equity ETF bought and held and a global 60/40 scored under the same rule,
+  as references and a possible outcome, not the destination. Tax is a cost, not a principle.
+  Research is separate from authorisation: 4c reports a frontier and the owner's drawdown
+  tolerance picks the variant before Session 13; the aspiration (30–50 % a year or more) is
+  reported as a distance, never a gate.
 - Evidence first (D61): Sessions 4b (research harness), 4c (core verdict) and 4d (one selection
   hypothesis) before Session 5; T1 on the deployment machine in parallel; Session 14 absorbed
   into 4c; Session 13 builds 4c's variant; Session 19a builds what pays at larger capital
@@ -69,7 +72,11 @@ reviewers; process and documents only, no runtime code changes. DECISIONS D60–
 - T1 before Session 6; the TWS API with IBC as the fallback if it fails (D68).
 - Gaps fixed by later sessions: European commissions (4b), currency-gain tax (7), hedged share
   classes and look-through (8, 9, 17), lite's caps restated per sleeve (17) (D69).
-- LLM-derived evidence is forward only (D70); the first research batches (D71).
+- LLM-derived evidence is forward only, so a minimal EventExtractor starts H7's clock in
+  Session 10 (D70); the first research batches (D71).
+- Session 19a is kept at the owner's request against two reviewers' proposal to build each
+  capability when it first activates: built last, behind its conditions, in a fixed order
+  (D66).
 
 **Withdrawn from the review's first rounds.** Cutting components on the strength of the legacy
 record (absence of evidence, not evidence against); "a weekly 188-name panel calibrates
@@ -81,8 +88,9 @@ a gate for three-to-six-month and single-name options; tax minimisation as a pri
 Sessions 4b, 4c, 4d, 19a added; Sessions 5–13 and 15–21 edited as listed in D61–D71; Session 14
 removed.
 
-**Owner, before Session 4c.** The objective's numbers: the return target, the drawdown limit
-and the probability of breaching it, the horizon (MASTER_PLAN §11).
+**Owner, before Session 13.** A point on Session 4c's frontier: the drawdown tolerance, the
+probability of breaching it and the horizon (MASTER_PLAN §11). No research session waits for
+it.
 
 ### Session 4a — Pre-trade rails (2026-10-16, v0.5.0)
 
@@ -536,9 +544,9 @@ settles it.
 
 ## Follow-ups
 
-- **Owner, before Session 4c:** record the objective's numbers in DECISIONS — the return
-  target, the drawdown limit and the probability of breaching it, the horizon (D60). Also
-  open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
+- **Owner, before Session 13:** choose a point on Session 4c's frontier — the drawdown
+  tolerance, the probability of breaching it, the horizon — recorded in DECISIONS (D60).
+  Before Session 10: an LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).
 - Session 4b: European commission rows (Xetra, LSE, Euronext, Borsa Italiana, SIX) so the cost
