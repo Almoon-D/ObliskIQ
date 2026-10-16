@@ -6,13 +6,14 @@ whole list, and the unread-key scan reads each list as one key.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from decimal import Decimal
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, NonNegativeInt, PositiveFloat, PositiveInt, model_validator
 
 from ..domain.base import NonEmptyText
 from ..domain.enums import AssetClass
-from ..domain.orders import ExecutionMode
+from ..domain.orders import ExecutionMode, Sleeve, TimeInForce
 from .base import FrozenModel
 
 #: IBKR serves trades for the current day and six before it.
@@ -116,6 +117,50 @@ class KillSwitchConfig(FrozenModel):
     store_timeout_seconds: PositiveFloat
 
 
+type Fraction = Annotated[Decimal, Field(gt=0, le=1)]
+
+
+class CapsConfig(FrozenModel):
+    """What orders that add risk may commit, as fractions of NAV and a count, per 24 hours."""
+
+    max_order_fraction_of_nav: Fraction
+    max_daily_fraction_of_nav: Fraction
+    max_orders_per_day: PositiveInt
+
+    @model_validator(mode="after")
+    def _order_within_day(self) -> Self:
+        if self.max_order_fraction_of_nav > self.max_daily_fraction_of_nav:
+            raise ValueError("one order's cap cannot exceed the daily cap")
+        return self
+
+
+class ProtectiveSpecConfig(FrozenModel):
+    max_limit_offset_fraction: Annotated[Decimal, Field(ge=0, lt=1)]
+
+
+class PretradeConfig(FrozenModel):
+    caps: CapsConfig
+    cash_floor: Annotated[Decimal, Field(ge=0)]
+    protective: ProtectiveSpecConfig
+
+
+class ApprovalConfig(FrozenModel):
+    """The sleeves whose intents wait for the owner's approval (none: the queue is off)."""
+
+    sleeves: list[Sleeve]
+
+    @model_validator(mode="after")
+    def _distinct(self) -> Self:
+        if len(set(self.sleeves)) != len(self.sleeves):
+            raise ValueError("each sleeve is listed once")
+        return self
+
+
+class FlattenConfig(FrozenModel):
+    intent_ttl_minutes: PositiveInt
+    tif: TimeInForce
+
+
 class ExecutionConfig(FrozenModel):
     modes: ModesConfig
     orders: OrdersConfig
@@ -123,6 +168,9 @@ class ExecutionConfig(FrozenModel):
     quote_policy: list[QuotePolicyRule]
     collar: CollarConfig
     kill_switch: KillSwitchConfig
+    pretrade: PretradeConfig
+    approval: ApprovalConfig
+    flatten: FlattenConfig
 
     @model_validator(mode="after")
     def _one_rule_per_class(self) -> Self:

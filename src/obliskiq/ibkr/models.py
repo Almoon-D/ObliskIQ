@@ -54,11 +54,16 @@ class Position(IbkrModel):
 
 
 class CashBalance(IbkrModel):
-    """Cash in one currency, as the ledger reports it."""
+    """Cash in one currency, as the ledger reports it.
+
+    ``exchange_rate`` is the ledger's ``exchangerate``: what one unit of the currency is worth in
+    the account's base currency (1 for the base currency itself) [CP ✓ 2026-09-10].
+    """
 
     currency: CurrencyCode
     cash: Amount
     settled_cash: Amount | None
+    exchange_rate: Amount | None = None
 
 
 class NavReading(IbkrModel):

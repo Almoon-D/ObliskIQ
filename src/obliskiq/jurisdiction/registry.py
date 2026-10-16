@@ -2,8 +2,9 @@
 
 Each policy kind (eligibility, tax, …) has one :class:`PolicyRegistry` listing the policies
 ObliskIQ ships for it, by id. A profile selects one id per kind; the registry resolves that
-id when a policy is requested. A profile that declares no id for the kind, or declares an
-id nobody registered, fails loudly — there is no fallback policy.
+id when a policy is requested, building it from the profile and the configuration. A profile
+that declares no id for the kind, or declares an id nobody registered, fails loudly — there is
+no fallback policy.
 
 Registries are built from immutable entry tuples, so nothing is registered at import time
 and there is no mutable module state.
@@ -15,11 +16,11 @@ from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
 from typing import Protocol
 
-from ..config.schema import check_identifier
+from ..config.schema import ObliskConfig, check_identifier
 from ..errors import PolicyError
 from .profile import JURISDICTIONS_DIR, JurisdictionProfile
 
-type PolicyFactory[P] = Callable[[JurisdictionProfile], P]
+type PolicyFactory[P] = Callable[[JurisdictionProfile, ObliskConfig], P]
 
 
 class PolicyKind(Protocol):
@@ -58,8 +59,8 @@ class PolicyRegistry[P]:
     def ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._factories))
 
-    def resolve(self, profile: JurisdictionProfile) -> P:
-        """The policy ``profile`` selects for this kind."""
+    def resolve(self, profile: JurisdictionProfile, settings: ObliskConfig) -> P:
+        """The policy ``profile`` selects for this kind, built with ``settings``."""
         policy_id = profile.policies.get(self._kind)
         where = f"{JURISDICTIONS_DIR}/{profile.id}.yaml"
         if policy_id is None:
@@ -74,7 +75,7 @@ class PolicyRegistry[P]:
                 f"{self._kind} policy '{policy_id}' selected by {where} is not registered "
                 f"(registered: {registered})"
             )
-        return factory(profile)
+        return factory(profile, settings)
 
 
 def check_declared_policies(profile: JurisdictionProfile, kinds: Iterable[PolicyKind]) -> None:
@@ -95,8 +96,3 @@ def check_declared_policies(profile: JurisdictionProfile, kinds: Iterable[Policy
             )
     if problems:
         raise PolicyError(f"{where}: " + "; ".join(problems))
-
-
-#: The policy kinds ObliskIQ ships, each with its registered policies. A kind joins this
-#: tuple together with its first policy.
-SHIPPED_POLICY_KINDS: tuple[PolicyKind, ...] = ()

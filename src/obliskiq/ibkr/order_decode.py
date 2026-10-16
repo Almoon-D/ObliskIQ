@@ -15,6 +15,7 @@ missing fill is how a position is misread.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -32,6 +33,8 @@ DUPLICATE_COID_MARKER = "local order id="
 
 #: The separator between a whatif warning's code and its text ("21/You are trying ...").
 WARNING_CODE_SEPARATOR = "/"
+
+_CURRENCY_RE = re.compile(r"[A-Z]{3}")
 
 _SIDES = {"B": OrderSide.BUY, "BUY": OrderSide.BUY, "S": OrderSide.SELL, "SELL": OrderSide.SELL}
 
@@ -111,6 +114,8 @@ class WhatIf:
     warning_code: str | None
     warning: str | None
     error: str | None
+    #: The currency the amounts are in, as the display strings name it (``"… USD (10 Shares)"``).
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +160,17 @@ def _leading_amount(raw: Any) -> Decimal | None:
     if text is None:
         return None
     return to_decimal(text.split()[0])
+
+
+def _amount_currency(raw: Any) -> str | None:
+    """The currency a display string names after its amount: ``"1,978.60 USD"`` → ``USD``."""
+    text = _text(raw)
+    if text is None:
+        return None
+    words = text.split()
+    if len(words) < 2 or not _CURRENCY_RE.fullmatch(words[1]):
+        return None
+    return words[1]
 
 
 def decode_place_answer(body: Any) -> PlaceAnswer:
@@ -327,6 +343,7 @@ def decode_whatif(body: Any) -> WhatIf:
         warning_code=code,
         warning=warning,
         error=_text(body.get("error")),
+        currency=_amount_currency(amount.get("total")) or _amount_currency(amount.get("amount")),
     )
 
 

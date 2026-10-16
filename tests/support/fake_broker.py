@@ -3,9 +3,11 @@
 It keeps orders, warnings, trades and cancels the way the Client Portal Web API describes them
 (docs/knowledge/ibkr-orders.md) and lets a test script the awkward cases: warnings to answer, a
 refusal, a reused cOID, an answer lost after the order was taken, an order listed late, a
-live-orders list that is not a complete snapshot, a fill that races a cancel. Sessions 4a and 5
-extend it. Like IBKR, any request other than the reply invalidates an open warning. Shapes
-are IBKR's documented ones, not live captures (VERIFY-LIVE).
+live-orders list that is not a complete snapshot, a fill that races a cancel. Session 4a adds
+what the pre-trade gate reads: the session and account endpoints, positions (which a fill moves,
+unless a test keeps them stale), the ledger, snapshots, contract rules, algos and the contract
+search. Session 5 extends it. Like IBKR, any request other than the reply invalidates an open
+warning. Shapes are IBKR's documented ones, not live captures (VERIFY-LIVE).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -15,6 +17,7 @@ import re
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -23,6 +26,10 @@ import respx
 
 BASE = "https://gw.test/v1/api"
 ACCOUNT = "DUTEST1"
+
+#: Snapshot field ids (config/defaults/ibkr.yaml): last, bid, ask, availability, the
+#: underlying's 30-day historical volatility, an option's own implied volatility.
+LAST, BID, ASK, AVAILABILITY, HISTORICAL_VOL, OPTION_IV = "31", "84", "86", "6509", "7087", "7633"
 
 _ID = r"(?P<id>[^/?]+)"
 
@@ -122,6 +129,31 @@ class FakeBroker:
             "warn": None,
             "error": None,
         }
+        #: Answers each whatif from its order body instead of ``whatif_answer``.
+        self.whatif_for: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+        #: The clock the broker stamps executions with (the test's wall clock, when set).
+        self.trade_clock: Callable[[], datetime] | None = None
+        #: Positions by conid (units), with their currency.
+        self.positions: dict[int, tuple[Decimal, str]] = {}
+        #: Fills leave the positions as they were (a stale portfolio cache).
+        self.stale_positions = False
+        #: Cash per currency: (cash, rate to the base currency). The base currency is EUR.
+        self.cash: dict[str, tuple[Decimal, Decimal | None]] = {"EUR": (Decimal(10000), None)}
+        self.nav: Decimal | None = Decimal(100000)
+        #: Currencies the ledger lists without a readable cash balance.
+        self.unreadable_cash: set[str] = set()
+        #: Snapshot rows by conid, keyed by field id.
+        self.quotes: dict[int, dict[str, Any]] = {}
+        #: The positions, ledger or snapshot endpoint answers 503.
+        self.unavailable: set[str] = set()
+        #: Contract search: (symbol, listing exchange, currency) by conid.
+        self.contracts: dict[int, tuple[str, str, str]] = {}
+        self.rules_answer: dict[str, Any] = {
+            "orderTypes": ["limit", "stop_limit"],
+            "sizeIncrement": 1,
+            "incrementRules": [{"lowerEdge": 0.0, "increment": 0.01}],
+        }
+        self.algos_answer: dict[str, Any] = {"algos": [{"id": "Adaptive", "name": "Adaptive"}]}
         self._pending: dict[str, Pending] = {}
         self._used_coids: set[str] = set()
         self._next_id = 1000
@@ -162,6 +194,33 @@ class FakeBroker:
         router.post(url=f"{BASE}/iserver/questions/suppress/reset").mock(
             side_effect=other(self._suppress_reset)
         )
+        router.post(url=f"{BASE}/iserver/auth/ssodh/init").mock(
+            return_value=httpx.Response(200, json={"authenticated": True, "competing": False})
+        )
+        router.get(url=f"{BASE}/iserver/accounts").mock(
+            return_value=httpx.Response(200, json={"accounts": [ACCOUNT]})
+        )
+        router.get(url=f"{BASE}/portfolio/accounts").mock(
+            return_value=httpx.Response(
+                200, json=[{"id": ACCOUNT, "accountId": ACCOUNT, "currency": "EUR"}]
+            )
+        )
+        portfolio = rf"{re.escape(BASE)}/portfolio/{re.escape(ACCOUNT)}"
+        router.get(url__regex=rf"{portfolio}/positions/(?P<page>[0-9]+)$").mock(
+            side_effect=other(self._positions)
+        )
+        router.get(url=f"{BASE}/portfolio/{ACCOUNT}/ledger").mock(side_effect=other(self._ledger))
+        router.get(url__regex=rf"{re.escape(BASE)}/iserver/marketdata/snapshot(\?.*)?$").mock(
+            side_effect=other(self._snapshot)
+        )
+        router.post(url=f"{BASE}/iserver/contract/rules").mock(side_effect=other(self._rules))
+        router.get(url__regex=rf"{re.escape(BASE)}/iserver/contract/{_ID}/algos(\?.*)?$").mock(
+            side_effect=other(self._algos)
+        )
+        router.post(url=f"{BASE}/iserver/secdef/search").mock(side_effect=other(self._search))
+        router.get(url__regex=rf"{re.escape(BASE)}/iserver/contract/{_ID}/info$").mock(
+            side_effect=other(self._info)
+        )
 
     # ── state a test arranges ──
 
@@ -195,12 +254,41 @@ class FakeBroker:
             self._used_coids.add(coid)
         return order
 
+    def hold(self, conid: int, quantity: str, currency: str = "USD") -> None:
+        """A position the account holds."""
+        self.positions[conid] = (Decimal(quantity), currency)
+
+    def quote(
+        self,
+        conid: int,
+        *,
+        bid: str = "99.9",
+        ask: str = "100.1",
+        last: str = "100",
+        availability: str = "RP",
+        sigma: str | None = "30%",
+        updated_ms: int | None = None,
+        option: bool = False,
+    ) -> None:
+        """The snapshot the broker answers for ``conid`` (``availability``: IBKR's 6509 code)."""
+        row: dict[str, Any] = {"conid": conid, LAST: last, BID: bid, ASK: ask}
+        row[AVAILABILITY] = availability
+        if sigma is not None:
+            row[OPTION_IV if option else HISTORICAL_VOL] = sigma
+        if updated_ms is not None:
+            row["_updated"] = updated_ms
+        self.quotes[conid] = row
+
     def fill(self, order_id: str, quantity: str | None = None, price: str = "100") -> None:
-        """Fill (part of) an order and record the trade."""
+        """Fill (part of) an order and record the trade; the position moves unless stale."""
         order = self.orders[order_id]
         amount = Decimal(quantity) if quantity is not None else order.quantity - order.filled
         order.filled += amount
         order.status = "Filled" if order.filled >= order.quantity else "Submitted"
+        if not self.stale_positions and order.sec_type != "CASH":
+            held, currency = self.positions.get(order.conid, (Decimal(0), "USD"))
+            signed = amount if order.side == "BUY" else -amount
+            self.positions[order.conid] = (held + signed, currency)
         self.trades.append(
             {
                 "execution_id": f"exec-{order_id}-{len(self.trades)}",
@@ -210,7 +298,11 @@ class FakeBroker:
                 "order_ref": order.coid,
                 "commission": "1.00",
                 "conid": order.conid,
-                "trade_time_r": 1_760_000_000_000 + len(self.trades),
+                "trade_time_r": (
+                    1_760_000_000_000 + len(self.trades)
+                    if self.trade_clock is None
+                    else int(self.trade_clock().timestamp() * 1000)
+                ),
             }
         )
 
@@ -328,7 +420,10 @@ class FakeBroker:
         return self._accept(pending)
 
     def _whatif(self, request: httpx.Request, account: str) -> httpx.Response:
-        self.whatifs.append(self._json(request)["orders"][0])
+        order = self._json(request)["orders"][0]
+        self.whatifs.append(order)
+        if self.whatif_for is not None:
+            return httpx.Response(200, json=self.whatif_for(order))
         return httpx.Response(200, json=self.whatif_answer)
 
     def _live_orders(self, request: httpx.Request) -> httpx.Response:
@@ -395,3 +490,88 @@ class FakeBroker:
     def _suppress_reset(self, request: httpx.Request) -> httpx.Response:
         self.suppress_resets += 1
         return httpx.Response(200, json={"status": "submitted"})
+
+    # ── what the pre-trade gate reads ──
+
+    def _down(self, name: str) -> httpx.Response | None:
+        if name in self.unavailable:
+            return httpx.Response(503, json={"error": f"{name} unavailable"})
+        return None
+
+    def _positions(self, request: httpx.Request, page: str) -> httpx.Response:
+        down = self._down("positions")
+        if down is not None:
+            return down
+        if page != "0":
+            return httpx.Response(200, json=[])
+        rows = [
+            {
+                "acctId": ACCOUNT,
+                "conid": conid,
+                "position": float(quantity),
+                "currency": currency,
+                "assetClass": "STK",
+            }
+            for conid, (quantity, currency) in sorted(self.positions.items())
+        ]
+        return httpx.Response(200, json=rows)
+
+    def _ledger(self, request: httpx.Request) -> httpx.Response:
+        down = self._down("ledger")
+        if down is not None:
+            return down
+        body: dict[str, Any] = {}
+        base: dict[str, Any] = {"currency": "BASE", "secondkey": "BASE", "exchangerate": 1}
+        base["cashbalance"] = float(sum(cash for cash, _ in self.cash.values()))
+        if self.nav is not None:
+            base["netliquidationvalue"] = float(self.nav)
+        body["BASE"] = base
+        for currency, (cash, rate) in self.cash.items():
+            row: dict[str, Any] = {"currency": currency, "cashbalance": str(cash)}
+            row["exchangerate"] = 1 if currency == "EUR" else (None if rate is None else str(rate))
+            body[currency] = row
+        for currency in self.unreadable_cash:
+            body[currency] = {"currency": currency, "cashbalance": None}
+        return httpx.Response(200, json=body)
+
+    def _snapshot(self, request: httpx.Request) -> httpx.Response:
+        down = self._down("snapshot")
+        if down is not None:
+            return down
+        conids = [int(c) for c in request.url.params.get("conids", "").split(",") if c]
+        return httpx.Response(200, json=[self.quotes[c] for c in conids if c in self.quotes])
+
+    def _rules(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=self.rules_answer)
+
+    def _algos(self, request: httpx.Request, id: str) -> httpx.Response:
+        return httpx.Response(200, json=self.algos_answer)
+
+    def _search(self, request: httpx.Request) -> httpx.Response:
+        symbol = self._json(request)["symbol"]
+        rows = [
+            {
+                "conid": str(conid),
+                "symbol": sym,
+                "description": exchange,
+                "sections": [{"secType": "STK"}],
+            }
+            for conid, (sym, exchange, _) in self.contracts.items()
+            if sym == symbol
+        ]
+        return httpx.Response(200, json=rows)
+
+    def _info(self, request: httpx.Request, id: str) -> httpx.Response:
+        found = self.contracts.get(int(id))
+        if found is None:
+            return httpx.Response(200, json={"error": "no such contract"})
+        symbol, exchange, currency = found
+        return httpx.Response(
+            200,
+            json={
+                "con_id": int(id),
+                "symbol": symbol,
+                "currency": currency,
+                "valid_exchanges": f"SMART,{exchange}",
+            },
+        )

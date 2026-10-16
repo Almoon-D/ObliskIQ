@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -28,12 +29,16 @@ class FakePolicy:
     profile_id: str
 
 
+#: The configuration a factory is built with; the fake policies never read it.
+SETTINGS: Any = object()
+
+
 def _registry(kind: str = "eligibility") -> PolicyRegistry[FakePolicy]:
     return PolicyRegistry(
         kind,
         [
-            ("strict", lambda profile: FakePolicy("strict", profile.id)),
-            ("lenient", lambda profile: FakePolicy("lenient", profile.id)),
+            ("strict", lambda profile, _settings: FakePolicy("strict", profile.id)),
+            ("lenient", lambda profile, _settings: FakePolicy("lenient", profile.id)),
         ],
     )
 
@@ -53,7 +58,7 @@ def test_the_shipped_spanish_profile_loads(repo_root):
     profile = load_profile(repo_root / "config", "es")
     assert profile.id == "es"
     assert profile.name == "Spain"
-    assert profile.policies == {}
+    assert profile.policies == {"eligibility": "skeleton"}
 
 
 def test_available_profiles(config_dir, tmp_path):
@@ -101,25 +106,25 @@ def test_a_profile_is_frozen():
 
 
 def test_a_declared_policy_resolves_to_its_registered_factory():
-    policy = _registry().resolve(_profile(eligibility="strict"))
+    policy = _registry().resolve(_profile(eligibility="strict"), SETTINGS)
     assert policy == FakePolicy("strict", "es")
 
 
 def test_a_profile_that_declares_no_policy_for_the_kind_fails_loudly():
     with pytest.raises(PolicyError, match="declares no eligibility policy; set policies"):
-        _registry().resolve(_profile())
+        _registry().resolve(_profile(), SETTINGS)
 
 
 def test_an_unregistered_policy_id_fails_loudly_and_lists_the_registered_ones():
     with pytest.raises(
         PolicyError, match=r"'eu_priips' .* not registered \(registered: lenient, strict\)"
     ):
-        _registry().resolve(_profile(eligibility="eu_priips"))
+        _registry().resolve(_profile(eligibility="eu_priips"), SETTINGS)
 
 
 def test_an_empty_registry_says_so():
     with pytest.raises(PolicyError, match=r"registered: none"):
-        PolicyRegistry[FakePolicy]("tax", []).resolve(_profile(tax="es_irpf"))
+        PolicyRegistry[FakePolicy]("tax", []).resolve(_profile(tax="es_irpf"), SETTINGS)
 
 
 def test_a_policy_error_is_a_configuration_error():
@@ -127,7 +132,7 @@ def test_a_policy_error_is_a_configuration_error():
 
 
 def test_a_duplicate_registration_is_refused():
-    factory = lambda profile: FakePolicy("x", profile.id)  # noqa: E731
+    factory = lambda profile, _settings: FakePolicy("x", profile.id)  # noqa: E731
     with pytest.raises(PolicyError, match="registered twice"):
         PolicyRegistry("tax", [("es_irpf", factory), ("es_irpf", factory)])
 
@@ -135,7 +140,7 @@ def test_a_duplicate_registration_is_refused():
 @pytest.mark.parametrize(("kind", "policy_id"), [("Tax", "es_irpf"), ("tax", "ES-IRPF")])
 def test_kinds_and_ids_must_be_identifiers(kind, policy_id):
     with pytest.raises(PolicyError, match="lower-case identifier"):
-        PolicyRegistry(kind, [(policy_id, lambda profile: FakePolicy("x", profile.id))])
+        PolicyRegistry(kind, [(policy_id, lambda profile, _settings: FakePolicy("x", profile.id))])
 
 
 def test_the_registry_reports_its_kind_and_ids():
@@ -146,8 +151,8 @@ def test_the_registry_reports_its_kind_and_ids():
 
 def test_resolution_is_per_kind():
     profile = _profile(eligibility="strict", tax="lenient")
-    assert _registry("eligibility").resolve(profile).name == "strict"
-    assert _registry("tax").resolve(profile).name == "lenient"
+    assert _registry("eligibility").resolve(profile, SETTINGS).name == "strict"
+    assert _registry("tax").resolve(profile, SETTINGS).name == "lenient"
 
 
 # ── checking a profile's declarations up front ──
@@ -168,7 +173,16 @@ def test_an_unknown_kind_is_refused():
 
 def test_an_unknown_kind_with_no_registries_is_refused():
     with pytest.raises(PolicyError, match=r"known: none"):
+        check_declared_policies(_profile(tax="es_irpf"), ())
+
+
+def test_an_unshipped_kind_is_refused_and_the_shipped_ones_listed():
+    with pytest.raises(PolicyError, match=r"no policy kind 'tax' exists \(known: eligibility\)"):
         check_declared_policies(_profile(tax="es_irpf"), SHIPPED_POLICY_KINDS)
+
+
+def test_the_shipped_profile_declares_only_shipped_policies(repo_root):
+    check_declared_policies(load_profile(repo_root / "config", "es"), SHIPPED_POLICY_KINDS)
 
 
 def test_an_unregistered_id_is_refused_up_front():
@@ -188,7 +202,7 @@ def test_policies_declared_in_yaml_are_read(config_dir):
         "id: es\nname: Spain\npolicies:\n  eligibility: strict\n",
     )
     profile = load_profile(config_dir, "es")
-    assert _registry().resolve(profile).name == "strict"
+    assert _registry().resolve(profile, SETTINGS).name == "strict"
 
 
 def test_a_profiles_policies_cannot_be_changed_after_loading(config_dir):
@@ -200,7 +214,7 @@ def test_a_profiles_policies_cannot_be_changed_after_loading(config_dir):
     with pytest.raises(TypeError):
         profile.policies["eligibility"] = "lenient"  # type: ignore[index]
     assert profile.model_dump()["policies"] == {"eligibility": "strict"}
-    assert _registry().resolve(profile).name == "strict"
+    assert _registry().resolve(profile, SETTINGS).name == "strict"
 
 
 def test_a_profile_survives_pickling_and_deep_copies():
@@ -211,7 +225,7 @@ def test_a_profile_survives_pickling_and_deep_copies():
     profile = _profile(eligibility="strict")
     for clone in (pickle.loads(pickle.dumps(profile)), copy.deepcopy(profile)):
         assert clone == profile
-        assert _registry().resolve(clone).name == "strict"
+        assert _registry().resolve(clone, SETTINGS).name == "strict"
         with pytest.raises(TypeError):
             clone.policies["eligibility"] = "lenient"  # type: ignore[index]
     assert repr(profile.policies) == "PolicyIds({'eligibility': 'strict'})"

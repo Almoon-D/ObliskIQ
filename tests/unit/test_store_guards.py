@@ -137,6 +137,13 @@ STATE_READS = {
     "latest_mode_change",
     "latest_kill_switch",
     "holding_assignment",
+    # Session 4a: what could still reach the broker, the bot's own fills, the owner's decisions
+    # and the stops cut for an exit.
+    "open_clearances",
+    "fills_by_coid",
+    "approval_for",
+    "stop_resizes_in_states",
+    "stop_resizes_for_exit",
 }
 
 #: Names that write in ``store/orders.py``.

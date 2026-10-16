@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.4.0"
+version = "0.5.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -181,6 +181,12 @@ forbidden_modules = [
 name = "Store, calendars and quant do not depend on one another"
 type = "independence"
 modules = ["obliskiq.store", "obliskiq.calendars", "obliskiq.quant"]
+
+[[tool.importlinter.contracts]]
+name = "Jurisdiction policies never reach the broker, the network or execution"
+type = "forbidden"
+source_modules = ["obliskiq.jurisdiction"]
+forbidden_modules = ["obliskiq.ibkr", "httpx", "obliskiq.execution", "obliskiq.store"]
 
 [[tool.importlinter.contracts]]
 name = "Calendars never reach the broker, the network or execution"

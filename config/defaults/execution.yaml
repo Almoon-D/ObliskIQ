@@ -79,3 +79,40 @@ execution:
     sweep_interval_seconds: 10.0
     # How long a read of the switch's database flag may take before the switch counts as on.
     store_timeout_seconds: 5.0
+
+  # The pre-trade gate (execution/pretrade.py): what an order that adds risk may commit. An order
+  # that reduces risk (a sell of a managed long position, within it) waives these, the kill
+  # switch, buy-side eligibility, the cash check and approval, and nothing else (DECISIONS D56).
+  # Amounts are QUOTED STRINGS: the gate compares them exactly.
+  pretrade:
+    caps:
+      # Notional of one order, in the base currency, as a fraction of the account's NAV (the
+      # ledger's base row). A judgement: lite's largest initial position
+      # (positions.max_initial_size_pct_nav, 0.25).
+      max_order_fraction_of_nav: "0.25"
+      # Notional cleared in any 24 hours, as a fraction of NAV. A judgement.
+      max_daily_fraction_of_nav: "0.50"
+      # Orders that add risk cleared in any 24 hours. A judgement.
+      max_orders_per_day: 20
+    # Cash, in the base currency, that must remain in the order's currency after the order and
+    # every other commitment in that currency: room for fees the whatif does not show. A
+    # judgement.
+    cash_floor: "25"
+    # A sell stop-limit that reduces risk (a protective stop) is checked against this instead of
+    # the collar: its stop rests below the collar's band and its limit sits at or below the stop,
+    # at most this fraction below it. A judgement; Session 5's protective exits set the spec.
+    protective:
+      max_limit_offset_fraction: "0.05"
+
+  # The approval queue (MASTER_PLAN §2: it exists, off by default). Every intent of a sleeve
+  # listed here that adds risk waits for the owner's approval (`obliskiq approvals`); for
+  # example [options] holds the options sleeve alone.
+  approval:
+    sleeves: []
+
+  # `obliskiq flatten --confirm`: closing orders for the managed positions.
+  flatten:
+    # How long a closing intent lives before it expires unsent.
+    intent_ttl_minutes: 30
+    # Time in force of the closing orders: they end with the session.
+    tif: DAY

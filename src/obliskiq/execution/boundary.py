@@ -69,6 +69,10 @@ class OrderAlertKind(StrEnum):
     WARNING_DECLINED = "warning_declined"
     OUTCOME_UNKNOWN = "outcome_unknown"
     DUPLICATE_COID = "duplicate_coid"
+    #: An option close the gate refused for want of a real-time quote (it may be exercised).
+    OPTION_CLOSE_BLOCKED = "option_close_blocked"
+    #: A protective stop cut for an exit could not be restored (I5).
+    RESTORE_FAILED = "restore_failed"
 
 
 @dataclass(frozen=True, slots=True)

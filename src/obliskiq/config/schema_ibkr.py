@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import re
+from decimal import Decimal
 from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
@@ -21,7 +22,7 @@ from pydantic import (
     model_validator,
 )
 
-from ..domain.base import CurrencyCode, NonEmptyText
+from ..domain.base import Conid, CurrencyCode, NonEmptyText
 from ..domain.calendar import Mic
 from .base import FrozenModel
 
@@ -326,12 +327,27 @@ class GatewayConfig(FrozenModel):
     login: GatewayLoginConfig
 
 
+class PaperOrderConfig(FrozenModel):
+    """``obliskiq preflight --paper-order-test``: the instruments it buys and how passively."""
+
+    conids: list[Conid] = Field(min_length=1)
+    limit_offset_fraction: Annotated[Decimal, Field(gt=0, lt=1)]
+    intent_ttl_minutes: PositiveInt
+
+    @model_validator(mode="after")
+    def _distinct(self) -> Self:
+        if len(set(self.conids)) != len(self.conids):
+            raise ValueError("each conid is listed once")
+        return self
+
+
 class PreflightConfig(FrozenModel):
     symbol: NonEmptyText
     listing_exchange: Annotated[str, StringConstraints(pattern=r"^[A-Z0-9.]{2,12}$")]
     currency: CurrencyCode
     history_period: IbkrPeriod
     history_bar: IbkrPeriod
+    paper_order: PaperOrderConfig
 
 
 class IbkrConfig(FrozenModel):

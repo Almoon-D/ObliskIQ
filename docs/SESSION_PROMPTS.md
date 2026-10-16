@@ -779,8 +779,9 @@ DELIVERABLES
    shortly before it; conversions batched to amortise the minimum commission; a buffer
    per active currency; excess repatriated; any intent that would leave a negative
    balance in any currency is refused (this extends Session 4a's cash check with funding
-   by conversion). Every conversion, funding or repatriating, gets its own clearance and
-   adds risk (Session 4's item 4), so it is refused with the kill switch ON.
+   by conversion; Session 4a's gate refuses every conversion, `conversion_unavailable`,
+   until this replaces it). Every conversion, funding or repatriating, gets its own
+   clearance and adds risk (Session 4's item 4), so it is refused with the kill switch ON.
    Valuation rates from IBKR; ECB reference rates only for reporting.
 2. execution/pricing.py: (a) an IBKR algo or peg with a limit cap, chosen from the
    contract's algo list, enabled per venue and asset class in config (default off until
@@ -794,7 +795,9 @@ DELIVERABLES
    fills, trailing roll-ups and partial exits; verified present at every heartbeat;
    missing → re-placed and alerted. Each placement and resize gets its own clearance
    under I2 and I3 (Session 4's item 4), so a stop within I2 goes through with the kill
-   switch ON; partial exits (role exit) follow I5. Tradability is not waived; this session
+   switch ON; partial exits (role exit) follow I5 through Session 4a's
+   `execution/exits.py` (`ExitCoordinator.place_exit`; the executor calls `settle` each
+   cycle). Tradability is not waived; this session
    decides only how long a stop rests at the broker (its tif) and records it in
    DECISIONS.
 4. execution/executor.py: stage → convert currency if needed → whatif → place_idempotent
@@ -880,7 +883,8 @@ DELIVERABLES
    stuck intents, reconciliation drift, missing protective stops, competing sessions,
    blocked venues.
 7. CLI: serve, run-cycle --mode shadow|paper [--dry-run], status, mode show|set, kill
-   on|off, flatten --confirm, intents list|approve|reject, holdings list|assign.
+   on|off, flatten --confirm, intents list (approvals are Session 4a's `obliskiq approvals
+   list|approve|reject`), holdings list|assign.
 8. Health: a heartbeat file and an optional ping URL (config).
 9. docs/RUNBOOK.md: run in shadow and paper; stop; recover; read the digest; why a
    running bot must be stopped before a Claude session with live IBKR checks.
@@ -1054,7 +1058,9 @@ DELIVERABLES
    ContangoCheck interface that fails closed until Session 12 implements it; corporate
    bonds off by default. es.yaml now selects it; wired into Session 4a's pre-trade; the
    skeleton allowlist policy and its config key are removed (the skeleton targets must
-   pass eu_priips).
+   pass eu_priips), and with them `ConfiguredDirectory` (execution/instruments.py), which
+   describes the allowlist's instruments to the gate: a directory over the universe
+   replaces it.
 5. data/market/: port universe (seed, pin, supersede), backfill, snapshots (settle loop,
    availability status), the chain collector (strike band, sigma ladder, per-row venue),
    the curve collector (data only); source per row; run records; scheduling per venue
@@ -1281,7 +1287,8 @@ legacy/lite/references/commodities-universe.md. Port lite's `option_sleeve`, `te
 `zombie_test`, `equity_risk`, `fx_inflation`, `commodities`, `screen`, `liquidity` and
 `smile` keys you consume (legacy/lite/config.yaml:37-117, 134-144, 156-269, 581-719;
 Session 2 ported part of the last two into `config/defaults/{liquidity,smile}.yaml`;
-extend those files), except
+extend those files; Session 4a ported `tenor.mandatory_close_trading_days` into
+`config/defaults/instruments.yaml`, so the rest of `tenor` joins it there), except
 `option_sleeve.budget_pct`: the option budget is read from Session 7's `capital.budgets`
 (one owner; recorded in DECISIONS).
 

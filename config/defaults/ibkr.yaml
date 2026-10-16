@@ -227,3 +227,11 @@ ibkr:
     currency: USD
     history_period: 1m
     history_bar: 1d
+    # `obliskiq preflight --paper-order-test`: one buy of the minimum quantity per instrument, at a
+    # limit that cannot fill, then a cancel. Each conid must be in eligibility.skeleton_allowlist.
+    paper_order:
+      conids: [89005163, 8158]
+      # The buy limit sits this fraction below the bid, rounded down to the contract's tick.
+      limit_offset_fraction: "0.05"
+      # How long the test's intents live before they expire unsent.
+      intent_ttl_minutes: 10

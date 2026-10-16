@@ -145,6 +145,7 @@ async def test_two_order_paths_on_one_database_place_an_intent_once(
         session=make_session(),
         broker=order_rig.broker,
         tmp_path=tmp_path,
+        calendars=order_rig.calendars,
     )
     try:
         stored = await order_rig.intent(state=state)
@@ -500,6 +501,7 @@ async def test_a_crash_after_the_spend_never_doubles_the_order_after_a_restart(
         session=make_session(),
         broker=order_rig.broker,
         tmp_path=tmp_path,
+        calendars=order_rig.calendars,
     )
     try:
         with pytest.raises(WriteRefusedError) as refused:
@@ -528,6 +530,7 @@ async def test_an_answer_lost_then_a_restart_finds_the_order_and_sends_nothing(
         session=make_session(),
         broker=order_rig.broker,
         tmp_path=tmp_path,
+        calendars=order_rig.calendars,
     )
     try:
         retry = await restarted.boundary.place(

@@ -21,7 +21,9 @@ from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from ..domain.orders import (
+    TERMINAL_STATES,
     UNMANAGED,
+    ApprovalDecision,
     BrokerOrder,
     CashBalance,
     ClearanceAction,
@@ -38,6 +40,8 @@ from ..domain.orders import (
     PretradeClearance,
     RiskEffect,
     Sleeve,
+    StopResize,
+    StopResizeState,
 )
 from ..errors import StoreError
 from .db import Store
@@ -63,6 +67,17 @@ class StoredClearance:
 
     clearance: PretradeClearance
     used_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class OpenClearance:
+    """A clearance with what the gate needs to count it: whether it was spent, and its intent's
+    cOID and state."""
+
+    clearance: PretradeClearance
+    used_at: datetime | None
+    coid: str
+    intent_state: IntentState
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,6 +419,44 @@ def spend_clearance(
     return "the clearance has expired"
 
 
+_CLEARANCE_JOIN = (
+    "SELECT c.clearance, c.used_at, i.coid, i.state FROM clearances AS c "
+    "JOIN intents AS i ON i.intent_id = c.intent_id "
+)
+
+
+def _open_clearance(row: sqlite3.Row) -> OpenClearance:
+    clearance = _build("clearances", lambda: PretradeClearance.model_validate_json(row[0]))
+    return OpenClearance(
+        clearance=clearance,
+        used_at=None if row[1] is None else read_stamp(row[1], "clearances", "used_at"),
+        coid=row[2],
+        intent_state=_build("intents", lambda: IntentState(row[3])),
+    )
+
+
+def open_clearances(store: Store) -> list[OpenClearance]:
+    """Every clearance of an intent that has not finished, oldest first: what could still reach
+    the broker, or may be working there. Read whole: a time bound could hide a sell in flight."""
+    terminal = sorted(state.value for state in TERMINAL_STATES)
+    marks = ", ".join("?" * len(terminal))
+    rows = store.execute(
+        f"{_CLEARANCE_JOIN}WHERE i.state NOT IN ({marks}) ORDER BY c.issued_at, c.clearance_id",
+        terminal,
+    ).fetchall()
+    return [_open_clearance(row) for row in rows]
+
+
+def clearances_issued(store: Store, *, since: datetime, as_of: datetime) -> list[OpenClearance]:
+    """Clearances issued after ``since`` and at or before ``as_of``, whatever became of them."""
+    rows = store.execute(
+        f"{_CLEARANCE_JOIN}WHERE c.issued_at > ? AND c.issued_at <= ? "
+        "ORDER BY c.issued_at, c.clearance_id",
+        (stamp_text(since), stamp_text(as_of)),
+    ).fetchall()
+    return [_open_clearance(row) for row in rows]
+
+
 def spent_effect(store: Store, intent_id: UUID) -> RiskEffect | None:
     """What the intent's spent clearances say about risk: ``adds_risk`` when any of them does
     (a spent modify may never have reached the broker, so the latest cannot be trusted to
@@ -556,6 +609,31 @@ def _fill_from_row(row: sqlite3.Row) -> Fill:
     )
 
 
+def fills_by_coid(store: Store, coids: Iterable[str]) -> dict[str, list[Fill]]:
+    """The recorded fills of each cOID (absent when none): the live order path's own fills."""
+    wanted = sorted(set(coids))
+    if not wanted:
+        return {}
+    marks = ", ".join("?" * len(wanted))
+    rows = store.execute(
+        f"SELECT * FROM fills WHERE coid IN ({marks}) ORDER BY executed_at, execution_id", wanted
+    ).fetchall()
+    found: dict[str, list[Fill]] = {}
+    for row in rows:
+        found.setdefault(row["coid"], []).append(_fill_from_row(row))
+    return found
+
+
+def fills_for_conid(store: Store, conid: int, *, since: datetime, as_of: datetime) -> list[Fill]:
+    """The instrument's fills executed at or after ``since`` and at or before ``as_of``."""
+    rows = store.execute(
+        "SELECT * FROM fills WHERE conid = ? AND executed_at >= ? AND executed_at <= ? "
+        "ORDER BY executed_at, execution_id",
+        (conid, stamp_text(since), stamp_text(as_of)),
+    ).fetchall()
+    return [_fill_from_row(row) for row in rows]
+
+
 def _new_read(store: Store, kind: str, observed_at: datetime) -> int:
     cursor = store.execute(
         "INSERT INTO account_reads (kind, observed_at) VALUES (?, ?)",
@@ -619,6 +697,34 @@ def _position_from_row(row: sqlite3.Row, observed: datetime) -> Position:
             observed_at=observed,
         ),
     )
+
+
+def position_reads(
+    store: Store, *, since: datetime, as_of: datetime
+) -> list[AccountRead[Position]]:
+    """Every positions read observed at or after ``since`` and at or before ``as_of``, oldest
+    first."""
+    with store.read():
+        heads = store.execute(
+            "SELECT read_id, observed_at FROM account_reads WHERE kind = 'positions' "
+            "AND observed_at >= ? AND observed_at <= ? ORDER BY observed_at, read_id",
+            (stamp_text(since), stamp_text(as_of)),
+        ).fetchall()
+        reads = []
+        for head in heads:
+            observed = read_stamp(head["observed_at"], "account_reads", "observed_at")
+            rows = store.execute(
+                "SELECT conid, quantity, average_cost, currency FROM positions_snap "
+                "WHERE read_id = ? ORDER BY conid",
+                (head["read_id"],),
+            ).fetchall()
+            reads.append(
+                AccountRead(
+                    observed_at=observed,
+                    rows=tuple(_position_from_row(row, observed) for row in rows),
+                )
+            )
+    return reads
 
 
 def record_cash(store: Store, balances: Sequence[CashBalance], *, observed_at: datetime) -> int:
@@ -765,3 +871,124 @@ def holding_assignment(store: Store, conid: int) -> HoldingAssignment | None:
             reason=row["reason"],
         ),
     )
+
+
+# ── approvals and stop resizes ──
+
+
+def record_approval(store: Store, decision: ApprovalDecision) -> None:
+    with store.transaction():
+        store.execute(
+            "INSERT INTO approvals (intent_id, decision, actor, reason, at) VALUES (?, ?, ?, ?, ?)",
+            (
+                str(decision.intent_id),
+                "approved" if decision.approved else "rejected",
+                decision.actor,
+                decision.reason,
+                stamp_text(decision.at),
+            ),
+        )
+
+
+def approval_for(store: Store, intent_id: UUID) -> ApprovalDecision | None:
+    """The owner's latest decision on an intent (by insertion); ``None`` when there is none."""
+    row = store.execute(
+        "SELECT intent_id, decision, actor, reason, at FROM approvals WHERE intent_id = ? "
+        "ORDER BY approval_id DESC LIMIT 1",
+        (str(intent_id),),
+    ).fetchone()
+    if row is None:
+        return None
+    return _build(
+        "approvals",
+        lambda: ApprovalDecision(
+            intent_id=UUID(row["intent_id"]),
+            approved=row["decision"] == "approved",
+            actor=row["actor"],
+            reason=row["reason"],
+            at=read_stamp(row["at"], "approvals", "at"),
+        ),
+    )
+
+
+_RESIZE_COLUMNS = (
+    "resize_id, exit_intent_id, stop_intent_id, stop_order_id, original_terms, "
+    "resized_quantity, state, created_at, updated_at, detail"
+)
+
+
+def _resize_from_row(row: sqlite3.Row) -> StopResize:
+    table = "stop_resizes"
+    return _build(
+        table,
+        lambda: StopResize(
+            resize_id=row["resize_id"],
+            exit_intent_id=UUID(row["exit_intent_id"]),
+            stop_intent_id=UUID(row["stop_intent_id"]),
+            stop_order_id=row["stop_order_id"],
+            original_terms=OrderTerms.model_validate_json(row["original_terms"]),
+            resized_quantity=_required_decimal(row["resized_quantity"], table, "resized_quantity"),
+            state=StopResizeState(row["state"]),
+            created_at=read_stamp(row["created_at"], table, "created_at"),
+            updated_at=read_stamp(row["updated_at"], table, "updated_at"),
+            detail=row["detail"],
+        ),
+    )
+
+
+def insert_stop_resize(store: Store, resize: StopResize) -> int:
+    """Record a stop cut for an exit; returns its id."""
+    with store.transaction():
+        cursor = store.execute(
+            "INSERT INTO stop_resizes (exit_intent_id, stop_intent_id, stop_order_id, "
+            "original_terms, resized_quantity, state, created_at, updated_at, detail) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                str(resize.exit_intent_id),
+                str(resize.stop_intent_id),
+                resize.stop_order_id,
+                resize.original_terms.model_dump_json(),
+                str(resize.resized_quantity),
+                resize.state.value,
+                stamp_text(resize.created_at),
+                stamp_text(resize.updated_at),
+                resize.detail,
+            ),
+        )
+    if cursor.lastrowid is None:  # pragma: no cover - an INSERT always sets it
+        raise StoreError("the stop resize was not recorded")
+    return cursor.lastrowid
+
+
+def record_stop_resize_state(
+    store: Store, resize_id: int, *, state: StopResizeState, at: datetime, detail: str
+) -> None:
+    """Move a resize to ``state``; a settled one (closed, restored) is refused by the schema."""
+    with store.transaction():
+        changed = store.execute(
+            "UPDATE stop_resizes SET state = ?, updated_at = ?, detail = ? WHERE resize_id = ?",
+            (state.value, stamp_text(at), detail, resize_id),
+        ).rowcount
+    if changed != 1:
+        raise StoreError(f"no stop resize {resize_id}; nothing was changed")
+
+
+def stop_resizes_in_states(store: Store, states: Iterable[StopResizeState]) -> list[StopResize]:
+    """Every resize in one of ``states``, oldest first."""
+    wanted = [state.value for state in states]
+    if not wanted:
+        return []
+    marks = ", ".join("?" * len(wanted))
+    rows = store.execute(
+        f"SELECT {_RESIZE_COLUMNS} FROM stop_resizes WHERE state IN ({marks}) ORDER BY resize_id",
+        wanted,
+    ).fetchall()
+    return [_resize_from_row(row) for row in rows]
+
+
+def stop_resizes_for_exit(store: Store, exit_intent_id: UUID) -> list[StopResize]:
+    rows = store.execute(
+        f"SELECT {_RESIZE_COLUMNS} FROM stop_resizes WHERE exit_intent_id = ? ORDER BY resize_id",
+        (str(exit_intent_id),),
+    ).fetchall()
+    return [_resize_from_row(row) for row in rows]

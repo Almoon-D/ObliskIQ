@@ -128,9 +128,29 @@ def _callers(attribute: str) -> set[str]:
     }
 
 
+def _receivers(attribute: str) -> dict[str, set[str]]:
+    """For each module, the names of what ``attribute`` is called on (``self._client``)."""
+    found: dict[str, set[str]] = {}
+    for module, tree in _modules().items():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr == attribute:
+                receiver = node.value
+                name = (
+                    receiver.attr
+                    if isinstance(receiver, ast.Attribute)
+                    else (receiver.id if isinstance(receiver, ast.Name) else "?")
+                )
+                found.setdefault(module, set()).add(name)
+    return found
+
+
 def test_only_the_write_boundary_places_or_modifies() -> None:
     assert _callers("place_idempotent") == {"execution/boundary.py"}
-    assert _callers("modify") == {"execution/boundary.py"}
+    # The order client's modify is the boundary's to call; the exit coordinator modifies a stop
+    # through the boundary.
+    assert _callers("modify") == {"execution/boundary.py", "execution/exits.py"}
+    assert _receivers("modify")["execution/exits.py"] == {"_boundary"}
+    assert _receivers("modify")["execution/boundary.py"] == {"_client"}
 
 
 def test_no_market_order_type_is_spelled_in_the_order_client() -> None:

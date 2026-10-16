@@ -814,3 +814,122 @@ token that expired in between. A re-arm stops at the first request the transport
 of renegotiating on each of its three steps. `run_read_only` takes a login driver and is tested end
 to end through the transport it builds: live OAuth with a mocked handshake, and the Gateway with a
 data directory and an injected driver.
+
+## Session 4a — Pre-trade rails (2026-10-16)
+
+### D54 · The gate's shape: stored intent, three stages, every failure named
+
+`execution/pretrade.py` replaces Session 4's refuse-everything gate and stays the only issuer of a
+clearance (D45's guard tests unchanged). It reads the intent from the store and never trusts the
+object a caller holds. It refuses the shape of the request at once (state, expiry, terms, a modify
+of another intent's order, a conversion); then stage 1 decides everything it can without the broker
+(paper guard, mode, kill switch, instrument, prohibited products, eligibility, approval, calendars)
+and stops there on any failure, so a refused paper guard or kill switch touches nothing; stage 2
+reads the broker (positions, a complete live-orders snapshot, the trades, the quotes, and for an
+order that adds risk the ledger and a whatif) and applies the quote policy and the collar; stage 3
+runs in one store transaction (`BEGIN IMMEDIATE`) that records the trades and the positions read,
+counts what the store holds (holdings, I2, cash commitments, caps) and records the clearance, so two
+processes clearing at once see each other. Each stage reports every failure it finds, each with one
+of 42 reason codes (`Reason`); a refusal's `code` is the first. The clearance carries the order's
+notional (in its currency and the base currency) so later checks can add up open commitments, and
+expires at the earliest of the intent's expiry and each quote's `observed_at + max_quote_age_seconds`
+(the Session 4 follow-up); a quote stamped by IBKR earlier than it was read is dated by IBKR's stamp.
+`PretradeGate.check` runs the same checks without issuing, for I5. Rejected: stopping at the first
+failure (the owner would fix one thing at a time), and a gate that trusts the caller's intent.
+
+### D55 · No short (I2): the position and every sell that could reach the broker
+
+The position is the lower of the broker's fresh read and the store's. The store's is its latest
+positions read when the instrument has no fill in the window the trades cover
+(`trades_lookup_days − 1` days); with fills, every read from the last one before the first of them
+onwards, each plus the fills reported after it, and the lowest wins. A sell in the same second as a
+read counts against it and a buy does not, since second-resolution stamps cannot order them. So a
+stale broker read after a fill cannot re-arm a stop, and a position that arrives without a fill (a
+transfer) is not understated for days. The gate records every positions read and the trades it reads,
+so a read always precedes the next fill. Counted against the position, for the instrument: every
+working sell the broker lists at its remaining size, or at the larger size an unspent modify or the
+latest spent modify could leave it at; every sell cleared but not listed, unspent until it expires
+and spent until the broker lists its cOID or its intent ends, once per intent, less its fills; and
+the request itself once (a modify at its new quantity less what the order filled). A live order of
+unreadable side, instrument or size refuses (`account_unreadable`), and a working sell whose
+reported fills exceed the fills recorded under its cOID refuses (`fills_unreconciled`): the position
+is not accounted. An option sold beyond the position is a written option (`written_option`). Rejected:
+the lowest of every read in the window (it kept a transferred position at zero for days), and
+trusting the latest read (it is the stale one).
+
+### D56 · Class by effect (I3), the cash check and the caps
+
+A non-conversion sell is classed as reducing risk and cleared only if it passes I2 and the holdings
+registry (the intent's sleeve owns the holding); every buy and conversion adds risk. A reducing order
+waives exactly the kill switch, the caps, the order count, buy-side eligibility, the cash and
+no-margin check and approval; prohibited products, the quote policy, the collar (a protective stop:
+its spec, D58), calendars, holdings and I2 still apply. **No leverage** is read as "the order would
+borrow": `margin_use` when the whatif's own cost (total, else amount) exceeds the cash in the order's
+currency, and `insufficient_cash` when that cash, less every other open buy in the currency (one
+figure per intent, the largest of its live clearances, less its fills; a clearance that names no
+currency counts against every one) and less `execution.pretrade.cash_floor` (base currency, at the
+ledger's rate), does not cover the cost. The whatif's margin fields are recorded, not gated on: a
+cash-funded purchase in a margin account reports an initial-margin change without borrowing
+(VERIFY-LIVE). A currency the account does not hold is refused (`currency_not_held`) until Session 5
+funds it, and every conversion is refused (`conversion_unavailable`) for the same reason. A working
+buy the bot did not place has an unknown cost and refuses buys (`cash_unaccounted`). The caps are
+fractions of the NAV in the base currency (`max_order_fraction_of_nav` 0.25, lite's largest initial
+position; `max_daily_fraction_of_nav` 0.50; `max_orders_per_day` 20, judgements) over a rolling 24
+hours, so no time zone decides where a day ends; a clearance without a notional cannot be added up
+and refuses. The whatif uses a cOID of its own, so a preview never makes the order's cOID read as
+used (VERIFY-LIVE).
+
+### D57 · Eligibility: the skeleton policy, the instrument directory and the mandate
+
+Policy factories take the configuration with the profile (`PolicyRegistry.resolve(profile,
+settings)`), because the skeleton's allowlist is configuration, not a jurisdiction rule.
+`SkeletonEligibility` allows exactly `eligibility.skeleton_allowlist` and says "skeleton policy" in
+every verdict; an option is eligible when it and its underlying are listed, or, when its underlying
+is an ETF or ETC the list does not hold, under the mandatory close (MASTER_PLAN §2). Nothing in this
+build describes instruments, so each allowlist record also carries the facts the gate needs (asset
+class, currency, listing exchange, the resolved description the markers read, the multiplier, an
+option's underlying and expiry), and `ConfiguredDirectory` serves them; an instrument nobody
+describes is never traded. Session 8 replaces both with the universe. The conids are lite's
+(EXV1 on Xetra, read live by lite; FCX from lite's conid fixture); the paper order test resolves each
+through IBKR's contract search before it orders. The **mandatory close** uses lite's
+`tenor.mandatory_close_trading_days` (10), counted back from the last tradable session
+(`session_before(..., sessions=10)`): an option on an ineligible ETP is not opened on or after that
+session, and from it on any order on an option is date-critical, so an unresolved calendar
+disagreement blocks it (the earlier date wins); a stock order never is. The prohibited categories are
+lite's; the schema refuses a configuration that drops one of the mandate's five, and
+`allow_futures_options` stays false until the never-exercise rule exists (Session 12). The markers are
+matched against every instrument's description, an option's underlying's included, never a ticker.
+
+### D58 · No exit leaves a position unprotected (I5), flatten and the protective spec
+
+`ExitCoordinator.place_exit` cuts the instrument's working protective stops by the exit's size,
+largest first (a stop cut to nothing is cancelled), but only after `PretradeGate.check` has passed
+every check of the exit with the stops counted at their cut size; then it clears and places the exit.
+Each cut is recorded in `stop_resizes` with the stop's terms before it. `settle` restores what an exit
+that ended without selling (refused, cancelled, expired, or refused before it was sent) left cut: a
+modify back up while the stop works, else a new protective intent; either passes the gate, and the
+restore covers the original size less what the exit sold (the larger of its recorded fills and its
+orders' last report). A downgrade can always come between a cut and its restore — downgrades are
+automatic and never wait — and the boundary then refuses the restore: the resize turns
+`restore_failed`, the owner is alerted at once, and every later `settle` tries again (Session 5's
+executor calls it each cycle). Rejected: blocking a downgrade while a stop is cut, and IBKR's
+one-cancels-all groups (their Web API behaviour is unverified). `flatten` sells each managed long
+position at the bid as an exit with reason `override`, through the coordinator, and reports what it
+leaves alone (`unmanaged` and unassigned holdings, a short position, an undescribed instrument, no
+bid); one position's failure never stops the others; it does not cancel working buys (the kill
+switch's job). A sell stop-limit that reduces risk is checked against its **protective spec** instead
+of the collar: its stop rests below the collar's band (so a stale quote cannot hide a stop already
+through the market) and its limit sits at or below the stop, at most
+`execution.pretrade.protective.max_limit_offset_fraction` (5 %, a judgement Session 5 refines) below.
+
+### D59 · The approval queue and the paper order test
+
+The approval queue holds every intent that adds risk of a sleeve listed in
+`execution.approval.sleeves` (empty: off, MASTER_PLAN §2) or made with `approval_required`; the
+owner's decisions are an append-only `approvals` table, an approval moves the intent from proposed to
+approved and a rejection to rejected, and the gate refuses an intent that needs one and has none.
+`obliskiq preflight --paper-order-test` needs mode `paper` (it writes nothing otherwise), buys the
+contract's size increment at `limit_offset_fraction` (5 %) below the bid rounded down to the
+contract's tick, and counts a US stock refused by the cash check (`currency_not_held`) when the paper
+account holds no dollars as the expected outcome. Its report masks the account and prints no balance
+or position.
