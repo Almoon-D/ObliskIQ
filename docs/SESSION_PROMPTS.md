@@ -65,7 +65,7 @@ in an environment is readable by the session's code, which is why this one holds
 credentials and capped keys only.
 
 **Network access:** `Custom`, with "include defaults" ticked and the domains in §D.
-Switch to `Full` only for Sessions 3, 9, 10, 13, 14 and 21 (the Gateway download and
+Switch to `Full` only for Sessions 3, 4b, 4c, 4d, 9, 10 and 21 (the Gateway download and
 login, issuer sites, central-bank and regulator feeds, long research histories), then
 back to `Custom`.
 
@@ -118,7 +118,36 @@ ObliskIQ-lite-MCP as it is.
 
 The TWS API 10.50/10.51 download is not needed: that is the TWS socket API and IB
 Gateway, a different product from the Client Portal Gateway. Session 3 downloads the
-Client Portal Gateway itself.
+Client Portal Gateway itself. The TWS API with IBC is the fallback only if T1 fails (§A.5,
+DECISIONS D68).
+
+### A.5 The deployment machine (owner, T1)
+
+Run this beside Sessions 4b–4d and finish it before Session 6. It proves what a cloud
+session cannot: that the paper Gateway logs in unattended, and what IBKR's order endpoints
+really answer (DECISIONS D68).
+
+1. A small always-on Linux machine with a stable outbound address (a home machine or a VPS;
+   MASTER_PLAN §5.20). Install git, uv and Java 11; clone `Almoon-D/ObliskIQ` at the latest
+   release; `make setup`; `uv run playwright install chromium`.
+2. Put the paper variables of §A.3 in the machine's environment (never OAuth keys) and set
+   `OBLISK_IBKR_GATEWAY_JAVA_HOME` to the Java 11 home.
+3. Day 1: `uv run obliskiq preflight --read-only`. It installs the Gateway, logs in
+   unattended and walks the read path. Keep the masked report.
+4. Day 2, after IBKR's daily reset: run the same command again. A fresh unattended login
+   after a reset is the second thing T1 proves; the in-process re-login is Session 6's.
+5. `uv run obliskiq mode set paper --reason "T1 paper order test"`, then
+   `uv run obliskiq preflight --paper-order-test` (one order per configured instrument that
+   cannot fill, read and cancelled), then `uv run obliskiq mode set shadow --reason "T1 done"`.
+6. Paste the masked reports into a short session: *"Record T1's findings per SESSION_PROMPTS
+   §A.5."* It records the shapes in `docs/knowledge/`, closes or re-dates the matching rows
+   of the ROADMAP's live verification queue, and bumps the patch version.
+
+T1 passes when both logins complete unattended and both preflights finish. If the
+unattended login cannot complete on the machine, stop and choose (MASTER_PLAN §11): a spike
+of the TWS API with IBC, or a daily manual login. From T1 on, a session's live step is a
+command list the session writes for you to run on the machine, with the bot paused; you
+paste the masked output into a short follow-up session that records it.
 
 ---
 
@@ -140,10 +169,10 @@ Client Portal Gateway itself.
    protocol."* Any other request after the merge (a follow-up, a fix) also goes to a fresh
    session: a long session pays its whole context again on every turn.
 6. One brokerage session per username. If you run the bot on a machine between sessions
-   (possible from Session 6), stop it before any session whose §C row has a live IBKR
+   (possible from Session 6; the machine itself from T1), stop it before any session whose §C row has a live IBKR
    check and restart it afterwards. Once you deploy for good (§E), sessions skip their
    live checks.
-7. Sessions 4, 4a, 5, 13, 14 and 17 touch money most directly. If one of them runs short of
+7. Sessions 4, 4a, 4b (the tax engine), 5, 13 and 17 touch money most directly. If one of them runs short of
    context or its review leaves too many findings, the agent merges a coherent, tested
    subset and writes `Session <N>a` for the rest (AGENTS.md). Let it; never ask it to
    rush.
@@ -157,6 +186,10 @@ Client Portal Gateway itself.
 | 3 | IBKR read path | Opus 5.5 | xhigh | **Full** | Gateway trial, read-only preflight |
 | 4 | Order path, kill switch and modes | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 4a | Pre-trade rails | Fable 5.1 (else Opus 5.5) | xhigh | Custom | one order test |
+| T1 | Deployment machine (owner, §A.5) | — | — | — | unattended logins, preflight, paper order test |
+| 4b | Research harness | Fable 5.1 (else Opus 5.5) | xhigh | **Full** | — |
+| 4c | Core verdict | Opus 5.5 | xhigh | **Full** | — |
+| 4d | First selection hypothesis | Opus 5.5 | xhigh | **Full** | — |
 | 5 | Execution mechanics | Fable 5.1 (else Opus 5.5) | xhigh | Custom | conversion and stop-limit tests |
 | 6 | Walking skeleton | Opus 5.5 | xhigh | Custom | one supervised cycle |
 | 7 | Capital, cash flows and tax | Opus 5.5 | xhigh | Custom | read-only |
@@ -165,19 +198,20 @@ Client Portal Gateway itself.
 | 10 | Macro, positioning, insiders and events | Sonnet 5.5 | xhigh | **Full** | — |
 | 11 | Measurement store and views | Sonnet 5.5 | xhigh | Custom | — |
 | 12 | Engines and gates | Opus 5.5 | xhigh | Custom | — |
-| 13 | Core engine | Fable 5.1 (else Opus 5.5) | xhigh | **Full** | — |
-| 14 | Core backtest and verdict | Opus 5.5 | xhigh | **Full** | — |
+| 13 | Core engine | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 15 | Satellite engine | Opus 5.5 | xhigh | Custom | — |
 | 16 | LLM layer | Opus 5.5 | xhigh | Custom | — |
 | 17 | Decision layer | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 18 | Scoreboard, patterns, capital and promotion | Opus 5.5 | xhigh | Custom | — |
 | 19 | Cockpit, settings and deployment | Sonnet 5.5 | xhigh | Custom | full preflight |
+| 19a | Capacity and scale | Opus 5.5 | xhigh | Custom | bond and fund capabilities (whatif only) |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
-| 21 | Research: first pattern batch | Opus 5.5 | xhigh | **Full** | — |
+| 21 | Research: second batch | Opus 5.5 | xhigh | **Full** | — |
 
 The paper Gateway login does not complete from a cloud container (docs/knowledge/ibkr.md):
-until the deployment machine logs in, the live steps in this column are queued
-`VERIFY-LIVE` rather than run.
+until T1 succeeds, the live steps in this column are queued `VERIFY-LIVE`; from T1 on, each
+is a command list the session writes for the owner to run on the machine (§A.5). There is
+no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 Only Session 1 needs attachments. Fable goes where a subtle mistake costs money; Opus on
 architecture and statistics; Sonnet on well-specified ports. Every session runs one
@@ -755,16 +789,208 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
+## Session 4b — Research harness
+
+**Launcher:** `Execute Session 4b exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 4b. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §1, §5.4, §5.9, §5.16 and DECISIONS D60–D64, D69 carefully). No IBKR call.
+Money paths fail closed; the tax engine is one. Finish with the end-of-session protocol.
+
+PRECONDITION: Sessions 1–4a merged. Otherwise STOP.
+
+GOAL: one research harness whose output can move capital, held to every rule of src/:
+point-in-time research data, a simulator that prices costs and Spanish tax with the code the
+live path will use, the statistics and the decision rule of DECISIONS D62–D63, and reports
+that say sufficient, insufficient, inconclusive or not evaluable — with what they cannot
+conclude.
+
+READ: src/obliskiq/quant/{costs,inference,stats}.py and their tests; config/defaults/costs.yaml
+and docs/knowledge/costs.md; src/obliskiq/jurisdiction/ (the registry and Session 4a's
+EligibilityPolicy); legacy/old/ObliskIQ/modules/testing/walk_forward_backtester.py and its test
+(delta execution, costs, bias disclosure); legacy/old/ObliskIQ/docs/STRATEGY_V2_DESIGN.md §0,
+§3.4 and §3.5 (registration rules, minimum samples, annualisation guards).
+
+DELIVERABLES
+1. src/obliskiq/research/ (import contracts: decision, execution and ibkr never import it; it
+   never imports execution or ibkr; live decision code never reads research data):
+   - data.py: a research_history store (migration; source-tagged, point-in-time, each series
+     with its vendor, download date and bias notes) and loaders for yfinance end-of-day prices,
+     the Ken French and AQR data libraries, FRED/ALFRED and ECB reference rates; conversion to
+     the base currency with ECB rates; coverage and survivorship reports (the share of a
+     universe without a price, by year).
+   - simulate.py: a monthly walk-forward simulator with delta execution, quant/costs.py on
+     every leg (the listing venue, never SMART) and the tax ledger of item 2; liquidation at the
+     horizon for every portfolio and reference (D60).
+   - stats.py: the annualised log growth of liquidation value, drawdowns and the probability of
+     breaching a limit, a block bootstrap, Newey–West on a series, the Fama–MacBeth series of a
+     cross-sectional effect, power to detect θ and the effect detectable at a given power,
+     n_eff = n / (1 + (n − 1)ρ) with ρ estimated from a panel, the deflated Sharpe, Bonferroni
+     intervals, the break-even cost multiplier.
+   - decide.py: the decision rule of D62 — not evaluable; sufficient (L ≥ θ); insufficient
+     (U < θ, labelled negative when U < 0); inconclusive (L < θ ≤ U, labelled positive when
+     L > 0) — exhaustive and mutually exclusive by construction, power reported beside it.
+   - registry.py: the trial registry (every exploratory trial with its inputs hash) and the
+     pre-registration lock (SHA-256 and merge commit; a run refuses an unlocked or changed file).
+   - report.py: a markdown report with inputs hashes, seeds, coverage, bias notes, the outcome
+     and its labels, power, and what the test cannot conclude.
+2. tax/ and jurisdiction/: the TaxPolicy protocol beside EligibilityPolicy in the registry; the
+   Lot domain and migration; a LotEngine with the policy's lot method;
+   jurisdiction/tax_es_irpf.py (`es_irpf`), selected by es.yaml with its data there: FIFO
+   (LIRPF art. 37.2); homogeneity per RIRPF art. 8 applied conservatively (the same ISIN, or the
+   same issuer and the same underlying index); the two-month rule (LIRPF art. 33.5.f) with
+   deferral and release; losses offset and carried forward (years from config); realised gain
+   and tax from the savings-base rate table, which records its tax year (verify yearly); ETF
+   switches taxable; fund-switch deferral at this broker false until verified; swap partners
+   differing in issuer and index by default; a `generic` policy (FIFO, no wash-sale rule) as a
+   template; hooks tax_cost(intent), wash_sale_conflict(intent), harvestable_losses(). The
+   simulator uses the same engine; Session 7 wires it to fills.
+   docs/knowledge/tax-es.md cites the article and an official source per rule, "not tax advice".
+3. Commission schedules in config/defaults/costs.yaml for the European venues the core's
+   vehicles trade on (Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana, SIX at
+   least), from IBKR's published schedule, each with a source, a date and verify_live
+   (D69); a UCITS order is then priced, in shadow too.
+4. research/explore/ with a README (outside the coverage floor, never evidence, D64) and
+   research/preregistrations/TEMPLATE.md carrying every field of D63.
+5. CLI: `obliskiq research data load|coverage`, `obliskiq research power <prereg>`,
+   `obliskiq research run <prereg>`. Record the new dependencies (yfinance at least) in
+   DECISIONS.
+
+TESTS (no network): the log growth of a liquidated portfolio, one rebalance, one loss deferral
+and its release, one carry-forward and one year of tax, hand-computed; Newey–West,
+Fama–MacBeth, the seeded bootstrap, power and n_eff against closed forms; the decision rule's
+outcomes and labels, and a property test that every interval lands in exactly one outcome; a
+point-in-time test that perturbs every observation after as_of and finds every output
+unchanged; a run refused on an unlocked or edited pre-registration; a European ETF order priced
+end to end and filled in shadow; loaders on recorded fixtures with sidecar notes.
+
+ACCEPTANCE: a toy study runs end to end through `obliskiq research run` and matches a hand
+calculation; the coverage floor holds over src/obliskiq/research, tax and jurisdiction; no tax
+constant in code (test).
+OUT OF SCOPE: any pre-registration or run on real data (Sessions 4c and 4d).
+Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
+## Session 4c — Core verdict
+
+**Launcher:** `Execute Session 4c exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 4c. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §1, §4, §5.2, §5.4, §5.9, §5.16 and DECISIONS D60–D63 carefully). Network is
+open for research data. No IBKR call. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 4b merged, and the owner's objective numbers (the return target, the
+drawdown limit and the probability of breaching it, the horizon; MASTER_PLAN §11) recorded in
+DECISIONS. Otherwise STOP and ask the owner for them.
+
+GOAL: the first investment experiment, executed: the core's variants and the two references
+tested once, after tax and liquidation, against the objective, in a reproducible report that
+states each outcome and what the test cannot conclude.
+
+READ: research/preregistrations/TEMPLATE.md; legacy/old/ObliskIQ/docs/STRATEGY_V2_DESIGN.md
+§0 (frozen at commit, amendment voids, single shot) and
+legacy/old/ObliskIQ/docs/STRATEGY_V1_1_VERDICT.md (how the last verdict was reported).
+
+ORDER MATTERS
+Step 1 — Pre-registration in its own PR, merged before Step 2 (AGENTS.md session workflow):
+research/preregistrations/core-allocation.md from the template:
+- portfolios: the equity reference and the 60/40 reference (D60); A static risk balance with
+  wide bands; B A + the tax-aware trend tilt (12-month TSMOM and a 10-month moving average,
+  hysteresis, a scale floor above zero); C a growth-tilted risk budget + the tilt; D an
+  equity-dominant book with the tilt as an overlay to cash, sized to the owner's drawdown
+  limit; every constant;
+- each role's long-history proxy in EUR (ECB rates) with its bias; the span (from 2005 at
+  least, longer pre-tax history where it exists for the trend overlay's structure); monthly
+  walk-forward; costs through quant/costs; tax through es_irpf (FIFO, the two-month rule, swap
+  partners on a different index, offsets, carry-forward); liquidation at the horizon;
+- the primary effect per variant: its annualised after-tax log growth minus the equity
+  reference's, with the block-bootstrap interval; the drawdown filter; θ with its
+  justification; Bonferroni across the variants; the power to detect θ and the effect
+  detectable at 0.8, computed before the run; robustness (subperiods, break-even cost
+  multiplier against the declared cost range); the rule that variants the test cannot tell
+  apart resolve to the simplest, lowest-turnover one;
+- a constants hash and research/preregistrations/core-allocation.lock.
+You may check that a series exists and its span; compute no return or statistic on it before
+the merge.
+
+Step 2 — The run, once: data through research/data.py with coverage reported; the verdict
+through `obliskiq research run`; research/reports/core-allocation.md (every metric before and
+after tax, a per-year table, bias disclosure, each outcome with its labels and power, what it
+cannot conclude — future superiority, crisis behaviour beyond the episodes in the sample). A
+DECISIONS entry names the variant Session 13 builds (its config key arrives with its consumer).
+If data is unreachable, the outcome is not evaluable and ROADMAP says so — never fabricated.
+
+ACCEPTANCE: the pre-registration is on main before the run; the verdict is reproducible by one
+command; the report states each outcome with its labels, power and limits; DECISIONS names the
+variant.
+Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
+## Session 4d — First selection hypothesis
+
+**Launcher:** `Execute Session 4d exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 4d. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §1, §5.5, §5.9 and DECISIONS D62–D64, D71 carefully). Network is open for
+research data. No IBKR call. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 4c merged. Otherwise STOP.
+
+GOAL: one selection hypothesis, chosen on the quality of its data, tested once with H5 beside
+it, so the satellite is built for what the evidence supports.
+
+STEP 1 — Data audit, committed as research/reports/selection-data-audit.md: for H1 (cross-asset
+and country momentum through UCITS), H2 (insider-purchase clusters, SEC Form 4) and H4 (a
+stock-level composite: nearness to the 52-week high, 12-1 momentum with a crash guard,
+profitability), which free sources give point-in-time data, over which span, the share of the
+universe lost to survivorship by year (measured, not assumed), the number of independent
+observations, and the effect each could detect at power 0.8. Choose by D71: among the
+candidates with adequate data, H2, then H4, then H1. If none has adequate data, record each as
+not evaluable with the data that would make it evaluable and its cost, and stop after Step 1.
+
+STEP 2 — Pre-registration in its own PR, merged before Step 3: research/preregistrations/
+selection-<id>.md from the template: mechanism, universe, the signal fixed ex ante (no weight
+search), horizon, the primary effect (for events: the abnormal return at the horizon, clustered
+by date; for a cross-section: the Fama–MacBeth series of the top group's excess return after
+costs and tax), θ with its justification, the development and confirmation samples, the trial
+budget, robustness (subperiods, a placebo, the break-even cost multiplier), H5 (the same signal
+with and without a volatility-scaled stop, gaps modelled) as a registered secondary test, and
+the lock.
+
+STEP 3 — Exploration on the development sample with every trial in the registry; one
+confirmation run; research/reports/selection-<id>.md with the outcomes, labels, power and
+limits. research/pattern_registry.yaml is created with this entry (Session 15 adds the legacy
+definitions and the loader): `shadow` with its grading rule for a sufficient or
+inconclusive-positive outcome, `retired` with its result for an insufficient one, `idea` with
+the data it needs for a not-evaluable one.
+
+ACCEPTANCE: the audit is committed before the pre-registration, and the pre-registration is on
+main before the confirmation run; the verdict is reproducible by one command; the report states
+what it cannot conclude.
+Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
 ## Session 5 — Execution mechanics
 
 **Launcher:** `Execute Session 5 exactly as specified in docs/SESSION_PROMPTS.md on main.`
 
 ```
 You are building ObliskIQ, session 5. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §2, §5.12, §5.13 carefully). Money paths fail closed. Finish with the
-end-of-session protocol.
+the design (read §2, §5.12, §5.13 and DECISIONS D67 carefully). Money paths fail closed.
+Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–4a merged. Otherwise STOP.
+PRECONDITION: Sessions 1–4d merged. Otherwise STOP. This session is independent of the
+strategy: it runs as written whatever Sessions 4c and 4d found (DECISIONS D61). If T1
+(§A.5) has recorded live order shapes, build on them; otherwise on fixtures.
 
 GOAL: an intent becomes a filled, protected, reconciled position: funded in its currency,
 priced patiently, protected at the broker, resumable after a crash.
@@ -789,7 +1015,7 @@ DELIVERABLES
    contract rules), repriced up to N times every M minutes toward the touch, then
    cancelled and retried at the next tradable window. The collar widens with σ·√(delay).
    Each reprice is a modify with a fresh clearance for its new terms. Never a plain market
-   order.
+   order. Every leg reaches the cost model with its listing venue, never SMART.
 3. execution/protective.py: protective exits rest at the broker as stop-limit orders
    (stop price and limit offset from the intent's protective spec), re-placed after
    fills, trailing roll-ups and partial exits; verified present at every heartbeat;
@@ -798,22 +1024,35 @@ DELIVERABLES
    switch ON; partial exits (role exit) follow I5 through Session 4a's
    `execution/exits.py` (`ExitCoordinator.place_exit`; the executor calls `settle` each
    cycle). Tradability is not waived; this session
-   decides only how long a stop rests at the broker (its tif) and records it in
-   DECISIONS.
+   decides how long a stop rests at the broker (its tif) and records it in
+   DECISIONS. Gaps (D67): the protective spec's limit offset follows the instrument's
+   volatility and its overnight-gap distribution (with a configured floor), replacing
+   `execution.pretrade.protective.max_limit_offset_fraction` as the one rule; a triggered
+   stop that has not filled is repriced toward the bid in configured steps, each through
+   the gate as an order that reduces risk; a deeper emergency limit exists only if the
+   owner enabled it (off by default). Attached orders: if the live probe in item 6 shows
+   that IBKR's Web API accepts an entry with a child stop-limit linked by `parentId`, design
+   the clearance of the package (I1 and I5) and record it in DECISIONS; otherwise record
+   why not and keep placing the stop on the first fill.
 4. execution/executor.py: stage → convert currency if needed → whatif → place_idempotent
    → replies → poll → reprice or cancel → protective exit → reconcile; staged and
    submitted intents resume by cOID after a restart.
 5. execution/reconcile.py: broker orders, trades, positions and cash per currency vs the
    store; drift freezes new intents and alerts; partial or missing broker data is never
-   reconciled as green.
+   reconciled as green. A configured grace period for IBKR's reporting lag runs before a
+   just-placed order or a just-filled position counts as missing (measured live in item 6
+   where possible, else a labelled judgement).
 6. LIVE (if paper credentials are present and the guard passes): (a) a EUR→USD conversion
    whatif, then one minimum conversion on paper, verifying both cash balances; (b) buy the
    minimum quantity of a liquid US stock (added to the skeleton allowlist) with a limit
    inside the collar, place its
    protective stop-limit, verify it rests at the broker and survives a restart of the
-   process, then sell the position with a limit and cancel the stop. Record shapes,
+   process, then sell the position with a limit and cancel the stop; (c) the same buy with
+   an attached child stop-limit (`parentId`), recording whether IBKR accepts and links it;
+   (d) the lag between a fill and the positions and trades reads. Record shapes,
    conversion commissions and stop behaviour in docs/knowledge/ibkr-orders.md as
-   [CP ✓ <date>].
+   [CP ✓ <date>]. From T1 on, these steps are a command list for the owner to run on the
+   machine (§A.5).
 
 TESTS (failure branches): the conversion fails before the trade → the trade is not placed;
 a projected negative balance in a foreign currency → refused; batching across two intents;
@@ -824,7 +1063,11 @@ protective stop missing → re-placed, also with the kill switch ON; a stop re-p
 heartbeat while flatten's exit is working, and before the broker lists it, never
 oversells; crash after place → resume by cOID without a second order; restart with staged
 and submitted intents; reconciliation drift → freeze; partial broker data → not green; the
-kill switch during a reprice keeps the protective stop.
+kill switch during a reprice keeps the protective stop; a gap through a stop's limit →
+the stop repriced through the gate, never to a market order; an order inside the
+reconciliation grace period is not drift, and one past it is; the spec's limit offset
+widens with volatility and gaps; a package of entry and attached stop (if adopted) never
+leaves the fill without its stop.
 
 ACCEPTANCE: every money path tested on its failure branches; the PR lists the live
 findings or the VERIFY-LIVE queued; no plain market order constructible anywhere (test).
@@ -842,7 +1085,8 @@ You are building ObliskIQ, session 6. AGENTS.md is your operating manual; MASTER
 the design (read §3.4, §5.4 "Exits", §5.12, §5.14, §5.19). Finish with the end-of-session
 protocol.
 
-PRECONDITION: Sessions 1–5 merged. Otherwise STOP.
+PRECONDITION: Sessions 1–5 merged. Otherwise STOP. T1 (§A.5) should have passed; if it
+has not, build against fixtures and queue the live step.
 
 GOAL: the system runs end to end — schedule → targets → intents → execution → reconcile
 → digest — with a deliberately trivial static target portfolio. Later sessions replace
@@ -861,11 +1105,13 @@ DELIVERABLES
    four decision cycles per trading day anchored to venue sessions through calendars
    (Asia, Europe, US, US-late; offsets in config), never UTC constants; job registry; run
    records and run_steps; crash recovery from the run log; graceful SIGTERM; an
-   injectable clock.
+   injectable clock. The keepalive logs in again unattended after IBKR's daily reset and
+   alerts a failed re-login within one heartbeat (DECISIONS D68).
 2. capital/ (minimal; Session 7 extends it): `capital.mode: whole_account | cap` and the
    cap in base currency, so a large paper balance behaves like a small account.
 3. A temporary core: config `core.skeleton_targets` (labelled skeleton; removed in Session
-   13) listing 3–4 roles with candidate symbol, venue and currency; conids resolved
+   13) listing 3–4 roles of the variant Session 4c selected, with candidate symbol, venue
+   and currency; conids resolved
    through secdef and pinned (fixtures in tests; live if paper credentials are present)
    and listed in the skeleton allowlist. UCITS vehicles only, so they will also pass
    eu_priips in Session 8; at least one quoted in a currency other than the base currency,
@@ -888,7 +1134,7 @@ DELIVERABLES
 8. Health: a heartbeat file and an optional ping URL (config).
 9. docs/RUNBOOK.md: run in shadow and paper; stop; recover; read the digest; why a
    running bot must be stopped before a Claude session with live IBKR checks.
-10. LIVE (if paper credentials are present): one supervised paper cycle with
+10. LIVE (on the T1 machine, as a command list for the owner, §A.5): one supervised paper cycle with
     `capital.mode: cap` and a cap of a few hundred euros in config/owner.yaml (the
     managed-capital cap this test is allowed): dry run first, then the real cycle; verify
     fills, the currency conversion, reconciliation and the digest; record findings. If
@@ -898,7 +1144,8 @@ TESTS: end to end with the stateful fake broker and a fake clock — cycle 1 cre
 fills intents in shadow and fake-paper; cycle 2 does nothing (inertia); a crash between
 place and fill does not double-order; the kill switch stops cycle 3; a simulated
 three-day run across the EU DST change fires cycles at the right local times; a holiday
-on one venue skips that venue's cycle only.
+on one venue skips that venue's cycle only; a session lost at the daily reset is logged in
+again, and a failed re-login alerts within one heartbeat.
 
 ACCEPTANCE: `obliskiq run-cycle --mode shadow --dry-run` on fixtures prints a sensible
 plan; the RUNBOOK lets the owner start paper trading on a machine.
@@ -946,7 +1193,8 @@ DELIVERABLES
    a StrategyValue interface each sleeve implements (Sessions 13, 15 and 17 fill it in;
    here a default that protects positions inside their entry window, probes awaiting
    confirmation and theses with pending catalysts, and prefers the cash line and
-   overweights). Losses before gains; the two-month rule respected. Weights in config.
+   overweights). An expected return enters only from a layer whose research outcome is
+   sufficient (MASTER_PLAN §5.9); otherwise the default ranking is the rule. Losses before gains; the two-month rule respected. Weights in config.
    The plan and its reasons go into the digest.
 4. Owner questions: domain and migration for OwnerQuestion (id, kind, context, options
    each with its tax cost and strategy cost, a proposed default, a decision deadline,
@@ -967,31 +1215,19 @@ DELIVERABLES
    freeze new buys, alert, wait for classification.
 8. Time-weighted return over Session 6's NAV rows (flows neutralised; convention in
    config).
-9. jurisdiction/: the TaxPolicy protocol, registered beside Session 4a's EligibilityPolicy
-   in the Session 1 registry. tax/: Lot domain and migration; a LotEngine using the
-   policy's lot method.
-   jurisdiction/tax_es_irpf.py (`es_irpf`), selected by es.yaml, with its data in that
-   file (lot method, wash-sale window, homogeneity rule, carry-forward years, ETF switches
-   taxable, fund-switch deferral at this broker unverified (false), the savings-base rate
-   table marked verify-yearly): FIFO (mandatory, LIRPF art. 37.2);
-   homogeneity per RIRPF art. 8 (same issuer, same rights), applied conservatively: the
-   same ISIN, or the same issuer and the same underlying index, counts as homogeneous;
-   the two-month rule (LIRPF art. 33.5.f): a loss sale is deferred when homogeneous
-   securities were bought within two months before or after, and released when those
-   securities are sold; losses offset gains and carry forward (years from config);
-   realised gain and tax estimate from the rate table (verify yearly); ETF switches
-   taxable; swap partners must differ in issuer and index by default (a same-index
-   partner only when the owner enables it); an annual CSV of realised results and
-   deferred losses for the owner's return. A `generic` policy (FIFO, no wash-sale rule)
-   as a template. Decision hooks: tax_cost(intent), wash_sale_conflict(intent),
-   harvestable_losses().
+9. Tax on the live path: Session 4b's LotEngine and `es_irpf` wired to fills (each fill opens
+   or closes lots; fees and FX at the trade date); currency lots for foreign-currency
+   balances under the TaxPolicy (DECISIONS D69), with the Spanish treatment of currency
+   gains confirmed from an official source in docs/knowledge/tax-es.md; an annual CSV of
+   realised results and deferred losses for the owner's return; the decision hooks
+   (tax_cost, wash_sale_conflict, harvestable_losses) served from the live lots.
 10. LIVE (read-only, if paper credentials are present): read the ledger, cash per currency
    and recent account activity to record how IBKR reports dividends, interest, fees and
    conversions (shapes into docs/knowledge/ibkr.md; the classifier's fixtures from them).
 
-TESTS: hand-computed FIFO with partial lots and fees; the two-month rule before and
-after, with deferral and later release; a swap partner on a different index avoiding
-deferral; a same-issuer same-index vehicle treated as homogeneous; carry-forward expiry;
+TESTS: fills opening and closing lots, partial lots and fees, against Session 4b's engine;
+the two-month rule triggered by a live buy after a loss sale, with deferral and later
+release; currency lots on a conversion and its repatriation; carry-forward expiry;
 a reservation met on time across a holiday and DST; the planner using the cash line at
 once and sparing a fresh thesis; a question raised when a protected thesis would be cut,
 "postpone" moving the reservation, no answer by the deadline → proceed; the year-end
@@ -1002,7 +1238,7 @@ TWR with flows equal to a hand calculation; switching the jurisdiction id swaps 
 policy with no code change.
 
 ACCEPTANCE: all money paths tested on failure branches; no tax constant in code (test);
-docs/knowledge/tax-es.md cites the law articles and a source per rule, marked "not tax
+docs/knowledge/tax-es.md covers currency gains with an official source, marked "not tax
 advice".
 Finish with the end-of-session protocol in AGENTS.md.
 ```
@@ -1036,15 +1272,18 @@ DELIVERABLES
 1. config/universe.yaml: grid axes ported from lite (markets, 12 sectors, unmapped_cells
    with reasons; the loader refuses an incomplete matrix); macro-board axes; instruments
    with roles (data | tradable_candidate | option_underlying), attributes (asset class,
-   domicile, UCITS and KID status, share class, fee, currency, listing venue, lot size,
-   inception) and exposures (core roles, grid cells, macro-board entities). US ETFs, index
+   domicile, UCITS and KID status, share class and its currency hedge, fee, currency,
+   listing venue, lot size, inception) and exposures (core roles, grid cells, macro-board
+   entities), with look-through country, sector and currency weights from the issuer's
+   holdings files where published (DECISIONS D69). US ETFs, index
    contracts and country ETFs remain data and option underlyings.
 2. Stock candidates (MASTER_PLAN §5.3 "Finding the stocks"): per grid cell, the holdings
    of its representative ETFs from the issuer's published files (iShares first; source
    and date per file) and IBKR market-scanner runs per venue; normalised, de-duplicated
    across listings, resolved through secdef on demand and pinned when a thesis needs
    them; refreshed on a configured cadence; point-in-time (a stock enters a cell on the
-   date the file showed it).
+   date the file showed it). The universe Session 4d's hypothesis needs comes first; every
+   other cell has candidates or a declared reason.
 3. Venue profiles: extend venues.yaml with the fields it lacks, each value with a source
    and date — trading permission required, market-data cost and availability (MASTER_PLAN
    §5.13 price list), currency, lot conventions. Settlement lag (Session 7) and
@@ -1064,11 +1303,12 @@ DELIVERABLES
 5. data/market/: port universe (seed, pin, supersede), backfill, snapshots (settle loop,
    availability status), the chain collector (strike band, sigma ladder, per-row venue),
    the curve collector (data only); source per row; run records; scheduling per venue
-   after its close through calendars. NAV stays with Session 6's writer.
-6. data/research_history/: yfinance end-of-day history for tradable candidates and stock
-   candidates, in a separate source-tagged table; an import contract and a test ensure
-   live decision code cannot read it. The core's long-history proxies are chosen by
-   Session 13's pre-registration and loaded in Session 14.
+   after its close through calendars. NAV stays with Session 6's writer. The chain
+   collector stores option surfaces forward from its first run for the option underlyings
+   of active and registered hypotheses: this is H8's history (DECISIONS D71).
+6. Research history for the tradable and stock candidates through Session 4b's
+   research/data.py (its store and import contract already keep it from live decision
+   code).
 7. CLI: `obliskiq collect <universe|candidates|backfill|snapshots|chains|curves|daily>`,
    `obliskiq universe validate|pin`.
 8. LIVE (if paper credentials are present): pin conids for the tradable candidates and
@@ -1080,7 +1320,8 @@ DELIVERABLES
 
 ACCEPTANCE: the universe validates; every grid cell has stock candidates or a declared
 reason why not; eligibility explains why US-domiciled ETFs are rejected for purchase;
-research history fetched live for the tradable candidates (dates and coverage recorded).
+research history loaded for the tradable candidates (dates and coverage recorded); the
+chain collector stores surfaces with their date and source.
 OUT OF SCOPE: broker capabilities and the vehicle selector (Session 9).
 Finish with the end-of-session protocol in AGENTS.md.
 ```
@@ -1099,42 +1340,34 @@ with the end-of-session protocol.
 PRECONDITION: Sessions 1–8 merged. Otherwise STOP.
 
 GOAL: measure what the broker can really do through the Web API, and turn any exposure
-into the best eligible vehicle — fund, ETF, bond or stock basket — with reasons.
+into the best eligible vehicle with reasons. Bonds, mutual funds and stock baskets, which
+pay only at larger capital, are Session 19a's (DECISIONS D66).
 
 DELIVERABLES
 1. Broker capabilities, LIVE with paper credentials (else VERIFY-LIVE), whatif only,
    nothing placed: per asset class and target venue, whether the Web API can search,
-   quote and accept an order — stocks on each venue, UCITS ETFs, government bonds and
-   bills (minimum increment, commission from whatif), mutual funds (cash-quantity whatif,
-   cut-off), US and Eurex options; the order types and algos per class; the account's
-   trading permissions. Recorded in docs/knowledge/ibkr-capabilities.md and config; the
+   quote and accept an order — stocks on each venue, UCITS ETFs and ETCs, US and Eurex
+   options; the order types and algos per class; the account's trading permissions. Recorded in docs/knowledge/ibkr-capabilities.md and config; the
    selector never proposes a vehicle whose capability is unverified.
-2. Core role candidates: for every role in MASTER_PLAN §5.4 at least two eligible vehicles,
-   mixing types where they exist (UCITS ETF, UCITS mutual fund, government bond or
-   bill), preferring accumulating share classes and venues the market-data plan covers;
+2. Core role candidates: for every role of the variant Session 4c selected, at least two
+   eligible UCITS vehicles, currency-hedged share classes ranked as distinct vehicles
+   (DECISIONS D69), preferring accumulating share classes and venues the market-data plan
+   covers;
    identifiers confirmed by two sources (issuer site, justETF) in
    docs/knowledge/universe-sources.md; conids pinned live with paper credentials.
-3. The bond rule (MASTER_PLAN §5.3), computed, no account-size threshold: a bond qualifies
-   when its minimum increment is at most a configured share of the role's amount, the
-   per-order minimum commission stays within the cost band, enough bonds exist to hold
-   the duration target, and its all-in cost beats the best fund for the role.
-4. Swap-partner groups: per exposure, eligible vehicles from a different issuer on a
+3. Swap-partner groups: per exposure, eligible vehicles from a different issuer on a
    different, highly correlated index (correlation threshold from config, measured on
    research history; examples S&P 500 ↔ MSCI USA, MSCI World ↔ FTSE Developed); a
    same-index partner only when the owner enables it.
-5. decision/vehicle_selector.py: exposure → ranked eligible vehicles with reasons
+4. decision/vehicle_selector.py: exposure → ranked eligible vehicles with reasons
    (eligibility, all-in cost including fee, spread, commission, transaction tax, FX
    conversion and market-data cost; liquidity; tracking correlation to the exposure's
    data series; tax treatment per the active TaxPolicy; currency; trading-window overlap).
-   Weights in config. A `basket` vehicle type (single stocks for an equity role) is
-   declared with a computed qualification rule of the same form as the bond rule (every
-   member at least the minimum trade, commissions within the cost band); building baskets
-   is a follow-up.
-6. CLI: `obliskiq universe capabilities|vehicles <exposure>`.
+   Weights in config. The selector accepts further vehicle types (bonds, funds, baskets)
+   through their qualification rules, which Session 19a adds.
+5. CLI: `obliskiq universe capabilities|vehicles <exposure>`.
 
-TESTS: the bond rule excludes direct bonds for a role of a few thousand euros and admits
-them for a role of a few hundred thousand, with no NAV threshold key anywhere (test);
-a same-index swap partner is refused while the setting is off; an unverified capability
+TESTS: a hedged and an unhedged class of one fund ranked as distinct vehicles; a same-index swap partner is refused while the setting is off; an unverified capability
 is never proposed; ranking reasons are complete.
 
 ACCEPTANCE: every core role has ≥ 2 verified candidates; the selector returns an eligible
@@ -1160,7 +1393,10 @@ protocol.
 PRECONDITION: Sessions 1–9 merged. Otherwise STOP.
 
 GOAL: point-in-time macro, positioning, insider and event data for the core, the views
-and the Hunter, plus the halt feeds that keep orders away from halted instruments.
+and the Hunter, plus the halt feeds that keep orders away from halted instruments. Every
+source is declared in config/sources.yaml with its activation condition; a fetcher is built
+when a registered hypothesis, a Hunter component or a safety rule consumes it (DECISIONS
+D66).
 
 READ: legacy/lite/src/obliskiq/macro/*.py, legacy/lite/references/macro-playbook.md (all),
 legacy/lite/docs/DECISIONS.md:1194-1407 "Collection without credentials, and what
@@ -1181,18 +1417,19 @@ DELIVERABLES
    USDJPY, monetary base), the BIS Data Portal (policy rates, credit-to-GDP gaps,
    effective FX) and the Federal Reserve Board excess bond premium; release-date policy
    per series; anything without a defensible release date is unusable for backtests.
-   Then, for the macro-board regions: Eurostat (HICP flash and activity, release calendar),
-   the Bank of England, the SNB, the Bundesbank, the Bank of Canada Valet API, the ABS and
-   RBA, Banco Central do Brasil (SGS), Norges Bank, MAS, and Banxico and CBRT EVDS
-   (optional free tokens BANXICO_TOKEN and EVDS_API_KEY, read by the names config
-   declares; skipped when absent); DBnomics as a fallback for series
-   with no direct fetcher, live only. Optional: FRED API v2 bulk backfill.
+   The excess bond premium feeds H6 (Session 21). The other macro-board regions —
+   Eurostat (HICP flash and activity), the Bank of England, the SNB, the Bundesbank, the
+   Bank of Canada Valet API, the ABS and RBA, Banco Central do Brasil (SGS), Norges Bank,
+   MAS, Banxico and CBRT EVDS (optional tokens BANXICO_TOKEN and EVDS_API_KEY), DBnomics as
+   a live-only fallback — are declared with their activation condition and built when a
+   registered hypothesis or component consumes them. Optional: FRED API v2 bulk backfill.
 3. data/positioning/: CFTC COT (annual ZIP backfill + Socrata incremental); value = net
    non-commercial / open interest; point-in-time percentiles with warm-up; velocity;
    contract registry (US30Y code 020601).
 4. data/insiders/: SEC EDGAR Form 4 (User-Agent from SEC_USER_AGENT) for US names among
    the stock candidates: open-market purchases by officers and directors; cluster inputs
-   (counts, values, roles) point-in-time on the filing date.
+   (counts, values, roles) point-in-time on the filing date. If Session 4d chose H2, its
+   research loader and this live fetcher share one parser.
 5. data/events/: Polymarket Gamma (curated markets and tag discovery; probability and
    velocity); Kalshi public market data (read-only); GDELT DOC 2.0 (region and theme
    volume and tone, Welford anomaly z-scores, warm-up); RSS (central banks, regulators,
@@ -1252,7 +1489,9 @@ DELIVERABLES
    correlation matrix keyed on legs, the census and family reach.
 3. The session-level IV solve (own column, provenance label, degraded runs) and a
    realised-volatility forecast (HAR-RV, numpy OLS) for the vol-mispricing component and
-   for the base-rate probabilities of Session 17.
+   for the base-rate probabilities of Session 17; per instrument, the distribution of
+   overnight gaps (earnings dates flagged where known) for the gap-adjusted sizing and the
+   protective spec (DECISIONS D67).
 4. `obliskiq compute <solve-iv|measure|rankings|census|all>`.
 5. Port all related tests (window honesty, isolation, validation).
 
@@ -1298,7 +1537,10 @@ DELIVERABLES
 2. engines/options_sleeve/ exactly as lite (shared pool, penalty booked at detection,
    recovery on qualifying realised gains, concurrency cap, minimum premium, catalyst-driven
    tenor window, mandatory close by calendar, strike-smile N(d₂) zombie test over two
-   sessions), its budget from `capital.budgets` on current NAV. Every option date rule
+   sessions), its budget from `capital.budgets` on current NAV. The sleeve trades only when
+   its activation condition holds (H8 sufficient and the budget buying the pre-registered
+   number of median premiums within the friction gate, DECISIONS D66); until then it runs
+   in shadow and its would-be entries are logged for H8. Every option date rule
    counts from Session 2's `Calendars.last_tradable_session` for the option and its underlying,
    minus a configured buffer of sessions (`session_before(…, sessions)`; N sessions including the
    last tradable one is sessions = N − 1).
@@ -1314,7 +1556,8 @@ DELIVERABLES
 
 ACCEPTANCE: an offline fixture store yields the option surface with honest statuses;
 ported tests green; a mutation check on three gates (record which mutation each test
-kills); a futures-tracking ETC turns ineligible when its contango breaches the limit.
+kills); a futures-tracking ETC turns ineligible when its contango breaches the limit; the
+options sleeve stays in shadow while its activation condition fails (test).
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
@@ -1322,107 +1565,50 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ## Session 13 — Core engine
 
-**Launcher:** `Execute Session 13 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+**Launcher:** `Execute Session 13 exactly as specified in docs/SESSION_PROMPTS.md on main.`
 
 ```
 You are building ObliskIQ, session 13. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §1, §2, §4, §5.2, §5.4, §5.16 carefully). Network is open to check which
-research series exist. Finish with the end-of-session protocol.
+the design (read §1, §2, §4, §5.2, §5.4, §5.16 and DECISIONS D60, D61 carefully). Money
+paths fail closed. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–12 merged. Otherwise STOP.
+PRECONDITION: Sessions 1–12 merged, and Session 4c's report and the DECISIONS entry naming
+the selected variant on main. Otherwise STOP.
 
-GOAL: the core — risk balance across four growth/inflation environments with a tax-aware
-trend tilt and tax- and cost-aware rebalancing — and its binding pre-registration. The
-verdict runs in Session 14.
+GOAL: the core as Session 4c's verdict selected it — the variants 4c registered, the
+selected one by default — with tax- and cost-aware rebalancing, built on the same research
+code paths so the live core and the tested core cannot drift apart.
 
-ORDER MATTERS
-Step 1 — Pre-registration first, in its own PR merged before Step 2 (AGENTS.md session
-workflow): research/preregistrations/core-allocation.md modelled on
-legacy/old/ObliskIQ/docs/STRATEGY_V2_DESIGN.md §0 (frozen at commit; amendment voids;
-single shot; no iteration): three variants (A static risk balance with wide bands; B A +
-the tax-aware trend tilt; C a growth-tilted risk budget + the trend tilt); every constant
-(trend windows, hysteresis buffer, scale floor, tax gate, bands); proxy mapping per role
-(long-history research series converted to base currency with ECB reference rates; each
-proxy's bias documented); span (≥ 2005 target); monthly walk-forward; costs (quant/costs);
-taxes through the active TaxPolicy (FIFO lots, the two-month rule, swap partners on a
-different index, loss offsets); benchmarks (global 60/40 and ACWI in base currency);
-metrics after tax (CAGR, volatility, Sharpe, Sortino, maximum drawdown, Calmar, turnover,
-realised gains, worst 12 months); gates (vs 60/40 after tax: higher Sharpe and lower
-maximum drawdown; deflated Sharpe across the variants); a constants hash. You may check
-that a series exists and its span; compute no return or statistic on it. The lock file
-research/preregistrations/core-allocation.lock records the SHA-256 and the merge commit.
-
-Step 2 — Code:
-- quant/covariance.py: EWMA, multi-year, Ledoit–Wolf, blend (base currency).
-- quant/risk_budget.py: fix and port legacy opportunistic_optimizer._risk_parity — the
-  objective uses risk-contribution shares (w·Σw / w'Σw) — through a convex formulation
-  (log-barrier or cyclical coordinate descent). Port the still-valid cases from
-  legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py; verify against closed forms
-  (two assets; diagonal Σ → inverse volatility) and against skfolio (test-only); property
-  tests (contributions match budgets, weights ≥ 0, sum 1). Do not port the date-based
-  crisis switch, regime-label leverage or Kelly-then-normalise.
-- engines/core/: environments (config), risk budgets, roles filled by the vehicle
-  selector, the trend tilt (12-month TSMOM and 10-month moving average, hysteresis, a
-  scale floor above zero by default), freed weight to cash or short duration, wide inner
-  and outer bands, minimum trade, integer shares, cash flows first, sells beyond the
-  outer band only, tax-aware execution (losses first; gain-realising reductions only when
-  the pre-registered benefit exceeds tax_cost; re-entry through swap partners), cash
-  reservations respected, no stop orders, the StrategyValue interface implemented →
-  TargetPortfolio. Variants A, B and C selectable by `core.variant` (default A), which
-  Session 14 sets from the verdict. Remove the Session 6 skeleton targets and their
-  config.
-
-ACCEPTANCE: the pre-registration is merged on main before the code PR; no commit
-computes a core-variant return or statistic; each variant produces a TargetPortfolio from
-fixtures for a small and a large account; risk-budget tests green against closed forms
-and skfolio.
-OUT OF SCOPE: the backtest harness and the verdict (Session 14).
-Finish with the end-of-session protocol in AGENTS.md.
-```
-
----
-
-## Session 14 — Core backtest and verdict
-
-**Launcher:** `Execute Session 14 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
-
-```
-You are building ObliskIQ, session 14. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §4, §5.4, §5.16). Network is open for research data. Finish with the
-end-of-session protocol.
-
-PRECONDITION: Sessions 1–13 merged and research/preregistrations/core-allocation.md
-committed with its lock file. Otherwise STOP.
-
-GOAL: run the pre-registered after-tax walk-forward once and promote the winning core
-variant — or keep variant A.
-
-READ: research/preregistrations/core-allocation.md (binding);
-legacy/old/ObliskIQ/modules/testing/walk_forward_backtester.py and its test (method and
-bias disclosure); legacy/old/ObliskIQ/docs/STRATEGY_V1_1_VERDICT.md (how the last verdict
-was reported).
+READ: research/preregistrations/core-allocation.md and research/reports/core-allocation.md
+(binding: every constant comes from there); src/obliskiq/research/simulate.py (the
+rebalancing the verdict used).
 
 DELIVERABLES
-1. research/backtest/: a monthly walk-forward harness with delta execution, costs and a
-   tax ledger through the active TaxPolicy (FIFO lots, two-month rule, swap partners,
-   loss offsets and carry-forward, annual tax); it refuses to run if the
-   pre-registration's SHA-256 differs from the lock file. Hand-computed fixture tests:
-   one rebalance, one loss deferral, one carry-forward, one year of tax.
-2. Data loaders for the pre-registered proxies into research_history, base-currency
-   conversion with ECB reference rates, coverage reported per series.
-3. The verdict, run once, if the data is reachable → research/reports/core-allocation.md
-   (all metrics before and after tax, a per-year table, bias disclosure, the
-   pre-registered gates with pass or fail) and the promoted variant written to
-   `core.variant`. If
-   data is unreachable: the harness and fixture tests merge, the verdict is PENDING in
-   ROADMAP — never fabricated. A fail is a valid outcome: the core then runs variant A.
+- quant/covariance.py: EWMA, multi-year, Ledoit–Wolf, blend (base currency), if a
+  registered variant uses risk budgeting.
+- quant/risk_budget.py, under the same condition: fix and port legacy
+  opportunistic_optimizer._risk_parity — the objective uses risk-contribution shares
+  (w·Σw / w'Σw) — through a convex formulation (log-barrier or cyclical coordinate descent).
+  Port the still-valid cases from legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py;
+  verify against closed forms (two assets; diagonal Σ → inverse volatility) and against
+  skfolio (test-only); property tests (contributions match budgets, weights ≥ 0, sum 1). Do
+  not port the date-based crisis switch, regime-label leverage or Kelly-then-normalise.
+- engines/core/: the registered variants with their constants (environments and risk
+  budgets where used; the equity-dominant variant and its overlay to cash), roles filled by
+  the vehicle selector, the trend tilt (12-month TSMOM and 10-month moving average,
+  hysteresis, a scale floor above zero), freed weight to cash or short duration, wide inner
+  and outer bands, minimum trade, integer shares, cash flows first, sells beyond the outer
+  band only, tax-aware execution (losses first; gain-realising reductions only when the
+  pre-registered benefit exceeds tax_cost; re-entry through swap partners), cash
+  reservations respected, no stop orders, the StrategyValue interface implemented →
+  TargetPortfolio. `core.variant` selects the variant, its default the one 4c selected.
+  Remove the Session 6 skeleton targets and their config.
+- A parity test: on a fixture history, engines/core and research/simulate.py produce the
+  same target weights and trades for the selected variant.
 
-4. A benchmark of the verdict run on standard 3.14 against 3.14t with the same process
-   pool (`compute.workers`), recorded in DECISIONS: 3.14t is adopted only if every
-   dependency installs and it is clearly faster.
-
-ACCEPTANCE: the verdict is reproducible by one command; the report states each gate;
-`core.variant` matches the report.
+ACCEPTANCE: each registered variant produces a TargetPortfolio from fixtures for a small and
+a large account; the parity test holds; risk-budget tests (if built) green against closed
+forms and skfolio; `core.variant` matches the DECISIONS entry.
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
@@ -1434,15 +1620,18 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ```
 You are building ObliskIQ, session 15. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §4, §5.2, §5.5, §5.6, §5.9, §6.4 carefully). Port from legacy/, never from
+the design (read §4, §5.2, §5.5, §5.6, §5.9, §6.4 and DECISIONS D62, D63, D71 carefully). Port from legacy/, never from
 memory. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–14 merged. Otherwise STOP.
+PRECONDITION: Sessions 1–13 merged. Otherwise STOP.
 
 GOAL: the Asymmetry Hunter — deterministic components on typed point-in-time inputs,
 measured independence, entry rules per expression, a frozen thesis lifecycle with
 machine-checkable triggers, company selection among the stock candidates, and the pattern
-registry. The LLM is not built here; only the interface its nominations arrive through.
+registry. Components and their agreement rule run in shadow and are graded until the
+research pipeline finds them sufficient (Session 21); the selection hypotheses Session 4d
+left in shadow run through the same lifecycle. The LLM is not built here; only the
+interface its nominations arrive through.
 
 READ: legacy/old/ObliskIQ/modules/analytics/asymmetry_hunter.py (all) and its tests,
 docs/{ASYMMETRY_HUNTER,HUNTER_READINESS}.md, modules/execution/continuity_guard.py and its
@@ -1462,8 +1651,10 @@ DELIVERABLES
    positioning and events, and add the others in MASTER_PLAN §5.5 item 1. Readiness per
    component (live, warming-up N/threshold, off). Weights, thresholds and k in config; a
    weights_hash on every Signal.
-4. research/pattern_registry.yaml: the 31 legacy definitions (logic, citation, group from
-   §6.4, state) and the first research batch of §5.9 as `idea` entries; the legacy IC, n
+4. research/pattern_registry.yaml (Session 4d created it): the 31 legacy definitions
+   (logic, citation, group from §6.4, state), each component and the k-of-n agreement rule
+   as entries registered for Session 21's batch, and the §5.9 hypotheses not yet tested as
+   `idea` entries; the legacy IC, n
    and hit-rate figures are not carried over. A loader validates states and transitions;
    components can be backed by registry entries in `shadow` or `active` state.
 5. engines/satellite/independence.py: effective votes from the historical correlation of
@@ -1481,8 +1672,8 @@ DELIVERABLES
    the Session 8 stock candidates (liquidity, 12-1 momentum with a crash guard, quality
    and valuation where data exists, active registry patterns, honest degradation).
 9. engines/satellite/learning.py: the interface for slow empirical-Bayes weight updates
-   after a pre-registered minimum sample (wired to grading in Session 18), versioned by
-   weights_hash. The StrategyValue interface for the reservation planner.
+   after a pre-registered minimum sample counted in effective observations (wired to
+   grading in Session 18), versioned by weights_hash. The StrategyValue interface for the reservation planner.
 10. CLI `obliskiq satellite scan|status|readiness` and `obliskiq patterns list|show`; a
     replay script (firing frequency over chosen historical windows; a sanity check, not a
     backtest).
@@ -1502,7 +1693,7 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ```
 You are building ObliskIQ, session 16. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §5.10 carefully). Tests use fakes; with any configured key, run the live
+the design (read §5.10 and DECISIONS D66, D70 carefully). Tests use fakes; with any configured key, run the live
 probe and the evaluation. Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 1–15 merged. Otherwise STOP.
@@ -1552,8 +1743,14 @@ DELIVERABLES
 9. Prompt-injection tests: news items carrying instructions change nothing beyond the
    schema.
 10. Scheduling: the extractor per collector run; the scout weekly and on event spikes; the
-    devil's advocate weekly.
-11. LIVE (if a key is configured): one probe and one eval run per configured model,
+    devil's advocate weekly. Each role runs in shadow within its cost share of NAV and
+    influences a decision only when its activation condition holds (DECISIONS D66).
+11. H7, forward only (DECISIONS D70): the EventExtractor's outputs are stamped when
+    produced, from its first day; research/preregistrations/llm-events.md, merged in its
+    own PR before the extractor runs live, registers whether its features add to the price
+    signal and how and when that is evaluated. No backtest of an LLM-derived signal on
+    history counts as evidence.
+12. LIVE (if a key is configured): one probe and one eval run per configured model,
     recorded.
 
 ACCEPTANCE: every role tested with fakes (valid, malformed, timeout, failover, budget
@@ -1571,7 +1768,8 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ```
 You are building ObliskIQ, session 17. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §2, §4, §5.5, §5.6, §5.8, §5.11, §5.13 carefully). Money paths fail
+the design (read §2, §4, §5.5, §5.6, §5.8, §5.11, §5.13 and DECISIONS D66, D67, D69
+carefully). Money paths fail
 closed. Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 1–16 merged. Otherwise STOP.
@@ -1588,7 +1786,8 @@ test_crisis_database.py. Port lite's `positions` and `portfolio_circuit_breaker`
 consume (legacy/lite/config.yaml:118-133, 145-155).
 
 DELIVERABLES
-1. decision/expression.py: a long option when the IV percentile is at or below threshold,
+1. decision/expression.py: a long option when the options sleeve is active (Session 12's
+   activation condition), the IV percentile is at or below threshold,
    the chain is liquid, the tenor window is satisfiable (catalyst + buffer), the payoff at
    the named target meets the minimum, real-time quotes exist for the option and its
    underlying, and the sleeve can afford it — choosing the candidate with the most
@@ -1598,13 +1797,20 @@ DELIVERABLES
 2. decision/sizing.py, two regimes per layer (MASTER_PLAN §5.11), chosen by a
    CalibrationState interface (Session 18 fills it; until then every layer is
    uncalibrated):
-   - Uncalibrated: shares sized so the loss at the stop is a configured share of NAV;
-     probe = max(lite minimum position, `sizing.probe_fraction` × full size), capped by
-     that risk budget and lite's caps; if the cap falls below lite's minimum position or
-     the minimum trade, the trade is skipped (never rounded up). Options: a configured
+   - Uncalibrated: shares sized so the gap-adjusted loss (the stop distance plus a
+     pre-registered quantile of the instrument's overnight gaps from Session 11, wider
+     across earnings dates; DECISIONS D67) is a configured share of NAV; probe = max(the
+     minimum position, `sizing.probe_fraction` × full size), capped by that risk budget
+     and the caps; if the cap falls below the minimum position or the minimum trade, the
+     trade is skipped (never rounded up). The minimum position is an absolute floor
+     derived from commissions, as lite's `option_sleeve.min_premium_base_currency` is,
+     replacing `positions.min_size_pct_nav` (DECISIONS D66); lite's other `positions` caps
+     are restated against the sleeve each governs and read on look-through exposure
+     (DECISIONS D69). Options: a configured
      share of the sleeve, at least one contract, within affordability and the friction
      gate.
-   - Calibrated: f ≤ `sizing.kelly_fraction` × Kelly(p_eff, payoff) with p_eff = p_base +
+   - Calibrated (the pre-registered minimum of graded outcomes counted in effective
+     observations, and Brier skill above zero): f ≤ `sizing.kelly_fraction` × Kelly(p_eff, payoff) with p_eff = p_base +
      shrink × (p_stated − p_base); p_base = N(d₂) at the target from the strike's smile
      IV (options) or the driftless random-walk probability of reaching the target before
      the stop within the horizon, volatility from the HAR-RV forecast (shares); shrink
@@ -1635,9 +1841,16 @@ DELIVERABLES
    (paper: autonomous). The StrategyValue interface completed for all sleeves.
 8. Entry gates reused from Session 12; refusals carry reason codes surfaced in the digest
    and status.
+9. decision/activation.py: the activation conditions of DECISIONS D66 for the sleeves,
+   venues, sources and LLM roles that exist by now, each computed from configuration with
+   its inputs reported (Session 19a adds the capabilities that pay at larger capital); no
+   NAV threshold key (test).
 
 ACCEPTANCE: on day one, with no graded outcome anywhere, an approved share thesis and an
-approved option thesis both produce non-zero intents (test); end to end from a fixture
+approved option thesis both produce non-zero intents when their activation conditions hold,
+and a refusal naming the failed condition when they do not (tests); a gap-adjusted size
+below the stop-only size on an instrument with fat overnight gaps (test); a 20 % sleeve
+holds more than four positions once its budget over the absolute floor allows it (test); end to end from a fixture
 thesis to a share probe, a scale-up after a trend confirmation and an exit on a fired
 trigger; an option thesis entered in one block and partially exited at the premium
 multiple; hand-computed Kelly with each p_base; a refused case per gate; ES tests; breaker
@@ -1653,13 +1866,15 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ```
 You are building ObliskIQ, session 18. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §1, §5.5, §5.9, §5.11, §5.19). Port from legacy/, never from memory.
+the design (read §1, §5.5, §5.9, §5.11, §5.19 and DECISIONS D62, D63, D65 carefully). Port
+from legacy/, never from memory.
 Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 1–17 merged. Otherwise STOP.
 
-GOAL: the system measures itself honestly, and the measurement drives sizing trust,
-Hunter weights, pattern promotion, the satellite's capital and mode promotion.
+GOAL: the system measures itself honestly: research outcomes and live monitoring drive
+sizing trust, Hunter weights, pattern promotion and the satellite's capital, and operational
+evidence drives mode promotion.
 
 READ: legacy/old/ObliskIQ/modules/analytics/{ai_scoreboard,forecast_panel}.py,
 docs/AI_SCOREBOARD.md, docs/PAPER_TRADING_GATE.md, modules/execution/paper_gate.py and
@@ -1668,10 +1883,13 @@ test_paper_gate).
 
 DELIVERABLES
 1. research/preregistrations/scoreboard.md first, in its own PR merged before the rest
-   (AGENTS.md session workflow): verdict rules, horizons, minimum
-   cohorts, the calibration rule (when a layer becomes calibrated, the shrink mapping),
-   the weight-update rule, the pattern shadow → active and retirement rules, the capital
-   allocation step (size, cadence, owner ceiling) and the kill rule.
+   (AGENTS.md session workflow): the decision rule of D62 for forward grading, horizons,
+   minimum samples in effective observations (ρ estimated from history by Session 4b's
+   harness, never counts of predictions), the calibration rule (when a layer becomes
+   calibrated, the shrink mapping), the weight-update rule, the pattern shadow → active
+   rule, the monitoring rule of D65 (the twin, the monthly looks, the alpha-spending
+   boundaries and the action for each breach), the exploration budget for a sufficient
+   layer and the pooled re-test that can raise it.
 2. scoreboard/performance.py: TWR-based NAV series (Session 7); attribution core, equity
    satellite, options, cash; benchmarks (global 60/40 and ACWI in base currency from
    collected eligible-vehicle prices); realised and unrealised P&L; realised tax per the
@@ -1681,25 +1899,32 @@ DELIVERABLES
    (shadow and active), theses and LLM nominations; weekly cohorts; Newey–West intervals;
    minimum cohorts before verdicts; Brier and reliability for stated probabilities against
    the base rate. Port the weekly forecast panel (a fixed universe forecast every week, in
-   base currency against ACWI) so calibration data accumulates faster than theses alone.
+   base currency against the equity reference) and report its effective sample beside its
+   count: cross-sectional forecasts share the market's move.
 5. scoreboard/calibration.py → CalibrationState for sizing: a layer switches to calibrated
    only with the minimum graded outcomes and Brier skill above zero, and back when either
    fails. Component grades → Hunter learning (empirical-Bayes, shrunk, after the minimum
    sample).
 6. Pattern lifecycle automation: shadow patterns graded daily at zero weight; promotion to
-   active and retirement applied by the pre-registered rule, logged, reported.
-7. capital/allocation.py: the satellite budget moves by the pre-registered rule — after
-   the minimum sample, a lower confidence bound above zero raises it one step, up to the
-   owner's ceiling; an interval wholly below zero halves it and alerts (the kill rule);
-   the core absorbs the rest. Every change audited and reported.
+   active by a sufficient outcome and its activation condition, logged, reported;
+   retirement only by a new pre-registered test.
+7. scoreboard/monitor.py and capital/allocation.py (D65): a twin per active layer; the
+   live-minus-twin gap and the twin against the backtest's predictive distribution,
+   reviewed monthly against alpha-spending boundaries; a gap breach freezes the layer's new
+   entries and alerts; a twin breach returns the layer to shadow at zero weight and
+   alerts; an exploration budget only for a sufficient layer, within the owner's ceiling,
+   raised only by the pooled re-test and an owner command; the core absorbs the rest.
+   Every change audited and reported.
 8. scoreboard/promotion.py: L0→L3 criteria (MASTER_PLAN §5.19 and config) including the
    breaker, kill and cash-flow drills; `obliskiq promotion status`; upgrades still need an
    owner command.
 9. reporting/: a weekly report (markdown plus a Telegram summary) and a monthly report.
 
-ACCEPTANCE: hand-computed Newey–West, Brier and TWR tests; promotion cannot pass on missing
-data; a kill-rule drill and an allocation step-up drill; weight updates, calibration,
-allocation steps and pattern promotion impossible before the minimum sample (tests).
+ACCEPTANCE: hand-computed Newey–West, Brier, n_eff and TWR tests; promotion cannot pass on
+missing data; a gap-breach drill, a twin-breach drill and a budget step drill; repeated
+monthly looks hold the pre-registered false-alarm rate (simulation test); weight updates,
+calibration, budget steps and pattern promotion impossible before the minimum sample
+(tests).
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
@@ -1778,6 +2003,62 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
+## Session 19a — Capacity and scale
+
+**Launcher:** `Execute Session 19a exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 19a. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §2, §5.3, §5.8, §5.11, §5.16 and DECISIONS D7, D66 carefully). Money paths
+fail closed. Finish with the end-of-session protocol.
+
+PRECONDITION: Sessions 1–19 merged. Otherwise STOP.
+
+GOAL: the machine scales with capital: every capability that pays only at larger capital is
+built and turns on by its computed condition, so 1.0.0 serves a small account and a large one
+with the same code and no NAV threshold anywhere.
+
+READ: decision/activation.py and decision/vehicle_selector.py and their tests;
+docs/knowledge/ibkr-capabilities.md; quant/costs.py (the bond rows and the impact term).
+
+DELIVERABLES
+1. The bond rule (MASTER_PLAN §5.3), computed: a bond qualifies when its minimum increment
+   is at most a configured share of the role's amount, the per-order minimum commission
+   stays within the cost band, enough bonds exist to hold the duration target, and its
+   all-in cost beats the best fund for the role; government bonds and bills as core
+   vehicles; capabilities measured by whatif (minimum increment, commission), nothing
+   placed.
+2. Mutual funds (UCITS): cash-quantity orders, cut-off times, NAV pricing under the
+   `nav_priced` quote policy; capability measured by whatif; ranked by the vehicle selector.
+3. Stock baskets for an equity role: the basket rule (every member at least the minimum
+   trade, commissions within the cost band, tracking error to the role's index within a
+   configured bound) and the basket builder.
+4. Capacity: order and position limits from each instrument's average daily value, with the
+   cost model's impact term as input; each sleeve's capacity reported in the digest.
+5. Venues, working currencies and market data: further venues and currencies activated by
+   D66's conditions; a market-data subscription proposed to the owner when its cost is
+   within the pre-registered share of the expected benefit it unlocks.
+6. Tax at scale: the rate table's upper brackets exercised end to end; the annual export
+   extended with what foreign-asset reporting needs, the obligations confirmed from
+   official sources in docs/knowledge/tax-es.md (not tax advice).
+7. decision/activation.py completed for every capability, and `obliskiq capabilities
+   status` showing each condition, its inputs and whether it holds.
+8. LIVE (a command list for the owner on the machine, §A.5): bond and fund whatifs on the
+   paper account; nothing placed.
+
+TESTS: a NAV ladder from a small account to a large one turns each capability on exactly
+when its condition holds, and never through a NAV threshold key (test); the bond rule
+excludes direct bonds for a role of a few thousand euros and admits them for a role of a few
+hundred thousand; a basket refused when a member falls below the minimum trade; a capacity
+limit caps an order; an unverified capability is never proposed.
+
+ACCEPTANCE: every capability in D66 has its condition, its test on the NAV ladder and its line
+in `obliskiq capabilities status`; live whatifs recorded or queued.
+Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
 ## Session 20 — Red-team and cleanup
 
 **Launcher:** `Execute Session 20 exactly as specified in docs/SESSION_PROMPTS.md on main.`
@@ -1786,7 +2067,7 @@ Finish with the end-of-session protocol in AGENTS.md.
 You are building ObliskIQ, session 20. AGENTS.md is your operating manual; MASTER_PLAN.md
 the design. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–19 merged. Otherwise STOP.
+PRECONDITION: Sessions 1–19a merged. Otherwise STOP.
 
 GOAL: find the silent failures before money does, prove each guard by mutation, remove the
 legacy snapshot, leave the docs true, release 1.0.0.
@@ -1812,7 +2093,12 @@ its role; an allocation step or a pattern promotion before its minimum sample; t
 release workflow tagging twice or publishing without notes; an option left to expire
 because its last tradable session was computed from the wrong venue or ignored a holiday;
 the Gateway login silently lost; update.sh leaving the machine
-on a broken version.
+on a broken version; a test outcome misclassified by the decision rule, or a research run
+on an unlocked or edited pre-registration; a point-in-time leak in the research harness; a
+capability turned on below its activation condition; a monitoring boundary that fires too
+often or never across repeated looks; sizing by the loss at the stop instead of the
+gap-adjusted loss; a triggered stop left unrepriced after a gap, or repriced past the
+gate; currency gains left out of the tax ledger.
 
 STEP 2 — For each of the ten: a failing test or a mutation test proving the guard catches
 it, then the fix. A mutation pass (mutmut or manual) over decision/, execution/, capital/,
@@ -1839,40 +2125,47 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
-## Session 21 — Research: first pattern batch
+## Session 21 — Research: second batch
 
 **Launcher:** `Execute Session 21 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
 
-Runs any time after Session 18; better once the bot has some weeks of paper data. Later
-batches reuse this prompt with a new batch list.
+Runs any time after Session 4d; the Hunter's components and their agreement rule need Session
+15. Later batches reuse this prompt with a new batch list.
 
 ```
 You are building ObliskIQ, session 21. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §3.1, §5.9, §6.4). Network is open. Finish with the end-of-session
-protocol.
+the design (read §3.1, §5.5, §5.9, §6.4 and DECISIONS D62, D63, D71 carefully). Network is
+open. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–18 merged. Otherwise STOP.
+PRECONDITION: Session 4d merged (and Session 15 for the Hunter's components). Otherwise STOP.
 
-GOAL: give the first research batch an honest test on our own point-in-time data; passes
-go to shadow, failures are recorded.
+GOAL: give the second research batch an honest test with Session 4b's harness on
+point-in-time data, so each hypothesis ends sufficient, insufficient, inconclusive or not
+evaluable — and only the sufficient ones can earn capital.
 
-STEP 1 — Pre-registration first, in its own PR merged before Step 2 (AGENTS.md session
-workflow): research/preregistrations/patterns-batch-1.md covering the
-§5.9 table and the §6.4 re-test group: exact definitions (respecified where the legacy
-logic misstated the cited paper), universe, span, point-in-time rules, horizons, test
-statistics (event study or cross-sectional IC with Newey–West), Benjamini–Hochberg across
-the whole batch, an out-of-sample split, minimum n, an assumed post-publication decay, data
-availability per hypothesis (a hypothesis without free point-in-time data is recorded as
-untestable, not approximated), a constants hash and a lock file.
+STEP 1 — Data audit and pre-registration, in its own PR merged before Step 2 (AGENTS.md
+session workflow): research/preregistrations/batch-2.md from the template, covering H3
+(forced selling: spin-offs and index deletions), H6 (the core's risk conditioned on the
+variance risk premium, the excess bond premium and trend), H9 (COT hedging pressure for
+commodity ETCs), the Hunter's components each alone and their k-of-n agreement rule as a
+registered combination beside them, the batch-1 candidates Session 4d did not choose, and the
+§6.4 re-test group: exact definitions (respecified where the legacy logic misstated the
+cited paper), mechanisms, universe, span, point-in-time rules, horizons, θ per hypothesis
+with its justification, the primary statistic (an event study clustered by date, or a
+Fama–MacBeth series with Newey–West), power and the detectable effect, the development and
+confirmation samples, the trial budget (combinations included), robustness, an assumed
+post-publication decay, data adequacy per hypothesis (one without adequate point-in-time data
+is not evaluable, never approximated), a constants hash and the lock.
 
-STEP 2 — A research harness using research_history and the point-in-time stores; run once.
+STEP 2 — Exploration on the development samples with every trial in the registry; one
+confirmation run through `obliskiq research run`.
 
-STEP 3 — research/reports/patterns-batch-1.md. Each pass moves to `shadow` in the registry
-at zero weight, recording its pre-registered active weight and grading rule (Session 18
-promotes or retires it); each fail is marked `retired` with its result. Never re-run with
-tweaks.
+STEP 3 — research/reports/batch-2.md with each outcome, its labels, power and limits. In the
+registry: sufficient and inconclusive-positive → `shadow` with the grading rule Session 18
+applies; insufficient → `retired` with its result; not evaluable → `idea` with the data it
+needs. Never re-run with tweaks.
 
-ACCEPTANCE: the pre-registration is merged on main before the results PR; the verdict is
+ACCEPTANCE: the pre-registration is on main before the results PR; the verdict is
 reproducible by one command; shadow entries have tests and readiness statuses.
 Finish with the end-of-session protocol in AGENTS.md.
 ```
@@ -1881,7 +2174,7 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ## E. After the build (owner steps)
 
-1. Provision a machine per `docs/DEPLOY.md`; install the paper credentials and the
+1. The machine from T1 (§A.5), set up per `docs/DEPLOY.md`: the paper credentials and the
    `read:packages` token there.
 2. `deploy/update.sh v1.0.0` installs the released image.
 3. Run `obliskiq preflight`; fix anything it reports in a short session (paste the output).
@@ -1892,8 +2185,10 @@ Finish with the end-of-session protocol in AGENTS.md.
    is paused.
 6. Switch to paper: fully autonomous. Use `/deposit` and `/withdraw` as needed, answer
    `/questions` when asked; observe until the L2 criteria are met.
-7. Review `obliskiq promotion status` and the scoreboard before any live-small step. Live
-   credentials go on the machine only.
+7. Review `obliskiq promotion status`, the research reports and the scoreboard before any
+   live-small step. Live-small is where real transaction costs are first measured, so it
+   can come early with a small cap (MASTER_PLAN §5.19). Live credentials go on the machine
+   only.
 
 ---
 

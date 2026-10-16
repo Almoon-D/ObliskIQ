@@ -5,6 +5,32 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.5.1] - 2026-10-16
+
+Design review (owner request): evidence before machinery. A red-team of the plan against the
+code and the legacy evidence, challenged twice by two other reviewers, recorded as DECISIONS
+D60–D71. Process and documents only; no runtime code changes.
+
+### Changed
+
+- MASTER_PLAN: the objective is the after-tax log growth of liquidation value within the
+  owner's drawdown limit, with an equity reference and a 60/40 scored under the same rule
+  (§1, D60); every capability runs under a computed activation condition, never a NAV
+  threshold (§2, D66); the core's variant, including an equity-dominant one, is selected by an
+  after-tax verdict (§5.4); the research pipeline has a protocol, registered combinations and a
+  decision rule with four mutually exclusive outcomes (§5.9, D62–D64); LLM-derived evidence is
+  forward only (§5.10, D70); sizing uses a gap-adjusted loss and protective exits handle gaps
+  without market orders (§5.11, §5.12, D67); currency gains enter the tax ledger (§5.16, D69);
+  capital follows research evidence and live results are monitored through a twin (§5.19,
+  D65); the transport's fallback is open again (§7, D68); the session sequence (§10).
+- SESSION_PROMPTS: T1, the owner's first run on the deployment machine (§A.5); new Sessions 4b
+  (research harness, with the tax engine and European commissions), 4c (core verdict), 4d
+  (first selection hypothesis) and 19a (capacity and scale, built before 1.0.0); Session 14
+  absorbed into 4c; Sessions 5–13 and 15–21 adjusted (D61–D71).
+- ROADMAP: the new sequence, the design-review log, live checks for attached orders, the
+  reporting lag and stop-limits through a gap, and T1 as the first live run.
+- AGENTS.md: the research harness's rules, and software tests are not evidence of returns.
+
 ## [0.5.0] - 2026-10-16
 
 Session 4a — Pre-trade rails. The pre-trade gate replaces Session 4's refuse-everything gate:

@@ -56,6 +56,8 @@ Read what the work in front of you needs, when it needs it.
 - No network in tests: HTTP mocked with `respx`; fixtures in `tests/fixtures/` with a sidecar note of source and date. Live probes are separate commands, never tests.
 - Money paths (sizing, gates, intents, orders, replies, reconciliation, currency conversion, cash flows, tax lots, modes, kill switch) need failure-branch tests, not only the happy path.
 - The coverage floor only ratchets up.
+- Research: code whose output can move capital lives in `src/obliskiq/research/` under every rule above, with tests of data correctness, point in time (perturbing data after `as_of` changes no output), computation and reproducibility. Scripts in `research/explore/` are outside the coverage floor and are never evidence: only a harness run on a merged, locked pre-registration counts (DECISIONS D64).
+- Software tests are not evidence of returns. A strategy claim needs a pre-registered test and its outcome under the decision rule (DECISIONS D62).
 
 ## Session workflow
 
