@@ -493,6 +493,10 @@ settles it.
   `execution.pretrade.protective.max_limit_offset_fraction` as the one rule for every stop.
 - Session 5: `fills_unreconciled` refuses sells of an instrument whose working sell reports fills the
   store never recorded (older than the trades IBKR serves, say); reconciliation records them.
+- Session 5: the gate reads the live orders and the trades fresh for every clearance, and IBKR paces
+  each at one request per 6 s here, so an exit beside a stop (check, cut, clear) takes about 18 s
+  and a cycle of N orders at least 6·N s. If that binds, share one read per cycle under the store
+  lock, keeping I2's rule that a sell cleared after the read still counts.
 - Session 5: one process places a given intent (D47); if the executor ever retries from more
   than one process, add a per-intent placement lease in the store. The kill switch classes a
   sell by the most cautious of its intent's spent clearances (D48); once reconciliation knows
