@@ -478,8 +478,14 @@ def decode_ledger(body: Any, *, base_currency: str) -> Ledger:
         if cash is None:
             unreadable.append(code)
             continue
+        rate = to_decimal(entry.get("exchangerate"))
         balances.append(
-            CashBalance(currency=code, cash=cash, settled_cash=to_decimal(entry.get("settledcash")))
+            CashBalance(
+                currency=code,
+                cash=cash,
+                settled_cash=to_decimal(entry.get("settledcash")),
+                exchange_rate=rate if rate is not None and rate > 0 else None,
+            )
         )
     balances.sort(key=lambda balance: balance.currency)
     identified = ledger_base_currency(ledger)

@@ -6,6 +6,9 @@ owner's panel, the jurisdiction profile it selects and the policies that profile
 ``obliskiq kill on|off|status`` sets, clears or shows the kill switch; ``kill on`` works even when
 the configuration does not load (it then sets the file flag alone). ``obliskiq mode show|set``
 shows or changes the execution mode (upgrades by this explicit command, audited).
+``obliskiq flatten --confirm`` places closing orders for every managed position (separate from
+the kill switch). ``obliskiq preflight --paper-order-test`` places and cancels one paper order per
+configured instrument. ``obliskiq approvals list|approve|reject`` works the approval queue.
 Any problem is printed for the owner, in plain words, with exit status 1 and no traceback.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -15,7 +18,8 @@ import argparse
 import asyncio
 import sqlite3
 import sys
-from collections.abc import Callable, Sequence
+import uuid
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TextIO
@@ -24,9 +28,13 @@ from .. import __version__
 from ..config import LoadedConfig, load_config
 from ..domain.orders import ExecutionMode, KillSwitchRecord
 from ..env import Environment, default_env_file, load_environment
-from ..errors import ConfigError, EnvVarError, ModeChangeRefusedError, StoreError
+from ..errors import ConfigError, EnvVarError, ModeChangeRefusedError, ObliskError, StoreError
+from ..execution.approvals import ApprovalQueue
 from ..execution.killswitch import clear_file_flag, file_flag_on, set_file_flag
 from ..execution.modes import Modes
+from ..execution.paper_test import PaperOrderTest
+from ..execution.runtime import OrderPath, open_order_path
+from ..execution.state import IntentBook
 from ..ibkr.preflight import run_read_only
 from ..ibkr.transport import missing_credentials, transport_refusal
 from ..jurisdiction import (
@@ -105,9 +113,8 @@ def _settings_show(loaded: Loaded, out: TextIO) -> int:
     return EXIT_OK
 
 
-def _preflight(loaded: Loaded, out: TextIO) -> int:
-    """``preflight --read-only``: walk the IBKR read path and report each step."""
-    env = loaded.env
+def _broker_refusal(env: Environment, out: TextIO) -> int | None:
+    """The exit status when the environment cannot reach IBKR; ``None`` when it can."""
     # An unset profile is reported as unset (below), not as a refused combination.
     refusal = transport_refusal(env) if env.ibkr_profile is not None else None
     if refusal is not None:
@@ -119,10 +126,123 @@ def _preflight(loaded: Loaded, out: TextIO) -> int:
         print("no credentials", file=out)
         print(f"  unset: {', '.join(missing)}", file=out)
         return EXIT_NO_CREDENTIALS
+    return None
+
+
+def _account(env: Environment) -> str:
+    return env.ibkr_account_id.get_secret_value() if env.ibkr_account_id else ""
+
+
+def _preflight(loaded: Loaded, out: TextIO) -> int:
+    """``preflight --read-only`` walks the IBKR read path; ``--paper-order-test`` places and
+    cancels one paper order per configured instrument."""
+    env = loaded.env
+    refused = _broker_refusal(env, out)
+    if refused is not None:
+        return refused
+    if loaded.args.paper_order_test:
+        return _paper_order_test(loaded, out)
     report = asyncio.run(run_read_only(env, loaded.config.settings, data_dir=env.data_dir))
-    account = env.ibkr_account_id.get_secret_value() if env.ibkr_account_id else ""
-    print(report.render((account,)), file=out)
+    print(report.render((_account(env),)), file=out)
     return EXIT_OK if report.ok else EXIT_INVALID
+
+
+def _with_order_path[T](loaded: Loaded, run: Callable[[OrderPath], Awaitable[T]]) -> T:
+    """Run ``run`` over an order path opened for this command, and close it."""
+
+    async def go() -> T:
+        async with open_order_path(
+            loaded.env,
+            loaded.config.settings,
+            loaded.profile,
+            data_dir=loaded.env.require_data_dir(),
+        ) as path:
+            return await run(path)
+
+    return asyncio.run(go())
+
+
+def _paper_order_test(loaded: Loaded, out: TextIO) -> int:
+    try:
+        report = _with_order_path(loaded, lambda path: PaperOrderTest(path).run())
+    except ObliskError as exc:
+        print(f"paper order test stopped: {exc}", file=out)
+        return EXIT_INVALID
+    print(report.render((_account(loaded.env),)), file=out)
+    return EXIT_OK if report.ok else EXIT_INVALID
+
+
+def _flatten(loaded: Loaded, out: TextIO) -> int:
+    """``flatten --confirm``: closing orders for every managed position."""
+    if not loaded.args.confirm:
+        print(
+            "flatten sells every managed position at the bid; nothing was done. Run "
+            "`obliskiq flatten --confirm` to go ahead.",
+            file=out,
+        )
+        return EXIT_INVALID
+    refused = _broker_refusal(loaded.env, out)
+    if refused is not None:
+        return refused
+    try:
+        report = _with_order_path(loaded, lambda path: path.flattener.flatten(actor=OWNER_ACTOR))
+    except ObliskError as exc:
+        print(f"flatten stopped: {exc}", file=out)
+        return EXIT_INVALID
+    print(report.render(), file=out)
+    return EXIT_OK if report.ok else EXIT_INVALID
+
+
+def _approval_queue(loaded: Loaded) -> tuple[ApprovalQueue, StoreWorker]:
+    settings = loaded.config.settings
+    data_dir = loaded.env.require_data_dir()
+    worker = StoreWorker(lambda: open_store(settings, data_dir))
+    book = IntentBook(worker, coid_max_length=settings.execution.orders.coid_max_length)
+    return ApprovalQueue(settings, worker, book), worker
+
+
+def _approvals_list(loaded: Loaded, out: TextIO) -> int:
+    async def pending() -> list[str]:
+        queue, worker = _approval_queue(loaded)
+        try:
+            return [
+                f"  {stored.intent.intent_id}  {stored.intent.sleeve.value}  "
+                f"{stored.intent.side.value} conid {stored.intent.conid}  {stored.intent.reason}"
+                for stored in await queue.pending()
+            ]
+        finally:
+            await worker.aclose()
+
+    rows = asyncio.run(pending())
+    print(f"{len(rows)} intent(s) waiting for approval", file=out)
+    for row in rows:
+        print(row, file=out)
+    return EXIT_OK
+
+
+def _approvals_decide(loaded: Loaded, out: TextIO) -> int:
+    approve = loaded.args.action == "approve"
+    try:
+        intent_id = uuid.UUID(loaded.args.intent_id)
+    except ValueError:
+        print(f"refused: {loaded.args.intent_id!r} is not an intent id", file=out)
+        return EXIT_INVALID
+
+    async def decide() -> None:
+        queue, worker = _approval_queue(loaded)
+        try:
+            call = queue.approve if approve else queue.reject
+            await call(intent_id, actor=OWNER_ACTOR, reason=loaded.args.reason)
+        finally:
+            await worker.aclose()
+
+    try:
+        asyncio.run(decide())
+    except ObliskError as exc:
+        print(f"refused: {exc}", file=out)
+        return EXIT_INVALID
+    print(f"intent {intent_id} {'approved' if approve else 'rejected'}", file=out)
+    return EXIT_OK
 
 
 def _kill_on_flags(env: Environment, loaded: Loaded | None, reason: str, out: TextIO) -> int:
@@ -274,17 +394,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     show.set_defaults(handler=_settings_show)
 
-    preflight = commands.add_parser(
-        "preflight", help="check the IBKR connection end to end (read-only)"
-    )
-    preflight.add_argument(
+    preflight = commands.add_parser("preflight", help="check the IBKR connection end to end")
+    how = preflight.add_mutually_exclusive_group(required=True)
+    how.add_argument(
         "--read-only",
         action="store_true",
-        required=True,
         help="read only: authentication, accounts, guard, positions, cash, a snapshot, history, "
         "contract rules, algos and the trading schedule for one stock; no order endpoint",
     )
+    how.add_argument(
+        "--paper-order-test",
+        action="store_true",
+        help="paper only: place one order that cannot fill per configured instrument, read its "
+        "status and reply messages, and cancel it (needs mode paper)",
+    )
     preflight.set_defaults(handler=_preflight)
+
+    flatten = commands.add_parser(
+        "flatten", help="place closing orders for every managed position (not the kill switch)"
+    )
+    flatten.add_argument(
+        "--confirm", action="store_true", help="go ahead: without it nothing is done"
+    )
+    flatten.set_defaults(handler=_flatten)
+
+    approvals = commands.add_parser("approvals", help="the approval queue")
+    approval_actions = approvals.add_subparsers(dest="action", required=True, metavar="ACTION")
+    approval_actions.add_parser("list", help="intents waiting for approval").set_defaults(
+        handler=_approvals_list
+    )
+    for verb in ("approve", "reject"):
+        decide = approval_actions.add_parser(verb, help=f"{verb} an intent held for approval")
+        decide.add_argument("intent_id", help="the intent's id (approvals list shows it)")
+        decide.add_argument("--reason", required=True, help="why (audited)")
+        decide.set_defaults(handler=_approvals_decide)
 
     kill = commands.add_parser("kill", help="the kill switch")
     kill_actions = kill.add_subparsers(dest="action", required=True, metavar="ACTION")

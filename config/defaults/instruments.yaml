@@ -1,0 +1,44 @@
+# What may never be traded, and the date rule that ends an option's life early (MASTER_PLAN §2,
+# §5.12). Values marked "lite" are ObliskIQ-lite-MCP's (config.yaml @b1ebd49); docs/DECISIONS.md
+# says why each is what it is.
+
+# lite's `instruments` block (legacy/lite/config.yaml:270-332): the keys the pre-trade gate reads.
+instruments:
+  # Never traded, by any role or side (reading them as data is always allowed). The mandate's
+  # five categories are the minimum: configuration cannot drop one. lite.
+  prohibited:
+    - futures_contracts               # undefined loss; violates the no-leverage mandate
+    - futures_options                 # see allow_futures_options
+    - short_options                   # any written premium, covered or not
+    - leveraged_etps                  # embedded leverage; daily reset decays badly over 90-200d
+    - inverse_etps
+  # lite's switch for long options on futures. It stays false in this build: a futures option
+  # needs the never-exercise rule, which the options sleeve (Session 12) builds. lite.
+  allow_futures_options: false
+  # Leveraged and inverse ETPs, matched case-insensitively against the instrument's resolved
+  # DESCRIPTION, never its ticker ('BULL' is a substring of plenty of innocent names). An option
+  # is matched on its underlying's description too. lite.
+  leveraged_inverse_markers:
+    - "2X"
+    - "3X"
+    - "-1X"
+    - "ULTRA"
+    - "ULTRASHORT"
+    - "ULTRAPRO"
+    - "LEVERAGED"
+    - "INVERSE"
+    - "DAILY BULL"
+    - "DAILY BEAR"
+    - "SHORT DAILY"
+    - "DOUBLE LONG"
+    - "DOUBLE SHORT"
+
+# lite's `tenor` block (legacy/lite/config.yaml:93-104): the one key the pre-trade gate reads.
+# The options sleeve (Session 12) ports the rest.
+tenor:
+  # An option is closed this many sessions before its last tradable session, regardless of
+  # moneyness: an option on an ineligible ETP is never opened inside that window, and inside it
+  # an unresolved calendar disagreement blocks any order on the option (the earlier date wins).
+  # lite counted from the expiry; the anchor here is the last tradable session
+  # (docs/knowledge/calendars.md, "Expiry and the last tradable session").
+  mandatory_close_trading_days: 10

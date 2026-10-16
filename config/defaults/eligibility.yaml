@@ -1,0 +1,37 @@
+# The SKELETON eligibility policy (jurisdiction/eligibility.py), which config/jurisdictions/es.yaml
+# selects until Session 8 builds the universe and the eu_priips policy and removes this file.
+#
+# Only the instruments listed here may be bought; everything else is refused as ineligible. Each
+# record also describes its instrument for the pre-trade gate (asset class, currency, listing
+# venue, the description the leveraged and inverse markers are matched against), because nothing
+# else in this build does. An option record names its underlying and expiry; an option whose
+# underlying is an ETF or ETC this list does not hold is an option on an ineligible ETP, allowed
+# only under the mandatory close (tenor.mandatory_close_trading_days).
+#
+# The conids are lite's, none pinned through ObliskIQ yet: VERIFY-LIVE(skeleton conids). The paper
+# order test resolves each one through IBKR's contract search before it orders, and stops at a
+# mismatch. An owner override replaces the whole list.
+eligibility:
+  skeleton_allowlist:
+    # A UCITS ETF in the base currency: iShares STOXX Europe 600 Banks on Xetra. Lite resolved it
+    # and read its daily bars on Xetra [MCP ✓ 2026-08-29] (legacy/lite/universe.yaml).
+    - conid: 89005163
+      symbol: EXV1
+      listing_exchange: IBIS
+      currency: EUR
+      asset_class: etf
+      description: iShares STOXX Europe 600 Banks UCITS ETF (DE)
+      multiplier: "1"
+      underlying_conid: null
+      expiry: null
+    # A liquid US stock: Freeport-McMoRan on the NYSE (lite's conid fixture,
+    # legacy/lite/tests/fixtures/ibkr/conids.json).
+    - conid: 8158
+      symbol: FCX
+      listing_exchange: NYSE
+      currency: USD
+      asset_class: stock
+      description: Freeport-McMoRan Inc
+      multiplier: "1"
+      underlying_conid: null
+      expiry: null

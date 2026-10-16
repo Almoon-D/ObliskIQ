@@ -29,6 +29,7 @@ from .schema_calendars import (
 from .schema_costs import CostsConfig
 from .schema_execution import DisciplineConfig, ExecutionConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
+from .schema_instruments import EligibilityConfig, InstrumentsConfig, TenorConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
@@ -112,6 +113,9 @@ class ObliskConfig(FrozenModel):
     ibkr: IbkrConfig
     discipline: DisciplineConfig
     execution: ExecutionConfig
+    instruments: InstrumentsConfig
+    tenor: TenorConfig
+    eligibility: EligibilityConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -141,6 +145,15 @@ class ObliskConfig(FrozenModel):
             f"seasonal_closes.{mic}: a synthetic calendar has no library close to replace"
             for mic in sorted(set(self.seasonal_closes) & set(self.synthetic_calendars))
         ]
+        problems += self._paper_order_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def _paper_order_problems(self) -> list[str]:
+        allowed = {instrument.conid for instrument in self.eligibility.skeleton_allowlist}
+        return [
+            f"ibkr.preflight.paper_order.conids: {conid} is not in eligibility.skeleton_allowlist"
+            for conid in self.ibkr.preflight.paper_order.conids
+            if conid not in allowed
+        ]

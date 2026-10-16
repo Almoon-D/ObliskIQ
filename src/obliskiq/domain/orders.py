@@ -300,6 +300,11 @@ class PretradeClearance(DomainModel):
     sigma: Annotated[float, Field(gt=0)] | None = None
     issued_at: UtcDatetime
     expires_at: UtcDatetime
+    #: What the order commits at its limit, in ``currency`` (the instrument's), and in the base
+    #: currency: the cash check and the daily caps add up the clearances that are still open.
+    currency: CurrencyCode | None = None
+    notional: PositiveAmount | None = None
+    notional_base: PositiveAmount | None = None
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
@@ -400,6 +405,53 @@ class ModeChange(DomainModel):
             raise ValueError("a mode change changes the mode")
         if (self.to_mode.rank > self.from_mode.rank) != (self.direction == "upgrade"):
             raise ValueError("an upgrade raises the mode and a downgrade lowers it")
+        return self
+
+
+class ApprovalDecision(DomainModel):
+    """The owner's word on an intent held in the approval queue."""
+
+    intent_id: IntentId
+    approved: bool
+    actor: NonEmptyText
+    reason: NonEmptyText
+    at: UtcDatetime
+
+
+class StopResizeState(StrEnum):
+    """Where a protective stop resized for an exit stands (I5)."""
+
+    RESIZED = "resized"  # the stop was cut so the exit fits beside it
+    CLOSED = "closed"  # the exit filled, or the cut was never needed: nothing to restore
+    RESTORED = "restored"  # the exit ended unfilled and the stop covers the position again
+    RESTORE_FAILED = "restore_failed"  # a restore was refused or failed; retried, alerted
+
+
+class StopResize(DomainModel):
+    """A protective stop cut to make room for an exit, and what restoring it takes.
+
+    ``resized_quantity`` zero means the stop was cancelled (a full exit). ``original_terms`` are
+    the stop's terms before the cut; a restore brings it back to them, less what the exit filled.
+    """
+
+    resize_id: Annotated[int, Field(ge=1)] | None = None
+    exit_intent_id: IntentId
+    stop_intent_id: IntentId
+    stop_order_id: NonEmptyText
+    original_terms: OrderTerms
+    resized_quantity: Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
+    state: StopResizeState
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    detail: NonEmptyText
+
+    @model_validator(mode="after")
+    def _a_cut(self) -> Self:
+        original = self.original_terms.quantity
+        if self.original_terms.side is not OrderSide.SELL or original is None:
+            raise ValueError("a protective stop is a sell sized in units")
+        if self.resized_quantity >= original:
+            raise ValueError("a resize cuts the stop")
         return self
 
 

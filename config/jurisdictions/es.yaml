@@ -2,3 +2,7 @@
 # registered in the obliskiq.jurisdiction package.
 id: es
 name: Spain
+policies:
+  # What may be bought: the skeleton allowlist (config/defaults/eligibility.yaml) until Session 8
+  # registers eu_priips and selects it here.
+  eligibility: skeleton
