@@ -1,0 +1,117 @@
+# The research harness (MASTER_PLAN §5.9; DECISIONS D60–D64). Values a pre-registration fixes
+# (theta, the horizon, seeds, the bootstrap, the adequacy checks) live in the pre-registration,
+# not here; these are the defaults D62 names and the mechanics every study shares.
+research:
+  # Where `obliskiq research run` writes its report, relative to the repository that holds the
+  # pre-registration.
+  reports_dir: research/reports
+
+  decision:
+    # The interval [L, U] of the primary effect has level 1 - 2 alpha, Bonferroni-adjusted across
+    # the tests of a confirmation run (D62). A pre-registration may state its own.
+    alpha: "0.05"
+    # The power a pre-registration targets to detect theta (D62).
+    target_power: "0.8"
+
+  simulation:
+    # Delta execution: a position is traded only when the change exceeds this fraction of its
+    # target value (legacy walk_forward_backtester delta_no_trade_band_pct @68280e1).
+    no_trade_band_fraction: "0.005"
+    # At a rebalance date a price older than this does not mark or trade a position; a held
+    # position without one stops the run (the legacy backtester looked back seven days).
+    max_price_age_days: 7
+    # Trade whole units, as the core rebalances (MASTER_PLAN §5.4).
+    whole_units: true
+    # Calendar days per year for annualising over elapsed time (legacy STRATEGY_V2_DESIGN §3.5).
+    days_per_year: "365.25"
+
+  breakeven:
+    # The cost multiplier at which the primary effect falls to theta is searched up to this
+    # factor; beyond it the report says "above".
+    max_multiplier: "20"
+    # The search stops when the multiplier is known to this width.
+    multiplier_tolerance: "0.001"
+
+  data:
+    # Seconds a download may take before it fails (the shared retry policy is `http`).
+    timeout_seconds: 60
+    # A rate older than this does not convert a price to the base currency.
+    max_fx_age_days: 7
+    ken_french:
+      base_url: https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/
+      # The library's own markers for a missing value.
+      missing_markers: ["-99.99", "-999"]
+      bias_notes:
+        - The library is revised without vintages; a value may differ from what was public then.
+        - US portfolios built from CRSP; returns in USD.
+    aqr:
+      base_url: https://www.aqr.com/-/media/AQR/Documents/Insights/Data-Sets/
+      bias_notes:
+        - AQR updates and revises its data sets without vintages.
+        - Factor returns are excess returns of long-short portfolios before trading costs.
+    fred:
+      csv_url: https://fred.stlouisfed.org/graph/fredgraph.csv
+      api_url: https://api.stlouisfed.org/fred/series/observations
+      # ALFRED's widest real-time period: every vintage the archive holds.
+      realtime_start: 1776-07-04
+      realtime_end: 9999-12-31
+      bias_notes:
+        - Without vintages FRED serves the latest revision; availability is the observation date plus the declared lag.
+    ecb:
+      url: https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.zip
+      bias_notes:
+        - ECB euro foreign exchange reference rates, set around 14:15 CET and published around 16:00 CET on TARGET days; a close before publication would not have had the day's rate.
+    yahoo:
+      bias_notes:
+        - Yahoo closes are split-adjusted backwards and not point in time; a split after the date changes the level.
+        - The listing's history only; a fund that closed before the download is absent (survivorship).
+
+  # Datasets `obliskiq research data load` knows. Each loads one or more series named
+  # <id>.<field>. vendor yahoo: `symbol` (Yahoo's ticker), `currency`, `start`. ken_french: `file`
+  # (the zip under base_url), `section` (0 is the first table), `frequency` (monthly or annual),
+  # `columns` (null: all), `release_lag_days`. aqr: `file`, `sheet`, `header_row` (1-based),
+  # `columns`, `units` (decimal or percent), `release_lag_days`. fred: `series`, `vintages` (true
+  # reads ALFRED and needs FRED_API_KEY), `frequency`, `units`, `release_lag_days` (used without
+  # vintages), `start`. ecb: `currencies`. Every record adds its own bias notes.
+  datasets:
+    - id: ecb_fx
+      vendor: ecb
+      currencies: [USD, GBP, CHF, JPY]
+      bias_notes:
+        - Units of the currency per euro.
+    - id: ff3_monthly
+      vendor: ken_french
+      file: F-F_Research_Data_Factors_CSV.zip
+      section: 0
+      frequency: monthly
+      columns: null
+      release_lag_days: 45
+      bias_notes:
+        - Fama-French three factors and the one-month bill, monthly, percent converted to decimals.
+    - id: aqr_tsmom_monthly
+      vendor: aqr
+      file: Time-Series-Momentum-Factors-Monthly.xlsx
+      sheet: TSMOM Factors
+      header_row: 18
+      columns: [TSMOM, TSMOM^EQ, TSMOM^FI, TSMOM^CM, TSMOM^FX]
+      units: decimal
+      release_lag_days: 45
+      bias_notes:
+        - Moskowitz, Ooi and Pedersen time-series momentum factors, excess returns.
+    - id: alfred_cpi
+      vendor: fred
+      series: CPIAUCSL
+      vintages: true
+      frequency: monthly
+      units: index
+      release_lag_days: 45
+      start: 1990-01-01
+      bias_notes:
+        - US CPI for all urban consumers, seasonally adjusted, every published vintage.
+    - id: eunl
+      vendor: yahoo
+      symbol: EUNL.DE
+      currency: EUR
+      start: 2009-01-01
+      bias_notes:
+        - iShares Core MSCI World UCITS ETF (accumulating) on Xetra.

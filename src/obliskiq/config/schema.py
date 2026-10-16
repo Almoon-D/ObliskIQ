@@ -31,6 +31,7 @@ from .schema_execution import DisciplineConfig, ExecutionConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
 from .schema_instruments import EligibilityConfig, InstrumentsConfig, TenorConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
+from .schema_research import ResearchConfig
 
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
 
@@ -73,6 +74,7 @@ class PathsConfig(FrozenModel):
 
     settings_audit_log: DataFileName
     database: DataFileName
+    research_database: DataFileName
     manual_incidents: DataFileName
     ibkr_gateway: DataFileName
 
@@ -116,6 +118,7 @@ class ObliskConfig(FrozenModel):
     instruments: InstrumentsConfig
     tenor: TenorConfig
     eligibility: EligibilityConfig
+    research: ResearchConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
