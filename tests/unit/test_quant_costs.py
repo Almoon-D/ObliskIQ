@@ -182,7 +182,7 @@ def test_a_euro_bond_pays_up_to_its_tier_and_is_unpriced_beyond_it(book):
 @pytest.mark.parametrize(
     "terms",
     [
-        OrderTerms("XETR", AssetClass.STOCK, "EUR", D(10), D(100)),  # no European share schedule
+        OrderTerms("XMAD", AssetClass.STOCK, "EUR", D(10), D(100)),  # no Madrid share schedule
         OrderTerms("XNAS", AssetClass.STOCK, "EUR", D(10), D(100)),  # right venue, wrong currency
         OrderTerms("XTKS", AssetClass.ETF, "JPY", D(100), D(3000)),
         OrderTerms("XNAS", AssetClass.FUND, "USD", D(10), D(100)),
@@ -437,7 +437,7 @@ def test_an_option_on_a_deep_underlying_takes_the_tight_tier(book):
 
 
 def test_a_leg_with_a_gap_has_no_total(book):
-    european = OrderTerms("XETR", AssetClass.STOCK, "EUR", D(100), D(100))
+    european = OrderTerms("XMAD", AssetClass.STOCK, "EUR", D(100), D(100))
     cost = leg(book, european, market_cap_usd=D("3000000000000"), issuer_country="DE")
     assert cost.gaps == (CostGap.NO_SCHEDULE,)
     assert cost.total is None
@@ -448,8 +448,8 @@ def test_a_leg_with_a_gap_has_no_total(book):
 def test_an_italian_share_has_no_total_until_its_tax_rate_is_known(book):
     milan = OrderTerms("XMIL", AssetClass.STOCK, "EUR", D(100), D(100))
     cost = leg(book, milan, issuer_country="IT")
-    assert CostGap.TAX_UNKNOWN in cost.gaps
-    assert CostGap.NO_SCHEDULE in cost.gaps
+    assert cost.gaps == (CostGap.TAX_UNKNOWN,)
+    assert cost.commission.schedule_id == "europe_eur"
     assert cost.total is None
 
 
@@ -546,7 +546,11 @@ def test_a_float_in_the_configuration_is_refused_with_a_hint():
         ({"up_to_face": D(100)}, "fraction_of_face schedules only"),
         (
             {"kind": "fraction_of_face", "rate": D("1.5"), "maximum_fraction_of_value": None},
-            "below 1",
+            "a fraction_of_face rate is a fraction below 1",
+        ),
+        (
+            {"kind": "fraction_of_value", "rate": D("1.5"), "maximum_fraction_of_value": None},
+            "a fraction_of_value rate is a fraction below 1",
         ),
         ({"venues": []}, "null .any venue. or a non-empty list"),
         ({"rate": D(0)}, "rate"),

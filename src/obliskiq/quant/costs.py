@@ -266,7 +266,13 @@ class CostBook:
                 unverified,
                 f"face {terms.quantity} is above the {schedule.up_to_face} this schedule covers",
             )
-        amount = terms.quantity * schedule.rate
+        if schedule.kind == "fraction_of_value":
+            value = terms.value()
+            if value is None:
+                raise ValueError("a schedule on the trade value needs the order's price")
+            amount = value * schedule.rate
+        else:
+            amount = terms.quantity * schedule.rate
         if schedule.minimum is not None:
             amount = max(amount, schedule.minimum)
         if schedule.maximum_fraction_of_value is not None:

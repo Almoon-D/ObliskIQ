@@ -40,6 +40,7 @@ class CommissionSchedule(FrozenModel):
 
     ``per_share``: ``rate`` per share, ``minimum`` per order, ``maximum_fraction_of_value`` of the
     trade value. ``per_contract``: ``rate`` per contract and ``minimum`` per order.
+    ``fraction_of_value``: ``rate`` as a fraction of the trade value and ``minimum`` per order.
     ``fraction_of_face``: ``rate`` as a fraction of face value, ``minimum`` per order, defined only
     up to ``up_to_face``. A ``minimum`` of ``None`` means no minimum is established.
     """
@@ -48,7 +49,7 @@ class CommissionSchedule(FrozenModel):
     venues: list[Mic] | None
     asset_classes: list[AssetClass] = Field(min_length=1)
     currency: CurrencyCode
-    kind: Literal["per_share", "per_contract", "fraction_of_face"]
+    kind: Literal["per_share", "per_contract", "fraction_of_value", "fraction_of_face"]
     rate: Annotated[Decimal, BeforeValidator(_not_a_float), Field(gt=0)]
     minimum: Amount | None
     maximum_fraction_of_value: Rate | None
@@ -62,8 +63,8 @@ class CommissionSchedule(FrozenModel):
             raise ValueError("maximum_fraction_of_value applies to per_share schedules only")
         if self.up_to_face is not None and self.kind != "fraction_of_face":
             raise ValueError("up_to_face applies to fraction_of_face schedules only")
-        if self.kind == "fraction_of_face" and self.rate >= 1:
-            raise ValueError("a fraction_of_face rate is a fraction below 1")
+        if self.kind in ("fraction_of_value", "fraction_of_face") and self.rate >= 1:
+            raise ValueError(f"a {self.kind} rate is a fraction below 1")
         if self.venues is not None and not self.venues:
             raise ValueError("venues is null (any venue) or a non-empty list")
         return self

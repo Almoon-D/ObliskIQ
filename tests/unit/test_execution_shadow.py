@@ -15,6 +15,7 @@ from obliskiq.domain.enums import AssetClass, MarketDataStatus
 from obliskiq.domain.orders import OrderSide, QuoteEvidence
 from obliskiq.execution.shadow import ShadowFiller
 from obliskiq.quant.costs import CostBook
+from obliskiq.quant.costs import OrderTerms as CostTerms
 
 NOW = datetime(2026, 10, 13, 14, 0, tzinfo=UTC)
 MID_100 = quote(bid="99.9", ask="100.1", at=NOW)
@@ -106,3 +107,73 @@ def test_an_option_is_costed_per_contract(filler: ShadowFiller) -> None:
     )
     assert outcome.fill is not None, outcome.reason
     assert Decimal("2.05") < outcome.fill.price <= Decimal("2.5")
+
+
+def test_a_ucits_etf_on_xetra_is_priced_end_to_end_and_filled_in_shadow(
+    filler: ShadowFiller, shipped_settings: ObliskConfig
+) -> None:
+    """DECISIONS D69: a UCITS order is priced on its listing venue's schedule, in shadow too."""
+    book = CostBook.from_config(shipped_settings)
+    order = terms(quantity="30", limit="101.5", venue="XETR")
+    outcome = _simulate(
+        filler,
+        order,
+        asset_class=AssetClass.ETF,
+        venue="XETR",
+        currency="EUR",
+        market_cap_usd=None,
+        issuer_country="IE",
+    )
+    assert outcome.fill is not None, outcome.reason
+    cost = outcome.cost
+    assert cost is not None
+    # 30 units at 100: 0.10 % of 3,000 is 3.00, under the EUR 4.00 minimum.
+    assert (cost.commission.schedule_id, cost.commission.amount) == ("europe_eur", Decimal("4.00"))
+    # An ETF has no market capitalisation, so the illiquid tier is assumed: 0.5 % spread and
+    # 0.5 % slippage, 15.00 each, one unit of price per unit traded.
+    assert (cost.spread_cost, cost.slippage_cost) == (Decimal("15.000"), Decimal("15.000"))
+    assert outcome.fill.price == Decimal("101.0")
+    assert outcome.fill.commission == Decimal("4.00")
+    assert cost.total == Decimal("34.000")
+    assert "commission:europe_eur" in cost.unverified
+    assert "tax_not_modelled" in cost.unverified
+    # Above the minimum the rate applies: 0.10 % of 10,000.
+    large = book.commission(CostTerms("XETR", AssetClass.ETF, "EUR", Decimal(100), Decimal(100)))
+    assert large.amount == Decimal("10.000")
+    # The same ETF in USD on the LSE has its own minimum.
+    london = book.commission(CostTerms("XLON", AssetClass.ETF, "USD", Decimal(10), Decimal(50)))
+    assert (london.schedule_id, london.amount) == ("europe_usd", Decimal("6.00"))
+    # A schedule on value needs the price.
+    with pytest.raises(ValueError, match="needs the order's price"):
+        book.commission(CostTerms("XETR", AssetClass.ETF, "EUR", Decimal(1)))
+
+
+@pytest.mark.parametrize(
+    ("venue", "currency", "schedule"),
+    [
+        ("XETR", "EUR", "europe_eur"),
+        ("XLON", "GBP", "lse_gbp"),
+        ("XLON", "USD", "europe_usd"),
+        ("XAMS", "EUR", "europe_eur"),
+        ("XAMS", "USD", "europe_usd"),
+        ("XPAR", "EUR", "europe_eur"),
+        ("XMIL", "EUR", "europe_eur"),
+        ("XSWX", "CHF", "six_chf"),
+        ("XSWX", "EUR", "europe_eur"),
+        ("XSWX", "USD", "europe_usd"),
+        ("XSWX", "GBP", "six_gbp"),
+    ],
+)
+def test_every_core_venue_has_a_schedule(
+    shipped_settings: ObliskConfig, venue: str, currency: str, schedule: str
+) -> None:
+    book = CostBook.from_config(shipped_settings)
+    for asset_class in (AssetClass.STOCK, AssetClass.ETF, AssetClass.ETC):
+        estimate = book.commission(
+            CostTerms(venue, asset_class, currency, Decimal(1000), Decimal(100))
+        )
+        assert (estimate.schedule_id, estimate.amount, estimate.gap) == (
+            schedule,
+            Decimal("100.000"),
+            None,
+        )
