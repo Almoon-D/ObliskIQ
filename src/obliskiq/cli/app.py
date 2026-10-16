@@ -150,8 +150,8 @@ def _kill_on_flags(env: Environment, loaded: Loaded | None, reason: str, out: Te
         print("kill switch NOT set: " + "; ".join(problems), file=out)
         return EXIT_INVALID
     print(
-        "kill switch ON: orders that add risk are blocked; the running service cancels the "
-        "working ones",
+        "kill switch ON: orders that add risk are blocked; working ones are cancelled only "
+        "where the service's sweep runs, so check the broker's open orders",
         file=out,
     )
     for problem in problems:

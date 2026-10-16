@@ -168,8 +168,8 @@ affected by message suppression. [DOC 2026-10-13]
 
 ## Cancel
 
-`{"msg": "Request was submitted", "order_id", "conid", "account"}`; `conid` is `-1` for an
-order cancelled at once; an unknown order answers `{"error": "OrderID 1 doesn't exist"}`.
-`orderId` `-1` cancels **every** open order — ObliskIQ sends only all-digit ids, so never `-1`. What a cancel of an
-order that has just filled answers is not documented; ObliskIQ reads the order's status after
-every cancel. VERIFY-LIVE(cancel of a filled order). [DOC 2026-10-13]
+`{"msg": "Request was submitted", "order_id", "conid", "account"}`; `conid` is `-1` for an order
+cancelled at once; an unknown order answers `{"error": "OrderID 1 doesn't exist"}`. `orderId` `-1`
+cancels **every** open order — ObliskIQ sends only all-digit ids, so never `-1`. What a cancel of an
+order that has just filled answers is not documented; ObliskIQ reads the order's status after every
+cancel. VERIFY-LIVE(cancel of a filled order). [DOC 2026-10-13]

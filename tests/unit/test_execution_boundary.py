@@ -652,7 +652,7 @@ def test_broker_statuses_map_to_intent_states() -> None:
         assert state_for(order(status)) is IntentState.WORKING
 
 
-# ── review round 1: defence in depth at the boundary ──
+# ── defence in depth at the boundary ──
 
 
 async def test_an_expired_intent_is_never_sent(order_rig: Any) -> None:
@@ -728,6 +728,78 @@ async def test_a_modify_of_an_expired_intent_is_refused(order_rig: Any) -> None:
             stored.intent.intent_id, order_id=order_id, terms=moved, clearance=clearance
         )
     assert refused.value.code == "intent_expired"
+
+
+def _expire_at_the_first_warning(rig: Any) -> None:
+    """Let the intent expire when the first warning arrives, then let the real policy decide."""
+    original = rig.replies.decider
+
+    def decider(clearance: Any, now: Any) -> Any:
+        decide = original(clearance, now)
+
+        def expire_then_decide(question: Any) -> Any:
+            rig.clock.advance(6 * 3600)
+            return decide(question)
+
+        return expire_then_decide
+
+    rig.replies.decider = decider
+
+
+async def test_an_intent_that_expires_during_the_lookup_is_not_sent(order_rig: Any) -> None:
+    stored = await order_rig.intent()
+    clearance = await order_rig.clear(stored.intent)
+    find = order_rig.client.find
+
+    async def find_then_expire(*args: Any, **kwargs: Any) -> Any:
+        found = await find(*args, **kwargs)
+        order_rig.clock.advance(6 * 3600)
+        return found
+
+    order_rig.client.find = find_then_expire
+    with pytest.raises(WriteRefusedError) as refused:
+        await order_rig.boundary.place(stored.intent.intent_id, clearance)
+    assert refused.value.code == "intent_expired"
+    assert order_rig.broker.live() == []
+    assert await _state(order_rig, stored) is IntentState.EXPIRED
+
+
+async def test_a_placements_warning_is_not_confirmed_once_the_intent_has_expired(
+    order_rig: Any,
+) -> None:
+    stored = await order_rig.intent()
+    clearance = await order_rig.clear(stored.intent)
+    order_rig.broker.questions = deque([(["o10153"], "price capped")])
+    _expire_at_the_first_warning(order_rig)
+    result = await order_rig.boundary.place(stored.intent.intent_id, clearance)
+    assert result.status is PlacementStatus.DECLINED
+    assert "intent_expired" in result.detail
+    assert not any(confirmed for _, confirmed in order_rig.broker.replies)
+    assert order_rig.broker.live() == []
+
+
+async def test_a_modifys_warning_is_not_confirmed_once_the_intent_has_expired(
+    order_rig: Any,
+) -> None:
+    stored, order_id = await _working_stop(order_rig)
+    moved = terms(side=OrderSide.SELL, stop="97", limit="96")
+    clearance = await order_rig.clear(
+        stored.intent,
+        effect=RiskEffect.REDUCES,
+        action=ClearanceAction.MODIFY,
+        order_id=order_id,
+        order_terms=moved,
+    )
+    order_rig.broker.questions = deque([(["o10331"], "stop order risks")])
+    _expire_at_the_first_warning(order_rig)
+    result = await order_rig.boundary.modify(
+        stored.intent.intent_id, order_id=order_id, terms=moved, clearance=clearance
+    )
+    assert result.status is PlacementStatus.DECLINED
+    assert "intent_expired" in result.detail
+    assert not any(confirmed for _, confirmed in order_rig.broker.replies)
+    assert (await order_rig.book.get(stored.intent.intent_id)).intent.terms != moved
+    assert order_id in [order.order_id for order in order_rig.broker.live()]  # left as it was
 
 
 async def test_a_cancel_needs_only_the_paper_guard(order_rig: Any) -> None:

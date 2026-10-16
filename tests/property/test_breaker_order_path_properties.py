@@ -59,7 +59,7 @@ from obliskiq.execution.killswitch import KillSwitch
 from obliskiq.execution.quotes import QuotePolicy
 from obliskiq.execution.replies import ReplyPolicy
 from obliskiq.execution.state import BROKER_STATES, IntentBook, can_transition
-from obliskiq.ibkr.order_decode import Question
+from obliskiq.ibkr.order_decode import CancelAnswer, LiveOrderRows, Question
 from obliskiq.ibkr.orders import order_body
 from obliskiq.store import open_database
 from obliskiq.store import orders as repo
@@ -301,6 +301,19 @@ class _Store:
         raise AssertionError(f"the sweep read {function.__name__}")
 
 
+class _Client:
+    """The broker as the sweep sees it: one live order, and every cancel accepted."""
+
+    def __init__(self, order: BrokerOrder) -> None:
+        self._order = order
+
+    async def live_order_rows(self) -> LiveOrderRows:
+        return LiveOrderRows(orders=(self._order,), unreadable=())
+
+    async def cancel(self, order_id: str) -> CancelAnswer:
+        return CancelAnswer(order_id=order_id, message="Request was submitted", error=None)
+
+
 _STORED = st.one_of(st.none(), st.tuples(st.sampled_from(IntentRole), st.sampled_from(OrderSide)))
 
 
@@ -346,7 +359,9 @@ def test_the_sweep_never_keeps_what_adds_risk_and_keeps_the_sells_that_reduce_it
         tif="DAY",
         observed_at=NOW,
     )
-    cancel, by_broker = asyncio.run(kill._cancel_verdict(order))
+    report = asyncio.run(kill.sweep(_Client(order)))  # type: ignore[arg-type]
+    cancel = report.cancelled == ("1",)
+    by_broker = report.classed_by_broker == ("1",)
 
     risky_at_the_broker = broker_side is not OrderSide.SELL or (sec_type or "").upper() == "CASH"
     store_knows = has_coid and not down and intent is not None

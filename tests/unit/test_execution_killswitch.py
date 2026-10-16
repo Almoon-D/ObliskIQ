@@ -82,16 +82,21 @@ async def test_a_database_read_that_hangs_counts_as_on(order_rig: Any) -> None:
 def test_a_file_flag_that_cannot_be_checked_counts_as_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # A symlink loop: ``Path.exists`` would read it as absent, ``stat`` raises ELOOP.
+    # A symlink loop, which ``Path.exists`` would read as absent.
     kill_switch_path(tmp_path).symlink_to(KILL_SWITCH_FILE)
     assert file_flag_on(tmp_path) is True
+    # A dangling symlink, which ``Path.stat`` would read as absent.
+    dangling = tmp_path / "dangling"
+    dangling.mkdir()
+    kill_switch_path(dangling).symlink_to(tmp_path / "nowhere")
+    assert file_flag_on(dangling) is True
     other = tmp_path / "other"
     other.mkdir()
 
     def refuse(self: Path, *args: Any, **kwargs: Any) -> Any:
         raise PermissionError("no access")
 
-    monkeypatch.setattr(Path, "stat", refuse)
+    monkeypatch.setattr(Path, "lstat", refuse)
     assert file_flag_on(other) is True
 
 
@@ -245,6 +250,38 @@ async def test_with_the_store_unavailable_orders_are_classed_from_the_broker(
     assert report.cancelled == (buy_id,)
     assert report.kept == (sell_id,)  # the store would have cancelled it; the broker keeps a sell
     assert set(report.classed_by_broker) == {buy_id, sell_id}
+
+
+async def test_a_hung_store_delays_no_cancel_of_a_buy_and_is_waited_on_once(
+    order_rig: Any,
+) -> None:
+    sells = [
+        (
+            await _place(
+                order_rig,
+                terms(side=OrderSide.SELL),
+                role=IntentRole.EXIT,
+                reason="target",
+                effect=RiskEffect.REDUCES,
+            )
+        )[1]
+        for _ in range(3)
+    ]
+    _, buy_id = await _place(
+        order_rig, terms(), role=IntentRole.ENTRY, reason="entry", effect=RiskEffect.ADDS
+    )
+    reads: list[bool] = []
+
+    async def hang(*args: Any, **kwargs: Any) -> Any:
+        reads.append(order_rig.broker.orders[buy_id].status == "Cancelled")
+        await asyncio.sleep(3600)
+
+    order_rig.kill._worker = type("Hung", (), {"run": staticmethod(hang)})()
+    order_rig.kill._timeout = 0.01
+    report = await order_rig.kill.sweep(order_rig.client)
+    assert report.cancelled == (buy_id,)
+    assert set(report.kept) == set(sells)
+    assert reads == [True]  # the buy was already cancelled; one timeout, then the broker decides
 
 
 async def test_the_sweep_works_while_the_gate_refuses_everything(order_rig: Any) -> None:

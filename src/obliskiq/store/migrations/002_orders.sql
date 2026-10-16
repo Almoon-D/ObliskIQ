@@ -8,6 +8,8 @@
 --   * Histories are append-only: intent_events, mode_audit, killswitch and
 --     holding_assignments refuse UPDATE and DELETE by trigger. The current value of a mode,
 --     the kill switch or a holding is its latest row.
+--   * Triggers also keep an intent's identity fixed (only its state and terms change) and spend
+--     a clearance once: used_at is set from NULL and never again, and none is deleted.
 --   * An intent's id is its uuid7 text; coid is what IBKR sees (the id, or its short form when
 --     IBKR's cOID is shorter), unique, so the mapping back is a lookup.
 
@@ -50,6 +52,7 @@ CREATE TRIGGER intents_identity_fixed BEFORE UPDATE OF intent_id, coid, sleeve, 
 BEGIN
     SELECT RAISE(ABORT, 'an intent''s identity never changes');
 END;
+
 CREATE INDEX ix_intents_state ON intents (state);
 
 -- Every transition, and every fact within a state (from_state = to_state: a modify, a fill, a
@@ -123,6 +126,7 @@ CREATE TRIGGER clearances_no_delete BEFORE DELETE ON clearances
 BEGIN
     SELECT RAISE(ABORT, 'a clearance is never deleted');
 END;
+
 CREATE INDEX ix_clearances_open ON clearances (conid, side) WHERE used_at IS NULL;
 
 -- ───────────────────────────── what the broker reported ─────────────────────────────

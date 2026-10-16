@@ -64,8 +64,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   constructs or records a clearance; only the order client spells the write endpoints; no order
   type but `LMT` and `STOP_LIMIT` is reachable (a property over generated terms).
 - `docs/knowledge/ibkr-orders.md`: endpoints, fields and message ids, tagged.
-- Review round 1 hardening: the kill switch's file flag is `stat`-ed (an uncheckable file is
-  ON), its sweep reads live orders row by row and its loop survives any failure; a declined
+- Review round 1 hardening: the kill switch's file flag is checked with `lstat` (an uncheckable
+  entry is ON), its sweep reads live orders row by row and its loop survives any failure; a declined
   placement whose cleanup is unverified stays `submitted`; any 5xx is unknown; order ids are
   digits only; the boundary refuses an expired intent, an intent of another mode and a modify
   of another intent's order; a cancel needs the paper guard alone; an entry buys; triggers keep
@@ -79,6 +79,10 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   delayed quote needs a sigma even at zero delay. Its observations added a collar ceiling
   (`execution.collar.max_fraction`), the live levels refused at the boundary itself, and a
   cancel that tolerates a store that is down.
+- Review round 2: the sweep cancels what the broker alone shows adds risk before it reads the
+  store, and after one failed store read classes the remaining sells from the broker; a dangling
+  symlink flag reads ON; an intent's expiry is checked again before the send and before each
+  warning is confirmed; a declined placement's cleanup counts as unverified unless shown.
 - Session 4 follow-ups closed: the order path's paced endpoints in the rate groups; the
   transport readied outside the pacing slot and a re-arm that stops at a dead transport (D53);
   `run_read_only` tested through its own `build_transport` (OAuth and Gateway); the
@@ -425,6 +429,13 @@ settles it.
   restore itself (a rejected or not-sent modify records a fact but does not alert). The gate sets
   a clearance's `expires_at` no later than the quote's `observed_at` plus `max_quote_age_seconds`:
   nothing below it enforces "expiring with the quote".
+- Session 18 (I5): the boundary writes an intent only in the mode it was made for, so an
+  automatic `live → live-small` downgrade would freeze every modify of an intent made under
+  `live`, stop resizes and restores included. When the live levels can write, let a downgrade
+  between two writing modes keep protective modifies of existing intents working.
+- Session 4a: the sweep cancels a live-order row it cannot read (D48), which could strip a
+  protective stop whose row fails validation for another field. Once paper rows are captured,
+  read the raw `side` and `secType` of an unreadable row and keep a readable non-`CASH` sell.
 - Session 5: the executor moves intents to `expired` at `expires_at` (and cancels a working
   order first), writes `positions_snap`, `cash_snap` and fills from reconciliation, assigns a new
   holding to its sleeve on its first fill, and runs `ShadowFiller` in shadow mode.

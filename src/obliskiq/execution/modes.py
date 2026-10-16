@@ -28,12 +28,9 @@ from ..util.timeutil import utc_now
 
 type Profile = Literal["paper", "live"]
 
-#: The profile each writing mode requires.
-_PROFILE_FOR: dict[ExecutionMode, Profile] = {
-    ExecutionMode.PAPER: "paper",
-    ExecutionMode.LIVE_SMALL: "live",
-    ExecutionMode.LIVE: "live",
-}
+#: The profile each writing mode requires. The live levels write nothing until the promotion
+#: gate exists (Session 18), so none is listed.
+_PROFILE_FOR: dict[ExecutionMode, Profile] = {ExecutionMode.PAPER: "paper"}
 
 #: Upgrades this build can make; the live levels wait for the promotion gate (Session 18).
 _UPGRADABLE = frozenset({ExecutionMode.PAPER})

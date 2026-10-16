@@ -13,11 +13,14 @@ It must work when everything else fails, so (DECISIONS D48):
   cancelled; a sell is kept unless the store knows it as a conversion, a buy or an order the gate
   cleared as adding risk. An order the store cannot classify — the store unreadable, or an order
   the bot did not place — is classed from the broker's live order alone (a buy, a conversion or
-  an order of unreadable side is cancelled, a sell kept). A live-order row that cannot be read
-  at all is cancelled by its id, and one without an id is reported; one bad row never stops the
-  others. While ON the sweep repeats every ``sweep_interval_seconds``, so an order in flight at
-  the switch, or listed late, is caught; no failure, a failing report hook included, ends it.
-  Cancels need no clearance and run in every mode; only the paper guard applies.
+  an order of unreadable side is cancelled, a sell kept). What the broker's order alone shows
+  adds risk is cancelled before the store is read, and after one failed store read the
+  remaining sells are classed from the broker, so a hung store delays no cancel of a buy. A
+  live-order row that cannot be read at all is cancelled by its id, and one without an id is
+  reported; one bad row never stops the others. While ON the sweep repeats every
+  ``sweep_interval_seconds``, so an order in flight at the switch, or listed late, is caught; no
+  failure, a failing report hook included, ends it. Cancels need no clearance and run in every
+  mode; only the paper guard applies.
 * **Turning it off** clears both flags and fails loudly if either stays set.
 
 ``flatten`` (closing the managed positions) is a separate command (Session 4a).
@@ -61,10 +64,11 @@ def file_flag_on(data_dir: Path) -> bool:
     """Whether the file flag is set; a file that cannot be checked counts as set.
 
     ``Path.exists`` would read an unreadable entry (a permission refusal, a symlink loop) as
-    absent, so the entry is ``stat``-ed: only a missing file reads as off.
+    absent, and ``stat`` a dangling symlink, so the entry itself is ``lstat``-ed: only a missing
+    entry reads as off.
     """
     try:
-        kill_switch_path(data_dir).stat()
+        kill_switch_path(data_dir).lstat()
     except FileNotFoundError:
         return False
     except OSError:
@@ -86,6 +90,11 @@ def set_file_flag(data_dir: Path, *, actor: str, reason: str, at: datetime) -> N
 
 def clear_file_flag(data_dir: Path) -> None:
     kill_switch_path(data_dir).unlink(missing_ok=True)
+
+
+def adds_risk_at_broker(order: BrokerOrder) -> bool:
+    """What the broker's live order alone shows: anything but a sell of a security adds risk."""
+    return order.side is not OrderSide.SELL or (order.sec_type or "").upper() == CONVERSION_SEC_TYPE
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,33 +182,23 @@ class KillSwitch:
         if await self.is_on():
             raise ExecutionError("the kill switch is still on after turning it off")
 
-    async def _cancel_verdict(self, order: BrokerOrder) -> tuple[bool, bool]:
-        """(cancel it, classed from the broker alone) for one live order."""
-        if (
-            order.side is not OrderSide.SELL
-            or (order.sec_type or "").upper() == CONVERSION_SEC_TYPE
-        ):
-            return True, True
+    async def _store_verdict(self, order: BrokerOrder) -> bool | None:
+        """Whether a sell at the broker adds risk by the store's record of its intent; ``None``
+        when the store holds no record that says. Raises when the store cannot be read."""
         if order.coid is None:
-            return False, True
-        try:
-            stored = await asyncio.wait_for(
-                self._worker.run(repo.intent_by_coid, order.coid), timeout=self._timeout
-            )
-            if stored is None:
-                return False, True
-            effect = await asyncio.wait_for(
-                self._worker.run(repo.spent_effect, stored.intent.intent_id),
-                timeout=self._timeout,
-            )
-        except Exception:
-            return False, True  # the store is unavailable: a sell at the broker is kept
+            return None
+        stored = await asyncio.wait_for(
+            self._worker.run(repo.intent_by_coid, order.coid), timeout=self._timeout
+        )
+        if stored is None:
+            return None
         intent = stored.intent
         if intent.terms.conversion or intent.side is not OrderSide.SELL:
-            return True, False
-        if effect is None:
-            return False, True
-        return effect is RiskEffect.ADDS, False
+            return True
+        effect = await asyncio.wait_for(
+            self._worker.run(repo.spent_effect, intent.intent_id), timeout=self._timeout
+        )
+        return None if effect is None else effect is RiskEffect.ADDS
 
     async def _cancel(self, client: OrderClient, order_id: str) -> str | None:
         """Cancel one order; the reason it failed, or ``None``."""
@@ -208,6 +207,16 @@ class KillSwitch:
         except Exception as exc:  # any failure is reported; the next sweep tries again
             return f"{order_id} ({type(exc).__name__})"
         return None if answer.error is None else f"{order_id} ({answer.error})"
+
+    async def _cancel_each(
+        self, client: OrderClient, order_ids: list[str], cancelled: list[str], failed: list[str]
+    ) -> None:
+        for order_id in order_ids:
+            failure = await self._cancel(client, order_id)
+            if failure is None:
+                cancelled.append(order_id)
+            else:
+                failed.append(failure)
 
     async def sweep(self, client: OrderClient) -> SweepReport:
         """Cancel every live order that adds risk; keep the sells that reduce it."""
@@ -218,29 +227,32 @@ class KillSwitch:
         cancelled: list[str] = []
         kept: list[str] = []
         failed: list[str] = []
-        by_broker: list[str] = []
         working = [order for order in live.orders if is_live(order)]
-        targets: list[str] = []
-        for order in working:
-            cancel, broker_only = await self._cancel_verdict(order)
-            if broker_only:
-                by_broker.append(order.order_id)
-            if cancel:
-                targets.append(order.order_id)
-            else:
-                kept.append(order.order_id)
+        at_broker = [order.order_id for order in working if adds_risk_at_broker(order)]
         for order_id in live.unreadable:
             if order_id is None:
                 failed.append("a live order whose id cannot be read")
             else:
-                by_broker.append(order_id)
-                targets.append(order_id)  # nothing proves it reduces risk
-        for order_id in targets:
-            failure = await self._cancel(client, order_id)
-            if failure is None:
-                cancelled.append(order_id)
-            else:
-                failed.append(failure)
+                at_broker.append(order_id)  # nothing proves it reduces risk
+        by_broker = list(at_broker)
+        # What the broker alone shows adds risk is cancelled before the store is read, so a
+        # hung store delays none of it.
+        await self._cancel_each(client, at_broker, cancelled, failed)
+        by_store: list[str] = []
+        store_up = True
+        for order in working:
+            if adds_risk_at_broker(order):
+                continue
+            verdict = None
+            if store_up:
+                try:
+                    verdict = await self._store_verdict(order)
+                except Exception:
+                    store_up = False  # the remaining sells are classed from the broker: kept
+            if verdict is None:
+                by_broker.append(order.order_id)
+            (by_store if verdict else kept).append(order.order_id)
+        await self._cancel_each(client, by_store, cancelled, failed)
         report = SweepReport(
             listed=len(working) + len(live.unreadable),
             cancelled=tuple(cancelled),

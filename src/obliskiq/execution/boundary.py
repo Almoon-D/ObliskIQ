@@ -5,9 +5,9 @@ check, after the cOID lookup):
 
 1. **Mode.** The current mode, read from the store, must be the intent's and permit writes
    under this profile (``shadow`` never does; ``paper`` needs profile ``paper``; the live levels
-   profile ``live``), and the account guard must run under the same profile. A mode that cannot
-   be read refuses. An expired intent is never sent, and a modify must name an order placed for
-   its intent.
+   none until the promotion gate exists), and the account guard must run under the same
+   profile. A mode that cannot be read refuses. An expired intent is never sent or confirmed,
+   and a modify must name an order placed for its intent.
 2. **Paper guard.** Under profile ``paper`` the account must carry a paper prefix.
 3. **Kill switch**, for an order that adds risk (I3, I4): ON refuses it. Every order adds risk
    except a sell the gate cleared as reducing it (the clearance model refuses that effect on a
@@ -136,9 +136,13 @@ class WriteBoundary:
         except AccountGuardError as exc:
             raise WriteRefusedError("paper_guard", str(exc)) from None
 
-    async def check_write(self, *, adds_risk: bool, intent_mode: ExecutionMode) -> None:
-        """Mode (the intent's, permitted under this profile), paper guard and, for an order
-        that adds risk, the kill switch."""
+    async def check_write(
+        self, *, adds_risk: bool, intent_mode: ExecutionMode, expires_at: datetime
+    ) -> None:
+        """Expiry, mode (the intent's, permitted under this profile), paper guard and, for an
+        order that adds risk, the kill switch."""
+        if self._now() >= expires_at:
+            raise WriteRefusedError("intent_expired", "the intent has expired")
         try:
             mode = await self._modes.current()
         except Exception as exc:
@@ -181,8 +185,8 @@ class WriteBoundary:
                 await self._book.advance(intent_id, IntentState.EXPIRED, "expired before sending")
             raise WriteRefusedError("intent_expired", "the intent expired before it was sent")
         risky = adds_risk(clearance)
-        mode = intent.mode
-        await self.check_write(adds_risk=risky, intent_mode=mode)
+        mode, expires_at = intent.mode, intent.expires_at
+        await self.check_write(adds_risk=risky, intent_mode=mode, expires_at=expires_at)
         if first_attempt:
             await self._book.advance(intent_id, IntentState.SUBMITTED, "sending to the broker")
         try:
@@ -191,11 +195,16 @@ class WriteBoundary:
                 terms=intent.terms,
                 clearance=clearance,
                 decide=self._replies.decider(clearance, self._now),
-                last_check=lambda: self.check_write(adds_risk=risky, intent_mode=mode),
+                last_check=lambda: self.check_write(
+                    adds_risk=risky, intent_mode=mode, expires_at=expires_at
+                ),
             )
         except WriteRefusedError as exc:
             if first_attempt:
-                await self._book.advance(intent_id, IntentState.REJECTED, f"refused: {exc}")
+                state = (
+                    IntentState.EXPIRED if exc.code == "intent_expired" else IntentState.REJECTED
+                )
+                await self._book.advance(intent_id, state, f"refused: {exc}")
             else:
                 await self._book.fact(intent_id, f"retry refused before sending: {exc}")
             raise
@@ -237,11 +246,9 @@ class WriteBoundary:
             raise WriteRefusedError(
                 "order_not_intents", f"order {order_id} was not placed for this intent"
             )
-        if self._now() >= intent.expires_at:
-            raise WriteRefusedError("intent_expired", "the intent has expired")
         risky = adds_risk(clearance)
-        mode = intent.mode
-        await self.check_write(adds_risk=risky, intent_mode=mode)
+        mode, expires_at = intent.mode, intent.expires_at
+        await self.check_write(adds_risk=risky, intent_mode=mode, expires_at=expires_at)
         try:
             result = await self._client.modify(
                 order_id=order_id,
@@ -249,7 +256,9 @@ class WriteBoundary:
                 terms=terms,
                 clearance=clearance,
                 decide=self._replies.decider(clearance, self._now),
-                last_check=lambda: self.check_write(adds_risk=risky, intent_mode=mode),
+                last_check=lambda: self.check_write(
+                    adds_risk=risky, intent_mode=mode, expires_at=expires_at
+                ),
             )
         except WriteRefusedError as exc:
             await self._book.fact(intent_id, f"modify refused: {exc}")

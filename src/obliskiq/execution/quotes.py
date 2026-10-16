@@ -134,9 +134,12 @@ class QuotePolicy:
     def collar_fraction(self, *, sigma: float | None, delay_seconds: int) -> Decimal | None:
         """``base + k·sigma·√(delay)``; ``None`` when a delay needs a sigma that is unknown."""
         if delay_seconds == 0:
-            return Decimal(repr(self._base))
+            return self._fraction(0.0, 0)
         if sigma is None:
             return None
+        return self._fraction(sigma, delay_seconds)
+
+    def _fraction(self, sigma: float, delay_seconds: int) -> Decimal:
         widening = self._multiplier * sigma * math.sqrt(delay_seconds / self._seconds_per_year)
         return Decimal(repr(self._base + widening))
 
@@ -148,16 +151,13 @@ class QuotePolicy:
         if reference is None:
             return _refuse("the quote has no reference price")
         if quote.status is MarketDataStatus.REALTIME:
-            delay = 0
+            fraction = self._fraction(0.0, 0)
         elif quote.delay_seconds is None:
             return _refuse("the quote does not say how late it is")
         elif sigma is None:
             return _refuse("a delayed quote needs a volatility to widen the collar; none given")
         else:
-            delay = quote.delay_seconds
-        fraction = self.collar_fraction(sigma=sigma, delay_seconds=delay)
-        if fraction is None:  # pragma: no cover - a delay without a sigma is refused above
-            return _refuse("a delayed quote needs a volatility to widen the collar; none given")
+            fraction = self._fraction(sigma, quote.delay_seconds)
         if fraction > self._max_fraction:
             return _refuse(
                 f"the collar {fraction} would exceed its ceiling {self._max_fraction}: the "

@@ -18,6 +18,7 @@ from obliskiq.ibkr.order_decode import (
     Refused,
     UnexpectedAnswer,
     decode_cancel,
+    decode_live_order_rows,
     decode_live_orders,
     decode_order_status,
     decode_place_answer,
@@ -239,3 +240,9 @@ def test_sides() -> None:
     assert side(None) is None
     assert side(True) is None
     assert side(["S"]) is None
+
+
+@pytest.mark.parametrize("body", [None, [], "orders", {"orders": {"orderId": 1}}])
+def test_a_live_orders_answer_that_is_not_a_list_of_rows_raises(body: Any) -> None:
+    with pytest.raises(DecodeError):
+        decode_live_order_rows(body, observed_at=NOW)

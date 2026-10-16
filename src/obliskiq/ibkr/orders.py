@@ -230,8 +230,8 @@ class PlacementResult:
     detail: str = ""
     lookup: Lookup | None = None
     #: For a declined placement: whether the broker was seen to list nothing working under the
-    #: cOID afterwards (nothing listed, or every listed order cancelled).
-    cleanup_verified: bool = True
+    #: cOID afterwards (nothing listed, or every listed order cancelled). Unverified unless shown.
+    cleanup_verified: bool = False
 
 
 @dataclass(frozen=True, slots=True)
