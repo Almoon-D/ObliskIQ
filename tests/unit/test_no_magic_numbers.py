@@ -36,6 +36,7 @@ DECISION_PATHS = (
     "quant",
     "grid",
     "llm",
+    "research",
 )
 
 #: Literals that carry no policy: indices, halves, squares, sign flips.
