@@ -24,7 +24,7 @@ from obliskiq.execution.killswitch import (
     kill_switch_path,
     set_file_flag,
 )
-from obliskiq.execution.pretrade import PretradeGate, PretradeRefusal
+from obliskiq.execution.pretrade import PretradeRefusal
 from obliskiq.ibkr.errors import IbkrUpstreamError
 
 
@@ -317,11 +317,15 @@ async def test_after_a_store_failure_a_pass_keeps_its_sells_and_the_next_reads_a
 
 
 async def test_the_sweep_works_while_the_gate_refuses_everything(order_rig: Any) -> None:
-    stored, buy_id = await _place(
+    _stored, buy_id = await _place(
         order_rig, terms(), role=IntentRole.ENTRY, reason="entry", effect=RiskEffect.ADDS
     )
-    assert isinstance(await PretradeGate().clear(stored.intent), PretradeRefusal)
     await order_rig.kill.turn_on(actor="owner", reason="drill")
+    order_rig.broker.unavailable.update({"positions", "ledger", "snapshot"})
+    another = await order_rig.intent()
+    refusal = await order_rig.gate.clear(another.intent)
+    assert isinstance(refusal, PretradeRefusal)
+    assert "kill_switch_on" in refusal.codes
     assert (await order_rig.kill.sweep(order_rig.client)).cancelled == (buy_id,)
 
 

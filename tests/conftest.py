@@ -414,23 +414,35 @@ def make_session(
     return build
 
 
+@pytest.fixture(scope="session")
+def rig_calendars(shipped_settings: ObliskConfig) -> Calendars:
+    """The venues the order rig's instruments trade on, built once. Tests must not change its
+    incidents; a test that does builds its own through ``build_calendars``."""
+    from order_rig import VENUES
+
+    return Calendars.from_settings(shipped_settings, reference=CALENDAR_REFERENCE, venues=VENUES)
+
+
 @pytest.fixture
 async def order_rig(
     make_session: Callable[..., BrokerSession],
     shipped_settings: ObliskConfig,
+    rig_calendars: Calendars,
     tmp_path: Path,
 ) -> Any:
-    """The order path over the fake broker (``tests/support``), in paper mode."""
+    """The order path over the fake broker (``tests/support``), in paper mode, with the pre-trade
+    gate over the test instruments (``order_rig.gate_settings``)."""
     from fake_broker import FakeBroker
-    from order_rig import build_rig
+    from order_rig import build_rig, gate_settings
 
     with respx.mock(assert_all_called=False) as router:
         broker = FakeBroker(router)
         rig = await build_rig(
-            settings=shipped_settings,
+            settings=gate_settings(shipped_settings),
             session=make_session(),
             broker=broker,
             tmp_path=tmp_path,
+            calendars=rig_calendars,
         )
         await rig.to_paper()
         yield rig

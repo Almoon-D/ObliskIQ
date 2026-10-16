@@ -1,5 +1,5 @@
-"""The shape of the migrations (``001_core.sql``, ``002_orders.sql``) and the constraints that
-keep a bad row out.
+"""The shape of the migrations (``001_core.sql``, ``002_orders.sql``, ``003_pretrade.sql``) and the
+constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
 saying so. Each CHECK has a row it must refuse.
@@ -94,6 +94,15 @@ SHAPE = {
     "positions_snap": (
         "read_id:INTEGER!*, conid:INTEGER!*, quantity:TEXT!, average_cost:TEXT, currency:TEXT"
     ),
+    # 003_pretrade
+    "approvals": (
+        "approval_id:INTEGER*, intent_id:TEXT!, decision:TEXT!, actor:TEXT!, reason:TEXT!, at:TEXT!"
+    ),
+    "stop_resizes": (
+        "resize_id:INTEGER*, exit_intent_id:TEXT!, stop_intent_id:TEXT!, stop_order_id:TEXT!, "
+        "original_terms:TEXT!, resized_quantity:TEXT!, state:TEXT!, created_at:TEXT!, "
+        "updated_at:TEXT!, detail:TEXT!"
+    ),
     "snapshots": (
         "snapshot_date:TEXT!*, conid:INTEGER!*, last:REAL, bid:REAL, ask:REAL, "
         "volume:INTEGER, implied_vol:REAL, implied_vol_source:TEXT, "
@@ -126,6 +135,10 @@ INDEXES = {
     "ix_holding_assignments_conid",
     "ix_intents_conid_state",
     "ix_intents_state",
+    # 003_pretrade
+    "ix_approvals_intent",
+    "ix_clearances_issued",
+    "ix_stop_resizes_state",
 }
 
 STAMP = "2026-10-09T22:30:00Z"

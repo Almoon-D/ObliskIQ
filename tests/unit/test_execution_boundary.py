@@ -27,7 +27,6 @@ from obliskiq.domain.orders import (
 )
 from obliskiq.errors import StoreError, WriteRefusedError
 from obliskiq.execution.boundary import OrderAlertKind, adds_risk, state_for
-from obliskiq.execution.pretrade import PRETRADE_UNAVAILABLE, PretradeGate, PretradeRefusal
 from obliskiq.ibkr.orders import PlacementStatus
 from obliskiq.store import orders as repo
 
@@ -116,20 +115,6 @@ async def test_a_clearance_for_another_intent_is_refused(order_rig: Any) -> None
     other = await order_rig.intent()
     clearance = await order_rig.clear(other.intent)
     assert await _refused(order_rig, stored, clearance) == "clearance_mismatch"
-
-
-async def test_the_shipped_gate_refuses_every_intent(order_rig: Any) -> None:
-    gate = PretradeGate()
-    for side, role, reason in (
-        (OrderSide.BUY, IntentRole.ENTRY, "entry"),
-        (OrderSide.SELL, IntentRole.EXIT, "target"),
-    ):
-        stored = await order_rig.intent(terms(side=side), role=role, reason=reason)
-        for action, order_id in ((ClearanceAction.PLACE, None), (ClearanceAction.MODIFY, "1")):
-            answer = await gate.clear(stored.intent, action=action, order_id=order_id)
-            assert isinstance(answer, PretradeRefusal)
-            assert answer.code == PRETRADE_UNAVAILABLE
-            assert answer.intent_id == stored.intent.intent_id
 
 
 async def test_an_intent_not_yet_staged_or_already_done_is_not_placed(order_rig: Any) -> None:

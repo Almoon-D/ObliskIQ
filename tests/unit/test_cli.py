@@ -41,7 +41,7 @@ def test_config_validate_reports_the_essentials(config_dir):
     assert rest == [
         "  base currency  EUR",
         "  jurisdiction   es (Spain)",
-        "  policies       none declared",
+        "  policies       eligibility: skeleton",
     ]
 
 
@@ -121,11 +121,12 @@ def test_an_unknown_jurisdiction_fails(config_dir):
 def test_a_profile_declaring_an_unknown_policy_fails(config_dir):
     _write(
         config_dir / "jurisdictions" / "es.yaml",
-        "id: es\nname: Spain\npolicies:\n  eligibility: eu_priips\n",
+        "id: es\nname: Spain\npolicies:\n  eligibility: eu_priips\n  tax: es_irpf\n",
     )
     status, _, err = _run("--config-dir", str(config_dir), "config", "validate")
     assert status == EXIT_INVALID
-    assert "no policy kind 'eligibility' exists" in err
+    assert "'eu_priips' is not a registered eligibility policy (registered: skeleton)" in err
+    assert "no policy kind 'tax' exists" in err
 
 
 def test_a_bad_environment_fails_loudly(config_dir, monkeypatch):
