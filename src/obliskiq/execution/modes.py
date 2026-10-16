@@ -45,6 +45,9 @@ def write_refusal(mode: ExecutionMode, profile: Profile | None) -> str | None:
     """Why ``mode`` under ``profile`` may not place or modify an order; ``None`` if it may."""
     if mode is ExecutionMode.SHADOW:
         return "shadow mode sends no order to the broker"
+    if mode not in _UPGRADABLE:
+        # Whatever the audit says: no live write until the promotion gate exists (Session 18).
+        return f"promotion_gate_unavailable: mode {mode.value} needs the promotion gate"
     required = _PROFILE_FOR[mode]
     if profile != required:
         return f"mode {mode.value} writes only under profile {required} (profile is {profile})"

@@ -405,13 +405,17 @@ def spend_clearance(
 
 
 def spent_effect(store: Store, intent_id: UUID) -> RiskEffect | None:
-    """The effect the gate recorded on the intent's most recently spent clearance."""
+    """What the intent's spent clearances say about risk: ``adds_risk`` when any of them does
+    (a spent modify may never have reached the broker, so the latest cannot be trusted to
+    describe the working order), ``reduces_risk`` when all do, ``None`` when none was spent."""
     row = store.execute(
-        "SELECT effect FROM clearances WHERE intent_id = ? AND used_at IS NOT NULL "
-        "ORDER BY used_at DESC, rowid DESC LIMIT 1",
+        "SELECT MAX(effect = 'adds_risk'), COUNT(*) FROM clearances "
+        "WHERE intent_id = ? AND used_at IS NOT NULL",
         (str(intent_id),),
     ).fetchone()
-    return None if row is None else _build("clearances", lambda: RiskEffect(row[0]))
+    if not row[1]:
+        return None
+    return RiskEffect.ADDS if row[0] else RiskEffect.REDUCES
 
 
 # ── what the broker reported ──

@@ -99,9 +99,16 @@ type QuotePolicyRule = Annotated[
 
 class CollarConfig(FrozenModel):
     base_fraction: Annotated[float, Field(ge=0, lt=1)]
+    max_fraction: Annotated[float, Field(gt=0, lt=1)]
     sigma_multiplier: PositiveFloat
     sessions_per_year: PositiveInt
     session_hours: Annotated[float, Field(gt=0, le=HOURS_PER_DAY)]
+
+    @model_validator(mode="after")
+    def _ceiling_above_base(self) -> Self:
+        if self.max_fraction < self.base_fraction:
+            raise ValueError("collar.max_fraction must not be below base_fraction")
+        return self
 
 
 class KillSwitchConfig(FrozenModel):

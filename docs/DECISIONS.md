@@ -660,7 +660,8 @@ quote or expiry is refused, and one `UPDATE … WHERE used_at IS NULL AND expire
 every binding matches spends it, so two processes cannot both use it; triggers make "spent once,
 never changed, never deleted" a schema rule, and fix an intent's identity (only its state and
 terms move). The cOID ties the write to the clearance's intent. A clearance is spent after the cOID lookup and the caller's last
-check, immediately before the send; a placement the lookup finds is reported, not sent, and
+check, immediately before the send, and the last check (kill switch, mode) runs again before
+each warning is confirmed, because the confirmation is the write that makes the order live; a placement the lookup finds is reported, not sent, and
 keeps its clearance. Session 4's gate refuses every intent (`pretrade_unavailable`), so no write
 can happen until Session 4a's checks exist. Rejected: an HMAC-signed token checked in memory (it
 cannot be spent once across processes), and trusting the object the caller presents.
@@ -715,7 +716,8 @@ service's sweep does the cancelling: every `sweep_interval_seconds` while ON it 
 orders, cancels every buy, conversion (`secType CASH`) or order of unreadable side, keeps a sell
 unless the store knows it as a conversion, a buy or an order the gate cleared as adding risk, and
 classes from the broker alone what the store cannot (the store unreadable, an order the bot did
-not place). The sweep reads the live orders row by row: a row that cannot be read is cancelled by
+not place). A spent modify may never have reached the broker, so the store's word on a sell is
+the most cautious of the intent's spent clearances: any one cleared as adding risk cancels it. The sweep reads the live orders row by row: a row that cannot be read is cancelled by
 its id, one without an id is reported, and one bad row never stops the others (the cOID lookup
 keeps the all-or-nothing read). No failure ends the loop: a failing pass or report hook is
 logged and the next pass runs on schedule; a cancel that raises anything is a failed cancel,
@@ -733,7 +735,8 @@ risk. Turning it off clears both flags and fails while either stays set.
   is declined. The owner may widen the list in configuration.
 - **`o354`** (no market data) is confirmed only when the asset class's rule is
   `realtime_preferred`, the clearance's quote is `delayed`, read within `max_quote_age_seconds`
-  and no later than `max_delay_seconds`, and the order is inside the collar. A real-time quote
+  and no later than `max_delay_seconds`, and the order is inside the collar. A delayed quote
+  needs a sigma even when it claims no delay. A real-time quote
   under `o354` contradicts the broker and is declined. `max_delay_seconds` is 1200, IBKR's
   documented bound that every delayed quote carries (D38).
 - **The collar is one-sided:** a buy's limit at most `collar` above the reference (the mid, else
@@ -741,7 +744,8 @@ risk. Turning it off clears both flags and fails while either stays set.
   stop-limit must rest its stop below the band, so a stale quote cannot hide a stop already
   through the market; a buy stop-limit has no collar rule and is refused. `collar = base +
   k·sigma·√(delay)`, the delay in years of trading time (252 sessions of 6.5 h); a delayed quote
-  without a sigma is refused. The defaults (0.5 % base, k = 2, quotes at most 60 s old) are
+  without a sigma is refused, and a collar past `max_fraction` (5 %) means an implausible sigma
+  and refuses. The defaults (0.5 % base, k = 2, the 5 % ceiling, quotes at most 60 s old) are
   judgements, not measurements; Session 18's transaction-cost analysis calibrates them.
 - Nothing is suppressed; `OrderClient.reset_suppressed()` re-enables what a user suppressed, so
   no warning bypasses the policy (calling it at service start is Session 6's).
@@ -760,7 +764,8 @@ A deployment starts in `execution.modes.initial` (`shadow`; configuration cannot
 Upgrades are owner commands (`obliskiq mode set`), audited in `mode_audit`; `shadow → paper`
 needs profile `paper`, and its audit row records the promotion criteria as untested (Session
 18 builds the promotion gate). Upgrades to `live-small` and `live` are refused
-(`promotion_gate_unavailable`) — the port of the legacy `assert_live_trading_allowed`
+(`promotion_gate_unavailable`), and the write boundary refuses those modes too, whatever the
+audit holds — the port of the legacy `assert_live_trading_allowed`
 (legacy/old/ObliskIQ/modules/execution/paper_gate.py), whose PASS criteria belong to Session 18.
 Downgrades are always allowed and audited. A writing mode needs its profile (`paper` with
 profile paper, the live levels with profile live) and the account guard's profile must be the
@@ -773,6 +778,8 @@ expired becomes `expired`), and a modify must name an order placed for its inten
 
 - **An entry buys.** A sell that opens would be a short or a written option: an `entry` sell is
   refused when the intent is made (I2 in 4a's gate is the real guard).
+- **A sell is sized in units**, but for a conversion, so the no-short check (I2) can count every
+  sell that could reach the broker; a modify keeps the order's kind of sizing.
 - **Discipline.** lite's `entry_order_type: limit_only` (an entry may be a limit or an algo with a
   limit cap, never a stop-limit) and `exit_reasons_allowed`, applied to exits **and** protective
   stops (a protective stop is an exit order). The other `discipline` keys are Session 4a's or

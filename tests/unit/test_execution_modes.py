@@ -98,7 +98,9 @@ def test_what_each_mode_may_write() -> None:
     assert write_refusal(ExecutionMode.PAPER, "paper") is None
     assert write_refusal(ExecutionMode.PAPER, "live") is not None
     assert write_refusal(ExecutionMode.PAPER, None) is not None
-    assert write_refusal(ExecutionMode.LIVE_SMALL, "live") is None
-    assert write_refusal(ExecutionMode.LIVE_SMALL, "paper") is not None
-    assert write_refusal(ExecutionMode.LIVE, "live") is None
-    assert write_refusal(ExecutionMode.LIVE, "paper") is not None
+    # The live levels write nothing until the promotion gate exists, whatever the audit says.
+    for mode in (ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE):
+        for profile in ("live", "paper", None):
+            refusal = write_refusal(mode, profile)  # type: ignore[arg-type]
+            assert refusal is not None
+            assert "promotion_gate_unavailable" in refusal

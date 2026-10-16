@@ -182,7 +182,8 @@ def _canonical(value: object) -> object:
 class OrderTerms(DomainModel):
     """Exactly what an order sends, apart from the account and the customer order id.
 
-    One of ``quantity`` (units) and ``cash_quantity`` (money). A currency conversion
+    One of ``quantity`` (units) and ``cash_quantity`` (money); a sell, but for a conversion, is
+    sized in units, so the no-short check (I2) can count it. A currency conversion
     (``conversion``) is sized in money, sent as IBKR's ``fxQty`` with ``isCcyConv``, and is a
     plain limit.
     """
@@ -202,6 +203,8 @@ class OrderTerms(DomainModel):
             raise ValueError("give exactly one of quantity and cash_quantity")
         if self.conversion and (self.cash_quantity is None or self.price.kind != "limit"):
             raise ValueError("a currency conversion is a limit order sized in cash_quantity")
+        if self.side is OrderSide.SELL and not self.conversion and self.quantity is None:
+            raise ValueError("a sell is sized in units, so the no-short check can count it")
         return self
 
     def digest(self) -> str:

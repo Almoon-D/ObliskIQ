@@ -378,8 +378,9 @@ class OrderClient:
 
         Before anything is sent: the paper guard, the clearance's binding, the cOID lookup (a
         found order is reported, not placed, and the clearance kept), ``last_check`` (the caller's
-        final gate, run immediately before the send), and the clearance spent for exactly these
-        terms. A raise means nothing was sent.
+        final gate, run immediately before the send and again before each warning is
+        confirmed), and the clearance spent for exactly these terms. A raise means nothing was
+        sent.
         """
         account = self._account()
         self._check_binding(clearance, coid=coid, action=ClearanceAction.PLACE)
@@ -403,7 +404,9 @@ class OrderClient:
             answer = await self._submit(
                 "POST", PLACE_PATH.format(account=account), PLACE_PATH, body
             )
-            return await self._resolve(answer, coid=coid, decide=decide, cancel_on_decline=True)
+            return await self._resolve(
+                answer, coid=coid, decide=decide, last_check=last_check, cancel_on_decline=True
+            )
 
     async def modify(
         self,
@@ -430,7 +433,9 @@ class OrderClient:
             )
             # A declined modify leaves the order as it was: cancelling it could strip a
             # position of its protective stop.
-            return await self._resolve(answer, coid=coid, decide=decide, cancel_on_decline=False)
+            return await self._resolve(
+                answer, coid=coid, decide=decide, last_check=last_check, cancel_on_decline=False
+            )
 
     async def _submit(
         self, method: str, path: str, label: str, body: Any
@@ -460,6 +465,7 @@ class OrderClient:
         *,
         coid: str,
         decide: ReplyDecider,
+        last_check: LastCheck,
         cancel_on_decline: bool,
     ) -> PlacementResult:
         """Follow a placement through its warnings to an outcome."""
@@ -507,6 +513,14 @@ class OrderClient:
                         verdict = ReplyVerdict(False, "more warning rounds than allowed")
                     else:
                         verdict = decide(answer)
+                    if verdict.confirm:
+                        # A confirmation is the write that makes the order live: the caller's
+                        # final checks (the kill switch, the mode) run again before it. They
+                        # read only local state, so the warning stays valid meanwhile.
+                        try:
+                            await last_check()
+                        except WriteRefusedError as exc:
+                            verdict = ReplyVerdict(False, f"refused before confirming: {exc}")
                     replies.append(
                         ReplyRecord(
                             reply_id=answer.reply_id,

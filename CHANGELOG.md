@@ -43,6 +43,8 @@ shape is VERIFY-LIVE.
   order path's state reads are the listed ones) and `docs/knowledge/ibkr-orders.md`.
 - Schema triggers: a clearance is spent once and never changed or deleted; an intent's identity
   never changes.
+- Adversarial tests (`tests/unit/test_breaker_*.py`, a property file) against the clearance
+  lock, class by effect, the kill switch, the reply policy, modes and the state machine.
 
 ### Changed
 

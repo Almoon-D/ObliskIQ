@@ -12,8 +12,8 @@ pre-trade check reuses them.
   ``base + k·sigma·√(delay)``, the delay in years of trading time. A buy's limit may sit at most
   that far above the reference and a sell's at most that far below; a passive limit is never
   refused by it. A sell stop-limit's stop must rest below the band, so a stale quote cannot hide
-  a stop that is already through the market. A delay with no sigma cannot be widened for, and is
-  refused.
+  a stop that is already through the market. A delayed quote with no sigma cannot be widened
+  for, and is refused; a collar past ``max_fraction`` means an implausible sigma, and refuses.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -60,6 +60,7 @@ class QuotePolicy:
         }
         collar = execution.collar
         self._base = collar.base_fraction
+        self._max_fraction = Decimal(repr(collar.max_fraction))
         self._multiplier = collar.sigma_multiplier
         self._seconds_per_year = collar.sessions_per_year * collar.session_hours * SECONDS_PER_HOUR
 
@@ -150,11 +151,18 @@ class QuotePolicy:
             delay = 0
         elif quote.delay_seconds is None:
             return _refuse("the quote does not say how late it is")
+        elif sigma is None:
+            return _refuse("a delayed quote needs a volatility to widen the collar; none given")
         else:
             delay = quote.delay_seconds
         fraction = self.collar_fraction(sigma=sigma, delay_seconds=delay)
-        if fraction is None:
+        if fraction is None:  # pragma: no cover - a delay without a sigma is refused above
             return _refuse("a delayed quote needs a volatility to widen the collar; none given")
+        if fraction > self._max_fraction:
+            return _refuse(
+                f"the collar {fraction} would exceed its ceiling {self._max_fraction}: the "
+                "volatility is not plausible"
+            )
         upper = reference * (1 + fraction)
         lower = reference * (1 - fraction)
         price = terms.price

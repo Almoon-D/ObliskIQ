@@ -120,3 +120,21 @@ def test_a_real_time_requirement_for_another_class(shipped_settings: ObliskConfi
     strict = QuotePolicy(shipped_settings.model_copy(update={"execution": execution}))
     assert strict.check(AssetClass.STOCK, REALTIME, now=NOW).ok
     assert not strict.check(AssetClass.STOCK, DELAYED, now=NOW).ok
+
+
+def test_a_collar_past_its_ceiling_is_refused(
+    quotes: QuotePolicy, shipped_settings: ObliskConfig
+) -> None:
+    ceiling = shipped_settings.execution.collar.max_fraction
+    implausible = quotes.within_collar(terms(limit="100.5"), DELAYED, sigma=50.0)
+    assert not implausible.ok
+    assert "ceiling" in implausible.reason
+    fraction = quotes.collar_fraction(sigma=50.0, delay_seconds=1200)
+    assert fraction is not None
+    assert float(fraction) > ceiling
+
+
+def test_a_delayed_quote_claiming_no_delay_still_needs_a_sigma(quotes: QuotePolicy) -> None:
+    claims_none = quote(status=MarketDataStatus.DELAYED, delay=0, at=NOW)
+    assert not quotes.within_collar(terms(limit="100.4"), claims_none, sigma=None).ok
+    assert quotes.within_collar(terms(limit="100.4"), claims_none, sigma=0.3).ok

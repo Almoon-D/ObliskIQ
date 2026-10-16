@@ -71,6 +71,14 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
   of another intent's order; a cancel needs the paper guard alone; an entry buys; triggers keep
   a clearance spent once and an intent's identity fixed; a structural test pins D46's state
   reads; the fake broker invalidates an open warning on any other request.
+- `test-breaker` against I1, I3, I4, the reply policy, modes and the state machine: 141 cases in
+  `tests/unit/test_breaker_*.py` and a property file. Of its eight defects, the four it shared
+  with the review were already fixed; the other four are fixed too: a warning is confirmed only
+  after the kill switch and mode are re-checked; any adds-risk clearance in a sell's history
+  cancels it in the sweep; a sell is sized in units and a modify keeps the kind of sizing; a
+  delayed quote needs a sigma even at zero delay. Its observations added a collar ceiling
+  (`execution.collar.max_fraction`), the live levels refused at the boundary itself, and a
+  cancel that tolerates a store that is down.
 - Session 4 follow-ups closed: the order path's paced endpoints in the rate groups; the
   transport readied outside the pacing slot and a re-arm that stops at a dead transport (D53);
   `run_read_only` tested through its own `build_transport` (OAuth and Gateway); the
@@ -409,8 +417,14 @@ settles it.
   bot did not open.
 - Session 5: one process places a given intent (D47); if the executor ever retries from more
   than one process, add a per-intent placement lease in the store. The kill switch classes a
-  sell by its intent's latest spent clearance (`spent_effect`); reconciliation should class it
-  by the terms the broker accepted, so a spent-then-declined modify cannot reclassify an order.
+  sell by the most cautious of its intent's spent clearances (D48); once reconciliation knows
+  the terms the broker accepted, it can class by those instead.
+- Session 4a (I5): the boundary refuses every modify outside a writing mode, so a downgrade
+  between a stop's resize and its restore leaves the stop resized (cancel still works); the gate
+  must order the steps so that cannot happen, or restore by other means, and alert on a failed
+  restore itself (a rejected or not-sent modify records a fact but does not alert). The gate sets
+  a clearance's `expires_at` no later than the quote's `observed_at` plus `max_quote_age_seconds`:
+  nothing below it enforces "expiring with the quote".
 - Session 5: the executor moves intents to `expired` at `expires_at` (and cancels a working
   order first), writes `positions_snap`, `cash_snap` and fills from reconciliation, assigns a new
   holding to its sleeve on its first fill, and runs `ShadowFiller` in shadow mode.

@@ -288,3 +288,10 @@ def test_a_broker_amount_that_is_not_finite_is_refused() -> None:
             tif=None,
             observed_at=NOW,
         )
+
+
+def test_a_sell_is_sized_in_units_unless_it_is_a_conversion() -> None:
+    with pytest.raises(ValidationError, match="sized in units"):
+        terms(side=OrderSide.SELL, cash="1000")
+    assert terms(side=OrderSide.SELL, cash="1000", conversion=True).conversion
+    assert terms(cash="1000").cash_quantity == Decimal(1000)

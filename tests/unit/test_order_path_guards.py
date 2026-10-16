@@ -156,11 +156,12 @@ def _terms(draw: st.DrawFn) -> OrderTerms:
         )
     )
     conversion = draw(st.booleans()) and price.kind == "limit"
-    in_cash = conversion or draw(st.booleans())
+    side = draw(st.sampled_from(OrderSide))
+    in_cash = conversion or (side is OrderSide.BUY and draw(st.booleans()))
     size = draw(_AMOUNTS)
     return OrderTerms(
         conid=draw(st.integers(min_value=1, max_value=10**9)),
-        side=draw(st.sampled_from(OrderSide)),
+        side=side,
         quantity=None if in_cash else size,
         cash_quantity=size if in_cash else None,
         price=price,

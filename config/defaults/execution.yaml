@@ -65,6 +65,9 @@ execution:
   # transaction-cost analysis calibrates it.
   collar:
     base_fraction: 0.005
+    # The widest collar any quote may give; past it the sigma is implausible and the order is
+    # refused. A judgement.
+    max_fraction: 0.05
     sigma_multiplier: 2.0
     # Trading time, for the √(delay) term: sessions a year and hours a session.
     sessions_per_year: 252

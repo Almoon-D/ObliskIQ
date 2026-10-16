@@ -224,10 +224,11 @@ class WriteBoundary:
             raise WriteRefusedError(
                 "intent_state", f"an intent in state {intent.state.value} has no order to modify"
             )
-        if (terms.conid, terms.side, terms.conversion) != (
+        if (terms.conid, terms.side, terms.conversion, terms.quantity is None) != (
             intent.conid,
             intent.side,
             intent.terms.conversion,
+            intent.terms.quantity is None,
         ):
             raise WriteRefusedError(
                 "modify_changes_order", "a modify keeps the instrument, the side and the kind"
@@ -271,7 +272,7 @@ class WriteBoundary:
         answer = await self._client.cancel(order_id)
         try:
             await self.sync_order(order_id)
-        except IbkrError as exc:
+        except Exception as exc:  # the cancel was sent; a failed read-back must not hide it
             log.warning(
                 "the order could not be read back after a cancel",
                 extra={"order_id": order_id, "error": type(exc).__name__},

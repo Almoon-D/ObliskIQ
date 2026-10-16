@@ -83,3 +83,12 @@ def test_an_asset_class_has_one_quote_policy(shipped_settings: ObliskConfig) -> 
     data["quote_policy"].append({"policy": "nav_priced", "asset_classes": ["stock"]})
     with pytest.raises(ValidationError, match="stock"):
         ExecutionConfig.model_validate(data)
+
+
+def test_the_collar_ceiling_is_not_below_its_base(shipped_settings: ObliskConfig) -> None:
+    from obliskiq.config.schema_execution import CollarConfig
+
+    data = shipped_settings.execution.collar.model_dump()
+    data["max_fraction"] = data["base_fraction"] / 2
+    with pytest.raises(ValidationError, match="max_fraction"):
+        CollarConfig.model_validate(data)
