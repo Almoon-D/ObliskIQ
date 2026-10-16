@@ -35,8 +35,8 @@ from obliskiq.research.data import (
     coverage_by_year,
     http_fetch,
     load_dataset,
-    parse_aqr,
     parse_alfred,
+    parse_aqr,
     parse_ecb,
     parse_fred_csv,
     parse_ken_french,
@@ -319,15 +319,18 @@ async def test_every_shipped_vendor_loads_into_the_store_point_in_time(
     [july] = research_observations(store, "ff3_monthly.Mkt-RF", as_of=date(1926, 9, 14))
     assert july.value == pytest.approx(0.0289)
     usd = research_series_info(store, "ecb_fx.USD")
-    assert usd is not None and usd.units == "USD per EUR"
+    assert usd is not None
+    assert usd.units == "USD per EUR"
     cpi = research_observations(store, "alfred_cpi.value", as_of=date(2023, 12, 31))
     assert [o.value for o in cpi] == [3.9, 3.7]  # the fixture is UNRATE's vintages
     close = research_observations(store, "eunl.close", as_of=date(2024, 1, 2))
     assert [o.observed_on for o in close] == [date(2024, 1, 2)]
     assert research_series_info(store, "eunl.dividend") is not None
     assert research_series_info(store, "eunl.adj_close") is not None
-    alfred_call = next(params for url, params in feed.fetch.calls if "stlouisfed" in url)  # type: ignore[attr-defined]
-    assert alfred_call is not None and alfred_call["realtime_start"] == "1776-07-04"
+    calls = feed.fetch.calls  # type: ignore[attr-defined]
+    alfred_call = next(params for url, params in calls if "stlouisfed" in url)
+    assert alfred_call is not None
+    assert alfred_call["realtime_start"] == "1776-07-04"
 
 
 async def test_fred_without_vintages_uses_the_declared_lag(shipped_settings: ObliskConfig):
@@ -375,7 +378,7 @@ async def test_a_dividendless_yahoo_history_has_no_dividend_series(shipped_setti
     )  # fmt: skip
     feed = Sources(
         fetch=sources({}).fetch,
-        yahoo=lambda symbol, start, end: Frame.from_fixture("yahoo_eunl_de.csv"),
+        yahoo=lambda *_: Frame.from_fixture("yahoo_eunl_de.csv"),
         fred_api_key=None,
     )
     loaded = await load_dataset(dataset, shipped_settings, feed, now=NOW)

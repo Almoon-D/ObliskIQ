@@ -37,7 +37,9 @@ def workbook(
             f'<Relationships xmlns="{RELS}"><Relationship Id="rId1" Target="{target}"/>'
             "</Relationships>"
         ),
-        "xl/worksheets/sheet1.xml": f'<worksheet xmlns="{MAIN}"><sheetData>{cells}</sheetData></worksheet>',
+        "xl/worksheets/sheet1.xml": (
+            f'<worksheet xmlns="{MAIN}"><sheetData>{cells}</sheetData></worksheet>'
+        ),
     }
     if shared is not None:
         items = "".join(f"<si><t>{text}</t></si>" for text in shared)
