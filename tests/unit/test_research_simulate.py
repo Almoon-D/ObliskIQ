@@ -302,7 +302,7 @@ def test_a_leg_the_cost_model_cannot_price_stops_the_run(es):
                 market_cap_usd=None,
                 income_country=None,
             )
-        ],  # fmt: skip
+        ],
         Panel(prices={"J": series((DATES[0], 100.0), (DATES[1], 100.0))}, income={}, fx={}),
         CostBook([], [], flat_costs()._friction),
         es,
@@ -321,7 +321,7 @@ def test_a_foreign_price_without_a_fresh_rate_stops_the_run(es):
             prices={"US": series((DATES[0], 100.0), (DATES[1], 100.0))},
             income={},
             fx={"USD": series((date(2023, 12, 1), 1.1))},
-        ),  # fmt: skip
+        ),
         flat_costs(),
         es,
         settings(),
