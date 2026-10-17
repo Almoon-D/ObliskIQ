@@ -22,6 +22,9 @@ import httpx
 from ..config.schema_research import Dataset
 from ..domain.research import TrialStage
 from ..errors import ObliskError
+from ..research import cross_section_report
+from ..research.cross_section import CrossSectionResult, CrossSectionRunner, sample_months
+from ..research.cross_section import declared_se as cross_section_se
 from ..research.data import (
     Sources,
     coverage_by_year,
@@ -33,11 +36,11 @@ from ..research.data import (
     survivorship,
     yfinance_history,
 )
-from ..research.prereg import Prereg, load_prereg
+from ..research.prereg import CrossSectionPrereg, Prereg, load_any
 from ..research.registry import Git, TrialRegistry, verify_lock, write_lock
 from ..research.report import write_report
 from ..research.stats import detectable_effect, effective_n, power
-from ..research.study import StudyRunner, declared_se
+from ..research.study import StudyResult, StudyRunner, declared_se
 from ..store import open_research_store
 from ..util.http import RetryPolicy
 from ..util.timeutil import utc_now
@@ -111,7 +114,12 @@ def _data_load(loaded: Loaded, out: TextIO) -> int:
 def _universe(loaded: Loaded) -> tuple[list[str], date, date]:
     args = loaded.args
     if args.prereg is not None:
-        study = load_prereg(args.prereg).spec.study
+        prereg = load_any(args.prereg)
+        if isinstance(prereg, CrossSectionPrereg):
+            members = prereg.spec.study
+            ids = [m.price_series for m in members.served() if m.price_series is not None]
+            return ids, members.development.start, members.confirmation.end
+        study = prereg.spec.study
         return [i.price_series for i in study.instruments], study.start, study.end
     return list(args.series), date(args.first_year, 1, 1), date(args.last_year + 1, 1, 1) - ONE_DAY
 
@@ -149,9 +157,9 @@ def _data_coverage(loaded: Loaded, out: TextIO) -> int:
     return EXIT_OK
 
 
-def _prereg(loaded: Loaded, out: TextIO) -> Prereg | None:
+def _prereg(loaded: Loaded, out: TextIO) -> Prereg | CrossSectionPrereg | None:
     try:
-        return load_prereg(loaded.args.prereg)
+        return load_any(loaded.args.prereg)
     except ObliskError as exc:
         print(f"refused: {exc}", file=out)
         return None
@@ -161,10 +169,14 @@ def _power(loaded: Loaded, out: TextIO) -> int:
     prereg = _prereg(loaded, out)
     if prereg is None:
         return EXIT_INVALID
-    spec = prereg.spec
     defaults = loaded.config.settings.research.decision
-    alpha = float(spec.alpha if spec.alpha is not None else defaults.alpha)
-    target = float(spec.target_power if spec.target_power is not None else defaults.target_power)
+    alpha = float(prereg.spec.alpha if prereg.spec.alpha is not None else defaults.alpha)
+    target = float(
+        prereg.spec.target_power if prereg.spec.target_power is not None else defaults.target_power
+    )
+    if isinstance(prereg, CrossSectionPrereg):
+        return _cross_section_power(prereg, alpha, target, out)
+    spec = prereg.spec
     inputs = spec.power
     per_period = effective_n(inputs.names_per_period, float(inputs.rho))
     observations = inputs.periods * per_period
@@ -186,51 +198,96 @@ def _power(loaded: Loaded, out: TextIO) -> int:
     return EXIT_OK
 
 
+def _cross_section_power(
+    prereg: CrossSectionPrereg, alpha: float, target: float, out: TextIO
+) -> int:
+    spec = prereg.spec
+    tests = spec.tests_in_confirmation
+    months = sample_months(spec.study.confirmation)
+    print(f"power of {spec.id} before any data", file=out)
+    print(f"  confirmation months     {months} (one observation a month)", file=out)
+    print(f"  alpha {alpha:g}, {tests} test(s) in the confirmation run", file=out)
+    print(
+        f"  {'test':<32} {'theta':>7} {'se a year':>10} {'power':>7} "
+        f"{f'detectable at {target:g}':>18}",
+        file=out,
+    )
+    for test in spec.tests:
+        se = cross_section_se(spec, test)
+        detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
+        chance = power(float(test.theta), se, alpha=alpha, tests=tests)
+        print(
+            f"  {test.name:<32} {float(test.theta):>7.2%} {se:>10.4%} {chance:>7.3f} "
+            f"{detectable:>18.4%}",
+            file=out,
+        )
+    return EXIT_OK
+
+
+type _Outcomes = list[tuple[str, str, str, float | None, float | None]]
+
+
+def _outcomes(result: StudyResult | CrossSectionResult) -> _Outcomes:
+    """Per test: its name, outcome, labels, estimate and Sharpe."""
+    rows: _Outcomes = []
+    for test in result.tests:
+        labels = ", ".join(label.value for label in test.decision.labels)
+        sharpe = None if test.deflated is None else test.deflated.sharpe
+        rows.append((test.name, test.decision.outcome.value, labels, test.estimate, sharpe))
+    return rows
+
+
 def _run(loaded: Loaded, out: TextIO) -> int:
     prereg = _prereg(loaded, out)
     if prereg is None:
         return EXIT_INVALID
     explore: bool = loaded.args.explore
     settings = loaded.config.settings
+    spec = prereg.spec
     try:
         lock = None if explore else verify_lock(prereg.path)
         root = Git(prereg.path).root
-        runner = StudyRunner(settings, loaded.profile)
+        reports = root / settings.research.reports_dir
         with open_research_store(settings, loaded.env.require_data_dir()) as store:
             registry = TrialRegistry(store)
             if explore:
-                registry.check_budget(prereg.spec.id, prereg.spec.trial_budget)
+                registry.check_budget(spec.id, spec.trial_budget)
             else:
-                registry.check_single_shot(prereg.spec.id)
-            result = runner.run(prereg, store, registry, explore=explore, lock=lock, now=utc_now())
-            path = write_report(result, root / settings.research.reports_dir)
-            for test in result.tests:
+                registry.check_single_shot(spec.id)
+            result: StudyResult | CrossSectionResult
+            if isinstance(prereg, CrossSectionPrereg):
+                result = CrossSectionRunner(settings, loaded.profile).run(
+                    prereg, store, registry, explore=explore, lock=lock, now=utc_now()
+                )
+                path = cross_section_report.write_report(result, reports)
+            else:
+                result = StudyRunner(settings, loaded.profile).run(
+                    prereg, store, registry, explore=explore, lock=lock, now=utc_now()
+                )
+                path = write_report(result, reports)
+            outcomes = _outcomes(result)
+            key = "test" if isinstance(prereg, CrossSectionPrereg) else "candidate"
+            for name, outcome, _labels, estimate, sharpe in outcomes:
                 registry.record(
-                    study_id=prereg.spec.id,
+                    study_id=spec.id,
                     stage=TrialStage.EXPLORATION if explore else TrialStage.CONFIRMATION,
                     at=result.run_at,
                     spec_sha256=prereg.sha256,
                     inputs=result.inputs_sha256,
-                    parameters={"report": path.name, "candidate": test.name},
-                    metric=prereg.spec.primary_metric,
-                    estimate=test.estimate,
-                    sharpe=None if test.deflated is None else test.deflated.sharpe,
+                    parameters={"report": path.name, key: name},
+                    metric=spec.primary_metric,
+                    estimate=estimate,
+                    sharpe=sharpe,
                     observations=max(len(result.dates) - 1, 0),
-                    outcome=test.decision.outcome.value,
+                    outcome=outcome,
                 )
     except ObliskError as exc:
         print(f"refused: {exc}", file=out)
         return EXIT_INVALID
-    print(f"{prereg.spec.id}:", file=out)
-    for test in result.tests:
-        labels = ", ".join(label.value for label in test.decision.labels)
-        estimate = "" if test.estimate is None else f", estimate {test.estimate:.4%} a year"
-        print(
-            f"  {test.name}: {test.decision.outcome.value}"
-            + (f" ({labels})" if labels else "")
-            + estimate,
-            file=out,
-        )
+    print(f"{spec.id}:", file=out)
+    for name, outcome, labels, estimate, _sharpe in outcomes:
+        text = "" if estimate is None else f", estimate {estimate:.4%} a year"
+        print(f"  {name}: {outcome}" + (f" ({labels})" if labels else "") + text, file=out)
     print(f"  report {path}", file=out)
     return EXIT_OK
 

@@ -1,9 +1,11 @@
 ---
-# A pre-registration (DECISIONS D62, D63). Copy this file to research/preregistrations/<id>.md,
-# fill every field, and merge it in its own pull request with no version change. After the
-# merge, write its lock with `obliskiq research lock <file> --commit <merge commit>` and merge the
-# lock; only then may `obliskiq research run <file>` produce the confirmation run. Nothing here
-# may change after the merge: a change is a new pre-registration with a new id.
+# A pre-registration (DECISIONS D62, D63) of a portfolio comparison; a selection signal tested
+# as a cross-section starts from TEMPLATE-cross-section.md. Copy this file to
+# research/preregistrations/<id>.md, fill every field, and merge it in its own pull request with
+# no version change. After the merge, write its lock with
+# `obliskiq research lock <file> --commit <merge commit>` and merge the lock; only then may
+# `obliskiq research run <file>` produce the confirmation run. Nothing here may change after the
+# merge: a change is a new pre-registration with a new id.
 id: study-id                     # lower-case letters, digits, underscores and hyphens
 title: What is tested, in one line
 kind: portfolio_comparison       # the study kind the harness runs

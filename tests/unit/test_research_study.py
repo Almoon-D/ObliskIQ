@@ -27,7 +27,7 @@ from obliskiq.domain.research import (
 from obliskiq.errors import PreregistrationError
 from obliskiq.jurisdiction import load_profile
 from obliskiq.research.decide import Outcome
-from obliskiq.research.prereg import front_matter, load_prereg
+from obliskiq.research.prereg import front_matter, load_any, load_prereg
 from obliskiq.research.registry import (
     TrialRegistry,
     canonical_sha256,
@@ -377,7 +377,7 @@ def test_every_locked_preregistration_matches_its_lock_and_states_its_constants_
         payload = json.loads(lock.read_text())
         prereg = folder / payload["file"]
         assert file_sha256(prereg) == payload["sha256"], prereg.name
-        load_prereg(prereg)
+        load_any(prereg)
         data, body = front_matter(prereg.read_text())
         if "## Constants hash" in body:
             assert canonical_sha256(data) in body, prereg.name

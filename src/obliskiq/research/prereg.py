@@ -16,6 +16,14 @@ bands, the trend tilt and the tax-aware rule. A frontier (``frontier``) and the 
 aspiration (``aspiration``) are reported beside the tests; ``structure`` registers a pre-tax
 check of the tilt on the longest history, which is descriptive and never an outcome.
 
+A **cross-section** (``kind: cross_section``, MASTER_PLAN §5.9) tests a selection signal: a
+universe of members held through one kind of vehicle, each a member over stated spans (a member
+the vendor does not serve is named with no series, and counts as lost to survivorship), a
+signal, a selection rule and named portfolios built from them; each test compares a candidate
+portfolio with another as the Fama-MacBeth series of the candidate's monthly excess log return
+after costs and tax. Exploration runs on the development sample, the confirmation run on the
+later confirmation sample.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -40,6 +48,8 @@ from .registry import file_sha256
 
 #: The line that opens and closes the front matter.
 FRONT_MATTER_FENCE = "---"
+#: Months in a year (a reset month is one of them).
+MONTHS_PER_YEAR = 12
 
 type Positive = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
 type Key = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]+$")]
@@ -387,11 +397,252 @@ class PreregSpec(FrozenModel):
         return (self.power.by_candidate or {}).get(candidate, self.power.sd_per_period)
 
 
+# ── a cross-section ──
+
+
+class VehicleSpec(FrozenModel):
+    """How every member of a cross-section is held: one kind of vehicle, its listing venue and
+    currency, its yearly cost (deducted from an index proxy) and the size its friction tier
+    reads (null is the illiquid tier, labelled)."""
+
+    currency: CurrencyCode
+    venue: NonEmptyText
+    asset_class: AssetClass
+    market_cap_usd: Positive | None
+    expense_ratio: Fraction | None
+    kind: SecurityKind
+    issuer: NonEmptyText
+
+
+class MemberSpec(FrozenModel):
+    """One member: its series (null when the vendor does not serve it: lost to survivorship)
+    and the spans it belongs to the universe, first and last day inclusive (null: still)."""
+
+    key: Key
+    name: NonEmptyText
+    price_series: NonEmptyText | None
+    spans: list[tuple[date, date | None]] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        previous: date | None = None
+        for index, (first, last) in enumerate(self.spans):
+            if last is not None and last < first:
+                raise ValueError(f"member {self.key}: a span ends before it starts")
+            if previous is not None and first <= previous:
+                raise ValueError(f"member {self.key}: spans must be ordered and disjoint")
+            if last is None and index != len(self.spans) - 1:
+                raise ValueError(f"member {self.key}: only the last span may be open")
+            previous = last
+        return self
+
+    def member_on(self, day: date) -> bool:
+        return any(first <= day and (last is None or day <= last) for first, last in self.spans)
+
+
+class SignalSpec(FrozenModel):
+    """Momentum: the return from ``lookback_months`` to ``skip_months`` month ends back."""
+
+    lookback_months: PositiveInt
+    skip_months: NonNegativeInt
+
+    @model_validator(mode="after")
+    def _skip_inside(self) -> Self:
+        if self.skip_months >= self.lookback_months:
+            raise ValueError("the skipped months must be fewer than the lookback")
+        return self
+
+
+class SelectionSpec(FrozenModel):
+    """The top group: a name enters within the top ``enter_fraction`` of the ranked members and
+    is kept while within the top ``keep_fraction``; the group holds ``enter_fraction`` of them.
+    Every holding is reset to equal weights at the last rebalance date of ``reset_month``."""
+
+    enter_fraction: Share
+    keep_fraction: Share
+    reset_month: Annotated[int, Field(ge=1, le=MONTHS_PER_YEAR)]
+
+    @model_validator(mode="after")
+    def _keep_wider(self) -> Self:
+        if self.keep_fraction < self.enter_fraction:
+            raise ValueError("a name is kept at least as long as it would enter")
+        return self
+
+
+class StopSpec(FrozenModel):
+    """A trailing protective stop: ``multiple`` times the daily volatility of the last
+    ``volatility_sessions`` sessions, scaled to ``horizon_sessions``, below the highest close
+    since entry; it fills at the first daily close at or below it (a gap is borne in full)."""
+
+    volatility_sessions: Annotated[int, Field(ge=2)]
+    horizon_sessions: PositiveInt
+    multiple: Positive
+
+
+class PortfolioSpec(FrozenModel):
+    """A portfolio of the cross-section: the whole ``universe`` or the signal's ``top_group``
+    (its signal lagged ``lag_months``, a placebo past the horizon), with or without the stop."""
+
+    rule: Literal["universe", "top_group"]
+    lag_months: NonNegativeInt
+    stop: bool
+
+
+class SampleSpec(FrozenModel):
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        if self.end <= self.start:
+            raise ValueError("a sample's end must follow its start")
+        return self
+
+
+class CrossSectionStudySpec(FrozenModel):
+    """What is simulated: the samples, the members and their vehicle, the signal, the selection,
+    the stop and the named portfolios."""
+
+    development: SampleSpec
+    confirmation: SampleSpec
+    calendar: Key
+    initial_capital: Positive
+    fx_dataset: NonEmptyText | None
+    vehicle: VehicleSpec
+    members: list[MemberSpec] = Field(min_length=2)
+    signal: SignalSpec
+    selection: SelectionSpec
+    stop: StopSpec | None
+    portfolios: dict[Key, PortfolioSpec] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        if self.development.end > self.confirmation.start:
+            raise ValueError("the development sample must end before the confirmation starts")
+        keys = [member.key for member in self.members]
+        if len(keys) != len(set(keys)):
+            raise ValueError("member keys must be unique")
+        served = {m.key for m in self.members if m.price_series is not None}
+        if self.calendar not in served:
+            raise ValueError(f"calendar {self.calendar} is not a member with a series")
+        if self.stop is None and any(p.stop for p in self.portfolios.values()):
+            raise ValueError("a portfolio with a stop needs study.stop")
+        return self
+
+    def served(self) -> list[MemberSpec]:
+        """The members whose series the vendor serves."""
+        return [member for member in self.members if member.price_series is not None]
+
+
+class CrossSectionTestSpec(FrozenModel):
+    """One test: ``candidate``'s monthly excess log return over ``against``'s, with its theta
+    and the standard deviation per month the power calculation assumes before data."""
+
+    name: NonEmptyText
+    candidate: Key
+    against: Key
+    theta: Positive
+    theta_justification: NonEmptyText
+    sd_per_period: Positive
+
+
+class PlaceboSpec(FrozenModel):
+    """A portfolio that must not show the effect: compared with ``against`` at the level of the
+    confirmation run, it fails as it should while its interval stays below ``test``'s theta."""
+
+    candidate: Key
+    against: Key
+    test: NonEmptyText
+
+
+class CrossSectionAdequacySpec(FrozenModel):
+    """The checks the data must pass (D62): coverage of the served members on the rebalance
+    dates, the share of members lost to survivorship in each year, the point-in-time kinds and
+    the months each sample needs."""
+
+    min_coverage: Annotated[Decimal, Field(gt=0, le=1)]
+    max_lost_share: Annotated[Decimal, Field(ge=0, lt=1)]
+    point_in_time: list[PointInTime] = Field(min_length=1)
+    min_effective_observations: PositiveInt
+    min_development_observations: PositiveInt
+
+
+class CrossSectionSpec(FrozenModel):
+    """Every field of a cross-section pre-registration (D63)."""
+
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]
+    title: NonEmptyText
+    kind: Literal["cross_section"]
+    mechanism: NonEmptyText
+    citation: NonEmptyText
+    universe: NonEmptyText
+    data_status: NonEmptyText
+    primary_metric: Literal["top_group_excess"]
+    alpha: Rate | None
+    target_power: Rate | None
+    tests_in_confirmation: PositiveInt
+    adjustment: NonEmptyText
+    trial_budget: NonNegativeInt
+    study: CrossSectionStudySpec
+    tests: list[CrossSectionTestSpec] = Field(min_length=1)
+    placebo: PlaceboSpec | None
+    bootstrap: BootstrapSpec
+    newey_west_lags: PositiveInt
+    periods_per_year: PositiveInt
+    subperiods: list[tuple[date, date]]
+    cost_uncertainty_multiplier: Positive
+    robustness: NonEmptyText
+    adequacy: CrossSectionAdequacySpec
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        confirmation = self.study.confirmation
+        for first, last in self.subperiods:
+            if not confirmation.start <= first < last <= confirmation.end:
+                raise ValueError(f"subperiod {first} to {last} is not inside the confirmation")
+        if self.tests_in_confirmation != len(self.tests):
+            raise ValueError(
+                f"tests_in_confirmation is {self.tests_in_confirmation} but {len(self.tests)} "
+                "test(s) are registered"
+            )
+        names = [test.name for test in self.tests]
+        if len(names) != len(set(names)):
+            raise ValueError("every test needs a distinct name")
+        portfolios = self.study.portfolios
+        pairs = [(t.candidate, t.against) for t in self.tests]
+        if self.placebo is not None:
+            pairs.append((self.placebo.candidate, self.placebo.against))
+            if self.placebo.test not in names:
+                raise ValueError(f"the placebo names no test: {self.placebo.test}")
+        for candidate, against in pairs:
+            unknown = sorted({candidate, against} - set(portfolios))
+            if unknown:
+                raise ValueError(f"a comparison names unknown portfolios {unknown}")
+            if candidate == against:
+                raise ValueError(f"{candidate} is compared with itself")
+        return self
+
+    def compared(self) -> list[str]:
+        """Every portfolio a test or the placebo compares, in the order first named."""
+        pairs = [(t.candidate, t.against) for t in self.tests]
+        if self.placebo is not None:
+            pairs.append((self.placebo.candidate, self.placebo.against))
+        return list(dict.fromkeys(name for pair in pairs for name in pair))
+
+
 @dataclass(frozen=True, slots=True)
 class Prereg:
     path: Path
     sha256: str
     spec: PreregSpec
+    body: str
+
+
+@dataclass(frozen=True, slots=True)
+class CrossSectionPrereg:
+    path: Path
+    sha256: str
+    spec: CrossSectionSpec
     body: str
 
 
@@ -411,15 +662,17 @@ def front_matter(text: str) -> tuple[Any, str]:
     return data, "\n".join(lines[close + 1 :])
 
 
-def load_prereg(path: Path) -> Prereg:
-    """Read and validate a pre-registration; every problem is named."""
+def _read(path: Path) -> tuple[Any, str]:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise PreregistrationError(f"{path} cannot be read: {exc}") from None
-    data, body = front_matter(text)
+    return front_matter(text)
+
+
+def _validate[M: FrozenModel](model: type[M], data: Any, path: Path) -> M:
     try:
-        spec = PreregSpec.model_validate(data)
+        return model.model_validate(data)
     except ValidationError as exc:
         problems = "; ".join(
             f"{'.'.join(str(p) for p in error['loc'])}: {error['msg']}" for error in exc.errors()
@@ -427,4 +680,21 @@ def load_prereg(path: Path) -> Prereg:
         raise PreregistrationError(
             f"{path.name} is not a valid pre-registration: {problems}"
         ) from None
+
+
+def load_prereg(path: Path) -> Prereg:
+    """Read and validate a portfolio comparison's pre-registration; every problem is named."""
+    data, body = _read(path)
+    spec = _validate(PreregSpec, data, path)
     return Prereg(path=path, sha256=file_sha256(path), spec=spec, body=body)
+
+
+def load_any(path: Path) -> Prereg | CrossSectionPrereg:
+    """Read and validate a pre-registration of either kind, chosen by its ``kind``."""
+    data, body = _read(path)
+    if isinstance(data, dict) and data.get("kind") == "cross_section":
+        spec = _validate(CrossSectionSpec, data, path)
+        return CrossSectionPrereg(path=path, sha256=file_sha256(path), spec=spec, body=body)
+    return Prereg(
+        path=path, sha256=file_sha256(path), spec=_validate(PreregSpec, data, path), body=body
+    )

@@ -165,6 +165,417 @@ research:
       start: 1997-01-01
       bias_notes:
         - MSCI Emerging Markets (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    # MSCI's standard (large and mid cap) country indices, net total return in EUR, daily: every
+    # country in MSCI ACWI at some time since 2001 that MSCI's public endpoint serves (Venezuela
+    # and Russia are not served; research/reports/selection-data-audit.md).
+    - id: msci_australia_eur
+      vendor: msci
+      index_code: "903600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Australia (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_austria_eur
+      vendor: msci
+      index_code: "904000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Austria (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_belgium_eur
+      vendor: msci
+      index_code: "905600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Belgium (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_canada_eur
+      vendor: msci
+      index_code: "912400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Canada (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_denmark_eur
+      vendor: msci
+      index_code: "920800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Denmark (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_finland_eur
+      vendor: msci
+      index_code: "924600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Finland (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_france_eur
+      vendor: msci
+      index_code: "925000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI France (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_germany_eur
+      vendor: msci
+      index_code: "928000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Germany (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_hong_kong_eur
+      vendor: msci
+      index_code: "934400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Hong Kong (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_ireland_eur
+      vendor: msci
+      index_code: "937200"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Ireland (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_israel_eur
+      vendor: msci
+      index_code: "300400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Israel (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_italy_eur
+      vendor: msci
+      index_code: "938000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Italy (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_japan_eur
+      vendor: msci
+      index_code: "939200"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Japan (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_netherlands_eur
+      vendor: msci
+      index_code: "952800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Netherlands (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_new_zealand_eur
+      vendor: msci
+      index_code: "955400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI New Zealand (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_norway_eur
+      vendor: msci
+      index_code: "957800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Norway (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_portugal_eur
+      vendor: msci
+      index_code: "962000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Portugal (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_singapore_eur
+      vendor: msci
+      index_code: "998100"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Singapore (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_spain_eur
+      vendor: msci
+      index_code: "972400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Spain (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_sweden_eur
+      vendor: msci
+      index_code: "975200"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Sweden (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_switzerland_eur
+      vendor: msci
+      index_code: "975600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Switzerland (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_united_kingdom_eur
+      vendor: msci
+      index_code: "982600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI United Kingdom (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_usa_eur
+      vendor: msci
+      index_code: "984000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI USA (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_brazil_eur
+      vendor: msci
+      index_code: "907600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Brazil (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_chile_eur
+      vendor: msci
+      index_code: "915200"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Chile (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_china_eur
+      vendor: msci
+      index_code: "302400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI China (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_colombia_eur
+      vendor: msci
+      index_code: "917000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Colombia (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_czech_republic_eur
+      vendor: msci
+      index_code: "920000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Czech Republic (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_egypt_eur
+      vendor: msci
+      index_code: "105766"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Egypt (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_greece_eur
+      vendor: msci
+      index_code: "930000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Greece (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_hungary_eur
+      vendor: msci
+      index_code: "934800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Hungary (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_india_eur
+      vendor: msci
+      index_code: "935600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI India (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_indonesia_eur
+      vendor: msci
+      index_code: "105767"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Indonesia (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_korea_eur
+      vendor: msci
+      index_code: "941000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Korea (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_malaysia_eur
+      vendor: msci
+      index_code: "105768"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Malaysia (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_mexico_eur
+      vendor: msci
+      index_code: "848400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Mexico (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_peru_eur
+      vendor: msci
+      index_code: "960400"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Peru (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_philippines_eur
+      vendor: msci
+      index_code: "860800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Philippines (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_poland_eur
+      vendor: msci
+      index_code: "961600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Poland (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_south_africa_eur
+      vendor: msci
+      index_code: "971000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI South Africa (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_taiwan_eur
+      vendor: msci
+      index_code: "915800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Taiwan (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_thailand_eur
+      vendor: msci
+      index_code: "105769"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Thailand (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_turkey_eur
+      vendor: msci
+      index_code: "979200"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Turkey (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_qatar_eur
+      vendor: msci
+      index_code: "133715"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Qatar (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_united_arab_emirates_eur
+      vendor: msci
+      index_code: "133717"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI United Arab Emirates (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_saudi_arabia_eur
+      vendor: msci
+      index_code: "705405"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Saudi Arabia (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_kuwait_eur
+      vendor: msci
+      index_code: "133713"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Kuwait (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_argentina_eur
+      vendor: msci
+      index_code: "903200"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Argentina (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_pakistan_eur
+      vendor: msci
+      index_code: "958600"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Pakistan (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_jordan_eur
+      vendor: msci
+      index_code: "940000"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Jordan (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_morocco_eur
+      vendor: msci
+      index_code: "105765"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Morocco (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
     - id: ecb_eonia
       vendor: ecb_data
       flow: EON

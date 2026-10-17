@@ -1460,3 +1460,48 @@ read 2026-10-17), the owner's purchase decision. Rejected: testing H2 or H4 on t
 (a bias of unknown sign as large as the effect), restricting them to the last two years
 (too few observations for a development and a confirmation sample), and testing their
 components on published portfolios (a different hypothesis from the registered composite).
+
+### D85 · The cross-section study kind (D63, MASTER_PLAN §5.9)
+
+A selection signal is tested as a **cross-section** (`kind: cross_section`), beside the portfolio
+comparison. The pre-registration names the members of a universe, each with the spans it belongs
+and its series; a member the vendor does not serve is named with no series, so the share of the
+universe lost to survivorship is measured on every rebalance date and checked against a
+pre-registered maximum (an adequacy check: above it the outcome is not evaluable). Every member
+is held through one kind of vehicle (venue, currency, yearly cost deducted from an index proxy,
+the friction tier's size). Two rules build portfolios: the whole **universe**, equally weighted,
+and the signal's **top group** (momentum from `lookback` to `skip` month ends back; a name enters
+within the top `enter_fraction` and is kept while within the top `keep_fraction`); a lagged
+signal is the placebo. Both trade only what changes (a leaver is sold, the entrants share what
+the continuing holdings leave) and are reset to equal weights once a year, because a monthly
+equal-weight rebalance of dozens of index vehicles pays a minimum commission on every drift.
+
+Each portfolio runs through the simulator with costs and tax as they arise and is liquidated at
+the horizon; its monthly series is the log change of the account's value, from the initial
+capital to the liquidation value, so the series of the candidate minus the other is the
+Fama-MacBeth series of the top group's excess return after costs and tax, and its sum is their
+difference in log growth. The primary effect is its mean times the periods in a year; the
+interval is a moving-block bootstrap of the series at the confirmation level (Bonferroni over the
+run's tests), with the Newey-West interval beside it (lags at least the horizon). Each test names
+its own theta and the standard deviation per month its power before data assumes. Exploration
+(`--explore`) runs on the development sample; the confirmation run on the later confirmation
+sample, read as of its end; each has its own minimum of months. Robustness: the sign in each
+subperiod (the series' months), the break-even cost multiplier (both portfolios re-run at scaled
+costs) and the placebo, which fails as it should while its interval's lower end stays below its
+test's theta. Rejected: resimulating bootstrap paths as the portfolio comparison does (members
+join and leave and some series start late, so a resampled month has no return for a member that
+is in the universe at the path's date); keeping the tax path dependence out of the interval is
+stated in every report.
+
+### D86 · Protective stops in the simulator (H5; D67)
+
+H5 needs a stop between monthly rebalance dates. `Simulator.run(..., stop=StopRule)` watches every
+position on the daily closes until the next date: the stop trails the highest close since the
+position was opened by `multiple` standard deviations of the daily log returns of the last
+`volatility_sessions` sessions, scaled by the square root of `horizon_sessions`, fixed at the last
+rebalance date. The whole position is sold at the first close at or below it, so a gap through
+the stop is borne in full (D67: a stop-limit does not fill through a gap, and a close is the
+worst a daily series can show); a touch inside a session that recovers by the close is not seen,
+and a close published after its day cannot trigger it. The cash waits for the next rebalance date,
+where the strategy may buy the name again. Rejected: filling at the stop level (it assumes the
+fill a gap denies) and an intraday model (the index proxies have closes only).

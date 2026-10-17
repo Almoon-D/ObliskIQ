@@ -235,7 +235,7 @@ def _series_ids(prereg: Prereg, base: str) -> tuple[list[str], list[str]]:
     return ids, fx
 
 
-def _month_ends(rows: Sequence[Observation], start: date, end: date) -> tuple[date, ...]:
+def month_ends(rows: Sequence[Observation], start: date, end: date) -> tuple[date, ...]:
     """The last observed date of each month between ``start`` and ``end``."""
     last: dict[tuple[int, int], date] = {}
     for row in rows:
@@ -246,7 +246,7 @@ def _month_ends(rows: Sequence[Observation], start: date, end: date) -> tuple[da
     return tuple(sorted(last.values()))
 
 
-def _less_costs(
+def less_costs(
     rows: tuple[Observation, ...], expense_ratio: Decimal | None, days_per_year: float
 ) -> tuple[Observation, ...]:
     """An index proxy less its vehicle's yearly cost, accrued day by day from its first row."""
@@ -289,13 +289,13 @@ def gather(store: Store, prereg: Prereg, base: str, days_per_year: float) -> _In
     for i in study.instruments:
         # Instruments on one series and cost (a role's two vehicles) share one tuple of rows.
         if (i.price_series, i.expense_ratio) not in adjusted:
-            adjusted[(i.price_series, i.expense_ratio)] = _less_costs(
+            adjusted[(i.price_series, i.expense_ratio)] = less_costs(
                 rows(i.price_series), i.expense_ratio, days_per_year
             )
     prices = {i.key: adjusted[(i.price_series, i.expense_ratio)] for i in study.instruments}
     income = {i.key: rows(i.income_series) for i in study.instruments}
     fx = {series_id.rsplit(".", 1)[1]: rows(series_id) for series_id in fx_ids}
-    dates = _month_ends(prices[study.calendar], study.start, study.end)
+    dates = month_ends(prices[study.calendar], study.start, study.end)
     return _Inputs(tuple(found), tuple(missing), Panel(prices, income, fx), dates)
 
 
