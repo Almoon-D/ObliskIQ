@@ -48,3 +48,9 @@ numerics:
       moneyness_band: 0.15
       # Past this fraction of contracts that did not converge, a run reports degraded.
       max_non_converged_fraction: 0.20
+
+  risk_budget:
+    # Cyclical coordinate descent stops when no scaled weight moves by more than this fraction
+    # of itself in a sweep (quant/risk_budget.py); a run that needs more sweeps is refused.
+    tolerance: 1.0e-12
+    max_iterations: 10000

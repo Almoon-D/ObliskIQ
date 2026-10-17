@@ -13,6 +13,12 @@ time: each observation carries the date it became public, and every read is boun
 - **FRED** without vintages (public a declared lag after the observation date) and **ALFRED**
   with them (each value public from the first day of its real-time period).
 - **ECB** euro reference rates (units of a currency per euro), public on their day.
+- **MSCI** daily index levels, public at the end of each calculation day.
+- **ECB Data Portal** and **Bundesbank** daily series by dataflow and key (money-market rates,
+  zero-coupon yields), public on their day.
+- **Derived** series computed from stored ones: an index accruing overnight rates, and the index
+  of a zero-coupon bond held at a constant maturity. Each value is public when every input it
+  used was.
 
 Parsers are pure functions of the downloaded bytes and are tested on recorded fixtures; the
 fetchers are the only code that touches the network.
@@ -27,32 +33,47 @@ import hashlib
 import io
 import json
 import math
+import re
 import zipfile
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Final, Protocol
+from decimal import Decimal
+from itertools import pairwise
+from typing import Any, Final, Protocol, TypeIs
 
 import httpx
 
 from ..config.schema import ObliskConfig
 from ..config.schema_research import (
     AqrDataset,
+    BundesbankDataset,
+    ConstantMaturityZeroDataset,
     Dataset,
+    EcbDataDataset,
     EcbDataset,
     FredDataset,
     KenFrenchDataset,
+    MsciDataset,
+    OvernightAccrualDataset,
     YahooDataset,
 )
 from ..domain.research import Frequency, Observation, PointInTime, ResearchSeries, Vendor
 from ..errors import DataSourceError, UpstreamError
 from ..store import Store
-from ..store.research import replace_research_series, research_observations
+from ..store.research import (
+    replace_research_series,
+    research_observations,
+    research_series_info,
+)
 from ..util.http import RetryPolicy, get_with_retry
 from .xlsx import excel_serial_date, read_sheet
 
 #: A percent is a hundredth.
 PERCENT: Final = 100.0
+PERCENT_DECIMAL: Final = Decimal(100)
+#: The fewest days a derived bond index is computed from (one day has no return).
+MIN_DERIVED_DAYS: Final = 2
 #: HTTP status of a successful download.
 HTTP_OK: Final = 200
 #: The ECB file's spelling of a rate it does not publish that day.
@@ -64,6 +85,13 @@ EURO: Final = "EUR"
 #: Ken French's date stamps: YYYYMM for a month, YYYY for a year.
 _MONTH_STAMP_LENGTH: Final = 6
 _YEAR_STAMP_LENGTH: Final = 4
+#: The Bundesbank's spelling of a day without a value.
+BUNDESBANK_MISSING: Final = "."
+#: A row of a daily series opens with its day.
+_ISO_DAY: Final = re.compile(r"\d{4}-\d{2}-\d{2}")
+#: MSCI stamps a calculation day as the integer YYYYMMDD.
+_MSCI_YEAR_SCALE: Final = 10_000
+_MSCI_MONTH_SCALE: Final = 100
 
 type Points = list[tuple[date, float]]
 
@@ -265,6 +293,88 @@ def parse_ecb(content: bytes, currencies: Sequence[str]) -> dict[str, Points]:
     return {name: sorted(points) for name, points in out.items()}
 
 
+def parse_msci(content: bytes, dataset: MsciDataset) -> Points:
+    """MSCI's index levels by calculation day; an answer that names an error is refused."""
+    try:
+        payload = json.loads(content)
+    except ValueError:
+        raise DataSourceError(f"MSCI's answer for {dataset.id} is not JSON") from None
+    if not isinstance(payload, dict):
+        raise DataSourceError(f"MSCI's answer for {dataset.id} is not an object")
+    if "error_message" in payload or "error_code" in payload:
+        message = str(payload.get("error_message", "")).strip()
+        raise DataSourceError(f"MSCI refused {dataset.id}: {message}")
+    echo = (
+        payload.get("msci_index_code"),
+        payload.get("index_variant_type"),
+        payload.get("ISO_currency_symbol"),
+    )
+    if echo != (dataset.index_code, dataset.variant, dataset.currency):
+        raise DataSourceError(f"MSCI answered for {echo}, not {dataset.id}'s index")
+    try:
+        rows = payload["indexes"]["INDEX_LEVELS"]
+    except KeyError, TypeError:
+        raise DataSourceError(f"MSCI's answer for {dataset.id} has no levels") from None
+    points: Points = []
+    for row in rows:
+        try:
+            stamp = int(row["calc_date"])
+            level = _number(str(row["level_eod"]), f"MSCI {dataset.id} {stamp}")
+        except KeyError, TypeError, ValueError:
+            raise DataSourceError(f"an MSCI level of {dataset.id} is malformed: {row}") from None
+        try:
+            day = date(
+                stamp // _MSCI_YEAR_SCALE,
+                stamp // _MSCI_MONTH_SCALE % _MSCI_MONTH_SCALE,
+                stamp % _MSCI_MONTH_SCALE,
+            )
+        except ValueError:
+            raise DataSourceError(f"MSCI {dataset.id}: {stamp} is not a date") from None
+        if level <= 0:
+            raise DataSourceError(f"MSCI {dataset.id} on {day}: {level} is not a level")
+        points.append((day, level))
+    return sorted(points)
+
+
+def parse_ecb_data(content: bytes, flow: str, key: str) -> Points:
+    """An ECB Data Portal CSV (``format=csvdata``): one row per period, ``TIME_PERIOD`` and
+    ``OBS_VALUE``; an empty value is left out."""
+    reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
+    fields = reader.fieldnames or []
+    if not {"KEY", "TIME_PERIOD", "OBS_VALUE"} <= set(fields):
+        raise DataSourceError(f"the ECB Data Portal's CSV for {flow}.{key} lacks columns: {fields}")
+    points: Points = []
+    for row in reader:
+        if row["KEY"] != f"{flow}.{key}":
+            raise DataSourceError(f"the ECB Data Portal answered {row['KEY']}, not {flow}.{key}")
+        value = (row["OBS_VALUE"] or "").strip()
+        if not value:
+            continue
+        day = _iso_date(row["TIME_PERIOD"].strip(), "ECB Data Portal")
+        points.append((day, _number(value, f"ECB Data Portal {flow}.{key} {day}")))
+    return sorted(points)
+
+
+def parse_bundesbank(content: bytes, flow: str, key: str) -> Points:
+    """A Bundesbank CSV (``format=csv``): a header naming the series, metadata rows, then one row
+    per day (``YYYY-MM-DD,value,flag``); ``.`` marks a day without a value."""
+    rows = list(csv.reader(io.StringIO(content.decode("utf-8-sig"))))
+    if not rows or len(rows[0]) < 2 or rows[0][1] != f"{flow}.{key}":
+        header = rows[0] if rows else []
+        raise DataSourceError(f"the Bundesbank's CSV is not {flow}.{key}: header {header}")
+    points: Points = []
+    for row in rows[1:]:
+        if not row or not _ISO_DAY.fullmatch(row[0]):
+            continue  # a metadata row
+        if len(row) < 2:
+            raise DataSourceError(f"the Bundesbank's row {row} has no value")
+        day = _iso_date(row[0], "Bundesbank")
+        if row[1].strip() == BUNDESBANK_MISSING:
+            continue
+        points.append((day, _number(row[1], f"Bundesbank {flow}.{key} {day}")))
+    return sorted(points)
+
+
 def _iso_date(text: str, where: str) -> date:
     try:
         return date.fromisoformat(text)
@@ -452,6 +562,14 @@ async def load_dataset(
         )
     if isinstance(dataset, FredDataset):
         return await _load_fred(dataset, settings, sources, now)
+    if isinstance(dataset, MsciDataset):
+        return await _load_msci(dataset, settings, sources, now)
+    if isinstance(dataset, EcbDataDataset | BundesbankDataset):
+        return await _load_keyed(dataset, settings, sources, now)
+    if isinstance(dataset, OvernightAccrualDataset | ConstantMaturityZeroDataset):
+        raise DataSourceError(
+            f"{dataset.id} is derived from stored series: it is computed, not downloaded"
+        )
     return await _load_ecb(dataset, settings, sources, now)
 
 
@@ -615,6 +733,234 @@ async def _load_ecb(
         )
         out.append(LoadedSeries(series, _as_observed(points)))
     return tuple(out)
+
+
+async def _load_msci(
+    dataset: MsciDataset, settings: ObliskConfig, sources: Sources, now: datetime
+) -> tuple[LoadedSeries, ...]:
+    msci = settings.research.data.msci
+    start = max(dataset.start, msci.earliest_start)
+    params = {
+        "currency_symbol": dataset.currency,
+        "index_variant": dataset.variant,
+        "start_date": start.strftime("%Y%m%d"),
+        "end_date": now.date().strftime("%Y%m%d"),
+        "data_frequency": "DAILY",
+        "index_codes": dataset.index_code,
+    }
+    content = await sources.fetch(msci.url, params)
+    points = parse_msci(content, dataset)
+    if not points:
+        raise DataSourceError(f"MSCI returned no levels for {dataset.id}")
+    series = _series(
+        dataset,
+        vendor=Vendor.MSCI,
+        field="level",
+        units="index level",
+        currency=dataset.currency,
+        frequency=Frequency.DAILY,
+        point_in_time=PointInTime.AS_OBSERVED,
+        url=f"{msci.url}?index_codes={dataset.index_code}&index_variant={dataset.variant}"
+        f"&currency_symbol={dataset.currency}",
+        downloaded_at=now,
+        content=content,
+        notes=msci.bias_notes,
+    )
+    return (LoadedSeries(series, _as_observed(points)),)
+
+
+async def _load_keyed(
+    dataset: EcbDataDataset | BundesbankDataset,
+    settings: ObliskConfig,
+    sources: Sources,
+    now: datetime,
+) -> tuple[LoadedSeries, ...]:
+    """One series by dataflow and key, from the ECB Data Portal or the Bundesbank."""
+    data = settings.research.data
+    if isinstance(dataset, EcbDataDataset):
+        vendor, base, notes = Vendor.ECB_DATA, data.ecb_data.base_url, data.ecb_data.bias_notes
+        params = {"format": "csvdata", "startPeriod": dataset.start.isoformat()}
+    else:
+        vendor, base, notes = (
+            Vendor.BUNDESBANK,
+            data.bundesbank.base_url,
+            data.bundesbank.bias_notes,
+        )
+        params = {"format": "csv", "lang": "en", "startPeriod": dataset.start.isoformat()}
+    url = f"{base}/{dataset.flow}/{dataset.key}"
+    content = await sources.fetch(url, params)
+    parse = parse_ecb_data if vendor is Vendor.ECB_DATA else parse_bundesbank
+    points = parse(content, dataset.flow, dataset.key)
+    if not points:
+        raise DataSourceError(f"{url} returned no values for {dataset.id}")
+    series = _series(
+        dataset,
+        vendor=vendor,
+        field="value",
+        units=dataset.units,
+        currency=None,
+        frequency=Frequency.DAILY,
+        point_in_time=PointInTime.AS_OBSERVED,
+        url=url,
+        downloaded_at=now,
+        content=content,
+        notes=notes,
+    )
+    return (LoadedSeries(series, _as_observed(points)),)
+
+
+# ── derived series ──
+
+
+type DerivedDataset = OvernightAccrualDataset | ConstantMaturityZeroDataset
+
+
+def is_derived(dataset: Dataset) -> TypeIs[DerivedDataset]:
+    """Whether ``dataset`` is computed from stored series rather than downloaded."""
+    return isinstance(dataset, OvernightAccrualDataset | ConstantMaturityZeroDataset)
+
+
+@dataclass(frozen=True, slots=True)
+class _Input:
+    series: ResearchSeries
+    rows: dict[date, Observation]
+
+
+def _input(store: Store, series_id: str, as_of: date, dataset_id: str) -> _Input:
+    info = research_series_info(store, series_id)
+    if info is None:
+        raise DataSourceError(f"{dataset_id} needs {series_id}: load it first")
+    rows = research_observations(store, series_id, as_of=as_of)
+    if not rows:
+        raise DataSourceError(f"{dataset_id} needs {series_id}, which has no rows")
+    return _Input(info, {row.observed_on: row for row in rows})
+
+
+def _accrual(dataset: OvernightAccrualDataset, inputs: Sequence[_Input]) -> list[Observation]:
+    """Each published day's rate accrues until the next published day."""
+    rates: list[Observation] = []
+    since: date | None = None
+    for segment, found in zip(dataset.segments, inputs, strict=True):
+        rates += [
+            row
+            for day, row in sorted(found.rows.items())
+            if (since is None or day > since)
+            and (segment.through is None or day <= segment.through)
+        ]
+        since = segment.through
+    if not rates:
+        raise DataSourceError(f"{dataset.id} has no rate in its segments")
+    basis = Decimal(dataset.day_count_basis)
+    level = dataset.base_level
+    out = [
+        Observation(
+            observed_on=rates[0].observed_on, available_on=rates[0].available_on,
+            value=float(level),
+        )
+    ]  # fmt: skip
+    for previous, current in pairwise(rates):
+        days = Decimal((current.observed_on - previous.observed_on).days)
+        level *= 1 + Decimal(repr(previous.value)) / PERCENT_DECIMAL * days / basis
+        out.append(
+            Observation(
+                observed_on=current.observed_on,
+                available_on=max(current.observed_on, previous.available_on),
+                value=float(level),
+            )
+        )
+    return out
+
+
+def _zero_coupon(
+    dataset: ConstantMaturityZeroDataset, long: _Input, short: _Input
+) -> list[Observation]:
+    """A zero bought at ``maturity_years`` on each day the curve has both maturities and sold on
+    the next at the yield for the maturity left (linear in maturity between the two)."""
+    days = sorted(set(long.rows) & set(short.rows))
+    if len(days) < MIN_DERIVED_DAYS:
+        raise DataSourceError(f"{dataset.id} needs at least {MIN_DERIVED_DAYS} common days")
+    maturity = float(dataset.maturity_years)
+    gap = maturity - float(dataset.shorter_maturity_years)
+    basis = float(dataset.year_basis_days)
+
+    def log_price(rate_percent: float, years: float) -> float:
+        rate = rate_percent / PERCENT
+        if dataset.compounding == "continuous":
+            return -years * rate
+        return -years * math.log1p(rate)
+
+    log_level = math.log(float(dataset.base_level))
+    first = days[0]
+    out = [
+        Observation(
+            observed_on=first,
+            available_on=max(long.rows[first].available_on, short.rows[first].available_on),
+            value=float(dataset.base_level),
+        )
+    ]
+    for previous, current in pairwise(days):
+        held = (current - previous).days / basis
+        left = maturity - held
+        today_long = long.rows[current].value
+        today_short = short.rows[current].value
+        rate_left = today_long - held / gap * (today_long - today_short)
+        log_level += log_price(rate_left, left) - log_price(long.rows[previous].value, maturity)
+        available = max(current, long.rows[current].available_on, short.rows[current].available_on)
+        out.append(
+            Observation(observed_on=current, available_on=available, value=math.exp(log_level))
+        )
+    return out
+
+
+def derive_dataset(
+    dataset: DerivedDataset, settings: ObliskConfig, store: Store, *, now: datetime
+) -> tuple[LoadedSeries, ...]:
+    """Compute a derived series from the stored series it names, as they stand at ``now``."""
+    as_of = now.date()
+    if isinstance(dataset, OvernightAccrualDataset):
+        inputs = [_input(store, seg.series, as_of, dataset.id) for seg in dataset.segments]
+        observations = _accrual(dataset, inputs)
+        described = "overnight accrual of " + ", then ".join(
+            seg.series + ("" if seg.through is None else f" through {seg.through}")
+            for seg in dataset.segments
+        )
+        units = "index level"
+    else:
+        inputs = [
+            _input(store, dataset.yield_series, as_of, dataset.id),
+            _input(store, dataset.shorter_yield_series, as_of, dataset.id),
+        ]
+        observations = _zero_coupon(dataset, inputs[0], inputs[1])
+        described = (
+            f"{dataset.maturity_years}-year constant-maturity zero from "
+            f"{dataset.yield_series} and {dataset.shorter_yield_series}"
+        )
+        units = "index level"
+    kinds = {found.series.point_in_time for found in inputs}
+    if len(kinds) != 1:
+        raise DataSourceError(f"{dataset.id} mixes inputs of kinds {sorted(kinds)}")
+    content = json.dumps(
+        {
+            "dataset": dataset.model_dump(mode="json"),
+            "inputs": {f.series.series_id: f.series.content_sha256 for f in inputs},
+        },
+        sort_keys=True,
+    ).encode()
+    input_notes = [note for found in inputs for note in found.series.bias_notes]
+    series = _series(
+        dataset,
+        vendor=Vendor.DERIVED,
+        field="level",
+        units=units,
+        currency=dataset.currency,
+        frequency=Frequency.DAILY,
+        point_in_time=kinds.pop(),
+        url=f"derived: {described}",
+        downloaded_at=now,
+        content=content,
+        notes=(*settings.research.data.derived.bias_notes, *dict.fromkeys(input_notes)),
+    )
+    return (LoadedSeries(series, tuple(observations)),)
 
 
 def store_loaded(store: Store, loaded: Iterable[LoadedSeries]) -> int:

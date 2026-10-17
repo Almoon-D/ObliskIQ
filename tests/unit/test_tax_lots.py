@@ -143,6 +143,22 @@ def test_a_loss_is_deferred_by_a_purchase_before_it_and_released_when_those_unit
     assert engine.ledger.provisional(2025).gains == D(-150)
 
 
+def test_a_part_sale_of_replacement_units_never_leaves_more_replacements_than_units(engine):
+    # Fourteen units bought, then fourteen more; the first fourteen sold at a loss inside the
+    # window, so every unit of the second lot is a replacement.
+    engine.acquire("WORLD", on=date(2025, 1, 2), quantity=D(14), cost=D(140))
+    engine.acquire("WORLD", on=date(2025, 3, 1), quantity=D(14), cost=D(140))
+    engine.dispose("WORLD", on=date(2025, 3, 15), quantity=D(14), proceeds=D(70))
+    [replaced] = engine.lots("WORLD")
+    assert replaced.replacement_units == replaced.quantity == D(14)
+    # Five go: 5/14 rounds down at Decimal's precision, so 14 - 14 x 5/14 is a hair above the
+    # nine units left; the lot's invariant refused that before the replacements were capped.
+    engine.dispose("WORLD", on=date(2025, 7, 1), quantity=D(5), proceeds=D(45))
+    [left] = engine.lots("WORLD")
+    assert left.quantity == D(9)
+    assert left.replacement_units == D(9)
+
+
 def test_a_purchase_within_two_months_after_a_loss_defers_it_out_of_its_year(engine):
     engine.acquire("WORLD", on=date(2025, 10, 1), quantity=D(100), cost=D(1000))
     sale = engine.dispose("WORLD", on=date(2025, 12, 15), quantity=D(100), proceeds=D(800))
@@ -345,6 +361,33 @@ def test_tax_cost_of_a_sale_is_the_marginal_tax_it_adds(engine):
     # The engine itself is untouched.
     assert engine.quantity("WORLD") == D(100)
     assert engine.ledger.provisional(2025).gains == D(0)
+
+
+def test_a_trial_of_several_trades_offsets_a_loss_against_a_gain(engine):
+    engine.acquire("WORLD", on=date(2025, 1, 2), quantity=D(100), cost=D(1000))
+    engine.acquire("PARTNER", on=date(2025, 1, 2), quantity=D(100), cost=D(1000))
+    on = date(2025, 6, 1)
+    gain = ProposedTrade(security="WORLD", side="sell", quantity=D(100), price=D(30), on=on)
+    loss = ProposedTrade(security="PARTNER", side="sell", quantity=D(100), price=D(5), on=on)
+    # Alone, the gain of 2,000 costs 380 and the loss of 500 saves nothing this year; together
+    # the year counts 1,500 of gain.
+    assert engine.trial_tax([gain]) == engine.tax_cost(gain).tax == D(380)
+    assert engine.trial_tax([loss]) == D(0)
+    assert engine.trial_tax([gain, loss]) == D(285)
+    assert engine.trial_tax([]) == D(0)
+    # The engine itself is untouched.
+    assert (engine.quantity("WORLD"), engine.quantity("PARTNER")) == (D(100), D(100))
+    assert engine.ledger.provisional(2025).gains == D(0)
+
+
+def test_a_trial_of_trades_in_two_tax_years_is_refused(engine):
+    engine.acquire("WORLD", on=date(2025, 1, 2), quantity=D(100), cost=D(1000))
+    trades = [
+        ProposedTrade(security="WORLD", side="sell", quantity=D(1), price=D(30), on=day)
+        for day in (date(2025, 12, 30), date(2026, 1, 2))
+    ]
+    with pytest.raises(TaxError, match="one tax year, got \\[2025, 2026\\]"):
+        engine.trial_tax(trades)
 
 
 def test_tax_cost_of_a_buy_counts_the_loss_it_would_defer(engine):

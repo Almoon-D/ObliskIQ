@@ -39,6 +39,11 @@ class Vendor(StrEnum):
     FRED = "fred"
     ALFRED = "alfred"
     ECB = "ecb"
+    MSCI = "msci"
+    ECB_DATA = "ecb_data"
+    BUNDESBANK = "bundesbank"
+    #: Computed by the harness from series already in the research store.
+    DERIVED = "derived"
 
 
 class Frequency(StrEnum):

@@ -1,13 +1,23 @@
-"""Running a pre-registered study: the data it reads, the adequacy checks, the historical run, the
-bootstrap, the robustness checks and the decision (MASTER_PLAN §5.9; DECISIONS D60, D62, D63).
+"""Running a pre-registered study: the data it reads, the adequacy checks, the historical runs,
+the bootstrap, one test per candidate, the robustness checks, the frontier and the decisions
+(MASTER_PLAN §5.4, §5.9; DECISIONS D60, D62, D63).
 
-The one study kind this build runs is a **portfolio comparison**: a candidate strategy against a
-reference over the same instruments, each simulated with costs and tax as they arise and
-liquidated at the horizon. The primary effect is the difference in the annualised log growth of
-liquidation value, after costs and tax. Its interval comes from a paired moving-block bootstrap
-of whole months — every instrument's return, its income yield and every reference rate resampled
-together — with both strategies simulated on each path, so each path's tax is paid as that path
-would have paid it.
+The one study kind this build runs is a **portfolio comparison**: several candidate strategies,
+each against one reference over the same instruments, every portfolio simulated with costs and
+tax as they arise and liquidated at the horizon. A candidate's primary effect is its annualised
+log growth of liquidation value minus the reference's, after costs and tax, and each candidate is
+one test: its interval has level ``1 - 2 alpha / m`` for ``m`` candidates (Bonferroni). The
+interval comes from a paired moving-block bootstrap of whole months — every instrument's return,
+its income yield and every reference rate resampled together — with every portfolio simulated on
+each path, so each path's tax is paid as that path would have paid it. A path keeps the real
+history before its first date, which the strategies' lookbacks read.
+
+Beside the tests: every portfolio's run before tax, its distribution of growth, drawdown breaches
+and terminal wealth over the paths, and the **frontier** (D60): for each drawdown limit and
+breach probability of the pre-registered grid, the portfolio with the highest median growth whose
+probability of breaching the limit does not exceed it; portfolios whose growth the bootstrap
+cannot tell apart from that one's resolve to the simplest, then the lowest turnover. A
+pre-registered **structure check** runs the tilt before tax on the longest history (descriptive).
 
 Everything is read as of the horizon and nothing later: the store bounds every read by
 publication date, and the strategies see only what was public on each rebalance date.
@@ -16,7 +26,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -25,19 +36,37 @@ from typing import Final
 import numpy as np
 
 from ..config.schema import ObliskConfig
-from ..domain.research import Observation, ResearchSeries, Trial
+from ..domain.research import Observation, ResearchSeries
 from ..domain.tax import SecurityIdentity
 from ..errors import SimulationError
 from ..jurisdiction.profile import JurisdictionProfile
 from ..jurisdiction.tax_policies import TAX_POLICIES
 from ..quant.costs import CostBook
+from ..quant.trend import TrendRule
 from ..store import Store
 from ..store.research import research_observations, research_series_info
 from .data import SurvivorshipReport, survivorship
 from .decide import AdequacyCheck, Decision, decide
-from .prereg import InstrumentSpec, Prereg
+from .prereg import (
+    BandedWeightsSpec,
+    EquityOverlaySpec,
+    InstrumentSpec,
+    Prereg,
+    RiskBalanceSpec,
+    StrategySpec,
+    StructureSpec,
+)
 from .registry import PreregLock, TrialRegistry, canonical_sha256, inputs_sha256, sharpes
-from .simulate import EURO, Panel, SimInstrument, SimulationResult, SimulationSettings, Simulator
+from .simulate import (
+    EURO,
+    IndexedSeries,
+    Panel,
+    SimInstrument,
+    SimulationResult,
+    SimulationSettings,
+    Simulator,
+    Strategy,
+)
 from .stats import (
     Breakeven,
     DeflatedSharpe,
@@ -52,7 +81,8 @@ from .stats import (
     power,
     sharpe_ratio,
 )
-from .strategies import build_strategy
+from .strategies import build_strategy, static_weights, tilt_rule
+from .structure import StructureResult, structure_check
 
 #: What the simulation itself cannot show, stated in every report.
 SIMULATION_NOTES: Final = (
@@ -66,7 +96,8 @@ SIMULATION_NOTES: Final = (
     "balance is held, so gains on balances are not taxed.",
     "Losses still carried forward at the horizon are worth nothing.",
     "Bootstrap paths resample whole months of every instrument and rate together; on a path, "
-    "income is paid at month end at the resampled month's yield.",
+    "income is paid at month end at the resampled month's yield, and the history before the "
+    "first date is the real one.",
 )
 #: What this study kind has no placebo for.
 NO_PLACEBO: Final = (
@@ -75,17 +106,31 @@ NO_PLACEBO: Final = (
 )
 #: The terminal-wealth percentile reported beside the median (D60).
 TERMINAL_PERCENTILE: Final = 5
+#: Shares of the paths per worker process, so that a slow share does not hold the others up.
+CHUNKS_PER_WORKER: Final = 4
 
 
 @dataclass(frozen=True, slots=True)
 class StrategyStats:
-    """One strategy: its historical run and its distribution over the bootstrap paths."""
+    """One portfolio: its historical runs after and before tax and its distribution over the
+    bootstrap paths."""
 
     name: str
+    simplicity: int
     historical: SimulationResult | None
+    pre_tax: SimulationResult | None
     median_log_growth: float | None
     terminal_wealth_p5: float | None
     breach: tuple[tuple[Decimal, float], ...]
+    static_weights: Mapping[str, Decimal] | None
+
+    @property
+    def turnover(self) -> float | None:
+        """Value traded a year over the mean mark-to-market value, after tax."""
+        run = self.historical
+        if run is None or not run.nav or run.years <= 0:
+            return None
+        return float(run.traded) / float(np.mean(run.nav)) / run.years
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +151,33 @@ class Robustness:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateTest:
+    """One candidate against the reference: its effect, its interval and its decision."""
+
+    name: str
+    estimate: float | None
+    se: float | None
+    detectable: float | None
+    declared_power: float
+    declared_detectable: float
+    robustness: Robustness | None
+    deflated: DeflatedSharpe | None
+    decision: Decision
+
+
+@dataclass(frozen=True, slots=True)
+class FrontierPoint:
+    """One point of the grid: who respects it, the best of them, and the resolved choice."""
+
+    limit: Decimal
+    probability: Decimal
+    eligible: tuple[str, ...]
+    best: str | None
+    indistinguishable: tuple[str, ...]
+    chosen: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class StudyResult:
     """Everything a report states about one run."""
 
@@ -122,17 +194,19 @@ class StudyResult:
     dates: tuple[date, ...]
     coverage: float | None
     survivorship: SurvivorshipReport
-    estimate: float | None
-    se: float | None
-    detectable: float | None
-    candidate: StrategyStats
+    checks: tuple[AdequacyCheck, ...]
     reference: StrategyStats
-    robustness: Robustness | None
-    deflated: DeflatedSharpe | None
+    candidates: tuple[StrategyStats, ...]
+    tests: tuple[CandidateTest, ...]
+    frontier: tuple[FrontierPoint, ...]
+    structure: StructureResult | None
     trials: int
-    decision: Decision
     tax_rules: tuple[str, ...]
     cost_labels: tuple[str, ...]
+
+    @property
+    def portfolios(self) -> tuple[StrategyStats, ...]:
+        return (self.reference, *self.candidates)
 
 
 # ── reading the data ──
@@ -148,7 +222,7 @@ class _Inputs:
 
 def _series_ids(prereg: Prereg, base: str) -> tuple[list[str], list[str]]:
     study = prereg.spec.study
-    ids = [i.price_series for i in study.instruments]
+    ids = list(dict.fromkeys(i.price_series for i in study.instruments))
     ids += [i.income_series for i in study.instruments if i.income_series is not None]
     currencies = (
         sorted({i.currency for i in study.instruments} | {base}) if study.fx_dataset else []
@@ -168,8 +242,28 @@ def _month_ends(rows: Sequence[Observation], start: date, end: date) -> tuple[da
     return tuple(sorted(last.values()))
 
 
-def gather(store: Store, prereg: Prereg, base: str) -> _Inputs:
-    """Read every series the study names, as of its horizon."""
+def _less_costs(
+    rows: tuple[Observation, ...], expense_ratio: Decimal | None, days_per_year: float
+) -> tuple[Observation, ...]:
+    """An index proxy less its vehicle's yearly cost, accrued day by day from its first row."""
+    if expense_ratio is None or not rows:
+        return rows
+    rate = float(expense_ratio)
+    anchor = min(row.observed_on for row in rows)
+    return tuple(
+        row.model_copy(
+            update={
+                "value": row.value
+                * math.exp(-rate * (row.observed_on - anchor).days / days_per_year)
+            }
+        )
+        for row in rows
+    )
+
+
+def gather(store: Store, prereg: Prereg, base: str, days_per_year: float) -> _Inputs:
+    """Read every series the study names, as of its horizon; index proxies lose their
+    vehicle's expense ratio."""
     study = prereg.spec.study
     as_of = study.end
     ids, fx_ids = _series_ids(prereg, base)
@@ -187,7 +281,14 @@ def gather(store: Store, prereg: Prereg, base: str) -> _Inputs:
             return ()
         return tuple(research_observations(store, series_id, as_of=as_of))
 
-    prices = {i.key: rows(i.price_series) for i in study.instruments}
+    adjusted: dict[tuple[str, Decimal | None], tuple[Observation, ...]] = {}
+    for i in study.instruments:
+        # Instruments on one series and cost (a role's two vehicles) share one tuple of rows.
+        if (i.price_series, i.expense_ratio) not in adjusted:
+            adjusted[(i.price_series, i.expense_ratio)] = _less_costs(
+                rows(i.price_series), i.expense_ratio, days_per_year
+            )
+    prices = {i.key: adjusted[(i.price_series, i.expense_ratio)] for i in study.instruments}
     income = {i.key: rows(i.income_series) for i in study.instruments}
     fx = {series_id.rsplit(".", 1)[1]: rows(series_id) for series_id in fx_ids}
     dates = _month_ends(prices[study.calendar], study.start, study.end)
@@ -221,10 +322,10 @@ def _boundary(
     rows: Sequence[Observation], dates: Sequence[date], max_age: int
 ) -> list[float | None]:
     """The latest value public at each date, if it is fresh enough."""
+    index = IndexedSeries(rows)
     out: list[float | None] = []
     for day in dates:
-        visible = [r for r in rows if r.observed_on <= day and r.available_on <= day]
-        latest = max(visible, key=lambda r: (r.observed_on, r.available_on), default=None)
+        latest = index.latest(day, day)
         fresh = latest is not None and day - latest.observed_on <= timedelta(days=max_age)
         out.append(latest.value if fresh and latest is not None else None)
     return out
@@ -235,13 +336,16 @@ def _boundary(
 
 @dataclass(frozen=True, slots=True)
 class _Months:
-    """Per month: each instrument's log return and income yield, each rate's log change."""
+    """Per month: each instrument's log return and income yield, each rate's log change; and
+    the history before the first date, which every path keeps."""
 
     first_prices: dict[str, float]
     first_rates: dict[str, float]
     returns: dict[str, np.ndarray]
     yields: dict[str, np.ndarray]
     rate_changes: dict[str, np.ndarray]
+    prior_prices: dict[str, tuple[Observation, ...]]
+    prior_rates: dict[str, tuple[Observation, ...]]
 
 
 def _months(panel: Panel, dates: Sequence[date], max_price_age: int, max_fx_age: int) -> _Months:
@@ -251,11 +355,34 @@ def _months(panel: Panel, dates: Sequence[date], max_price_age: int, max_fx_age:
             raise SimulationError(f"{what} lacks a value at a rebalance date")
         return np.array(values, dtype=float)
 
+    def before(rows: Sequence[Observation]) -> tuple[Observation, ...]:
+        return tuple(row for row in rows if row.observed_on < dates[0])
+
+    def month_ends_before(rows: Sequence[Observation]) -> tuple[Observation, ...]:
+        """Every vintage of the last observed day of each month before the first date: the
+        rows a month-end close reads (a strategy's lookback sees no other price)."""
+        prior = before(rows)
+        last: dict[tuple[int, int], date] = {}
+        for row in prior:
+            month = (row.observed_on.year, row.observed_on.month)
+            last[month] = max(last.get(month, row.observed_on), row.observed_on)
+        ends = set(last.values())
+        return tuple(row for row in prior if row.observed_on in ends)
+
     returns, yields, first = {}, {}, {}
+    prior: dict[str, tuple[Observation, ...]] = {}
+    shared: dict[int, tuple[np.ndarray, np.ndarray, tuple[Observation, ...]]] = {}
     for key, rows in panel.prices.items():
-        prices = levels(rows, max_price_age, key)
+        # One series priced for two instruments is resampled once and shared by both.
+        if id(rows) not in shared:
+            series_levels = levels(rows, max_price_age, key)
+            shared[id(rows)] = (
+                series_levels,
+                np.diff(np.log(series_levels)),
+                month_ends_before(rows),
+            )
+        prices, returns[key], prior[key] = shared[id(rows)]
         first[key] = float(prices[0])
-        returns[key] = np.diff(np.log(prices))
         paid = [
             sum(
                 r.value
@@ -270,11 +397,20 @@ def _months(panel: Panel, dates: Sequence[date], max_price_age: int, max_fx_age:
         rates = levels(rows, max_fx_age, f"the {currency} rate")
         first_rates[currency] = float(rates[0])
         rate_changes[currency] = np.diff(np.log(rates))
-    return _Months(first, first_rates, returns, yields, rate_changes)
+    return _Months(
+        first,
+        first_rates,
+        returns,
+        yields,
+        rate_changes,
+        prior,
+        {currency: before(rows) for currency, rows in panel.fx.items()},
+    )
 
 
 def _synthetic(months: _Months, dates: Sequence[date], path: np.ndarray) -> Panel:
-    """A panel on the rebalance dates whose months are ``path``'s months of history."""
+    """A panel on the rebalance dates whose months are ``path``'s months of history, after the
+    real history before the first date."""
 
     def series(first: float, changes: np.ndarray) -> tuple[np.ndarray, tuple[Observation, ...]]:
         levels = first * np.exp(np.concatenate([[0.0], np.cumsum(changes[path])]))
@@ -285,35 +421,31 @@ def _synthetic(months: _Months, dates: Sequence[date], path: np.ndarray) -> Pane
 
     prices: dict[str, tuple[Observation, ...]] = {}
     income: dict[str, tuple[Observation, ...]] = {}
+    built: dict[int, tuple[np.ndarray, tuple[Observation, ...]]] = {}
     for key, first in months.first_prices.items():
-        levels, prices[key] = series(first, months.returns[key])
+        changes = months.returns[key]
+        if id(changes) not in built:
+            levels, resampled = series(first, changes)
+            built[id(changes)] = levels, (*months.prior_prices.get(key, ()), *resampled)
+        levels, prices[key] = built[id(changes)]
         paid = months.yields[key][path] * levels[:-1]
         income[key] = tuple(
             Observation(observed_on=d, available_on=d, value=float(v))
             for d, v in zip(dates[1:], paid, strict=True)
             if v > 0
         )
-    fx = {c: series(first, months.rate_changes[c])[1] for c, first in months.first_rates.items()}
+    fx = {
+        c: (*months.prior_rates.get(c, ()), *series(first, months.rate_changes[c])[1])
+        for c, first in months.first_rates.items()
+    }
     return Panel(prices, income, fx)
 
 
 # ── the run ──
 
 
-@dataclass(frozen=True, slots=True)
-class _Draw:
-    """One bootstrap path: each strategy's growth, worst drawdown and terminal wealth multiple."""
-
-    candidate: float
-    reference: float
-    candidate_drawdown: float
-    reference_drawdown: float
-    candidate_wealth: float
-    reference_wealth: float
-
-
 type _Simulate = Callable[
-    [Panel, Sequence[date], Decimal], tuple[SimulationResult, SimulationResult]
+    [Panel, Sequence[date], Decimal, Sequence[str]], dict[str, SimulationResult]
 ]
 
 
@@ -332,8 +464,31 @@ def _growth_difference(candidate: SimulationResult, reference: SimulationResult)
     return _growth(candidate) - _growth(reference)
 
 
-def _not_run(name: str) -> StrategyStats:
-    return StrategyStats(name, None, None, None, ())
+def _not_run(spec: StrategySpec, weights: Mapping[str, Decimal] | None) -> StrategyStats:
+    return StrategyStats(spec.name, spec.simplicity, None, None, None, None, (), weights)
+
+
+@dataclass(frozen=True, slots=True)
+class _Draws:
+    """Per path and portfolio: growth, worst drawdown and terminal wealth multiple."""
+
+    names: tuple[str, ...]
+    growth: np.ndarray
+    drawdown: np.ndarray
+    wealth: np.ndarray
+
+    def column(self, name: str) -> int:
+        return self.names.index(name)
+
+
+def declared_se(prereg: Prereg, candidate: str) -> float:
+    """The standard error of the annualised effect before any data: the declared standard
+    deviation per observation over the effective observations, scaled to a year."""
+    inputs = prereg.spec.power
+    per_period = effective_n(inputs.names_per_period, float(inputs.rho))
+    observations = inputs.periods * per_period
+    sd = float(prereg.spec.sd_per_period(candidate))
+    return sd * inputs.periods_per_year / math.sqrt(observations)
 
 
 class StudyRunner:
@@ -342,7 +497,9 @@ class StudyRunner:
 
     def __init__(self, settings: ObliskConfig, profile: JurisdictionProfile) -> None:
         self._settings = settings
+        self._profile = profile
         self._policy = TAX_POLICIES.resolve(profile, settings)
+        self._strategies: dict[str, tuple[list[SimInstrument], dict[str, Strategy]]] = {}
         self._costs = CostBook.from_config(settings)
         self._rules_sha256 = {
             "costs": canonical_sha256(settings.costs.model_dump(mode="json")),
@@ -351,7 +508,7 @@ class StudyRunner:
             ),
         }
 
-    def _simulation(self, prereg: Prereg, multiplier: Decimal) -> SimulationSettings:
+    def _simulation(self, prereg: Prereg, multiplier: Decimal, taxed: bool) -> SimulationSettings:
         mechanics = self._settings.research.simulation
         return SimulationSettings(
             base_currency=self._settings.account.base_currency,
@@ -362,6 +519,7 @@ class StudyRunner:
             whole_units=mechanics.whole_units,
             days_per_year=float(mechanics.days_per_year),
             cost_multiplier=multiplier,
+            taxed=taxed,
         )
 
     def run(
@@ -375,6 +533,7 @@ class StudyRunner:
         now: datetime,
     ) -> StudyResult:
         spec = prereg.spec
+        study = spec.study
         decision_defaults = self._settings.research.decision
         alpha = float(spec.alpha if spec.alpha is not None else decision_defaults.alpha)
         alpha_source = "pre-registration" if spec.alpha is not None else "config research.decision"
@@ -384,37 +543,40 @@ class StudyRunner:
         target_source = (
             "pre-registration" if spec.target_power is not None else "config research.decision"
         )
+        tests = spec.tests_in_confirmation
         base = self._settings.account.base_currency
-        inputs = gather(store, prereg, base)
+        days_per_year = float(self._settings.research.simulation.days_per_year)
+        inputs = gather(store, prereg, base, days_per_year)
         checks = self._checks(prereg, inputs)
-        instruments = _instruments(spec.study.instruments)
-        candidate_strategy = build_strategy(
-            spec.study.candidate.name, spec.study.candidate.model_dump()
-        )
-        reference_strategy = build_strategy(
-            spec.study.reference.name, spec.study.reference.model_dump()
-        )
+        weights = {
+            s.name: (
+                static_weights(s, study.core, self._settings)
+                if study.core is not None
+                and isinstance(s, BandedWeightsSpec | RiskBalanceSpec | EquityOverlaySpec)
+                else None
+            )
+            for s in study.portfolios
+        }
 
         def simulate(
-            panel: Panel, dates: Sequence[date], multiplier: Decimal
-        ) -> tuple[SimulationResult, SimulationResult]:
-            simulator = Simulator(
-                instruments, panel, self._costs, self._policy, self._simulation(prereg, multiplier)
-            )
-            return (
-                simulator.run(candidate_strategy, dates),
-                simulator.run(reference_strategy, dates),
-            )
+            panel: Panel,
+            dates: Sequence[date],
+            multiplier: Decimal,
+            names: Sequence[str],
+            *,
+            taxed: bool = True,
+        ) -> dict[str, SimulationResult]:
+            return self._simulate(prereg, panel, dates, multiplier, names, taxed=taxed)
 
         survivors = survivorship(
             store,
-            [i.price_series for i in spec.study.instruments],
-            start=spec.study.start,
-            end=spec.study.end,
-            as_of=spec.study.end,
+            list(dict.fromkeys(i.price_series for i in study.instruments)),
+            start=study.start,
+            end=study.end,
+            as_of=study.end,
         )
         hashes = {s.series_id: s.content_sha256 for s in inputs.series}
-        mechanics = self._simulation(prereg, Decimal(1))
+        mechanics = self._simulation(prereg, Decimal(1), True)
         parameters = {
             "alpha": alpha,
             "target_power": target,
@@ -426,58 +588,86 @@ class StudyRunner:
             "days_per_year": mechanics.days_per_year,
             "base_currency": mechanics.base_currency,
             "policy": self._policy.policy_id,
+            "risk_budget": self._settings.numerics.risk_budget.model_dump(),
             **self._rules_sha256,
         }
         digest = inputs_sha256(spec_sha256=prereg.sha256, series=hashes, parameters=parameters)
         coverage = self._coverage(inputs)
-        candidate_stats = _not_run(spec.study.candidate.name)
-        reference_stats = _not_run(spec.study.reference.name)
-        estimate = se = detectable = None
-        robustness: Robustness | None = None
-        interval: tuple[float, float] | None = None
-        study_power: float | None = None
-        deflated: DeflatedSharpe | None = None
+        reference_spec = study.reference
+        names = [s.name for s in study.portfolios]
+        stats = {s.name: _not_run(s, weights[s.name]) for s in study.portfolios}
+        estimates: dict[str, float | None] = dict.fromkeys(names)
+        intervals: dict[str, tuple[float, float] | None] = dict.fromkeys(names)
+        ses: dict[str, float | None] = dict.fromkeys(names)
+        robustness: dict[str, Robustness | None] = dict.fromkeys(names)
+        deflated: dict[str, DeflatedSharpe | None] = dict.fromkeys(names)
+        frontier: tuple[FrontierPoint, ...] = ()
         cost_labels: frozenset[str] = frozenset()
         trials = registry.trials(spec.id)
         if all(check.passed for check in checks):
             try:
-                cand, ref = simulate(inputs.panel, inputs.dates, Decimal(1))
-                estimate = _growth_difference(cand, ref)
-                cost_labels = cand.cost_labels | ref.cost_labels
-                draws = self._bootstrap(prereg, inputs, simulate)
-                robustness = self._robustness(prereg, inputs, estimate, simulate)
+                historical = simulate(inputs.panel, inputs.dates, Decimal(1), names)
+                pre_tax = simulate(inputs.panel, inputs.dates, Decimal(1), names, taxed=False)
+                reference_run = historical[reference_spec.name]
+                for name in names[1:]:
+                    estimates[name] = _growth_difference(historical[name], reference_run)
+                cost_labels = frozenset().union(*(r.cost_labels for r in historical.values()))
+                draws = self._bootstrap(prereg, inputs, names)
+                for candidate in study.candidates:
+                    robustness[candidate.name] = self._robustness(
+                        prereg, inputs, candidate.name, reference_spec.name,
+                        estimates[candidate.name], simulate,
+                    )  # fmt: skip
             except SimulationError as exc:
                 checks = (*checks, AdequacyCheck("simulation", False, str(exc)))
-                estimate = None
+                estimates = dict.fromkeys(names)
+                robustness = dict.fromkeys(names)
             else:
-                differences = np.array([d.candidate - d.reference for d in draws])
-                tests = spec.tests_in_confirmation
-                interval = percentile_interval(differences.tolist(), alpha=alpha, tests=tests)
-                se = float(differences.std(ddof=1)) if differences.size > 1 else None
-                if se is not None and se > 0:
-                    study_power = power(float(spec.theta), se, alpha=alpha, tests=tests)
-                    detectable = detectable_effect(
-                        se, alpha=alpha, tests=tests, target_power=target
+                ref = draws.column(reference_spec.name)
+                for candidate in study.candidates:
+                    differences = (
+                        draws.growth[:, draws.column(candidate.name)] - draws.growth[:, ref]
                     )
-                candidate_stats = self._stats(
-                    spec.study.candidate.name,
-                    cand,
-                    [(d.candidate, d.candidate_drawdown, d.candidate_wealth) for d in draws],
-                    prereg,
-                )
-                reference_stats = self._stats(
-                    spec.study.reference.name,
-                    ref,
-                    [(d.reference, d.reference_drawdown, d.reference_wealth) for d in draws],
-                    prereg,
-                )
-                deflated = self._deflated(cand, ref, trials)
-        decision = decide(
-            interval=interval,
-            theta=float(spec.theta),
-            power=study_power,
-            target_power=target,
-            checks=checks,
+                    intervals[candidate.name] = percentile_interval(
+                        differences.tolist(), alpha=alpha, tests=tests
+                    )
+                    ses[candidate.name] = (
+                        float(differences.std(ddof=1)) if differences.size > 1 else None
+                    )
+                for name in names:
+                    stats[name] = self._stats(
+                        stats[name], historical[name], pre_tax[name], draws, prereg
+                    )
+                every = [
+                    sharpe_ratio(self._excess(historical[c.name], reference_run))
+                    for c in study.candidates
+                ]
+                pool = [*sharpes(trials), *(s for s in every if s is not None)]
+                for candidate in study.candidates:
+                    deflated[candidate.name] = self._deflated(
+                        historical[candidate.name], reference_run, pool
+                    )
+                frontier = self._frontier(prereg, stats, draws, alpha=alpha, tests=tests)
+        candidate_tests = tuple(
+            self._test(
+                prereg,
+                candidate.name,
+                estimates[candidate.name],
+                intervals[candidate.name],
+                ses[candidate.name],
+                robustness[candidate.name],
+                deflated[candidate.name],
+                checks,
+                alpha=alpha,
+                tests=tests,
+                target=target,
+            )
+            for candidate in study.candidates
+        )
+        structure = (
+            None
+            if spec.structure is None or study.core is None
+            else self._structure(prereg, spec.structure, tilt_rule(study.core), store, alpha=alpha)
         )
         return StudyResult(
             prereg=prereg,
@@ -493,20 +683,59 @@ class StudyRunner:
             dates=inputs.dates,
             coverage=coverage,
             survivorship=survivors,
-            estimate=estimate,
-            se=se,
-            detectable=detectable,
-            candidate=candidate_stats,
-            reference=reference_stats,
-            robustness=robustness,
-            deflated=deflated,
-            trials=len(trials) + 1,
-            decision=decision,
+            checks=checks,
+            reference=stats[reference_spec.name],
+            candidates=tuple(stats[c.name] for c in study.candidates),
+            tests=candidate_tests,
+            frontier=frontier,
+            structure=structure,
+            trials=len(trials) + len(study.candidates),
             tax_rules=self._policy.describe(),
             cost_labels=tuple(sorted(cost_labels)),
         )
 
     # ── the steps ──
+
+    def _test(
+        self,
+        prereg: Prereg,
+        name: str,
+        estimate: float | None,
+        interval: tuple[float, float] | None,
+        se: float | None,
+        robustness: Robustness | None,
+        deflated: DeflatedSharpe | None,
+        checks: tuple[AdequacyCheck, ...],
+        *,
+        alpha: float,
+        tests: int,
+        target: float,
+    ) -> CandidateTest:
+        theta = float(prereg.spec.theta)
+        study_power = detectable = None
+        if se is not None and se > 0:
+            study_power = power(theta, se, alpha=alpha, tests=tests)
+            detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
+        before = declared_se(prereg, name)
+        return CandidateTest(
+            name=name,
+            estimate=estimate,
+            se=se,
+            detectable=detectable,
+            declared_power=power(theta, before, alpha=alpha, tests=tests),
+            declared_detectable=detectable_effect(
+                before, alpha=alpha, tests=tests, target_power=target
+            ),
+            robustness=robustness,
+            deflated=deflated,
+            decision=decide(
+                interval=interval,
+                theta=theta,
+                power=study_power,
+                target_power=target,
+                checks=checks,
+            ),
+        )
 
     def _coverage(self, inputs: _Inputs) -> float | None:
         """The share of rebalance dates at which every instrument has a fresh price."""
@@ -556,7 +785,58 @@ class StudyRunner:
             ),
         )
 
-    def _bootstrap(self, prereg: Prereg, inputs: _Inputs, simulate: _Simulate) -> list[_Draw]:
+    def _built(self, prereg: Prereg) -> tuple[list[SimInstrument], dict[str, Strategy]]:
+        study = prereg.spec.study
+        if prereg.sha256 not in self._strategies:
+            self._strategies[prereg.sha256] = (
+                _instruments(study.instruments),
+                {s.name: build_strategy(s, study, self._settings) for s in study.portfolios},
+            )
+        return self._strategies[prereg.sha256]
+
+    def _simulate(
+        self,
+        prereg: Prereg,
+        panel: Panel,
+        dates: Sequence[date],
+        multiplier: Decimal,
+        names: Sequence[str],
+        *,
+        taxed: bool = True,
+    ) -> dict[str, SimulationResult]:
+        """Every named portfolio on one panel, through one simulator."""
+        instruments, strategies = self._built(prereg)
+        simulator = Simulator(
+            instruments,
+            panel,
+            self._costs,
+            self._policy,
+            self._simulation(prereg, multiplier, taxed),
+        )
+        return {name: simulator.run(strategies[name], dates) for name in names}
+
+    def paths(
+        self,
+        prereg: Prereg,
+        months: _Months,
+        dates: Sequence[date],
+        names: Sequence[str],
+        paths: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Growth, worst drawdown and terminal wealth multiple of every portfolio (columns) on
+        each resampled path (rows)."""
+        shape = (len(paths), len(names))
+        growth, drawdown, wealth = np.empty(shape), np.empty(shape), np.empty(shape)
+        for row, path in enumerate(paths):
+            panel = _synthetic(months, dates, path)
+            runs = self._simulate(prereg, panel, dates, Decimal(1), names)
+            for column, name in enumerate(names):
+                growth[row, column] = _growth(runs[name])
+                drawdown[row, column] = runs[name].max_drawdown
+                wealth[row, column] = _wealth(runs[name])
+        return growth, drawdown, wealth
+
+    def _bootstrap(self, prereg: Prereg, inputs: _Inputs, names: Sequence[str]) -> _Draws:
         spec = prereg.spec.bootstrap
         research = self._settings.research
         months = _months(
@@ -568,63 +848,77 @@ class StudyRunner:
         paths = block_bootstrap_indices(
             len(inputs.dates) - 1, block=spec.block_months, n_boot=spec.n_boot, seed=spec.seed
         )
-        draws: list[_Draw] = []
-        for path in paths:
-            candidate, reference = simulate(
-                _synthetic(months, inputs.dates, path), inputs.dates, Decimal(1)
-            )
-            draws.append(
-                _Draw(
-                    _growth(candidate),
-                    _growth(reference),
-                    candidate.max_drawdown,
-                    reference.max_drawdown,
-                    _wealth(candidate),
-                    _wealth(reference),
-                )
-            )
-        return draws
+        workers = min(research.workers, len(paths))
+        if workers <= 1:
+            growth, drawdown, wealth = self.paths(prereg, months, inputs.dates, names, paths)
+            return _Draws(tuple(names), growth, drawdown, wealth)
+        # The paths are drawn above from the seed; each worker runs a contiguous share and the
+        # shares are put back in order, so the draws do not depend on the number of workers.
+        chunks = np.array_split(paths, workers * CHUNKS_PER_WORKER)
+        tasks = [
+            PathTask(self._settings, self._profile, prereg, months, inputs.dates, tuple(names), c)
+            for c in chunks
+            if len(c)
+        ]
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            parts = list(pool.map(run_paths, tasks))
+        return _Draws(
+            tuple(names),
+            np.concatenate([part[0] for part in parts]),
+            np.concatenate([part[1] for part in parts]),
+            np.concatenate([part[2] for part in parts]),
+        )
 
     @staticmethod
     def _stats(
-        name: str,
+        known: StrategyStats,
         historical: SimulationResult,
-        draws: Sequence[tuple[float, float, float]],
+        pre_tax: SimulationResult,
+        draws: _Draws,
         prereg: Prereg,
     ) -> StrategyStats:
-        growth = np.array([d[0] for d in draws])
-        drawdowns = [d[1] for d in draws]
-        wealth = np.array([d[2] for d in draws])
+        column = draws.column(known.name)
+        drawdowns = draws.drawdown[:, column].tolist()
         return StrategyStats(
-            name=name,
+            name=known.name,
+            simplicity=known.simplicity,
             historical=historical,
-            median_log_growth=float(np.median(growth)),
-            terminal_wealth_p5=float(np.percentile(wealth, TERMINAL_PERCENTILE)),
+            pre_tax=pre_tax,
+            median_log_growth=float(np.median(draws.growth[:, column])),
+            terminal_wealth_p5=float(np.percentile(draws.wealth[:, column], TERMINAL_PERCENTILE)),
             breach=tuple(
                 (limit, breach_probability(drawdowns, float(limit)))
                 for limit in prereg.spec.drawdown_limits
             ),
+            static_weights=known.static_weights,
         )
 
     def _robustness(
-        self, prereg: Prereg, inputs: _Inputs, estimate: float, simulate: _Simulate
+        self,
+        prereg: Prereg,
+        inputs: _Inputs,
+        candidate: str,
+        reference: str,
+        estimate: float | None,
+        simulate: _Simulate,
     ) -> Robustness:
         spec = prereg.spec
+        pair = [candidate, reference]
         subperiods: list[SubperiodEstimate] = []
         for first, last in spec.subperiods:
             dates = [d for d in inputs.dates if first <= d <= last]
-            if len(dates) < 2:
+            if len(dates) < len(pair) or estimate is None:
                 subperiods.append(SubperiodEstimate(first, last, None, None))
                 continue
-            part = _growth_difference(*simulate(inputs.panel, dates, Decimal(1)))
+            runs = simulate(inputs.panel, dates, Decimal(1), pair)
+            part = _growth_difference(runs[candidate], runs[reference])
             subperiods.append(SubperiodEstimate(first, last, part, (part > 0) == (estimate > 0)))
         search = self._settings.research.breakeven
 
         def effect_at(multiplier: float) -> float:
             try:
-                return _growth_difference(
-                    *simulate(inputs.panel, inputs.dates, Decimal(repr(multiplier)))
-                )
+                runs = simulate(inputs.panel, inputs.dates, Decimal(repr(multiplier)), pair)
+                return _growth_difference(runs[candidate], runs[reference])
             except SimulationError:
                 # Costs so high that a strategy cannot trade or ends with nothing: no effect.
                 return -math.inf
@@ -648,18 +942,23 @@ class StudyRunner:
         )
 
     @staticmethod
-    def _deflated(
-        candidate: SimulationResult, reference: SimulationResult, trials: Sequence[Trial]
-    ) -> DeflatedSharpe | None:
-        excess = [
+    def _excess(candidate: SimulationResult, reference: SimulationResult) -> list[float]:
+        return [
             c - r
             for c, r in zip(candidate.period_log_returns, reference.period_log_returns, strict=True)
         ]
+
+    def _deflated(
+        self, candidate: SimulationResult, reference: SimulationResult, pool: Sequence[float]
+    ) -> DeflatedSharpe | None:
+        """The candidate's monthly Sharpe of excess log returns against the best of every trial
+        the registry holds for the study and every candidate of this run."""
+        excess = self._excess(candidate, reference)
         sharpe = sharpe_ratio(excess)
         shape = moments(excess)
         if sharpe is None or shape is None:
             return None
-        every = [*sharpes(trials), sharpe]
+        every = list(pool) if pool else [sharpe]
         variance = float(np.var(every, ddof=1)) if len(every) > 1 else 0.0
         return deflated_sharpe(
             sharpe,
@@ -669,3 +968,140 @@ class StudyRunner:
             trials=len(every),
             sharpe_variance=variance,
         )
+
+    @staticmethod
+    def _frontier(
+        prereg: Prereg,
+        stats: Mapping[str, StrategyStats],
+        draws: _Draws,
+        *,
+        alpha: float,
+        tests: int,
+    ) -> tuple[FrontierPoint, ...]:
+        grid = prereg.spec.frontier
+        if grid is None:
+            return ()
+        points: list[FrontierPoint] = []
+
+        def order(name: str) -> tuple[int, float, str]:
+            turnover = stats[name].turnover
+            return stats[name].simplicity, math.inf if turnover is None else turnover, name
+
+        for limit in prereg.spec.drawdown_limits:
+            for probability in grid.breach_probabilities:
+                eligible = [
+                    name
+                    for name in draws.names
+                    if dict(stats[name].breach)[limit] <= float(probability)
+                ]
+                if not eligible:
+                    points.append(FrontierPoint(limit, probability, (), None, (), None))
+                    continue
+                best = max(eligible, key=lambda n: (stats[n].median_log_growth or -math.inf, n))
+                column = draws.column(best)
+                apart = []
+                for name in eligible:
+                    if name == best:
+                        continue
+                    gap = draws.growth[:, column] - draws.growth[:, draws.column(name)]
+                    low, high = percentile_interval(gap.tolist(), alpha=alpha, tests=tests)
+                    if low <= 0 <= high:
+                        apart.append(name)
+                chosen = min([best, *apart], key=order)
+                points.append(
+                    FrontierPoint(
+                        limit, probability, tuple(eligible), best, tuple(sorted(apart)), chosen
+                    )
+                )
+        return tuple(points)
+
+    # ── the structure check ──
+
+    def _structure(
+        self,
+        prereg: Prereg,
+        spec: StructureSpec,
+        rule: TrendRule,
+        store: Store,
+        *,
+        alpha: float,
+    ) -> StructureResult:
+        """Read the structure check's series as of its end and run the tilt on them
+        (descriptive)."""
+        ids = [*spec.market_series, spec.cash_series]
+        infos = {series_id: research_series_info(store, series_id) for series_id in ids}
+        missing = sorted(series_id for series_id, info in infos.items() if info is None)
+        allowed = set(spec.point_in_time)
+        late = sorted(
+            series_id
+            for series_id, info in infos.items()
+            if info is not None and info.point_in_time not in allowed
+        )
+        columns = {
+            series_id: {
+                row.observed_on: row.value
+                for row in research_observations(store, series_id, as_of=spec.end)
+                if spec.start <= row.observed_on <= spec.end
+            }
+            for series_id in ids
+            if series_id not in missing
+        }
+        months = (
+            sorted(set.intersection(*(set(column) for column in columns.values())))
+            if columns
+            else []
+        )
+        checks = (
+            AdequacyCheck(
+                "data loaded",
+                not missing,
+                "every series is in the research store"
+                if not missing
+                else f"never loaded: {', '.join(missing)}",
+            ),
+            AdequacyCheck(
+                "point in time",
+                not late,
+                f"every series is {', '.join(sorted(p.value for p in allowed))}"
+                if not late
+                else f"not point in time as pre-registered: {', '.join(late)}",
+            ),
+            AdequacyCheck(
+                "history",
+                len(months) > rule.months_needed,
+                f"{len(months)} common months (the tilt needs {rule.months_needed} first)",
+            ),
+        )
+        market = [sum(columns[s][m] for s in spec.market_series) for m in months]
+        cash = [columns[spec.cash_series][m] for m in months] if months else []
+        return structure_check(
+            spec,
+            months,
+            market,
+            cash,
+            checks,
+            rule=rule,
+            bootstrap=prereg.spec.bootstrap,
+            limits=prereg.spec.drawdown_limits,
+            alpha=alpha,
+            days_per_year=float(self._settings.research.simulation.days_per_year),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PathTask:
+    """A share of the bootstrap paths, with everything a worker process needs to run them."""
+
+    settings: ObliskConfig
+    profile: JurisdictionProfile
+    prereg: Prereg
+    months: _Months
+    dates: tuple[date, ...]
+    names: tuple[str, ...]
+    paths: np.ndarray
+
+
+def run_paths(task: PathTask) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Run a share of the paths in a worker process (the same code as in process)."""
+    runner = StudyRunner(task.settings, task.profile)
+    return runner.paths(task.prereg, task.months, task.dates, task.names, task.paths)

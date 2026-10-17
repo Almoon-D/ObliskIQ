@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
 from ..domain.tax import CarryForward, Component, IncomeEvent, Realisation, TaxYearSummary
@@ -70,6 +70,15 @@ class TaxLedger:
         self._years: defaultdict[int, _Year] = defaultdict(_Year)
         self._carry: list[_Carry] = []
         self._settled: dict[int, TaxYearSummary] = {}
+
+    def copy(self) -> TaxLedger:
+        """An independent ledger in the same state (the hooks try a trade on one)."""
+        twin = TaxLedger(self._policy)
+        for year, row in self._years.items():
+            twin._years[year] = replace(row)
+        twin._carry = [replace(carry) for carry in self._carry]
+        twin._settled = dict(self._settled)  # summaries are immutable
+        return twin
 
     # ── recording ──
 

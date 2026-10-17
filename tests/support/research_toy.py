@@ -33,6 +33,7 @@ INSTRUMENT = """    - key: {key}
       issuer_country: null
       income_country: null
       market_cap_usd: "1000000000000"
+      expense_ratio: null
       security:
         kind: etf
         isin: null
@@ -65,19 +66,25 @@ study:
   initial_capital: "10000"
   fx_dataset: null
   instruments:
-{INSTRUMENT.format(key="A", lower="a")}{INSTRUMENT.format(key="B", lower="b")}  candidate:
-    name: rebalanced
-    strategy: fixed_weights
-    weights: {{A: "0.5", B: "0.5"}}
+{INSTRUMENT.format(key="A", lower="a")}{INSTRUMENT.format(key="B", lower="b")}  roles: null
+  core: null
   reference:
     name: held
     strategy: buy_and_hold
     weights: {{A: "0.5", B: "0.5"}}
+    simplicity: 1
+  candidates:
+    - name: rebalanced
+      strategy: fixed_weights
+      weights: {{A: "0.5", B: "0.5"}}
+      simplicity: 2
 bootstrap:
   n_boot: 20
   block_months: 2
   seed: 7
 drawdown_limits: ["0.2"]
+frontier: null
+aspiration: null
 subperiods:
   - [2024-01-01, 2024-12-31]
   - [2025-01-01, 2025-12-31]
@@ -89,10 +96,12 @@ adequacy:
   min_effective_observations: 4
 power:
   sd_per_period: "0.02"
+  by_candidate: null
   periods: 4
   periods_per_year: 12
   names_per_period: 1
   rho: "0"
+structure: null
 ---
 
 # A toy rotation against holding

@@ -14,7 +14,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
-| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | next | |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | in progress (the harness for it landed) | v0.7.0 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
@@ -37,6 +37,37 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 4c — Core verdict (2026-10-17, v0.7.0; in progress)
+
+**Landed (the harness, its own pull request before the pre-registration).**
+- Several candidates against one reference, one test each with Bonferroni across them; one trial
+  per candidate; every portfolio before and after tax; the frontier and its resolution to the
+  simplest portfolio the bootstrap cannot tell apart from the best; the aspiration as a
+  distance; power before data per candidate (DECISIONS D79).
+- The core's variants as strategies: static weights by role (stated, risk budgets by environment
+  on a declared covariance, or an equity overlay), wide bands, the trend tilt, tax-aware
+  execution with swap partners; `quant/risk_budget.py` and `quant/trend.py` for Session 13 (D80,
+  D82).
+- MSCI, ECB Data Portal and Bundesbank loaders, an overnight-rate accrual and a constant-maturity
+  zero as derived series, expense ratios deducted from index proxies (D78); a pre-tax structure
+  check of the tilt on the Ken French market from 1926 (D79).
+- The simulator at bootstrap scale: indexed series, kept prices, closes and trend states, worker
+  processes that leave the result unchanged; the lot engine's copy built field by field (D81).
+- Fixed: a rounding excess of replacement units after a part sale of a lot that carries a
+  deferred loss (D81). Found in self-review, before any run: Decimal residues that could sum a
+  tax-held book's weights above 1 (the run would have been not evaluable) or sell a kept
+  position by one unit, now a weight quantum and a unit residue; a reduction's tax priced on its
+  sales together (`LotEngine.trial_tax`); a structure subperiod annualised over the months it
+  holds.
+- Tests: 3,400 passing; coverage 99.83 %; every module in `research/`, `quant/risk_budget.py`
+  and `quant/trend.py` at 100 %.
+
+**Next in this session.** The pre-registration `research/preregistrations/core-allocation.md` in
+its own pull request, its lock, then the one run and `research/reports/core-allocation.md`.
+
+**SESSION_PROMPTS edits.** Session 13: `quant/risk_budget.py` and `quant/trend.py` exist; no
+covariance estimator unless the chosen variant re-estimates its weights (D82).
 
 ### Session 4b — Research harness (2026-10-16 → 2026-10-17, v0.6.0)
 
@@ -604,8 +635,6 @@ settles it.
   Before Session 10: an LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).
-- Session 4c: extend the harness to several candidates against the equity reference (one test
-  each, Bonferroni across them) and add the core's variants as strategies (D76).
 - Session 5: route direct or SMART and make the European commission rows follow the routing
   (D77); price currency conversions (IBKR's FX commission) so the simulator can stop treating
   them as free (D75).

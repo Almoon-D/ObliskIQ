@@ -1314,3 +1314,90 @@ SmartRouting column is half that (0.05 %, lower minimums); the order path's rout
 5's choice, so the higher figure stands until then and `docs/knowledge/costs.md` records both.
 A new schedule kind, `fraction_of_value`, prices on the trade value. Rows are grouped by
 currency and minimum; every row keeps `verify_live: true`.
+
+## Session 4c — Core verdict (2026-10-17)
+
+### D78 · The data for an after-tax test from 2005 in EUR
+
+Yahoo's European listings start in 2008–2009 whatever the fund's launch (EUNL, IWDA, IQQW and
+the iShares and Lyxor bond lines were checked on 2026-10-17), so a test from 2005 needs
+long-history proxies. Three public vendors are added, each read as observed: **MSCI**'s
+end-of-day index levels (MSCI World and Emerging Markets, net total return in EUR, from
+29 December 2000), the **ECB Data Portal** (EONIA from 1999 and the euro short-term rate) and the
+**Bundesbank** (zero-coupon yields of German Federal securities by residual maturity, daily from
+August 1997). Two **derived** series are computed from stored ones, as research history of their
+own (`research data load` computes them; the content hash names the inputs' hashes): an index
+accruing the overnight rate day by day (EONIA through its last fixing, then the euro short-term
+rate) and the index of a zero-coupon bond held at a constant maturity, rolled daily at the
+curve's yield for the maturity left. The Bundesbank's rates are continuously compounded: its
+published 1-, 5- and 10-year rates of 5 October 2026 equal the Svensson formula of that day's
+parameters. A study deducts a vehicle's expense ratio from an index proxy day by day
+(`expense_ratio`), so an index does not pass for a fund. Migration 005 widens the vendor list.
+Rejected: building euro-bond returns from monthly average yields (FRED), which misstate a month
+end; the ECB's AAA curve, which starts in September 2004 and leaves no lookback before 2005;
+stooq and LBMA, which refused the container's requests.
+
+### D79 · Several candidates against one reference; the frontier and its resolution (D60, D76)
+
+A pre-registration names a `reference` and a list of `candidates`; each candidate is one test of
+its log-growth difference against the reference, with `tests_in_confirmation` equal to their
+number and every interval at level `1 - 2α/m` (Bonferroni). Every portfolio is simulated on the
+same bootstrap paths, so pairs can be compared path by path. The **frontier** (`frontier`) takes
+each drawdown limit and breach probability of its grid, keeps the portfolios whose share of paths
+breaching the limit is at most the probability, and names the one with the highest median
+after-tax log growth; portfolios whose paired growth difference from it has an interval holding
+zero (same level) cannot be told apart from it, and the point resolves to the simplest of them
+by the pre-registered `simplicity` rank, then the lowest turnover. References are on the frontier
+(D60: a possible outcome). Each candidate is one trial in the registry (one row per candidate),
+so the deflated Sharpe counts every candidate of the run. Every portfolio also runs **before
+tax** (`SimulationSettings.taxed` false: the same trades, nothing withheld, settled or paid), and
+the owner's aspiration (`aspiration`) is reported as the distance of each median from
+`ln(1 + a)`. Power before data takes a candidate's own standard deviation
+(`power.by_candidate`). A pre-registered **structure check** (`structure`) runs the tilt before
+tax on the longest history (the Ken French US market and bill from 1926, `ff3_market`, public at
+the month's close): descriptive, never an outcome and outside the Bonferroni count, its interval
+from a block bootstrap of the two arms' realised returns.
+
+### D80 · The core's variants in the harness (MASTER_PLAN §5.4)
+
+One mechanism, `CoreStrategy`, with static weights by role: `banded_weights` states them,
+`risk_balance` computes them once from risk budgets by environment (each environment's budget
+split equally among its roles, a role in two environments taking a share of each) on a
+**declared** long-run covariance, and `equity_overlay` holds one equity role at a fraction and the
+rest in cash. Wide bands: nothing trades while every role is inside its outer band (the smaller
+of an absolute width and a share of its target); when one leaves it, every role goes back to
+target. The tilt scales each risky role by `quant.trend` (momentum over cash, a moving average,
+hysteresis, a floor above zero) and gives the freed weight to the cash role. Tax-aware execution
+holds a trend reduction whose tax (the lot engine's own answer) exceeds a pre-registered share of
+the value sold, lets losses through, buys a role's swap partner when the primary would defer a
+loss, and sells first from the vehicle with the smaller gain; a held reduction alone trades
+nothing else. The static risk balance does not estimate covariance: the proxies for gold and
+commodities start in late 2004, so no multi-year estimate exists before a 2005 start, and a
+re-estimated risk balance could not be tested from 2005; MASTER_PLAN §5.4's covariance line now
+says so. `quant/risk_budget.py` (cyclical coordinate descent on the convex risk-budgeting problem,
+the legacy `_risk_parity` fixed) and `quant/trend.py` are in `quant/` so that Session 13's engine
+uses the same code. Rejected: a risk balance re-estimated monthly from a short window, and
+placeholder vehicles priced as if they were funds.
+
+### D81 · The simulator at bootstrap scale
+
+A strategy sees a `Book` (units, base-currency values, the investable value after tax owed, and
+the lot engine's answers through read-only queries or a copy), not just units. The lot engine's
+trial copy is built field by field instead of `deepcopy` (a twentyfold saving), and
+`LotEngine.purchase_defers_loss` answers the purchase side of the wash-sale question without a
+trial. Prices, rates, completed month-end closes and trend states are kept per panel; on a
+bootstrap path the history before the first date keeps only the month-end rows a lookback
+reads, and a role's two vehicles share one resampled series. The paths are drawn from the seed
+first and shared among `research.workers` processes in contiguous chunks put back in order, so a
+result does not depend on the number of workers (a test runs both). Found while benchmarking: a
+part sale of a lot whose units all carry a deferred loss could leave `replacement_units` a
+rounding hair above the units left (5/14 at Decimal's precision), which the lot's invariant then
+refused; the engine now caps them at the units left (a test reproduces it).
+
+### D82 · Session 13's quant modules exist already (SESSION_PROMPTS)
+
+Session 13's prompt asked for `quant/risk_budget.py` and, if a registered variant uses risk
+budgeting, `quant/covariance.py`. The first exists from this session, tested against closed forms
+and an independent Newton solve; the registered variants hold static weights from declared risk,
+so Session 13 builds no covariance estimator unless a later pre-registration re-estimates the
+weights, and its prompt now says so (a fact this session changed, AGENTS.md session workflow).

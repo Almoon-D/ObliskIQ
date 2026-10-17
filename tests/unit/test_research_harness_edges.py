@@ -67,8 +67,14 @@ def run_study(runner: StudyRunner, path: Path, store: Store):
     [
         ("  end: 2025-12-31", "  end: 2023-12-31", "end must follow start"),
         ("  calendar: A", "  calendar: Z", "calendar Z is not one of the instruments"),
-        ('weights: {A: "0.5", B: "0.5"}\n  reference', 'weights: {A: "0.5", C: "0.5"}\n  reference',
+        ('weights: {A: "0.5", B: "0.5"}\n    simplicity: 1',
+         'weights: {A: "0.5", C: "0.5"}\n    simplicity: 1',
          r"weights unknown instruments \['C'\]"),
+        ("tests_in_confirmation: 1", "tests_in_confirmation: 2", "one test each"),
+        ("    - name: rebalanced", "    - name: held", "distinct names"),
+        ("      strategy: fixed_weights", "      strategy: momentum", "strategy"),
+        ("  by_candidate: null", "  by_candidate: {other: '0.01'}", "names no candidate"),
+        ("      simplicity: 2", "      simplicity: 0", "simplicity"),
         ("  - [2025-01-01, 2025-12-31]", "  - [2025-01-01, 2026-12-31]", "is not inside the study"),
         ("kind: portfolio_comparison", "kind: event_study", "kind"),
         ("    - key: B", "    - key: A", "instrument keys must be unique"),
@@ -95,17 +101,12 @@ def test_a_pre_registration_without_valid_front_matter_is_refused(tmp_path, text
         load_prereg(write(tmp_path, text))
 
 
-@pytest.mark.parametrize(
-    ("spec", "message"),
-    [
-        ({"strategy": "momentum", "weights": {"A": "1"}}, "names 'momentum'; known"),
-        ({"strategy": "fixed_weights", "weights": {}}, "needs a mapping of weights"),
-        ({"strategy": "fixed_weights", "weights": {"A": "lots"}}, "not a number"),
-    ],
-)
-def test_a_strategy_spec_that_cannot_be_built_is_refused(spec, message):
-    with pytest.raises(PreregistrationError, match=message):
-        build_strategy("s", spec)
+def test_the_toy_strategies_are_built_from_their_specification(shipped_settings, tmp_path):
+    study = load_prereg(write(tmp_path, TOY)).spec.study
+    held = build_strategy(study.reference, study, shipped_settings)
+    rebalanced = build_strategy(study.candidates[0], study, shipped_settings)
+    assert (type(held).__name__, held.name) == ("BuyAndHold", "held")
+    assert (type(rebalanced).__name__, rebalanced.name) == ("FixedWeights", "rebalanced")
 
 
 # ── git ──
@@ -141,11 +142,12 @@ def test_a_venue_without_a_schedule_is_not_evaluable(runner, tmp_path, shipped_s
     with open_research_store(shipped_settings, tmp_path / "data") as store:
         put_toy(store)
         result = run_study(runner, path, store)
-    assert result.decision.outcome is Outcome.NOT_EVALUABLE
-    check = result.decision.checks[-1]
+    [test] = result.tests
+    assert test.decision.outcome is Outcome.NOT_EVALUABLE
+    check = result.checks[-1]
     assert (check.name, check.passed) == ("simulation", False)
     assert "no_schedule" in check.detail
-    assert result.estimate is None
+    assert test.estimate is None
 
 
 def test_identical_strategies_have_no_spread_no_power_and_no_sharpe(
@@ -158,14 +160,15 @@ def test_identical_strategies_have_no_spread_no_power_and_no_sharpe(
     with open_research_store(shipped_settings, tmp_path / "data") as store:
         put_toy(store)
         result = run_study(runner, path, store)
-    assert result.estimate == 0
-    assert result.se == 0
-    assert result.decision.power is None
-    assert result.decision.outcome is Outcome.INSUFFICIENT
-    assert Label.POWER_UNKNOWN in result.decision.labels
-    assert result.deflated is None
-    assert result.robustness is not None
-    one_date = result.robustness.subperiods[0]
+    [test] = result.tests
+    assert test.estimate == 0
+    assert test.se == 0
+    assert test.decision.power is None
+    assert test.decision.outcome is Outcome.INSUFFICIENT
+    assert Label.POWER_UNKNOWN in test.decision.labels
+    assert test.deflated is None
+    assert test.robustness is not None
+    one_date = test.robustness.subperiods[0]
     assert (one_date.estimate, one_date.sign_holds) == (None, None)
 
 
@@ -174,8 +177,8 @@ def test_a_run_that_ends_with_nothing_has_no_growth(runner, tmp_path, shipped_se
     with open_research_store(shipped_settings, tmp_path / "data") as store:
         put_toy(store)
         result = run_study(runner, path, store)
-    assert result.candidate.historical is not None
-    empty = replace(result.candidate.historical, log_growth=None)
+    assert result.candidates[0].historical is not None
+    empty = replace(result.candidates[0].historical, log_growth=None)
     with pytest.raises(SimulationError, match="ended with nothing"):
         _growth(empty)
 
@@ -187,19 +190,19 @@ def test_the_breakeven_search_reads_an_untradeable_cost_as_no_effect(
     with open_research_store(shipped_settings, tmp_path / "data") as store:
         put_toy(store)
         prereg = load_prereg(path)
-        inputs = gather(store, prereg, "EUR")
+        inputs = gather(store, prereg, "EUR", 365.25)
         result = run_study(runner, path, store)
-    candidate, reference = result.candidate.historical, result.reference.historical
+    candidate, reference = result.candidates[0].historical, result.reference.historical
 
     winner = replace(candidate, log_growth=0.1)
     loser = replace(reference, log_growth=0.0)
 
-    def simulate(panel, dates, multiplier):
+    def simulate(panel, dates, multiplier, names):
         if multiplier > 1:
             raise SimulationError("costs more than it raises")
-        return winner, loser
+        return {"rebalanced": winner, "held": loser}
 
-    robustness = runner._robustness(prereg, inputs, 0.1, simulate)
+    robustness = runner._robustness(prereg, inputs, "rebalanced", "held", 0.1, simulate)
     # The effect holds up to the model's own costs and vanishes past them: break-even near 1.
     assert robustness.breakeven.status == "found"
     assert robustness.breakeven.multiplier == pytest.approx(1, abs=0.001)
@@ -216,6 +219,7 @@ USD = """    - key: U
       issuer_country: null
       income_country: US
       market_cap_usd: "1000000000000"
+      expense_ratio: null
       security:
         kind: etf
         isin: null
@@ -229,7 +233,7 @@ def test_a_study_in_a_foreign_currency_converts_and_withholds(runner, tmp_path, 
     text = (
         TOY.replace("  fx_dataset: null", "  fx_dataset: ecb_fx")
         .replace('weights: {A: "0.5", B: "0.5"}', 'weights: {A: "0.5", U: "0.5"}')
-        .replace("  candidate:", USD + "  candidate:")
+        .replace("  roles: null", USD + "  roles: null")
     )
     path = write(tmp_path, text)
     rates = [1.0, 1.25, 1.25, 1.0, 1.0]
@@ -250,12 +254,16 @@ def test_a_study_in_a_foreign_currency_converts_and_withholds(runner, tmp_path, 
         replace_research_series(store, toy_series("toy.u_dividend"), [dividend])
         result = run_study(runner, path, store)
         prereg = load_prereg(path)
-        inputs = gather(store, prereg, "EUR")
-    assert all(check.passed for check in result.decision.checks), result.decision.checks
-    candidate = result.candidate.historical
+        inputs = gather(store, prereg, "EUR", 365.25)
+    assert all(check.passed for check in result.checks), result.checks
+    candidate = result.candidates[0].historical
     assert candidate is not None
     assert candidate.withheld > 0
-    assert result.decision.interval is not None
+    assert result.tests[0].decision.interval is not None
+    # Before tax nothing is withheld.
+    pre_tax = result.candidates[0].pre_tax
+    assert pre_tax is not None
+    assert pre_tax.withheld == 0
     months = _months(inputs.panel, inputs.dates, 7, 7)
     assert months.rate_changes["USD"][0] == pytest.approx(math.log(1.25))
     assert months.yields["U"][0] == pytest.approx(0.02)
@@ -376,5 +384,5 @@ def test_a_run_without_data_reports_no_estimate(repo_root, tmp_path, monkeypatch
     path = write(repo, TOY)
     status, out = cli(repo_root, "research", "run", str(path), "--explore")
     assert status == EXIT_OK, out
-    assert out.startswith("toy_rotation: not evaluable")
+    assert out.startswith("toy_rotation:\n  rebalanced: not evaluable")
     assert "estimate" not in out

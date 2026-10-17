@@ -24,9 +24,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import calendar
-import copy
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from typing import Final, Literal
@@ -185,6 +184,21 @@ class LotEngine:
     def cost(self, security: str) -> Decimal:
         return sum((lot.cost for lot in self._lots.get(security, [])), ZERO)
 
+    def basis(self, security: str) -> Decimal:
+        """What a sale of every unit counts against: the lots' cost and the losses they carry."""
+        return sum((lot.cost + lot.deferred_loss for lot in self._lots.get(security, [])), ZERO)
+
+    def purchase_defers_loss(self, security: str, on: date) -> bool:
+        """Whether a purchase of ``security`` on ``on`` would take a loss still open under the
+        wash-sale rule (the purchase side of :meth:`wash_sale_conflict`, without a trial)."""
+        identity = self.identity(security)
+        return any(
+            window.units > ZERO
+            and window.sold_on <= on <= window.closes_on
+            and self._policy.homogeneous(self.identity(window.security), identity)
+            for window in self._windows
+        )
+
     def held(self) -> tuple[str, ...]:
         return tuple(sorted(key for key, lots in self._lots.items() if lots))
 
@@ -329,7 +343,11 @@ class LotEngine:
             lot.quantity -= take
             lot.cost -= piece.cost
             lot.deferred_loss -= piece.released
-            lot.replacement_units -= lot.replacement_units * share
+            # Kept proportional, and never above the units left: a share rounded at Decimal's
+            # precision could otherwise leave a lot more replacement units than units.
+            lot.replacement_units = min(
+                lot.replacement_units - lot.replacement_units * share, lot.quantity
+            )
             if lot.quantity <= ZERO:
                 lots.pop(0)
             slices.append(piece)
@@ -376,24 +394,33 @@ class LotEngine:
     # ── hooks ──
 
     def _copy(self) -> LotEngine:
-        return copy.deepcopy(self, memo={id(self._policy): self._policy})
+        """An independent engine in the same state: its own lots, windows and ledger."""
+        twin = LotEngine(self._policy, (), ledger=self._ledger.copy())
+        twin._identities = dict(self._identities)  # identities are immutable
+        twin._lots = {key: [replace(lot) for lot in lots] for key, lots in self._lots.items()}
+        twin._windows = [replace(window) for window in self._windows]
+        twin._sequence = self._sequence
+        return twin
+
+    def _make(self, trade: ProposedTrade) -> tuple[Decimal, Decimal]:
+        """Make ``trade`` at the price it names: what it counts in the year's gains and the loss
+        the wash-sale rule sets aside."""
+        notional = trade.quantity * trade.price
+        if trade.side == "sell":
+            results = self.dispose(
+                trade.security, on=trade.on, quantity=trade.quantity, proceeds=notional
+            )
+            realised = sum((r.counted for r in results), ZERO)
+            return realised, sum((r.deferred for r in results), ZERO)
+        lot = self.acquire(trade.security, on=trade.on, quantity=trade.quantity, cost=notional)
+        return ZERO, lot.deferred_loss
 
     def tax_cost(self, trade: ProposedTrade) -> TaxCostEstimate:
         """The tax ``trade`` would add to its year, at the price it names, before trading costs."""
         year = trade.on.year
         before = self._ledger.provisional(year)
         trial = self._copy()
-        notional = trade.quantity * trade.price
-        if trade.side == "sell":
-            results = trial.dispose(
-                trade.security, on=trade.on, quantity=trade.quantity, proceeds=notional
-            )
-            realised = sum((r.counted for r in results), ZERO)
-            deferred = sum((r.deferred for r in results), ZERO)
-        else:
-            lot = trial.acquire(trade.security, on=trade.on, quantity=trade.quantity, cost=notional)
-            realised = ZERO
-            deferred = lot.deferred_loss
+        realised, deferred = trial._make(trade)
         after = trial.ledger.provisional(year)
         return TaxCostEstimate(
             trade=trade,
@@ -403,6 +430,22 @@ class LotEngine:
             tax_year=year,
             rate_table_covers_year=after.rate_table_covers_year,
         )
+
+    def trial_tax(self, trades: Sequence[ProposedTrade]) -> Decimal:
+        """The tax ``trades`` would add to their year made together, in order, at the prices they
+        name and before trading costs: a loss on one offsets a gain on another as the year would
+        (:meth:`tax_cost` prices one trade alone). Nothing here changes."""
+        if not trades:
+            return ZERO
+        years = {trade.on.year for trade in trades}
+        if len(years) > 1:
+            raise TaxError(f"a trial of several trades needs one tax year, got {sorted(years)}")
+        year = trades[0].on.year
+        before = self._ledger.provisional(year)
+        trial = self._copy()
+        for trade in trades:
+            trial._make(trade)
+        return trial.ledger.provisional(year).tax_due - before.tax_due
 
     def wash_sale_conflict(self, trade: ProposedTrade) -> WashSaleConflict | None:
         """Whether ``trade`` would defer a loss, and how much."""

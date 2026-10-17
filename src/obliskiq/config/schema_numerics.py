@@ -66,9 +66,15 @@ class ImpliedVolConfig(FrozenModel):
         return self
 
 
+class RiskBudgetConfig(FrozenModel):
+    tolerance: PositiveFloat
+    max_iterations: PositiveInt
+
+
 class NumericsConfig(FrozenModel):
     bsm: BsmConfig
     implied_vol: ImpliedVolConfig
+    risk_budget: RiskBudgetConfig
 
     @model_validator(mode="after")
     def _seed_range_sits_inside_the_sigma_range(self) -> Self:

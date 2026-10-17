@@ -282,8 +282,10 @@ cycles. All of these live in config with a source per value.
   an overlay to cash, sized to each drawdown limit of the pre-registered grid.
 - **Risk balance** (A–C). 25% of risk per environment in A and B; equal risk contribution
   inside a basket. No leverage, so risk comes from duration, not borrowing.
-- **Covariance.** EWMA blended with a multi-year estimate, Ledoit–Wolf shrinkage, in the
-  base currency.
+- **Covariance.** The registered variants hold static risk-balance weights computed from a
+  declared long-run covariance in the base currency (DECISIONS D80); an estimate (EWMA blended
+  with a multi-year estimate, Ledoit–Wolf shrinkage) is built only when a pre-registered variant
+  re-estimates its weights.
 - **Optimizer.** The legacy `_risk_parity` compared absolute risk contributions to 1/n
   without dividing by portfolio volatility. It is fixed (risk-contribution shares) and
   solved with a convex formulation, verified against closed forms (two assets; diagonal
