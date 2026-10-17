@@ -494,3 +494,19 @@ def test_coverage_and_survivorship_report_what_the_universe_lacks(store: Store):
     from obliskiq.research.data import YearCoverage
 
     assert YearCoverage(2020, 0, ()).missing_share == 1.0
+
+
+# ── every field of a dataset record is read ──
+
+
+@pytest.mark.parametrize(
+    "model", [YahooDataset, KenFrenchDataset, AqrDataset, FredDataset, EcbDataset]
+)
+def test_every_field_of_a_dataset_record_is_read_by_the_loaders(model, repo_root):
+    """A record's fields sit inside a list, which the unread-key scan reads as one leaf."""
+    import ast
+
+    source = (repo_root / "src" / "obliskiq" / "research" / "data.py").read_text(encoding="utf-8")
+    read = {node.attr for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Attribute)}
+    # The discriminator chooses the loader; every other field must be read by name.
+    assert set(model.model_fields) - {"vendor"} <= read

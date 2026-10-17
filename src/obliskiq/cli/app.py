@@ -9,6 +9,8 @@ shows or changes the execution mode (upgrades by this explicit command, audited)
 ``obliskiq flatten --confirm`` places closing orders for every managed position (separate from
 the kill switch). ``obliskiq preflight --paper-order-test`` places and cancels one paper order per
 configured instrument. ``obliskiq approvals list|approve|reject`` works the approval queue.
+``obliskiq research data load|coverage``, ``research power``, ``research run`` and
+``research lock`` drive the research harness (``cli/research.py``).
 Any problem is printed for the owner, in plain words, with exit status 1 and no traceback.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -49,6 +51,7 @@ from ..store import open_store
 from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
+from .research import add_research_commands
 
 EXIT_OK = 0
 EXIT_INVALID = 1
@@ -455,6 +458,8 @@ def build_parser() -> argparse.ArgumentParser:
     mode_set.add_argument("mode", choices=[m.value for m in ExecutionMode])
     mode_set.add_argument("--reason", required=True, help="why (audited)")
     mode_set.set_defaults(handler=_mode_set)
+
+    add_research_commands(commands)
     return parser
 
 

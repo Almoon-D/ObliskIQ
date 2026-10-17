@@ -102,6 +102,11 @@ def _construct_mapping(loader: _StrictLoader, node: yaml.MappingNode) -> dict[An
 _StrictLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
 
 
+def strict_yaml(text: str) -> Any:
+    """``text`` parsed as YAML, refusing duplicate keys; YAML errors propagate."""
+    return yaml.load(text, Loader=_StrictLoader)
+
+
 def display_path(path: Path, config_dir: Path) -> str:
     """``path`` relative to the parent of the config directory, e.g. ``config/owner.yaml``."""
     try:
