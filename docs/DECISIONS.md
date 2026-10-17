@@ -1401,3 +1401,30 @@ budgeting, `quant/covariance.py`. The first exists from this session, tested aga
 and an independent Newton solve; the registered variants hold static weights from declared risk,
 so Session 13 builds no covariance estimator unless a later pre-registration re-estimates the
 weights, and its prompt now says so (a fact this session changed, AGENTS.md session workflow).
+
+### D83 · A confirmation run the harness made not evaluable is repeated after the fix (D76)
+
+The first confirmation run of `core-allocation` (2026-10-17, lock at 7537c6c) stopped on a
+bootstrap path. A sale of one unit of the commodity vehicle would have cost more than it raised
+(the USD 6 minimum commission on a resampled price below it), and the simulator treated that as
+an error, so every candidate came out not evaluable. Nothing in the outcome was computed: no
+estimate, interval, path statistic or frontier. The historical runs had completed without error
+and none of their figures were printed. The only figures produced were the structure check's: it
+is descriptive, before tax, on the US market, and never an outcome. D76 lets a run that is not
+evaluable be repeated once its data are fixed, and the same holds once the harness is fixed,
+provided that:
+
+- the fix changes no pre-registered constant;
+- it follows from the mechanics alone, not from any outcome;
+- it is merged before the repeat;
+- the first run is recorded (here, ROADMAP).
+
+The fix: a sale whose costs would exceed what it raises is not made, as no executor would place
+it. Its units stay held and count as nothing at the horizon, and every report counts such sales
+on the historical path and on the bootstrap paths.
+
+Rejected:
+
+- keeping the refusal: one rare path makes the whole test not evaluable;
+- negative proceeds: cash would fall below zero, which the mandate forbids;
+- a new pre-registration: a new id for a change no constant needs.

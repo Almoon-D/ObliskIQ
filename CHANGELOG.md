@@ -5,6 +5,27 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.7.1] - 2026-10-17
+
+Session 4c, second part: the fix between the confirmation run that was not evaluable and its
+repeat (DECISIONS D83), and the pre-registration's lock. No IBKR call.
+
+### Added
+
+- `research/preregistrations/core-allocation.lock`: the pre-registration's SHA-256 and the
+  commit that merged it, written with `obliskiq research lock`; a test checks every locked
+  pre-registration against its lock and the constants hash its prose states.
+- Reports count the sales not made because their costs would exceed what they raise, on the
+  historical path and on the bootstrap paths, for each portfolio.
+
+### Fixed
+
+- A sale whose costs would exceed what it raises (a minimum commission on a few units) is not
+  made: the units stay held and count as nothing at the horizon. The simulator used to stop the
+  run, so one resampled path made a whole confirmation run not evaluable (D83).
+- A report whose pre-registered frontier the bootstrap never reached says so, instead of saying
+  that none was pre-registered.
+
 ## [0.7.0] - 2026-10-17
 
 Session 4c, first part — the harness for the core verdict. A pre-registration now tests several

@@ -14,10 +14,13 @@ At each rebalance date, in order:
    no-trade band; sells first, then the tax is paid, then buys within the cash left (cash never
    goes below zero, and nothing is borrowed). Every leg is priced by ``quant/costs.py`` on the
    instrument's **listing venue**; a leg the cost model cannot price stops the run, because an
-   unknown cost is not zero. Each sale goes through the lot engine (FIFO, the wash-sale rule)
-   and each purchase opens a lot whose cost includes the leg's costs.
+   unknown cost is not zero. A sale whose costs would exceed what it raises (a minimum
+   commission on a few units) is not made, as no executor would place it: the units stay held
+   and the run counts it. Each sale goes through the lot engine (FIFO, the wash-sale rule) and
+   each purchase opens a lot whose cost includes the leg's costs.
 5. At the **horizon** everything is sold, every year still open is settled and its tax paid:
-   what is left is the liquidation value.
+   what is left is the liquidation value (a position no sale can turn into cash counts as
+   nothing).
 
 Money is ``Decimal``; prices and rates read from research history are floats and are converted
 exactly (their shortest representation). The series of mark-to-market values is recorded after
@@ -463,6 +466,8 @@ class SimulationResult:
     withheld: Decimal
     summaries: tuple[TaxYearSummary, ...]
     cost_labels: frozenset[str]
+    #: Sales not made because their costs would exceed what they raise.
+    unsold: int = 0
 
     @property
     def period_log_returns(self) -> tuple[float, ...]:
@@ -481,6 +486,7 @@ class _State:
     costs: Decimal = ZERO
     traded: Decimal = ZERO
     trades: int = 0
+    unsold: int = 0
     withheld: Decimal = ZERO
     labels: set[str] = field(default_factory=set)
     taxes: list[TaxPayment] = field(default_factory=list)
@@ -540,8 +546,11 @@ class Simulator:
 
     # ── one leg ──
 
-    def _leg(self, key: str, side: str, quantity: Decimal, on: date, state: _State) -> Decimal:
-        """Trade ``quantity`` of ``key``; returns the leg's cost in the base currency."""
+    def _quote(
+        self, key: str, side: str, quantity: Decimal, on: date
+    ) -> tuple[Decimal, Decimal, tuple[str, ...]]:
+        """A leg's cost and notional in the base currency and what in its cost is unverified,
+        without recording it."""
         instrument = self._instruments[key]
         price = self.price(key, on)
         cost: LegCost = self._costs.leg_cost(
@@ -557,9 +566,15 @@ class Simulator:
         if total is None:
             gaps = ", ".join(gap.value for gap in cost.gaps) or "a component without a price"
             raise SimulationError(f"the cost model cannot price a {side} of {key} on {on} ({gaps})")
-        state.labels.update(cost.unverified)
         leg_cost = self.to_base(total * self._settings.cost_multiplier, instrument.currency, on)
         notional = self.to_base(quantity * price, instrument.currency, on)
+        return leg_cost, notional, cost.unverified
+
+    @staticmethod
+    def _record(quote: tuple[Decimal, Decimal, tuple[str, ...]], state: _State) -> Decimal:
+        """Count a quoted leg as traded; returns its cost in the base currency."""
+        leg_cost, notional, unverified = quote
+        state.labels.update(unverified)
         state.costs += leg_cost
         state.traded += notional
         state.trades += 1
@@ -567,11 +582,15 @@ class Simulator:
 
     def _sell(
         self, key: str, quantity: Decimal, on: date, engine: LotEngine, state: _State
-    ) -> None:
-        cost = self._leg(key, "sell", quantity, on, state)
-        proceeds = quantity * self._base_price(key, on) - cost
+    ) -> bool:
+        """Sell ``quantity`` of ``key``; a sale whose costs would exceed what it raises is not
+        made (the units stay held, the run counts it) and returns ``False``."""
+        quote = self._quote(key, "sell", quantity, on)
+        proceeds = quantity * self._base_price(key, on) - quote[0]
         if proceeds < ZERO:
-            raise SimulationError(f"a sale of {quantity} {key} on {on} costs more than it raises")
+            state.unsold += 1
+            return False
+        self._record(quote, state)
         engine.dispose(key, on=on, quantity=quantity, proceeds=proceeds)
         state.cash += proceeds
         left = state.units[key] - quantity
@@ -579,14 +598,14 @@ class Simulator:
             state.units[key] = left
         else:
             del state.units[key]
+        return True
 
     def _buy_cost(self, key: str, quantity: Decimal, on: date) -> Decimal:
         """What a buy would take from cash, without recording it."""
-        scratch = _State(cash=ZERO, next_year=on.year)
-        return quantity * self._base_price(key, on) + self._leg(key, "buy", quantity, on, scratch)
+        return quantity * self._base_price(key, on) + self._quote(key, "buy", quantity, on)[0]
 
     def _buy(self, key: str, quantity: Decimal, on: date, engine: LotEngine, state: _State) -> None:
-        cost = self._leg(key, "buy", quantity, on, state)
+        cost = self._record(self._quote(key, "buy", quantity, on), state)
         paid = quantity * self._base_price(key, on) + cost
         engine.acquire(key, on=on, quantity=quantity, cost=paid)
         state.cash -= paid
@@ -643,6 +662,7 @@ class Simulator:
             withheld=state.withheld,
             summaries=engine.ledger.settled(),
             cost_labels=frozenset(state.labels),
+            unsold=state.unsold,
         )
 
     def _marked(self, on: date, state: _State) -> Decimal:

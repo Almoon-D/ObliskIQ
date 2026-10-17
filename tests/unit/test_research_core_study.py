@@ -226,12 +226,13 @@ def test_a_worker_runs_its_share_with_the_code_run_in_process(
     names = ("equity", "overlay")
     paths = np.array([list(range(len(inputs.dates) - 1))])
     task = PathTask(shipped_settings, profile, prereg, months, inputs.dates, names, paths)
-    growth, drawdown, wealth = run_paths(task)
+    growth, drawdown, wealth, unsold = run_paths(task)
     # The identity path is the history: its growth is the historical run's.
     runner = StudyRunner(shipped_settings, profile)
     history = runner.paths(prereg, months, inputs.dates, names, paths)
     assert growth.tolist() == history[0].tolist()
-    assert drawdown.shape == wealth.shape == (1, 2)
+    assert drawdown.shape == wealth.shape == unsold.shape == (1, 2)
+    assert unsold.tolist() == [[0, 0]]
     # Only the month-end rows of the history before the first date are kept for a path.
     prior = months.prior_prices["EQ"]
     assert [row.observed_on for row in prior] == MONTHS[:6]
@@ -287,7 +288,8 @@ def test_the_frontier_takes_the_best_unless_a_simpler_one_cannot_be_told_apart(
             0.0502 + noise,  # as close, rank 3 too but trades less
         ]
     )
-    draws = _Draws(("simple", "close", "better", "calm"), growth, growth * 0, growth * 0)
+    zero = growth * 0
+    draws = _Draws(("simple", "close", "better", "calm"), growth, zero, zero, zero.astype(int))
     portfolio = {
         "simple": stats("simple", 1, 0.05, 0.05),
         "close": stats("close", 3, 0.0505, 0.05, traded=500.0),
@@ -341,7 +343,8 @@ def test_among_equally_simple_portfolios_the_lower_turnover_one_is_chosen(prereg
     rng = np.random.default_rng(5)
     noise = rng.normal(0, 0.01, size=(300, 1))
     growth = np.hstack([0.051 + noise, 0.050 + noise + rng.normal(0, 0.005, size=(300, 1))])
-    draws = _Draws(("busy", "calm"), growth, growth * 0, growth * 0)
+    zero = growth * 0
+    draws = _Draws(("busy", "calm"), growth, zero, zero, zero.astype(int))
     portfolio = {
         "busy": stats("busy", 2, 0.051, 0.1, traded=900.0),
         "calm": stats("calm", 2, 0.050, 0.1, traded=10.0),
