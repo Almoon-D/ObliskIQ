@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.5.1"
+version = "0.6.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -64,6 +64,7 @@ only-include = [
     "tests",
     "config",
     "docs",
+    "research",
     ".github",
     "AGENTS.md",
     "CHANGELOG.md",
@@ -147,7 +148,7 @@ precision = 1
 show_missing = true
 skip_covered = true
 # Measured coverage minus one point; it only ever rises. docs/ROADMAP.md records each measurement.
-fail_under = 99.4
+fail_under = 99.5
 
 [tool.importlinter]
 root_packages = ["obliskiq"]

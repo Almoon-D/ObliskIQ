@@ -15,7 +15,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, model_validator
+from pydantic import AfterValidator, Field, model_validator
 
 from .base import CountryCode, DomainModel, NonEmptyText
 
@@ -28,28 +28,11 @@ def _isin(value: str) -> str:
     return value
 
 
-def _finite(value: Decimal) -> Decimal:
-    if not value.is_finite():
-        raise ValueError("must be a finite amount")
-    return value
-
-
-def _not_negative(value: Decimal) -> Decimal:
-    if not value.is_finite() or value < 0:
-        raise ValueError("must be a finite amount that is not negative")
-    return value
-
-
-def _positive(value: Decimal) -> Decimal:
-    if not value.is_finite() or value <= 0:
-        raise ValueError("must be a positive, finite amount")
-    return value
-
-
 type Isin = Annotated[str, AfterValidator(_isin)]
-type Money = Annotated[Decimal, AfterValidator(_finite)]
-type Magnitude = Annotated[Decimal, AfterValidator(_not_negative)]
-type Quantity = Annotated[Decimal, AfterValidator(_positive)]
+#: Amounts: a domain model refuses NaN and the infinities, so each is finite.
+type Money = Decimal
+type Magnitude = Annotated[Decimal, Field(ge=0)]
+type Quantity = Annotated[Decimal, Field(gt=0)]
 
 
 class SecurityKind(StrEnum):

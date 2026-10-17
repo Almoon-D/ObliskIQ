@@ -924,7 +924,12 @@ research/preregistrations/core-allocation.md from the template:
   apart resolve to the simplest, lowest-turnover one;
 - a constants hash and research/preregistrations/core-allocation.lock.
 You may check that a series exists and its span; compute no return or statistic on it before
-the merge.
+the merge. The harness (DECISIONS D76) runs one portfolio comparison, a candidate against a
+reference, per pre-registration: extend `research/prereg.py` and `research/study.py` to several
+candidates against the equity reference (one test each, Bonferroni across them) and add the
+variants as strategies in `research/strategies.py`, under the harness's tests, in a pull
+request of its own merged before Step 2; the lock is written with `obliskiq research lock`,
+and a confirmation run writes `research/reports/<id>.md`.
 
 Step 2 — The run, once: data through research/data.py with coverage reported; the verdict
 through `obliskiq research run`; research/reports/core-allocation.md (every metric before and
@@ -1228,7 +1233,9 @@ DELIVERABLES
 8. Time-weighted return over Session 6's NAV rows (flows neutralised; convention in
    config).
 9. Tax on the live path: Session 4b's LotEngine and `es_irpf` wired to fills (each fill opens
-   or closes lots; fees and FX at the trade date); currency lots for foreign-currency
+   or closes lots; fees and FX at the trade date; `store/lots.py` saves the open lots whole, and
+   the engine's open loss windows and its ledger need persistence beside them, DECISIONS D74);
+   currency lots for foreign-currency
    balances under the TaxPolicy (DECISIONS D69), with the Spanish treatment of currency
    gains confirmed from an official source in docs/knowledge/tax-es.md; an annual CSV of
    realised results and deferred losses for the owner's return; the decision hooks
