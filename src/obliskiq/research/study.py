@@ -95,6 +95,8 @@ SIMULATION_NOTES: Final = (
     "Currency conversions are instant at the reference rate and cost nothing; no currency "
     "balance is held, so gains on balances are not taxed.",
     "Losses still carried forward at the horizon are worth nothing.",
+    "A sale whose costs would exceed what it raises (a minimum commission on a few units) is not "
+    "made; its units stay held and count as nothing at the horizon.",
     "Bootstrap paths resample whole months of every instrument and rate together; on a path, "
     "income is paid at month end at the resampled month's yield, and the history before the "
     "first date is the real one.",
@@ -123,6 +125,8 @@ class StrategyStats:
     terminal_wealth_p5: float | None
     breach: tuple[tuple[Decimal, float], ...]
     static_weights: Mapping[str, Decimal] | None
+    #: Bootstrap paths on which a sale was not made because it cost more than it raised.
+    unsold_paths: int | None = None
 
     @property
     def turnover(self) -> float | None:
@@ -470,12 +474,14 @@ def _not_run(spec: StrategySpec, weights: Mapping[str, Decimal] | None) -> Strat
 
 @dataclass(frozen=True, slots=True)
 class _Draws:
-    """Per path and portfolio: growth, worst drawdown and terminal wealth multiple."""
+    """Per path and portfolio: growth, worst drawdown, terminal wealth multiple and the sales
+    not made because they cost more than they raised."""
 
     names: tuple[str, ...]
     growth: np.ndarray
     drawdown: np.ndarray
     wealth: np.ndarray
+    unsold: np.ndarray
 
     def column(self, name: str) -> int:
         return self.names.index(name)
@@ -822,11 +828,12 @@ class StudyRunner:
         dates: Sequence[date],
         names: Sequence[str],
         paths: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Growth, worst drawdown and terminal wealth multiple of every portfolio (columns) on
-        each resampled path (rows)."""
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Growth, worst drawdown, terminal wealth multiple and sales not made of every
+        portfolio (columns) on each resampled path (rows)."""
         shape = (len(paths), len(names))
         growth, drawdown, wealth = np.empty(shape), np.empty(shape), np.empty(shape)
+        unsold = np.zeros(shape, dtype=int)
         for row, path in enumerate(paths):
             panel = _synthetic(months, dates, path)
             runs = self._simulate(prereg, panel, dates, Decimal(1), names)
@@ -834,7 +841,8 @@ class StudyRunner:
                 growth[row, column] = _growth(runs[name])
                 drawdown[row, column] = runs[name].max_drawdown
                 wealth[row, column] = _wealth(runs[name])
-        return growth, drawdown, wealth
+                unsold[row, column] = runs[name].unsold
+        return growth, drawdown, wealth, unsold
 
     def _bootstrap(self, prereg: Prereg, inputs: _Inputs, names: Sequence[str]) -> _Draws:
         spec = prereg.spec.bootstrap
@@ -850,8 +858,7 @@ class StudyRunner:
         )
         workers = min(research.workers, len(paths))
         if workers <= 1:
-            growth, drawdown, wealth = self.paths(prereg, months, inputs.dates, names, paths)
-            return _Draws(tuple(names), growth, drawdown, wealth)
+            return _Draws(tuple(names), *self.paths(prereg, months, inputs.dates, names, paths))
         # The paths are drawn above from the seed; each worker runs a contiguous share and the
         # shares are put back in order, so the draws do not depend on the number of workers.
         chunks = np.array_split(paths, workers * CHUNKS_PER_WORKER)
@@ -863,10 +870,7 @@ class StudyRunner:
         with ProcessPoolExecutor(max_workers=workers) as pool:
             parts = list(pool.map(run_paths, tasks))
         return _Draws(
-            tuple(names),
-            np.concatenate([part[0] for part in parts]),
-            np.concatenate([part[1] for part in parts]),
-            np.concatenate([part[2] for part in parts]),
+            tuple(names), *(np.concatenate(column) for column in zip(*parts, strict=True))
         )
 
     @staticmethod
@@ -891,6 +895,7 @@ class StudyRunner:
                 for limit in prereg.spec.drawdown_limits
             ),
             static_weights=known.static_weights,
+            unsold_paths=int((draws.unsold[:, column] > 0).sum()),
         )
 
     def _robustness(
@@ -1101,7 +1106,7 @@ class PathTask:
     paths: np.ndarray
 
 
-def run_paths(task: PathTask) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def run_paths(task: PathTask) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Run a share of the paths in a worker process (the same code as in process)."""
     runner = StudyRunner(task.settings, task.profile)
     return runner.paths(task.prereg, task.months, task.dates, task.names, task.paths)

@@ -14,7 +14,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
-| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | in progress (the harness for it landed) | v0.7.0 |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | in progress (harness, pre-registration and lock landed) | v0.7.0, v0.7.1 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
@@ -38,7 +38,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4c — Core verdict (2026-10-17, v0.7.0; in progress)
+### Session 4c — Core verdict (2026-10-17, v0.7.0, v0.7.1; in progress)
 
 **Landed (the harness, its own pull request before the pre-registration).**
 - Several candidates against one reference, one test each with Bonferroni across them; one trial
@@ -63,8 +63,20 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 - Tests: 3,400 passing; coverage 99.83 %; every module in `research/`, `quant/risk_budget.py`
   and `quant/trend.py` at 100 %.
 
-**Next in this session.** The pre-registration `research/preregistrations/core-allocation.md` in
-its own pull request, its lock, then the one run and `research/reports/core-allocation.md`.
+**The pre-registration** `research/preregistrations/core-allocation.md` merged on its own
+(7537c6c) and is locked there (`core-allocation.lock`).
+
+**The first confirmation run was not evaluable (D83).** Every adequacy check of the data passed:
+every series loaded and as observed, all 250 rebalance dates priced, 249 months. The historical
+runs completed. A bootstrap path then stopped the run: a sale of one unit of the commodity
+vehicle would have cost more than it raised (the USD 6 minimum commission on a resampled price
+below it), and the simulator treated that as an error. No estimate, interval, path statistic or
+frontier was computed. The descriptive structure check ran. The fix (v0.7.1): such a sale is not
+made, its units count as nothing at the horizon, and reports count these sales. It changes no
+pre-registered constant and is merged before the repeat.
+
+**Next in this session.** The repeat of the confirmation run and
+`research/reports/core-allocation.md`.
 
 **SESSION_PROMPTS edits.** Session 13: `quant/risk_budget.py` and `quant/trend.py` exist; no
 covariance estimator unless the chosen variant re-estimates its weights (D82).

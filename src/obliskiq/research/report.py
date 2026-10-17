@@ -109,9 +109,17 @@ def _aspiration_distance(stats: StrategyStats, aspiration: Decimal) -> str:
     return _percent(stats.median_log_growth - math.log1p(float(aspiration)))
 
 
+def _unsold(stats: StrategyStats) -> str:
+    historical = "n/a" if stats.historical is None else str(stats.historical.unsold)
+    paths = "n/a" if stats.unsold_paths is None else str(stats.unsold_paths)
+    return f"{stats.name} {historical} on the historical path, on {paths} bootstrap paths"
+
+
 def _frontier_lines(result: StudyResult) -> list[str]:
-    if not result.frontier:
+    if result.prereg.spec.frontier is None:
         return ["No frontier was pre-registered."]
+    if not result.frontier:
+        return ["Not computed: the bootstrap did not run (see the adequacy checks)."]
     tests = {test.name: test for test in result.tests}
 
     def against(name: str | None) -> str:
@@ -421,6 +429,13 @@ def render(result: StudyResult) -> str:
             "portfolio's median after-tax log growth, never as a gate.",
             "",
         ]
+    lines += [
+        "Sales not made because their costs would exceed what they raise (the units stay held, "
+        "and count as nothing at the horizon): "
+        + "; ".join(_unsold(stats) for stats in result.portfolios)
+        + ".",
+        "",
+    ]
     limits = spec.drawdown_limits
     lines += [
         "Probability that a bootstrap path's mark-to-market drawdown reaches each limit:",

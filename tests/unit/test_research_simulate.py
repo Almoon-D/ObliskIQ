@@ -398,20 +398,36 @@ def test_the_proportional_pass_falls_back_to_whole_positions_when_costs_leave_it
     assert state.cash == D(300) - D("0.2") - D("0.1")
 
 
-def test_a_sale_that_costs_more_than_it_raises_stops_the_run(es):
+def dear_simulator(es) -> Simulator:
+    """Every leg pays 200 a unit: no sale at a price of 150 raises its cost."""
     expensive = CommissionSchedule(
         id="dear", venues=None, asset_classes=[AssetClass.ETF], currency="EUR", kind="per_share",
         rate=D(200), minimum=None, maximum_fraction_of_value=None, up_to_face=None,
         scope_note="test", source=SOURCE,
     )  # fmt: skip
-    sim = simulator(es, costs=CostBook([expensive], [], flat_costs()._friction))
+    return simulator(es, costs=CostBook([expensive], [], flat_costs()._friction))
+
+
+def test_a_sale_that_costs_more_than_it_raises_is_not_made_and_is_counted(es):
     from obliskiq.research.simulate import _State
     from obliskiq.tax.lots import LotEngine
 
     engine = LotEngine(es, [identity("A", "Issuer A")])
     engine.acquire("A", on=DATES[0], quantity=D(1), cost=D(100))
-    with pytest.raises(SimulationError, match="costs more than it raises"):
-        sim._sell("A", D(1), DATES[0], engine, _State(cash=D(0), next_year=2024, units={"A": D(1)}))
+    state = _State(cash=D(0), next_year=2024, units={"A": D(1)})
+    assert dear_simulator(es)._sell("A", D(1), DATES[0], engine, state) is False
+    assert (state.units, state.cash, state.costs, state.trades, state.unsold) == (
+        {"A": D(1)}, D(0), D(0), 0, 1,
+    )  # fmt: skip
+    assert engine.quantity("A") == D(1)
+
+
+def test_a_position_no_sale_can_turn_into_cash_counts_as_nothing_at_the_horizon(es):
+    result = dear_simulator(es).run(BuyAndHold("hold A", {"A": D(1)}), [DATES[0], DATES[-1]])
+    # 333 units at 100 plus 200 a unit leave 100 of the 100,000; at 150 no sale pays its 200.
+    assert (result.trades, result.unsold) == (1, 1)
+    assert result.liquidation_value == D(100)
+    assert result.tax_paid == D(0)
 
 
 def test_a_target_without_any_price_yet_stops_the_run(es):

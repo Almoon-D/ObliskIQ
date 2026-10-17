@@ -379,6 +379,12 @@ def test_the_report_says_when_nothing_respects_a_point_or_a_check_failed(
     assert "none respects this point" in text
     assert "Not run: a check failed." in text
     assert "| n/a |" in text
+    # The toy's paths sell nothing at a loss of its costs; a pre-registered frontier the
+    # bootstrap never reached says so, rather than that none was pre-registered.
+    assert "equity 0 on the historical path, on 0 bootstrap paths" in render(result)
+    unreached = render(replace(result, frontier=()))
+    assert "Not computed: the bootstrap did not run" in unreached
+    assert "No frontier was pre-registered." not in unreached
 
 
 def test_a_structure_check_without_a_core_is_refused(tmp_path):
