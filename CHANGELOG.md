@@ -5,6 +5,24 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.7.2] - 2026-10-17
+
+Session 4c, last part — the core verdict. The locked pre-registration `core-allocation` ran
+once more after the fix in 0.7.1 (DECISIONS D83), on the same inputs. No IBKR call.
+
+### Added
+
+- `research/reports/core-allocation.md`: the nine candidates against buying and holding a global
+  equity fund after Spanish tax, 2005–2026. Every candidate is inconclusive (sign uncertain, low
+  power), as the pre-registered power predicted. The report also gives every portfolio before
+  and after tax and year by year, the frontier of median after-tax growth against drawdown
+  breach for the owner's choice, robustness, selection across trials and the descriptive
+  structure check.
+
+### Changed
+
+- `research/reports/README.md` states how reports are named and lists the reports.
+
 ## [0.7.1] - 2026-10-17
 
 Session 4c, second part: the fix between the confirmation run that was not evaluable and its

@@ -14,7 +14,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
-| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | in progress (harness, pre-registration and lock landed) | v0.7.0, v0.7.1 |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
@@ -38,7 +38,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4c — Core verdict (2026-10-17, v0.7.0, v0.7.1; in progress)
+### Session 4c — Core verdict (2026-10-17, v0.7.0 → v0.7.2)
 
 **Landed (the harness, its own pull request before the pre-registration).**
 - Several candidates against one reference, one test each with Bonferroni across them; one trial
@@ -75,8 +75,54 @@ frontier was computed. The descriptive structure check ran. The fix (v0.7.1): su
 made, its units count as nothing at the horizon, and reports count these sales. It changes no
 pre-registered constant and is merged before the repeat.
 
-**Next in this session.** The repeat of the confirmation run and
-`research/reports/core-allocation.md`.
+**The confirmation run** (repeated after the fix, on the same inputs: inputs SHA-256 `c5207063…`)
+wrote `research/reports/core-allocation.md`. Every adequacy check passed. Each candidate is one
+test against the equity reference: annualised after-tax log growth of liquidation value,
+2005-12 to 2026-09. Each interval is at level 0.9889 (Bonferroni over nine).
+
+| Candidate | Estimate / yr | Interval | Outcome | Power at θ = 1 % |
+|---|---|---|---|---|
+| 60/40 | −2.18 % | [−5.16 %, 1.42 %] | inconclusive (sign uncertain, low power) | 0.038 |
+| A | −4.06 % | [−9.79 %, 2.90 %] | inconclusive (sign uncertain, low power) | 0.016 |
+| B | −4.88 % | [−10.76 %, 2.42 %] | inconclusive (sign uncertain, low power) | 0.016 |
+| C | −4.39 % | [−9.44 %, 1.75 %] | inconclusive (sign uncertain, low power) | 0.019 |
+| D10 | −4.93 % | [−10.58 %, 1.40 %] | inconclusive (sign uncertain, low power) | 0.017 |
+| D20 | −3.47 % | [−7.99 %, 1.44 %] | inconclusive (sign uncertain, low power) | 0.022 |
+| D30 | −2.00 % | [−5.74 %, 1.52 %] | inconclusive (sign uncertain, low power) | 0.035 |
+| D40 | −0.55 % | [−4.23 %, 1.73 %] | inconclusive (sign uncertain, low power) | 0.060 |
+| D50 | +0.74 % | [−3.72 %, 2.06 %] | inconclusive (sign uncertain, low power) | 0.068 |
+
+- **What it shows.** No candidate is shown to out-grow buying and holding global equities after
+  tax, and none is shown to grow less. That is the outcome the pre-registered power predicted, and
+  it is not evidence against any of them.
+- **The frontier is the owner's material.** Median after-tax growth against the share of paths
+  that reach each drawdown limit:
+  - The equity reference reaches a 50 % drawdown on 13.4 % of paths and a 40 % drawdown on
+    37.3 %.
+  - The 60/40 reaches 30 % on 10.7 % of paths.
+  - A reaches 20 % on 4.9 % of paths.
+  - D10 reaches 10 % on 0.9 % of paths.
+
+  The resolution rule picks, as the drawdown tolerance tightens: the equity reference (40 % at
+  50 %, or 50 % at 25 % or more), then the 60/40 (30–50 % limits at stricter probabilities),
+  then A (20 %, and 30 % at 5–10 %), then D10 (10 %). The bootstrap cannot tell any of these
+  apart from the best median at its point.
+- **Robustness.**
+  - The sign holds in both halves for every candidate except D40 (first half positive) and D50
+    (second half negative).
+  - No break-even cost multiplier exists: every estimate is below θ even without costs.
+  - The tilted variants B and C turn over about 100 % a year at the illiquid tier's costs,
+    about €23,000 over the run, against about 18 % for A.
+- **A reading, not a test.** On the historical path D50 matches the reference year by year from
+  2016 and pays no tax before the horizon. That is consistent with the tax-aware rule holding
+  every trend reduction once embedded gains made its tax exceed 5 % of the value sold. A fresh
+  start in 2016 has no gains, so its tilt trades, which is why D50's second half differs.
+- **The structure check** (descriptive, US market before tax, 1927–2026): the tilt grew 9.47 % a
+  year against 9.72 % held, an interval of [−1.88 %, 1.54 %]. Its maximum drawdown was −49 %
+  against −84 %.
+- **Selection.** The registry counts 18 trials, the first run's nine not-evaluable ones
+  included; the deflated Sharpe uses all 18, which is harsher.
+- **The owner's choice of a point** is recorded later, in DECISIONS (D60), not this session.
 
 **SESSION_PROMPTS edits.** Session 13: `quant/risk_budget.py` and `quant/trend.py` exist; no
 covariance estimator unless the chosen variant re-estimates its weights (D82).
@@ -638,13 +684,17 @@ settles it.
 | The US treaty withholding rate of 15 % against the BOE text of the Spain–US convention and its 2013 protocol | 4b | 7 |
 | Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 7 |
 | The savings scale for tax year 2027 (the table is verified through 2026) | 4b | the monthly tax-source check (§5.16), 2027 |
-| `yfinance_history` against Yahoo from the deployment machine (the call is network code outside the coverage floor; its frame is pinned by a fixture) | 4b | 4c |
+| `yfinance_history` against Yahoo from the deployment machine (the call is network code outside the coverage floor; its frame is pinned by a fixture). From the cloud container it worked on 2026-10-17 (4c loaded TIP, IEF, GLD and CRSOX) | 4b | T1 |
 
 ## Follow-ups
 
 - **Owner, before Session 13:** choose a point on Session 4c's frontier — the drawdown
-  tolerance, the probability of breaching it, the horizon — recorded in DECISIONS (D60).
-  Before Session 10: an LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
+  tolerance, the probability of breaching it, the horizon — recorded in DECISIONS (D60). The
+  frontier is in `research/reports/core-allocation.md`; its points resolve to the equity
+  reference, the 60/40, A or D10, and no candidate's growth is shown to differ from the
+  reference's. If the point is a tilted variant, note that on the historical path the tax-aware
+  rule held every trend reduction once gains built up (Session 4c log). Before Session 10: an
+  LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).
 - Session 5: route direct or SMART and make the European commission rows follow the routing
