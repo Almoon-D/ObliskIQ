@@ -12,7 +12,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
-| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
+| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | open (owner): not yet run, due before Session 6 (D68) | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
@@ -37,6 +37,46 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Documentation review (owner request, 2026-10-17, v0.8.2)
+
+The documents that steer later sessions, checked against each other and the code after
+Session 4d, starting from five points an earlier agent raised; documents only, no code or
+configuration changed.
+
+**The five points.**
+- The 4c record (the first run not evaluable, the fix, the repeat; nine candidates
+  inconclusive; the owner's point needed before Session 13 only): correct as written.
+- T1: D68, §A.5 and MASTER_PLAN §10 set the owner's order (before Session 6); Session 6's
+  precondition says what the session does if T1 has not passed. A plan and its contingency,
+  not a contradiction: left as is, with the sessions table's T1 status brought up to date.
+- The core's static risk balance on a declared covariance (D80, D82): MASTER_PLAN §5.4 and
+  Session 13's prompt already bind Session 13 to it, and a re-estimated variant needs a new
+  pre-registration. No change.
+- Costs and tax still open (currency conversions, routing, currency lots): already assigned
+  (Session 5's Follow-ups; currency lots in Session 7's prompt, D69), and
+  `research/reports/core-allocation.md` states that conversions are free and which
+  commissions are unverified. Direct routing is the higher of IBKR's two fixed rates
+  (D77). No change.
+- Stale premises: AGENTS.md's opening line (the core and OAuth) and the README (the core, the
+  status) corrected.
+
+**Also corrected.**
+- The subagents the owner removed on 2026-10-16: SESSION_PROMPTS §B step 4 and §C.1, and D22
+  marked withdrawn.
+- DECISIONS entries a later one superseded now say so, as D8 does for D42: D5 (D60, D61), D9
+  (D61), D12 (D65); D61 cites D30, not D31, for the pricing of both legs.
+- MASTER_PLAN §5.4: the two references are on the frontier and can be the owner's pick
+  (D60, D79). §5.5 item 8: no selection hypothesis is sufficient yet (D84, D87). §10 row 3:
+  both transports.
+- SESSION_PROMPTS: the opening count of sessions; Session 6's skeleton roles (the equity
+  reference has one fund, so the skeleton completes 3–4 roles from §5.4); Session 10's H2
+  parser and Session 15's shadow hypotheses after Session 4d (D84, D87); the feature-session
+  template's path to weight (D62, D65, D66).
+- `docs/knowledge/README.md` lists the research sources 4c and 4d added.
+
+**SESSION_PROMPTS edits.** The opening paragraph, §B step 4, §C.1 (removed), Session 6 item 3,
+Session 10 item 4, Session 15's goal, §F.1 item 2.
 
 ### Session 4d — First selection hypothesis (2026-10-17, v0.7.3 → v0.8.1)
 
@@ -840,8 +880,8 @@ settles it.
 - **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
   the live account's, D42). Its login did not complete from a cloud container (most likely the
   outbound address changing per connection), so the first live run is T1 on the deployment
-  machine (SESSION_PROMPTS §A.5), beside Sessions 4b–4d; until then sessions build against
-  fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
+  machine (SESSION_PROMPTS §A.5), due before Session 6 (D68); until then sessions build
+  against fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
   and a daily manual login (D68).
 - Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
   failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the

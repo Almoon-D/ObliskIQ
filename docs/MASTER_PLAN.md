@@ -279,7 +279,9 @@ cycles. All of these live in config with a source per value.
 - **Variants.** The engine builds the variants Session 4c registers and runs the one the
   owner picks from its frontier (`core.variant`): A static risk balance with wide bands; B A + the trend
   tilt; C a growth-tilted risk budget + the tilt; D an equity-dominant book with the tilt as
-  an overlay to cash, sized to each drawdown limit of the pre-registered grid.
+  an overlay to cash, sized to each drawdown limit of the pre-registered grid. The two
+  references of §1 are on the frontier too, so either can be the owner's pick (DECISIONS
+  D60, D79).
 - **Risk balance** (A–C). 25% of risk per environment in A and B; equal risk contribution
   inside a basket. No leverage, so risk comes from duration, not borrowing.
 - **Covariance.** The registered variants hold static risk-balance weights computed from a
@@ -345,8 +347,9 @@ cycles. All of these live in config with a source per value.
    pre-registered minimum sample, counted in effective observations (§5.9); every weight
    set is versioned by its hash.
 8. **Company selection** inside a sector or country thesis, and the selection hypotheses
-   the research pipeline found sufficient (Session 4d first: insider-purchase clusters, a
-   stock-level momentum and quality composite, or cross-asset momentum): liquidity, 12-1
+   the research pipeline found sufficient (none yet: Session 4d's country momentum and its
+   stop were insufficient, DECISIONS D87; insider-purchase clusters and the stock-level
+   composite wait for survivorship-free prices, D84): liquidity, 12-1
    momentum with a momentum-crash guard, quality and valuation where data exists, promoted
    patterns, honest degradation.
 
@@ -945,7 +948,7 @@ subset and inserts an `Na` prompt for the remainder.
 |---|---|---|
 | 1 | Foundation | scaffold, docs, owner settings and defaults, jurisdiction registry, CI, releases, legacy snapshot |
 | 2 | Store, calendars and numerics | store and migrations, calendar and phase layer, BSM, IV, smile, stats, inference |
-| 3 | IBKR read path | OAuth, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, live preflight |
+| 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, live preflight |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test; runs beside 4b–4d, before 6 |

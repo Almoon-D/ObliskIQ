@@ -1,6 +1,6 @@
 # AGENTS.md — ObliskIQ
 
-A global, autonomous portfolio manager for one IBKR account: a core (risk balance plus a tax-aware trend tilt), a satellite (the Asymmetry Hunter, defined risk) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API over OAuth 1.0a.
+A global, autonomous portfolio manager for one IBKR account: a core (the variant the owner picks from Session 4c's after-tax frontier, MASTER_PLAN §5.4), a satellite (the Asymmetry Hunter, defined risk) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
 
 ## Read first — your slice, not whole files
 

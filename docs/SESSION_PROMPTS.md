@@ -1,9 +1,10 @@
 # ObliskIQ — Session Prompts
 
-Committed by Session 1 as `docs/SESSION_PROMPTS.md`. Twenty build sessions plus one
-research session, run in order, one PR each, merged and released by the agent itself
-(protocol in `AGENTS.md`). The design lives in `docs/MASTER_PLAN.md`; this file says what
-each session does. Section F holds the templates for feature and maintenance sessions
+Committed by Session 1 as `docs/SESSION_PROMPTS.md`. Build sessions 1–20 (with 4a, 4b and
+19a; there is no Session 14), research sessions 4c, 4d and 21, and the owner's T1, run in
+order, one PR each (a pre-registration in a PR of its own), merged and released by the agent
+itself (protocol in `AGENTS.md`). The design lives in `docs/MASTER_PLAN.md`; this file says
+what each session does. Section F holds the templates for feature and maintenance sessions
 after the build.
 
 ---
@@ -161,8 +162,8 @@ paste the masked output into a short follow-up session that records it.
    approval, and plan mode echoes the whole plan back into the session's context. Paste the
    prompt. From Session 2 on, the one-line launcher is enough: the agent prints its section
    from `main` with `make prompt S=<N>`, including corrections earlier sessions made.
-4. The agent opens the PR, reviews it with a fresh subagent, fixes, merges, confirms the
-   release and logs the session in `docs/ROADMAP.md`. Read that entry and the release
+4. The agent opens the PR, reviews its own diff against the prompt, fixes, merges, confirms
+   the release and logs the session in `docs/ROADMAP.md`. Read that entry and the release
    notes before the next session.
 5. A PR left open with the `needs-owner` label: answer its summary, then run a short
    session: *"Resolve PR #n per its needs-owner summary, then follow the end-of-session
@@ -216,18 +217,6 @@ no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 Only Session 1 needs attachments. Fable goes where a subtle mistake costs money; Opus on
 architecture and statistics; Sonnet on well-specified ports. Every session runs one
 effort level above what its work strictly needs, capped at `xhigh`; `max` is not used.
-
-### C.1 Subagents
-
-Session 1 writes these to `.claude/agents/` (AGENTS.md says when each is used). The
-session model delegates to them, so cheap work runs on cheap models:
-
-| Agent | Model | Effort | Job |
-|---|---|---|---|
-| `reviewer` | Opus 5.5 | xhigh | the fresh PR review in the end-of-session protocol |
-| `test-breaker` | Opus 5.5 | xhigh | failure-branch and property tests for money paths it did not write |
-| `port-checker` | Sonnet 5.5 | xhigh | ported module vs legacy original: behaviour changed without a DECISIONS entry |
-| `explorer` | Haiku (newest listed) | high | read-only searches across legacy/ and the repository |
 
 ## D. Custom network allowlist
 
@@ -1126,9 +1115,10 @@ DELIVERABLES
 2. capital/ (minimal; Session 7 extends it): `capital.mode: whole_account | cap` and the
    cap in base currency, so a large paper balance behaves like a small account.
 3. A temporary core: config `core.skeleton_targets` (labelled skeleton; removed in Session
-   13) listing 3–4 roles of the variant the owner chose from Session 4c's frontier (the
-   equity reference's vehicles until one is chosen), with candidate symbol, venue and
-   currency; conids resolved
+   13) listing 3–4 roles, taken from the variant the owner chose from Session 4c's frontier
+   (the equity reference until one is chosen) and completed with other core roles of
+   MASTER_PLAN §5.4 when it has fewer, with candidate symbol, venue and currency; conids
+   resolved
    through secdef and pinned (fixtures in tests; live if paper credentials are present)
    and listed in the skeleton allowlist. UCITS vehicles only, so they will also pass
    eu_priips in Session 8; at least one quoted in a currency other than the base currency,
@@ -1447,8 +1437,9 @@ DELIVERABLES
    contract registry (US30Y code 020601).
 4. data/insiders/: SEC EDGAR Form 4 (User-Agent from SEC_USER_AGENT) for US names among
    the stock candidates: open-market purchases by officers and directors; cluster inputs
-   (counts, values, roles) point-in-time on the filing date. If Session 4d chose H2, its
-   research loader and this live fetcher share one parser.
+   (counts, values, roles) point-in-time on the filing date. Session 4d did not test H2
+   (DECISIONS D84); if a later batch does, its research loader and this live fetcher share
+   one parser.
 5. data/events/: Polymarket Gamma (curated markets and tag discovery; probability and
    velocity); Kalshi public market data (read-only); GDELT DOC 2.0 (region and theme
    volume and tone, Welford anomaly z-scores, warm-up); RSS (central banks, regulators,
@@ -1656,8 +1647,9 @@ GOAL: the Asymmetry Hunter — deterministic components on typed point-in-time i
 measured independence, entry rules per expression, a frozen thesis lifecycle with
 machine-checkable triggers, company selection among the stock candidates, and the pattern
 registry. Components and their agreement rule run in shadow and are graded until the
-research pipeline finds them sufficient (Session 21); the selection hypotheses Session 4d
-left in shadow run through the same lifecycle. The LLM is not built here; only the
+research pipeline finds them sufficient (Session 21). Session 4d left no selection
+hypothesis in shadow (DECISIONS D87); one a later batch leaves there runs through the same
+lifecycle. The LLM is not built here; only the
 interface its nominations arrive through.
 
 READ: legacy/old/ObliskIQ/modules/analytics/asymmetry_hunter.py (all) and its tests,
@@ -2239,8 +2231,9 @@ FEATURE: <describe what you want, in your own words>
    the design, add a DECISIONS entry with its evidence and update MASTER_PLAN in the same
    PR. If it conflicts with a hard rule in AGENTS.md, stop and ask.
 2. A new signal, pattern or sizing rule is pre-registered in research/preregistrations/
-   before any test on data, enters in shadow at zero weight, and earns weight only through
-   the scoreboard.
+   before any test on data and tested by the research harness; it runs in shadow at zero
+   weight only on a sufficient or inconclusive-positive outcome, and earns weight only on
+   a sufficient one and its activation condition (DECISIONS D62, D65, D66).
 3. If the deployed bot is running, make no IBKR calls: build against fixtures and queue
    VERIFY-LIVE items.
 4. Branch f-<slug>; bump the minor version (patch for a fix) with its CHANGELOG section.

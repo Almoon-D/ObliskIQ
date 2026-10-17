@@ -2,16 +2,20 @@
 
 An autonomous, risk-first portfolio manager for one Interactive Brokers account.
 
-- **Core** — risk balanced across growth and inflation environments, with a slow,
-  tax-aware trend tilt.
+- **Core** — documented premia held for the long run, in the variant the owner picks from a
+  tested after-tax frontier: from global equities bought and held to a risk balance across
+  growth and inflation environments, with or without a slow, tax-aware trend tilt.
 - **Satellite** — the Asymmetry Hunter: rare, corroborated, defined-risk bets on
   dislocations, sized by evidence.
 - **Discipline** — a hard decision, risk and execution layer; a scoreboard that grades every
-  proposal; capital that follows demonstrated skill. No leverage, no shorting, no written
+  proposal; capital that follows tested evidence. No leverage, no shorting, no written
   options, limit-capped orders only.
 
-**Status: pre-alpha. It does not trade yet.** The foundation is in place (configuration,
-tooling, CI, releases); the build proceeds session by session, paper trading first.
+**Status: pre-alpha. It does not trade yet.** Built so far: configuration, the store and
+calendars, the IBKR read and order paths with the kill switch and the pre-trade rails (tested
+against fixtures; no order has reached IBKR yet), and the research harness with its first
+verdicts in [`research/reports/`](research/reports/). The build proceeds session by session,
+paper trading first.
 
 ## Start here
 
