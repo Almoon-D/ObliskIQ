@@ -997,8 +997,8 @@ the design (read §1, §5.4, §5.9 and DECISIONS D60, D62–D64, D80, D88–D90 
 is open for research data. No IBKR call. Finish with the end-of-session protocol.
 
 PRECONDITION: Session 4d merged. Otherwise STOP. The probability of breaching the owner's
-drawdown tolerance and the horizon are open (D88): the study reports over a grid and never
-assumes a value for the owner.
+drawdown tolerance, and whether it is stated over a number of years or as a rate, are open
+(D88): the study reports over a grid of both and never assumes a value for the owner.
 
 GOAL: the first test of adaptation (D89), one mechanism: does re-estimating the core's
 covariance forecast its risk better than the declared matrix Session 4c used, and what does it
@@ -1033,8 +1033,9 @@ core-risk-estimation.md from the template.
   rule, the largest weight change, the warm-up and evaluation dates.
 - Primary outcome: risk-forecast accuracy, θ in loss units with its justification.
 - Secondary outcomes, paired against static A after costs and Spanish tax: annualised log
-  growth, turnover, tax paid, and the share of paths reaching 30 % for each horizon and
-  probability of a pre-registered grid.
+  growth, turnover, tax paid, and the breach of 30 % both as the share of paths reaching it
+  over each horizon of a pre-registered grid and as a rate (breaches per decade, the share of
+  time beyond it).
 - Power before data for each; a low power is reported as such, never as evidence against
   adaptation. Bonferroni across the specifications; robustness (subperiods, the break-even
   cost multiplier); the lock.
@@ -1661,8 +1662,8 @@ paths fail closed. Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 1–12 merged, Sessions 4c's and 4e's reports on main, and the owner's
 choice of a point on the frontier (the drawdown tolerance, its probability and the horizon)
-recorded in DECISIONS (D60; D88 records the tolerance, 30 %, and leaves the probability and
-the horizon open). Otherwise STOP and ask the owner for that choice.
+recorded in DECISIONS (D60; D88 records the tolerance, 30 % of the value the bot manages over
+a very long horizon, and leaves the probability and its form open). Otherwise STOP and ask the owner for that choice.
 
 GOAL: the core as the owner's point on the frontier selects it — the variants 4c registered and
 any specification 4e found sufficient, the chosen one by default — with tax- and cost-aware

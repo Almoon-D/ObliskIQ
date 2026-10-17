@@ -1,10 +1,11 @@
 # The owner's drawdown tolerance: what its two open values imply
 
 On 2026-10-17 the owner set the drawdown tolerance at **30 % from the previous peak** of the
-portfolio's total value (DECISIONS D88). Two values stay open:
+value the bot manages; unmanaged holdings do not count. The horizon is very long, and the owner
+does not need the money now (DECISIONS D88). Two things stay open:
 
 - the probability of breaching it that is acceptable;
-- the numeric horizon over which that probability is evaluated.
+- how that probability is stated: over a number of years, or as a rate.
 
 This report shows what each choice would imply, using two sources: Session 4c's published
 results, and an illustration built only from stated assumptions. It sets neither value and
@@ -21,7 +22,8 @@ recommends none. It is not evidence for or against any portfolio (D64).
   be equal or deeper. For a given portfolio, the probability therefore rises with the horizon.
   When monthly returns are drawn independently with any volatility, the probability tends to one
   as the horizon grows without bound. "A very long horizon" cannot be the evaluation horizon by
-  itself; the probability needs a number of years, or has to be stated as a rate.
+  itself: the probability needs a number of years, or has to be stated as a rate. A rate (form 2
+  below) needs no horizon, so it does not grow with the horizon the way form 1 does.
 - **It can be stated in three ways, which select different portfolios for the same number:**
   1. at least once within H years (Session 4c's form, with H about 20.75 years);
   2. as a rate, such as expected breaches per decade or the share of years spent beyond the

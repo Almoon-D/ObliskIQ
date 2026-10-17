@@ -1548,8 +1548,9 @@ Rejected:
 ### D88 · The drawdown tolerance, exposure caps and the option budget (D60; MASTER_PLAN §1, §11)
 
 The owner set the drawdown tolerance at **30 % from the previous peak of the portfolio's total
-value**, measured as D60's mark-to-market NAV. The horizon is very long, and the objective
-stays D60's: compound growth of wealth net of costs and tax.
+value**, measured as D60's mark-to-market value of what the bot manages. Holdings the bot does
+not manage do not count toward it (owner). The horizon is very long: the owner does not need the
+money now. The objective stays D60's: compound growth of wealth net of costs and tax.
 
 **Meaning.** The tolerance is the limit D60's research uses to filter candidates. A candidate
 respects it when the share of simulated paths whose drawdown reaches 30 % is at most the
@@ -1558,12 +1559,13 @@ guaranteed maximum loss, and **not** an order to sell when it is reached. The br
 §5.11 keep thresholds and keys of their own, and this entry sets none of them to 30 %.
 
 **Open.** These stay open. Reports show their implications without assuming a value
-(`research/reports/drawdown-tolerance-implications.md`). Until the probability and the horizon
-are set, Session 13's precondition is unmet.
+(`research/reports/drawdown-tolerance-implications.md`). Until both are set, Session 13's
+precondition is unmet.
 
 - the acceptable probability of breaching the tolerance;
-- the numeric horizon over which that probability is evaluated;
-- whether holdings the bot does not manage count toward the portfolio's value.
+- how that probability is stated: over a number of years, or as a rate that needs none
+  (breaches per decade, the share of time beyond the limit). "Very long" alone does not define
+  it, because the probability of at least one breach rises toward one as the horizon grows.
 
 **Exposure caps by asset class.** None is set. They are configuration keys that are absent by
 default, so no limit applies until the owner writes one. When present, they are read on
@@ -1577,6 +1579,8 @@ reinterpreted.
 Rejected:
 
 - reading the tolerance as a stop or a liquidation trigger (the owner's ruling);
+- counting unmanaged holdings toward it (the owner's ruling). Whole-book risk (§5.11) still
+  reads them for concentration and exposure, which this entry does not change;
 - setting caps by asset class now;
 - assuming a probability or horizon on the owner's behalf.
 

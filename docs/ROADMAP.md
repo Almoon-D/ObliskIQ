@@ -46,11 +46,12 @@ and a desk audit of the global data. Documents and one exploration script; no co
 configuration changed. No IBKR call.
 
 **The owner's decisions** (D88, D89):
-- **Drawdown tolerance: 30 %** from the previous peak of the portfolio's total value.
+- **Drawdown tolerance: 30 %** from the previous peak of the value the bot manages; unmanaged
+  holdings do not count. The horizon is very long (the owner does not need the money now).
   - It is a research and selection limit, not a guaranteed maximum loss and not an order to sell.
     No breaker threshold is set from it.
-  - The probability of breaching it and the numeric horizon are open, as is whether unmanaged
-    holdings count toward it.
+  - The probability of breaching it is open, and so is how it is stated: over a number of years,
+    or as a rate that needs none.
 - **No exposure caps by asset class.** They become optional configuration keys, absent by
   default; the mandate is unchanged.
 - **The option sleeve** keeps its premium budget of at most 5 % and lite's penalty balance.
@@ -875,9 +876,9 @@ settles it.
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
   (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought.
-- **Owner, before Session 13:** the drawdown tolerance is 30 % (D88). Still open: the
-  probability of breaching it, the numeric horizon, and whether unmanaged holdings count
-  toward it (`research/reports/drawdown-tolerance-implications.md`). At 30 % Session 4c's
+- **Owner, before Session 13:** the drawdown tolerance is 30 % of the value the bot manages,
+  over a very long horizon (D88). Still open: the probability of breaching it, and whether it is
+  stated over a number of years or as a rate (`research/reports/drawdown-tolerance-implications.md`). At 30 % Session 4c's
   frontier resolves to A or the 60/40, and no candidate's growth is shown to differ from the
   reference's; Session 4e may add adaptive specifications. If the point is a tilted variant, note that on the historical path the tax-aware
   rule held every trend reduction once gains built up (Session 4c log). Before Session 10: an

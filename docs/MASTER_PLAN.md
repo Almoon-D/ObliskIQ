@@ -1009,15 +1009,15 @@ reuse its prompt.
 | 11 | Base currency | Selectable; EUR today; other currencies held as working balances. |
 | 12 | Withdrawals | Planned as soon as announced; the bot asks before cutting protected positions. |
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
-| 14 | Objective (DECISIONS D60) | After-tax log growth of liquidation value within a drawdown limit, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long. |
+| 14 | Objective (DECISIONS D60) | After-tax log growth of liquidation value within a drawdown limit, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
 | 15 | Scale (D66) | Capabilities that pay only at larger capital are built in Session 19a, before 1.0.0, and run by computed activation conditions. |
-| 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the portfolio's total value: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Its probability and horizon are open (below). |
+| 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count): the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Its probability, and how that probability is stated, are open (below). |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient; the static variants are the fallback and the benchmark. |
 
-Open: the probability of breaching the drawdown tolerance, the numeric horizon it is evaluated
-over and whether unmanaged holdings count toward it — needed before Session 13 builds a variant,
-not before the research (`research/reports/drawdown-tolerance-implications.md`); the LLM
+Open: the probability of breaching the drawdown tolerance and how it is stated (over a number
+of years, or as a rate that needs none) — needed before Session 13 builds a variant, not before
+the research (`research/reports/drawdown-tolerance-implications.md`); the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
 holdings to release; the paper managed-capital cap; the satellite budget ceiling; whether
 IBKR supports Spanish tax-free fund switches; whether a hedge inside a UCITS share class fits
