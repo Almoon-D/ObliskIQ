@@ -13,7 +13,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import argparse
 import asyncio
-import math
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
@@ -26,7 +25,9 @@ from ..errors import ObliskError
 from ..research.data import (
     Sources,
     coverage_by_year,
+    derive_dataset,
     http_fetch,
+    is_derived,
     load_dataset,
     store_loaded,
     survivorship,
@@ -36,7 +37,7 @@ from ..research.prereg import Prereg, load_prereg
 from ..research.registry import Git, TrialRegistry, verify_lock, write_lock
 from ..research.report import write_report
 from ..research.stats import detectable_effect, effective_n, power
-from ..research.study import StudyRunner
+from ..research.study import StudyRunner, declared_se
 from ..store import open_research_store
 from ..util.http import RetryPolicy
 from ..util.timeutil import utc_now
@@ -87,7 +88,10 @@ def _data_load(loaded: Loaded, out: TextIO) -> int:
             with open_research_store(settings, loaded.env.require_data_dir()) as store:
                 for dataset in datasets:
                     try:
-                        series = await load_dataset(dataset, settings, sources, now=utc_now())
+                        if is_derived(dataset):
+                            series = derive_dataset(dataset, settings, store, now=utc_now())
+                        else:
+                            series = await load_dataset(dataset, settings, sources, now=utc_now())
                         done.append((dataset.id, store_loaded(store, series)))
                     except ObliskError as exc:
                         done.append((dataset.id, str(exc)))
@@ -164,19 +168,21 @@ def _power(loaded: Loaded, out: TextIO) -> int:
     inputs = spec.power
     per_period = effective_n(inputs.names_per_period, float(inputs.rho))
     observations = inputs.periods * per_period
-    se = float(inputs.sd_per_period) * inputs.periods_per_year / math.sqrt(observations)
     tests = spec.tests_in_confirmation
+    theta = float(spec.theta)
     print(f"power of {spec.id} before any data", file=out)
     print(f"  effective observations  {observations:g} ({per_period:g} per period)", file=out)
-    print(f"  standard error          {se:.4%} a year", file=out)
-    print(f"  theta                   {float(spec.theta):.4%} a year", file=out)
+    print(f"  theta                   {theta:.4%} a year", file=out)
+    print(f"  alpha {alpha:g}, {tests} test(s) in the confirmation run", file=out)
     print(
-        f"  power to detect theta   {power(float(spec.theta), se, alpha=alpha, tests=tests):.3f}",
+        f"  {'candidate':<24} {'se a year':>10} {'power':>7} {f'detectable at {target:g}':>18}",
         file=out,
     )
-    detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
-    print(f"  detectable at {target:g}      {detectable:.4%} a year", file=out)
-    print(f"  alpha {alpha:g}, {tests} test(s) in the confirmation run", file=out)
+    for candidate in spec.study.candidates:
+        se = declared_se(prereg, candidate.name)
+        detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
+        chance = power(theta, se, alpha=alpha, tests=tests)
+        print(f"  {candidate.name:<24} {se:>10.4%} {chance:>7.3f} {detectable:>18.4%}", file=out)
     return EXIT_OK
 
 
@@ -198,29 +204,33 @@ def _run(loaded: Loaded, out: TextIO) -> int:
                 registry.check_single_shot(prereg.spec.id)
             result = runner.run(prereg, store, registry, explore=explore, lock=lock, now=utc_now())
             path = write_report(result, root / settings.research.reports_dir)
-            registry.record(
-                study_id=prereg.spec.id,
-                stage=TrialStage.EXPLORATION if explore else TrialStage.CONFIRMATION,
-                at=result.run_at,
-                spec_sha256=prereg.sha256,
-                inputs=result.inputs_sha256,
-                parameters={"report": path.name},
-                metric=prereg.spec.primary_metric,
-                estimate=result.estimate,
-                sharpe=None if result.deflated is None else result.deflated.sharpe,
-                observations=max(len(result.dates) - 1, 0),
-                outcome=result.decision.outcome.value,
-            )
+            for test in result.tests:
+                registry.record(
+                    study_id=prereg.spec.id,
+                    stage=TrialStage.EXPLORATION if explore else TrialStage.CONFIRMATION,
+                    at=result.run_at,
+                    spec_sha256=prereg.sha256,
+                    inputs=result.inputs_sha256,
+                    parameters={"report": path.name, "candidate": test.name},
+                    metric=prereg.spec.primary_metric,
+                    estimate=test.estimate,
+                    sharpe=None if test.deflated is None else test.deflated.sharpe,
+                    observations=max(len(result.dates) - 1, 0),
+                    outcome=test.decision.outcome.value,
+                )
     except ObliskError as exc:
         print(f"refused: {exc}", file=out)
         return EXIT_INVALID
-    labels = ", ".join(label.value for label in result.decision.labels)
-    print(
-        f"{prereg.spec.id}: {result.decision.outcome.value}" + (f" ({labels})" if labels else ""),
-        file=out,
-    )
-    if result.estimate is not None:
-        print(f"  estimate {result.estimate:.4%} a year", file=out)
+    print(f"{prereg.spec.id}:", file=out)
+    for test in result.tests:
+        labels = ", ".join(label.value for label in test.decision.labels)
+        estimate = "" if test.estimate is None else f", estimate {test.estimate:.4%} a year"
+        print(
+            f"  {test.name}: {test.decision.outcome.value}"
+            + (f" ({labels})" if labels else "")
+            + estimate,
+            file=out,
+        )
     print(f"  report {path}", file=out)
     return EXIT_OK
 

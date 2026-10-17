@@ -1608,19 +1608,18 @@ registered, the chosen one by default — with tax- and cost-aware rebalancing, 
 code paths so the live core and the tested core cannot drift apart.
 
 READ: research/preregistrations/core-allocation.md and research/reports/core-allocation.md
-(binding: every constant comes from there); src/obliskiq/research/simulate.py (the
-rebalancing the verdict used).
+(binding: every constant comes from there); src/obliskiq/research/simulate.py and
+src/obliskiq/research/strategies.py (the rebalancing, tilt and tax-aware execution the verdict
+used); src/obliskiq/quant/risk_budget.py and src/obliskiq/quant/trend.py (Session 4c, DECISIONS
+D80, D82).
 
 DELIVERABLES
-- quant/covariance.py: EWMA, multi-year, Ledoit–Wolf, blend (base currency), if a
-  registered variant uses risk budgeting.
-- quant/risk_budget.py, under the same condition: fix and port legacy
-  opportunistic_optimizer._risk_parity — the objective uses risk-contribution shares
-  (w·Σw / w'Σw) — through a convex formulation (log-barrier or cyclical coordinate descent).
-  Port the still-valid cases from legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py;
-  verify against closed forms (two assets; diagonal Σ → inverse volatility) and against
-  skfolio (test-only); property tests (contributions match budgets, weights ≥ 0, sum 1). Do
-  not port the date-based crisis switch, regime-label leverage or Kelly-then-normalise.
+- quant/covariance.py (EWMA, multi-year, Ledoit–Wolf, blend, base currency) only if the
+  chosen variant re-estimates its weights; the registered variants hold static weights from a
+  declared covariance (D80), so by default none is built.
+- quant/risk_budget.py exists (Session 4c: cyclical coordinate descent, closed forms and an
+  independent Newton solve in tests). Add the check against skfolio (test-only) and port the
+  remaining still-valid cases of legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py.
 - engines/core/: the registered variants with their constants (environments and risk
   budgets where used; the equity-dominant variant and its overlay to cash), roles filled by
   the vehicle selector, the trend tilt (12-month TSMOM and 10-month moving average,

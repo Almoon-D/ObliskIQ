@@ -22,9 +22,14 @@ import respx
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_research import (
     AqrDataset,
+    BundesbankDataset,
+    ConstantMaturityZeroDataset,
+    EcbDataDataset,
     EcbDataset,
     FredDataset,
     KenFrenchDataset,
+    MsciDataset,
+    OvernightAccrualDataset,
     YahooDataset,
 )
 from obliskiq.domain.research import PointInTime, Vendor
@@ -500,7 +505,19 @@ def test_coverage_and_survivorship_report_what_the_universe_lacks(store: Store):
 
 
 @pytest.mark.parametrize(
-    "model", [YahooDataset, KenFrenchDataset, AqrDataset, FredDataset, EcbDataset]
+    "model",
+    [
+        YahooDataset,
+        KenFrenchDataset,
+        AqrDataset,
+        FredDataset,
+        EcbDataset,
+        MsciDataset,
+        EcbDataDataset,
+        BundesbankDataset,
+        OvernightAccrualDataset,
+        ConstantMaturityZeroDataset,
+    ],
 )
 def test_every_field_of_a_dataset_record_is_read_by_the_loaders(model, repo_root):
     """A record's fields sit inside a list, which the unread-key scan reads as one leaf."""
@@ -508,5 +525,5 @@ def test_every_field_of_a_dataset_record_is_read_by_the_loaders(model, repo_root
 
     source = (repo_root / "src" / "obliskiq" / "research" / "data.py").read_text(encoding="utf-8")
     read = {node.attr for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Attribute)}
-    # The discriminator chooses the loader; every other field must be read by name.
-    assert set(model.model_fields) - {"vendor"} <= read
+    # The discriminators choose the loader; every other field must be read by name.
+    assert set(model.model_fields) - {"vendor", "method"} <= read

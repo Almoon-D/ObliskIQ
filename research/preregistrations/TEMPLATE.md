@@ -23,11 +23,13 @@ theta_justification: Why an effect below theta is not worth having.
 alpha: null                      # null takes research.decision.alpha (0.05): the interval has
                                  # level 1 - 2 alpha, Bonferroni-adjusted over the tests below
 target_power: null               # null takes research.decision.target_power (0.8)
-tests_in_confirmation: 1         # the tests of the confirmation run (Bonferroni)
+tests_in_confirmation: 1         # one test per candidate (Bonferroni across them); must equal
+                                 # the number of candidates
 adjustment: >-
   Bonferroni across the tests of the confirmation run; the deflated Sharpe across every trial
   the registry holds for this id.
-trial_budget: 20                 # exploratory trials allowed before the confirmation run
+trial_budget: 20                 # exploratory trials allowed before the confirmation run (each
+                                 # candidate of an exploratory run is one trial); 0 for none
 study:
   start: 2010-01-01              # the first rebalance date is the first month end on or after
   end: 2025-12-31                # the horizon: everything is sold and taxed on its month end
@@ -45,25 +47,37 @@ study:
       issuer_country: null       # transaction taxes follow the issuer; null for a fund
       income_country: null       # who withholds on its income (withholding_at_source in es.yaml)
       market_cap_usd: null       # for the friction tier; null is the illiquid tier, labelled
+      expense_ratio: null        # a vehicle's yearly cost deducted from an index proxy; null when
+                                 # the price already carries its fund's costs
       security:
         kind: etf
         isin: IE00B4L5Y983
         issuer: iShares
         tracked_index: MSCI World
         listed: true
-  candidate:
-    name: the candidate
-    strategy: fixed_weights      # fixed_weights or buy_and_hold
-    weights: {WORLD: "1"}
+  # The core's variants name roles: each role's primary vehicle and swap partner (instrument
+  # keys), and what the variants share (environments, declared long-run risk, bands, the tilt,
+  # the tax-aware rule). Both null when only fixed_weights and buy_and_hold are named.
+  roles: null
+  core: null
   reference:
     name: the reference
-    strategy: buy_and_hold
+    strategy: buy_and_hold       # fixed_weights, buy_and_hold, banded_weights, risk_balance or
+                                 # equity_overlay
     weights: {WORLD: "1"}
+    simplicity: 1                # the frontier resolves to the lowest rank, then turnover
+  candidates:                    # each one is tested against the reference
+    - name: the candidate
+      strategy: fixed_weights
+      weights: {WORLD: "1"}
+      simplicity: 2
 bootstrap:
   n_boot: 1000                   # paired moving-block bootstrap paths
   block_months: 12
   seed: 20261016
 drawdown_limits: ["0.2", "0.35"] # the probability of breaching each is reported (D60)
+frontier: null                   # {breach_probabilities: [...]}: with drawdown_limits, the grid
+aspiration: null                 # yearly growth rates reported as a distance, never a gate
 subperiods:                      # the sign must hold in each (D63)
   - [2010-01-01, 2017-12-31]
   - [2018-01-01, 2025-12-31]
@@ -78,10 +92,13 @@ adequacy:                        # failing any is "not evaluable" (D62)
   min_effective_observations: 120
 power:                           # stated before any data: `obliskiq research power <file>`
   sd_per_period: "0.02"          # sd of one observation of the per-period metric
+  by_candidate: null             # {candidate: sd} where a candidate's differs
   periods: 192
   periods_per_year: 12
   names_per_period: 1
   rho: "0"                       # average correlation between names in a period
+structure: null                  # a pre-tax check of the tilt on the longest history
+                                 # (descriptive, never an outcome)
 ---
 
 # Title

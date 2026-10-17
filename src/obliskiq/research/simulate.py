@@ -6,8 +6,10 @@ At each rebalance date, in order:
 1. **Income** paid since the last date on the units held is received: the source withholds at
    the policy's rate and the rest is cash; the gross enters the tax ledger.
 2. **Tax** of every year whose payment date has come is settled and becomes a liability.
-3. The strategy sees the market **as of the date** (nothing published later) and names its
-   target weights of the account's value after that liability; ``None`` keeps what is held.
+3. The strategy sees the market **as of the date** (nothing published later) and the account's
+   **book** (units, values, and the lot engine's answers about the tax a trade would cost or
+   defer), and names its target weights of the account's value after that liability; ``None``
+   keeps what is held.
 4. **Delta execution**: only the change to each target is traded, and only when it exceeds the
    no-trade band; sells first, then the tax is paid, then buys within the cash left (cash never
    goes below zero, and nothing is borrowed). Every leg is priced by ``quant/costs.py`` on the
@@ -22,23 +24,31 @@ exactly (their shortest representation). The series of mark-to-market values is 
 each date's trades and tax; at the horizon it records the value before the terminal sale, and
 the liquidation value is kept beside it.
 
+A run **before tax** (``SimulationSettings.taxed`` false) trades the same way and records every
+lot, but no tax is withheld, settled or paid: it is the same strategy's pre-tax result, so a
+report can state every metric before and after tax.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import calendar
 import math
-from collections.abc import Mapping, Sequence
+from bisect import bisect_right
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from itertools import pairwise
+from operator import attrgetter
 from typing import Final, Protocol
 
 from ..domain.enums import AssetClass
 from ..domain.research import Observation
-from ..domain.tax import SecurityIdentity, TaxYearSummary
+from ..domain.tax import ProposedTrade, SecurityIdentity, TaxYearSummary
 from ..errors import SimulationError
 from ..jurisdiction.tax import TaxPolicy
 from ..quant.costs import CostBook, LegCost, OrderTerms
+from ..quant.trend import TrendRule, TrendState, trend_state
 from ..tax.lots import LotEngine
 from .stats import annualised_log_growth, max_drawdown, years_between
 
@@ -48,6 +58,8 @@ ONE = Decimal(1)
 EURO: Final = "EUR"
 #: Halvings in the search for the share of a buy list the cash covers (2^-30 of the list).
 SCALE_BISECTIONS: Final = 30
+#: Months in a year, for stepping through month ends.
+MONTHS_PER_YEAR: Final = 12
 
 
 def exact(value: float) -> Decimal:
@@ -89,11 +101,209 @@ def _visible(rows: Sequence[Observation], as_of: date) -> list[Observation]:
     return [o for o in rows if o.available_on <= as_of and o.observed_on <= as_of]
 
 
+def month_end(year: int, month: int) -> date:
+    return date(year, month, calendar.monthrange(year, month)[1])
+
+
+class IndexedSeries:
+    """One series' rows sorted by observation then publication, read by bisection."""
+
+    def __init__(self, rows: Sequence[Observation]) -> None:
+        ordered = list(rows)
+        if any(
+            (a.observed_on, a.available_on) > (b.observed_on, b.available_on)
+            for a, b in pairwise(ordered)
+        ):
+            ordered.sort(key=attrgetter("observed_on", "available_on"))
+        self.rows = ordered
+        self._ordinals = [row.observed_on.toordinal() for row in self.rows]
+        #: Every row public on the day it describes: a read then does not depend on ``as_of``.
+        self.as_observed = all(row.available_on == row.observed_on for row in self.rows)
+
+    def latest(self, on: date, as_of: date) -> Observation | None:
+        """The latest vintage of the latest observation on or before ``on`` public by
+        ``as_of``."""
+        position = bisect_right(self._ordinals, on.toordinal())
+        while position > 0:
+            position -= 1
+            row = self.rows[position]
+            if row.available_on <= as_of:
+                return row
+        return None
+
+    @property
+    def first(self) -> date | None:
+        return self.rows[0].observed_on if self.rows else None
+
+
+class PanelIndex:
+    """Every price and rate series of a panel, indexed once."""
+
+    def __init__(self, panel: Panel) -> None:
+        self.panel = panel
+        shared: dict[int, IndexedSeries] = {}
+
+        def indexed(rows: Sequence[Observation]) -> IndexedSeries:
+            # Instruments priced on one series (a role's two vehicles) share its index.
+            if id(rows) not in shared:
+                shared[id(rows)] = IndexedSeries(rows)
+            return shared[id(rows)]
+
+        self.prices = {key: indexed(rows) for key, rows in panel.prices.items()}
+        self.fx = {currency: indexed(rows) for currency, rows in panel.fx.items()}
+        #: Each instrument's closes at its completed month ends, filled as runs ask for them.
+        self.completed_months: dict[str, list[tuple[date, float]]] = {}
+        #: Trend states by instrument, cash instrument, rule and date: every run on the panel
+        #: that asks the same question on the same date gets the same answer.
+        self.trends: dict[tuple[str, str, TrendRule, date], TrendState | None] = {}
+        #: Listing prices and reference rates by key and date, as read on that date.
+        self.listing_prices: dict[tuple[str, date], Decimal | None] = {}
+        self.rates: dict[tuple[str, date], Decimal | None] = {}
+
+    def price_series(self, key: str) -> IndexedSeries:
+        return self.prices.get(key) or IndexedSeries(())
+
+    def fx_series(self, currency: str) -> IndexedSeries:
+        return self.fx.get(currency) or IndexedSeries(())
+
+
+class Pricing:
+    """Prices and reference rates as of a date, fresh enough or not at all, in the listing
+    currency or the base currency."""
+
+    def __init__(
+        self,
+        instruments: Mapping[str, SimInstrument],
+        index: PanelIndex,
+        settings: SimulationSettings,
+    ) -> None:
+        self.instruments = instruments
+        self.index = index
+        self.settings = settings
+
+    @staticmethod
+    def _fresh(series: IndexedSeries, on: date, as_of: date, max_age: int) -> Observation | None:
+        found = series.latest(on, as_of)
+        if found is None or on - found.observed_on > timedelta(days=max_age):
+            return None
+        return found
+
+    def listing_price(self, key: str, on: date, as_of: date | None = None) -> Decimal | None:
+        if as_of is None and (key, on) in self.index.listing_prices:
+            return self.index.listing_prices[(key, on)]
+        found = self._fresh(
+            self.index.price_series(key), on, on if as_of is None else as_of,
+            self.settings.max_price_age_days,
+        )  # fmt: skip
+        value = None if found is None or found.value <= 0 else exact(found.value)
+        if as_of is None:
+            self.index.listing_prices[(key, on)] = value
+        return value
+
+    def per_euro(self, currency: str, on: date, as_of: date | None = None) -> Decimal | None:
+        if currency == EURO:
+            return ONE
+        if as_of is None and (currency, on) in self.index.rates:
+            return self.index.rates[(currency, on)]
+        found = self._fresh(
+            self.index.fx_series(currency), on, on if as_of is None else as_of,
+            self.settings.max_fx_age_days,
+        )  # fmt: skip
+        value = None if found is None or found.value <= 0 else exact(found.value)
+        if as_of is None:
+            self.index.rates[(currency, on)] = value
+        return value
+
+    def to_base(
+        self, amount: Decimal, currency: str, on: date, as_of: date | None = None
+    ) -> Decimal | None:
+        base = self.settings.base_currency
+        if currency == base:
+            return amount
+        local = self.per_euro(currency, on, as_of)
+        target = self.per_euro(base, on, as_of)
+        if local is None or target is None:
+            return None
+        return amount * target / local
+
+    def month_end_closes(self, key: str, as_of: date) -> tuple[tuple[date, float], ...]:
+        """The base-currency close of ``key`` at each month end from its first month to the
+        month of ``as_of`` (the last one at ``as_of`` itself), each public by ``as_of``. A month
+        without a fresh close and rate ends the run: a signal over a gap is not computed.
+
+        For a series and rates public on the day they describe, a completed month's close does
+        not depend on ``as_of``, so it is computed once per panel and kept."""
+        series = self.index.price_series(key)
+        first = series.first
+        if first is None:
+            return ()
+        completed = (as_of.year - first.year) * MONTHS_PER_YEAR + as_of.month - first.month
+        current = self._month_end_close(key, series, as_of, as_of)
+        if not self._cacheable(key, series):
+            return (
+                *(
+                    self._month_end_close(key, series, self._month(first, k), as_of)
+                    for k in range(completed)
+                ),
+                current,
+            )
+        done = self.index.completed_months.setdefault(key, [])
+        while len(done) < completed:
+            done.append(self._month_end_close(key, series, self._month(first, len(done)), as_of))
+        return (*done[:completed], current)
+
+    def trend(self, key: str, cash: str, rule: TrendRule, as_of: date) -> TrendState | None:
+        """The tilt of ``key`` on ``as_of`` over the month ends it shares with ``cash``
+        (``quant.trend``); ``None`` while the history is shorter than the rule needs."""
+        memo = (key, cash, rule, as_of)
+        if memo not in self.index.trends:
+            bills = dict(self.month_end_closes(cash, as_of))
+            closes = [
+                (day, value) for day, value in self.month_end_closes(key, as_of) if day in bills
+            ]
+            self.index.trends[memo] = trend_state(
+                [value for _, value in closes], [bills[day] for day, _ in closes], rule
+            )
+        return self.index.trends[memo]
+
+    @staticmethod
+    def _month(first: date, offset: int) -> date:
+        """The last day of the month ``offset`` months after ``first``'s."""
+        year, month = divmod(
+            first.year * MONTHS_PER_YEAR + first.month - 1 + offset, MONTHS_PER_YEAR
+        )
+        return month_end(year, month + 1)
+
+    def _cacheable(self, key: str, series: IndexedSeries) -> bool:
+        currency = self.instruments[key].currency
+        rates = {currency, self.settings.base_currency} - {EURO}
+        return series.as_observed and (
+            currency == self.settings.base_currency
+            or all(self.index.fx_series(c).as_observed for c in rates)
+        )
+
+    def _month_end_close(
+        self, key: str, series: IndexedSeries, on: date, as_of: date
+    ) -> tuple[date, float]:
+        found = self._fresh(series, on, as_of, self.settings.max_price_age_days)
+        converted = (
+            None
+            if found is None
+            else self.to_base(
+                exact(found.value), self.instruments[key].currency, found.observed_on, as_of
+            )
+        )
+        if found is None or converted is None or converted <= ZERO:
+            raise SimulationError(f"{key} has no month-end close on {on} within the allowed age")
+        return month_end(on.year, on.month), float(converted)
+
+
 class MarketView:
     """What a strategy may see on ``as_of``: only observations public by then."""
 
-    def __init__(self, panel: Panel, as_of: date) -> None:
-        self._panel = panel
+    def __init__(self, source: Panel | Pricing, as_of: date) -> None:
+        self._pricing = source if isinstance(source, Pricing) else None
+        self._index = source.index if isinstance(source, Pricing) else PanelIndex(source)
         self._as_of = as_of
 
     @property
@@ -101,7 +311,7 @@ class MarketView:
         return self._as_of
 
     def prices(self, key: str) -> tuple[tuple[date, float], ...]:
-        rows = _visible(self._panel.prices.get(key, ()), self._as_of)
+        rows = _visible(self._index.panel.prices.get(key, ()), self._as_of)
         latest: dict[date, Observation] = {}
         for row in rows:
             known = latest.get(row.observed_on)
@@ -109,16 +319,81 @@ class MarketView:
                 latest[row.observed_on] = row
         return tuple((day, latest[day].value) for day in sorted(latest))
 
+    def _priced(self) -> Pricing:
+        if self._pricing is None:
+            raise SimulationError("a view over a bare panel has no base-currency closes")
+        return self._pricing
+
+    def month_end_closes(self, key: str) -> tuple[tuple[date, float], ...]:
+        """``key``'s base-currency close at each month end through ``as_of`` (see
+        :meth:`Pricing.month_end_closes`)."""
+        return self._priced().month_end_closes(key, self._as_of)
+
+    def trend(self, key: str, cash: str, rule: TrendRule) -> TrendState | None:
+        """``key``'s trend state on ``as_of`` against ``cash`` (see :meth:`Pricing.trend`)."""
+        return self._priced().trend(key, cash, rule, self._as_of)
+
+
+class Book:
+    """What a strategy may know of the account on a date: units, base-currency values, the
+    value it may invest (after the tax now owed), and the lot engine's answers about a trade.
+    The tax questions run on a copy of the engine (DECISIONS D74), so asking changes nothing."""
+
+    def __init__(
+        self,
+        units: Mapping[str, Decimal],
+        price: Callable[[str], Decimal],
+        investable: Decimal,
+        engine: LotEngine,
+        on: date,
+    ) -> None:
+        self.units = dict(units)
+        self._price = price
+        self.investable = investable
+        self._engine = engine
+        self.on = on
+
+    def price(self, key: str) -> Decimal:
+        """The base-currency price of one unit of ``key``."""
+        return self._price(key)
+
+    def value(self, key: str) -> Decimal:
+        quantity = self.units.get(key, ZERO)
+        return quantity * self._price(key) if quantity > ZERO else ZERO
+
+    def weight(self, key: str) -> Decimal:
+        """``key``'s share of the investable value."""
+        return self.value(key) / self.investable if self.investable > ZERO else ZERO
+
+    def basis(self, key: str) -> Decimal:
+        """What a sale of every unit counts against: the lots' cost and the losses they carry."""
+        return self._engine.basis(key)
+
+    def units_for(self, key: str, value: Decimal) -> Decimal:
+        """The whole units of ``key`` that ``value`` buys or sells, rounded down."""
+        return (value / self._price(key)).to_integral_value(rounding=ROUND_FLOOR)
+
+    def sale_tax(self, key: str, quantity: Decimal) -> Decimal:
+        """The tax a sale of ``quantity`` units now would add to the year (negative: saved)."""
+        if quantity <= ZERO:
+            return ZERO
+        trade = ProposedTrade(
+            security=key, side="sell", quantity=quantity, price=self._price(key), on=self.on
+        )
+        return self._engine.tax_cost(trade).tax
+
+    def purchase_defers_loss(self, key: str) -> bool:
+        """Whether buying ``key`` now would defer a loss under the wash-sale rule."""
+        return self._engine.purchase_defers_loss(key, self.on)
+
 
 class Strategy(Protocol):
-    """Target weights of the account's value, or ``None`` to keep what is held."""
+    """Target weights of the account's investable value, or ``None`` to keep what is held."""
 
     @property
     def name(self) -> str: ...
 
-    def targets(
-        self, view: MarketView, holdings: Mapping[str, Decimal]
-    ) -> Mapping[str, Decimal] | None: ...
+    def targets(self, view: MarketView, book: Book) -> Mapping[str, Decimal] | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +408,7 @@ class SimulationSettings:
     whole_units: bool
     days_per_year: float
     cost_multiplier: Decimal
+    taxed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,36 +478,24 @@ class Simulator:
         self._costs = costs
         self._policy = policy
         self._settings = settings
+        self._pricing = Pricing(self._instruments, PanelIndex(panel), settings)
 
     # ── prices and rates ──
 
-    @staticmethod
-    def _latest(rows: Sequence[Observation], on: date, max_age: int) -> float | None:
-        """The latest vintage of the latest observation public on ``on``, if fresh enough."""
-        visible = _visible(rows, on)
-        if not visible:
-            return None
-        found = max(visible, key=lambda row: (row.observed_on, row.available_on))
-        if on - found.observed_on > timedelta(days=max_age):
-            return None
-        return found.value
-
     def price(self, key: str, on: date) -> Decimal:
         """The listing-currency price of ``key`` on ``on``; a missing or stale one stops the run."""
-        value = self._latest(self._panel.prices.get(key, ()), on, self._settings.max_price_age_days)
-        if value is None or value <= 0:
+        value = self._pricing.listing_price(key, on)
+        if value is None:
             raise SimulationError(f"{key} has no price on {on} within the allowed age")
-        return exact(value)
+        return value
 
     def _per_euro(self, currency: str, on: date) -> Decimal:
-        if currency == EURO:
-            return ONE
-        value = self._latest(self._panel.fx.get(currency, ()), on, self._settings.max_fx_age_days)
-        if value is None or value <= 0:
+        value = self._pricing.per_euro(currency, on)
+        if value is None:
             raise SimulationError(
                 f"no reference rate for {currency} on {on} within the allowed age"
             )
-        return exact(value)
+        return value
 
     def to_base(self, amount: Decimal, currency: str, on: date) -> Decimal:
         base = self._settings.base_currency
@@ -241,6 +505,12 @@ class Simulator:
 
     def _base_price(self, key: str, on: date) -> Decimal:
         return self.to_base(self.price(key, on), self._instruments[key].currency, on)
+
+    def _pricer(self, on: date) -> Callable[[str], Decimal]:
+        def price(key: str) -> Decimal:
+            return self._base_price(key, on)
+
+        return price
 
     # ── one leg ──
 
@@ -316,8 +586,10 @@ class Simulator:
             if previous is not None:
                 self._receive_income(previous, on, engine, state)
             liability = self._taxes_due(on, engine, state, through=None)
-            weights = strategy.targets(MarketView(self._panel, on), dict(state.units))
-            self._rebalance(weights, self._marked(on, state), liability, on, engine, state)
+            marked = self._marked(on, state)
+            book = Book(state.units, self._pricer(on), max(marked - liability, ZERO), engine, on)
+            weights = strategy.targets(MarketView(self._pricing, on), book)
+            self._rebalance(weights, marked, liability, on, engine, state)
             nav.append(float(self._marked(on, state)))
             previous = on
         self._receive_income(trading[-1], horizon, engine, state)
@@ -367,14 +639,17 @@ class Simulator:
                         gross=gross,
                         source_country=instrument.income_country,
                     )
-                    state.cash += gross - event.withheld
-                    state.withheld += event.withheld
+                    withheld = event.withheld if self._settings.taxed else ZERO
+                    state.cash += gross - withheld
+                    state.withheld += withheld
 
     def _taxes_due(
         self, on: date, engine: LotEngine, state: _State, *, through: int | None
     ) -> Decimal:
         """Settle every open year whose payment date has come (or every year through
-        ``through``, at the horizon); returns the tax now owed."""
+        ``through``, at the horizon); returns the tax now owed. A run before tax owes none."""
+        if not self._settings.taxed:
+            return ZERO
         owed = ZERO
         year = state.next_year
         while year <= on.year and (

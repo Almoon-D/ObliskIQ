@@ -7,7 +7,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import math
-from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 
@@ -23,6 +22,7 @@ from obliskiq.jurisdiction import load_profile
 from obliskiq.jurisdiction.tax_es_irpf import EsIrpfTaxPolicy
 from obliskiq.quant.costs import CostBook, FrictionInputs
 from obliskiq.research.simulate import (
+    Book,
     MarketView,
     Panel,
     SimInstrument,
@@ -213,7 +213,7 @@ def test_tax_with_too_little_cash_is_paid_by_selling(es):
     class SwitchThenHold:
         name = "switch"
 
-        def targets(self, view: MarketView, holdings: Mapping[str, Decimal]):
+        def targets(self, view: MarketView, book: Book):
             if view.as_of == DATES[0]:
                 return {"A": D(1)}
             if view.as_of == DATES[1]:

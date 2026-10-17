@@ -143,6 +143,22 @@ def test_a_loss_is_deferred_by_a_purchase_before_it_and_released_when_those_unit
     assert engine.ledger.provisional(2025).gains == D(-150)
 
 
+def test_a_part_sale_of_replacement_units_never_leaves_more_replacements_than_units(engine):
+    # Fourteen units bought, then fourteen more; the first fourteen sold at a loss inside the
+    # window, so every unit of the second lot is a replacement.
+    engine.acquire("WORLD", on=date(2025, 1, 2), quantity=D(14), cost=D(140))
+    engine.acquire("WORLD", on=date(2025, 3, 1), quantity=D(14), cost=D(140))
+    engine.dispose("WORLD", on=date(2025, 3, 15), quantity=D(14), proceeds=D(70))
+    [replaced] = engine.lots("WORLD")
+    assert replaced.replacement_units == replaced.quantity == D(14)
+    # Five go: 5/14 rounds down at Decimal's precision, so 14 - 14 x 5/14 is a hair above the
+    # nine units left; the lot's invariant refused that before the replacements were capped.
+    engine.dispose("WORLD", on=date(2025, 7, 1), quantity=D(5), proceeds=D(45))
+    [left] = engine.lots("WORLD")
+    assert left.quantity == D(9)
+    assert left.replacement_units == D(9)
+
+
 def test_a_purchase_within_two_months_after_a_loss_defers_it_out_of_its_year(engine):
     engine.acquire("WORLD", on=date(2025, 10, 1), quantity=D(100), cost=D(1000))
     sale = engine.dispose("WORLD", on=date(2025, 12, 15), quantity=D(100), proceeds=D(800))

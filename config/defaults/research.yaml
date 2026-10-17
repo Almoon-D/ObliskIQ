@@ -5,6 +5,9 @@ research:
   # Where `obliskiq research run` writes its report, relative to the repository that holds the
   # pre-registration.
   reports_dir: research/reports
+  # Processes the bootstrap's paths are shared among (1 runs them in this process). The paths are
+  # drawn from the pre-registered seed before they are shared, so the result does not depend on it.
+  workers: 4
 
   decision:
     # The interval [L, U] of the primary effect has level 1 - 2 alpha, Bonferroni-adjusted across
@@ -65,6 +68,26 @@ research:
       bias_notes:
         - Yahoo closes are split-adjusted backwards and not point in time; a split after the date changes the level.
         - The listing's history only; a fund that closed before the download is absent (survivorship).
+    msci:
+      # MSCI's public end-of-day index levels (the endpoint behind its index pages).
+      url: https://app2.msci.com/products/service/index/indexmaster/getLevelDataForGraph
+      earliest_start: 1997-01-01
+      bias_notes:
+        - MSCI index levels are published at the end of each calculation day; MSCI may restate history without vintages.
+        - An index, not a fund - no fund costs or tracking difference (a study deducts the vehicle's expense ratio).
+    ecb_data:
+      # The ECB Data Portal's SDMX REST interface: <base_url>/<flow>/<key>?format=csvdata.
+      base_url: https://data-api.ecb.europa.eu/service/data
+      bias_notes:
+        - ECB Data Portal values as published now; the ECB revises some series without vintages.
+    bundesbank:
+      # The Bundesbank's time-series database REST interface: <base_url>/<flow>/<key>?format=csv.
+      base_url: https://api.statistiken.bundesbank.de/rest/data
+      bias_notes:
+        - Bundesbank estimates as published now, without vintages.
+    derived:
+      bias_notes:
+        - Computed by the harness from series in the research store; it carries every bias of its inputs.
 
   # Datasets `obliskiq research data load` knows. Each loads one or more series named
   # <id>.<field>. vendor yahoo: `symbol` (Yahoo's ticker), `currency`, `start`. ken_french: `file`
@@ -115,3 +138,150 @@ research:
       start: 2009-01-01
       bias_notes:
         - iShares Core MSCI World UCITS ETF (accumulating) on Xetra.
+    # The US market and the one-month bill, public at the month's close: the market's return
+    # and the bill's yield were known then; the library recomputes them from CRSP later.
+    - id: ff3_market
+      vendor: ken_french
+      file: F-F_Research_Data_Factors_CSV.zip
+      section: 0
+      frequency: monthly
+      columns: [Mkt-RF, RF]
+      release_lag_days: 0
+      bias_notes:
+        - The US market's excess return and the one-month bill, monthly; public at the month's close (the market's return and the bill's yield were known then; the library's values are a later reconstruction).
+    - id: msci_world_eur
+      vendor: msci
+      index_code: "990100"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI World (large and mid caps of developed markets), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: msci_em_eur
+      vendor: msci
+      index_code: "891800"
+      variant: NETR
+      currency: EUR
+      start: 1997-01-01
+      bias_notes:
+        - MSCI Emerging Markets (large and mid caps), net total return in EUR, daily; dividends reinvested after the withholding MSCI applies to non-resident institutions.
+    - id: ecb_eonia
+      vendor: ecb_data
+      flow: EON
+      key: D.EONIA_TO.RATE
+      units: percent a year
+      start: 1999-01-01
+      bias_notes:
+        - EONIA, the euro overnight index average, until its end on 3 January 2022; from 2 October 2019 it was the euro short-term rate plus 8.5 basis points.
+    - id: ecb_estr
+      vendor: ecb_data
+      flow: EST
+      key: B.EU000A2X2A25.WT
+      units: percent a year
+      start: 2019-10-01
+      bias_notes:
+        - The euro short-term rate (euro STR), from 1 October 2019; published the next TARGET day at 08:00 CET.
+    - id: bbk_bund_04y
+      vendor: bundesbank
+      flow: BBSIS
+      key: D.I.ZST.ZI.EUR.S1311.B.A604.R04XX.R.A.A._Z._Z.A
+      units: percent a year
+      start: 1997-01-01
+      bias_notes:
+        - Zero-coupon yield of listed German Federal securities at a residual maturity of 4 years (Svensson method), daily.
+    - id: bbk_bund_05y
+      vendor: bundesbank
+      flow: BBSIS
+      key: D.I.ZST.ZI.EUR.S1311.B.A604.R05XX.R.A.A._Z._Z.A
+      units: percent a year
+      start: 1997-01-01
+      bias_notes:
+        - Zero-coupon yield of listed German Federal securities at a residual maturity of 5 years (Svensson method), daily.
+    - id: bbk_bund_16y
+      vendor: bundesbank
+      flow: BBSIS
+      key: D.I.ZST.ZI.EUR.S1311.B.A604.R16XX.R.A.A._Z._Z.A
+      units: percent a year
+      start: 1997-01-01
+      bias_notes:
+        - Zero-coupon yield of listed German Federal securities at a residual maturity of 16 years (Svensson method), daily.
+    - id: bbk_bund_17y
+      vendor: bundesbank
+      flow: BBSIS
+      key: D.I.ZST.ZI.EUR.S1311.B.A604.R17XX.R.A.A._Z._Z.A
+      units: percent a year
+      start: 1997-01-01
+      bias_notes:
+        - Zero-coupon yield of listed German Federal securities at a residual maturity of 17 years (Svensson method), daily.
+    # EONIA until its last fixing, then the euro STR: the overnight rate a euro money-market
+    # fund earns before its costs.
+    - id: euro_cash
+      vendor: derived
+      method: overnight_accrual
+      segments:
+        - series: ecb_eonia.value
+          through: 2021-12-31
+        - series: ecb_estr.value
+          through: null
+      day_count_basis: 360
+      currency: EUR
+      base_level: "100"
+      bias_notes:
+        - An overnight deposit rolled every day at EONIA, then the euro STR, actual/360; no fund cost (a study deducts the vehicle's expense ratio).
+    # The Bundesbank's Svensson rates are continuously compounded: the published 1-, 5- and
+    # 10-year rates of 5 October 2026 equal the Svensson formula of that day's parameters
+    # (docs/knowledge/research-sources.md).
+    - id: bund_zero_05y
+      vendor: derived
+      method: constant_maturity_zero
+      yield_series: bbk_bund_05y.value
+      maturity_years: 5
+      shorter_yield_series: bbk_bund_04y.value
+      shorter_maturity_years: 4
+      compounding: continuous
+      year_basis_days: "365.25"
+      currency: EUR
+      base_level: "100"
+      bias_notes:
+        - A 5-year zero-coupon German Federal bond rolled daily at constant maturity; German Federal securities only (no other euro government's spread), and a fitted curve rather than traded bonds.
+    - id: bund_zero_17y
+      vendor: derived
+      method: constant_maturity_zero
+      yield_series: bbk_bund_17y.value
+      maturity_years: 17
+      shorter_yield_series: bbk_bund_16y.value
+      shorter_maturity_years: 16
+      compounding: continuous
+      year_basis_days: "365.25"
+      currency: EUR
+      base_level: "100"
+      bias_notes:
+        - A 17-year zero-coupon German Federal bond rolled daily at constant maturity; German Federal securities only (no other euro government's spread), and a fitted curve rather than traded bonds.
+    - id: tip
+      vendor: yahoo
+      symbol: TIP
+      currency: USD
+      start: 2003-01-01
+      bias_notes:
+        - iShares TIPS Bond ETF (US Treasury inflation-protected securities), NYSE Arca; its fee is in its price.
+    - id: ief
+      vendor: yahoo
+      symbol: IEF
+      currency: USD
+      start: 2002-01-01
+      bias_notes:
+        - iShares 7-10 Year Treasury Bond ETF, Nasdaq; its fee is in its price.
+    - id: gld
+      vendor: yahoo
+      symbol: GLD
+      currency: USD
+      start: 2004-01-01
+      bias_notes:
+        - SPDR Gold Shares (physically backed), NYSE Arca; its fee is in its price.
+    - id: crsox
+      vendor: yahoo
+      symbol: CRSOX
+      currency: USD
+      start: 2004-01-01
+      bias_notes:
+        - Cantor Fitzgerald (formerly Credit Suisse) Commodity Return Strategy Fund, institutional class, a US mutual fund managed against the Bloomberg Commodity Index Total Return; its fee is in its price.

@@ -116,7 +116,8 @@ def test_the_toy_study_matches_the_hand_calculation(
     with open_research_store(shipped_settings, data_dir) as store:
         result = run_study(runner, prereg_path, store)
     assert result.dates == tuple(DATES)
-    candidate, reference = result.candidate.historical, result.reference.historical
+    candidate, reference = result.candidates[0].historical, result.reference.historical
+    [test] = result.tests
     assert candidate is not None and reference is not None  # noqa: PT018
     assert candidate.liquidation_value == REBALANCED
     assert reference.liquidation_value == HELD
@@ -125,14 +126,20 @@ def test_the_toy_study_matches_the_hand_calculation(
         (2025, Decimal("375.3355"), date(2025, 12, 31)),
     ]
     assert [(t.tax_year, t.amount) for t in reference.taxes] == [(2025, Decimal("452.9315"))]
-    assert result.estimate == pytest.approx(EFFECT)
+    assert test.estimate == pytest.approx(EFFECT)
     assert result.coverage == 1.0
-    assert all(check.passed for check in result.decision.checks)
-    assert result.decision.outcome is not Outcome.NOT_EVALUABLE
-    low, high = result.decision.interval
+    assert all(check.passed for check in result.checks)
+    assert test.decision.outcome is not Outcome.NOT_EVALUABLE
+    assert test.decision.interval is not None
+    low, high = test.decision.interval
     assert low <= high
-    assert result.robustness is not None
-    assert [p.estimate is not None for p in result.robustness.subperiods] == [True, True]
+    assert test.robustness is not None
+    assert [p.estimate is not None for p in test.robustness.subperiods] == [True, True]
+    # Before tax the same trades leave more: no tax is withheld, settled or paid.
+    pre_tax = result.candidates[0].pre_tax
+    assert pre_tax is not None
+    assert pre_tax.tax_paid == 0
+    assert pre_tax.liquidation_value > candidate.liquidation_value
     assert result.cost_labels == (
         "commission:europe_eur",
         "friction_assumption",
@@ -146,9 +153,9 @@ def test_the_same_inputs_and_seed_give_the_same_result(
     with open_research_store(shipped_settings, data_dir) as store:
         first = run_study(runner, prereg_path, store)
         second = run_study(runner, prereg_path, store)
-    assert first.decision.interval == second.decision.interval
+    assert first.tests == second.tests
     assert first.inputs_sha256 == second.inputs_sha256
-    assert first.candidate.median_log_growth == second.candidate.median_log_growth
+    assert first.candidates[0].median_log_growth == second.candidates[0].median_log_growth
 
 
 def test_a_changed_cost_or_tax_rule_changes_the_inputs_hash(
@@ -195,26 +202,25 @@ def test_nothing_published_after_the_horizon_changes_any_output(
     with open_research_store(shipped_settings, perturbed) as store:
         put_toy(store, extra=later)
         after = run_study(runner, prereg_path, store)
-    for field in ("estimate", "se", "detectable", "coverage", "dates"):
+    for field in ("coverage", "dates", "tests", "frontier", "checks"):
         assert getattr(before, field) == getattr(after, field), field
-    assert before.decision.interval == after.decision.interval
-    assert before.decision.outcome is after.decision.outcome
-    assert before.candidate.median_log_growth == after.candidate.median_log_growth
-    assert before.candidate.breach == after.candidate.breach
-    assert before.robustness == after.robustness
-    assert before.deflated == after.deflated
+    for b, a in zip(before.portfolios, after.portfolios, strict=True):
+        assert b.median_log_growth == a.median_log_growth
+        assert b.breach == a.breach
+        assert b.terminal_wealth_p5 == a.terminal_wealth_p5
 
 
 def test_missing_or_late_data_is_not_evaluable(runner, prereg_path, tmp_path, shipped_settings):
     with open_research_store(shipped_settings, tmp_path / "empty") as store:
         result = run_study(runner, prereg_path, store)
-    assert result.decision.outcome is Outcome.NOT_EVALUABLE
-    failed = {c.name for c in result.decision.checks if not c.passed}
+    [test] = result.tests
+    assert test.decision.outcome is Outcome.NOT_EVALUABLE
+    failed = {c.name for c in result.checks if not c.passed}
     assert {"data loaded", "coverage", "effective observations"} <= failed
-    assert result.robustness is None
+    assert test.robustness is None
     report = render(result)
     assert "**not evaluable**" in report
-    assert "Not run: the outcome is not evaluable." in report
+    assert "rebalanced: not run (the outcome is not evaluable)." in report
     with open_research_store(shipped_settings, tmp_path / "lagged") as store:
         put_toy(store)
         lagged = toy_series("toy.a_close").model_copy(
@@ -226,7 +232,7 @@ def test_missing_or_late_data_is_not_evaluable(runner, prereg_path, tmp_path, sh
         ]
         replace_research_series(store, lagged, rows)
         result = run_study(runner, prereg_path, store)
-    check = next(c for c in result.decision.checks if c.name == "point in time")
+    check = next(c for c in result.checks if c.name == "point in time")
     assert not check.passed
     assert "toy.a_close" in check.detail
 
@@ -246,7 +252,7 @@ def test_a_toy_study_runs_end_to_end_through_the_command_line(
     assert lock_path(prereg_path).is_file()
     status, out, err = cli(repo_root, "research", "run", str(prereg_path))
     assert status == EXIT_OK, out + err
-    assert out.startswith("toy_rotation: ")
+    assert out.startswith("toy_rotation:\n  rebalanced: ")
     assert f"estimate {EFFECT:.4%} a year" in out
     report = repo / "research" / "reports" / "toy_rotation.md"
     text = report.read_text(encoding="utf-8")
@@ -257,6 +263,10 @@ def test_a_toy_study_runs_end_to_end_through_the_command_line(
         "seed 7",
         "`" + "a" * 64 + "`",
         "## What this test cannot conclude",
+        "## The frontier",
+        "No frontier was pre-registered.",
+        "## Year by year",
+        "No structure check was pre-registered.",
         "## Bias notes",
         "Not tax advice.",
         "two-month rule",
@@ -338,11 +348,11 @@ def test_research_power_states_power_before_any_data(repo_root, prereg_path):
     status, out, _ = cli(repo_root, "research", "power", str(prereg_path))
     assert status == EXIT_OK
     # sd 0.02 a month over 4 independent months, annualised: 0.02 x 12 / 2 = 12 % a year.
-    assert "standard error          12.0000% a year" in out
     # Power: Phi(0.005 / 0.12 - 1.6449) = Phi(-1.6032) = 0.054; detectable at 0.8:
     # (1.6449 + 0.8416) x 12 % = 29.84 %.
-    assert "power to detect theta   0.054" in out
-    assert "detectable at 0.8      29.8377% a year" in out
+    row = next(line for line in out.splitlines() if line.strip().startswith("rebalanced"))
+    assert row.split() == ["rebalanced", "12.0000%", "0.054", "29.8377%"]
+    assert "effective observations  4 (1 per period)" in out
     status, out, _ = cli(repo_root, "research", "power", str(prereg_path.with_name("missing.md")))
     assert status == EXIT_INVALID
     assert "cannot be read" in out

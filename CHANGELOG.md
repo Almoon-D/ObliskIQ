@@ -5,6 +5,58 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.7.0] - 2026-10-17
+
+Session 4c, first part — the harness for the core verdict. A pre-registration now tests several
+candidates against one reference (one test each, Bonferroni across them), the core's variants
+are strategies of the harness, and the report states a frontier of after-tax growth against
+drawdown. The pre-registration and its one run follow in their own pull requests. No IBKR call.
+
+### Added
+
+- Research vendors MSCI (end-of-day index levels), the ECB Data Portal and the Bundesbank, and
+  two derived series computed from stored ones: an overnight-rate accrual (EONIA, then the euro
+  short-term rate) and a constant-maturity zero-coupon bond (DECISIONS D78). Migration 005 widens
+  the vendor list. Datasets for MSCI World and Emerging Markets in EUR, EONIA and the euro STR,
+  German Federal zero-coupon yields at 4, 5, 16 and 17 years, the euro cash index, 5- and 17-year
+  zeros, TIP, IEF, GLD, CRSOX and the Ken French market and bill as public at the month's close.
+- `quant/risk_budget.py`: long-only risk budgeting by cyclical coordinate descent on the convex
+  problem (the legacy `_risk_parity` fixed), tested against closed forms and an independent
+  Newton solve. `quant/trend.py`: momentum over cash and a moving average with hysteresis and a
+  scale floor (D80).
+- `research/strategies.py`: `banded_weights`, `risk_balance` and `equity_overlay` as one core
+  strategy — static weights by role, wide bands, the trend tilt with freed weight to cash,
+  tax-aware execution (a costly trend reduction held, losses taken, swap partners on a purchase
+  that would defer a loss) (D80).
+- `research/structure.py`: a pre-registered pre-tax check of the tilt on the longest history,
+  descriptive (D79).
+- The study and report: several candidates, the runs before tax, the frontier with its
+  resolution to the simplest portfolio the bootstrap cannot tell apart from the best, the
+  aspiration as a distance, static weights, a year-by-year table and taxes by year, power before
+  data per candidate (D79). `research.workers` shares the bootstrap's paths among processes
+  without changing the result (D81).
+- A pre-registration's fields `candidates`, `roles`, `core`, `frontier`, `aspiration`,
+  `structure`, `power.by_candidate`, each instrument's `expense_ratio` and each strategy's
+  `simplicity`; `trial_budget` may be 0.
+
+### Changed
+
+- The simulator gives a strategy a `Book` (values, the investable value after tax owed and the
+  lot engine's answers), indexes each series once and keeps prices, month-end closes and trend
+  states per panel (D81).
+- `obliskiq research power` prints each candidate's standard error, power and detectable effect;
+  `research run` records one trial per candidate and prints each candidate's outcome.
+- The lot engine's trial copy is built field by field; `LotEngine.basis` and
+  `LotEngine.purchase_defers_loss` answer without a trial.
+- MASTER_PLAN §5.4: the registered variants hold static weights from a declared covariance;
+  Session 13's prompt follows (D80, D82).
+
+### Fixed
+
+- A part sale of a lot whose units all carry a deferred loss could leave a rounding excess of
+  replacement units that the lot's own invariant refused; they are capped at the units left
+  (D81).
+
 ## [0.6.0] - 2026-10-17
 
 Session 4b — Research harness. One harness whose output can move capital, under every rule of
