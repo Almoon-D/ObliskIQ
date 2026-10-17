@@ -163,7 +163,8 @@ EUR, as observed and restated without vintages. The universe on each month end i
 in MSCI ACWI then (developed and emerging), from MSCI's market classification history: 49
 countries in 2001, 44 to 50 since, 53 in all. MSCI's endpoint serves 51 of them, from 29 December
 2000 (Qatar, the United Arab Emirates and Kuwait from 1 June 2005, Saudi Arabia from 1 September
-2014, all before they joined); all 51 load through the harness (`obliskiq research data load`).
+2014, all before they joined); all 51 loaded through the harness's MSCI loader on 2026-10-17
+(their datasets are configured with the cross-section harness).
 
 **Survivorship, measured.** Venezuela (a member until May 2006) and Russia (until March 2022) are
 not served under any code; MSCI's search lists only a "Russia Value" index that serves nothing.

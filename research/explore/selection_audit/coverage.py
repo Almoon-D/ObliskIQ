@@ -27,7 +27,7 @@ matched, the standard deviation of six-month (``HORIZON_SESSIONS``) log returns 
 SPY over the year after the sampled trade, and the mean pairwise correlation of those excess
 returns among stocks sampled in the same half-year (the rho of n_eff).
 
-Usage: python -I research/explore/selection_audit/coverage.py <out dir>
+Usage: python research/explore/selection_audit/coverage.py <out dir> (it imports yahoo.py beside it)
 """
 
 import csv
