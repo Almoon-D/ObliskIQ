@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import io
+import json
 import logging
 import math
 from datetime import date
@@ -26,8 +27,15 @@ from obliskiq.domain.research import (
 from obliskiq.errors import PreregistrationError
 from obliskiq.jurisdiction import load_profile
 from obliskiq.research.decide import Outcome
-from obliskiq.research.prereg import load_prereg
-from obliskiq.research.registry import TrialRegistry, lock_path, verify_lock, write_lock
+from obliskiq.research.prereg import front_matter, load_prereg
+from obliskiq.research.registry import (
+    TrialRegistry,
+    canonical_sha256,
+    file_sha256,
+    lock_path,
+    verify_lock,
+    write_lock,
+)
 from obliskiq.research.report import render
 from obliskiq.research.study import StudyRunner
 from obliskiq.store import Store, open_research_store
@@ -356,6 +364,23 @@ def test_research_power_states_power_before_any_data(repo_root, prereg_path):
     status, out, _ = cli(repo_root, "research", "power", str(prereg_path.with_name("missing.md")))
     assert status == EXIT_INVALID
     assert "cannot be read" in out
+
+
+def test_every_locked_preregistration_matches_its_lock_and_states_its_constants_hash(repo_root):
+    """The repository's own pre-registrations: unchanged since their lock (the merge commit is
+    checked by ``research run``, which needs the history a shallow checkout lacks), valid, and
+    stating the hash of their front matter where they state one."""
+    folder = repo_root / "research" / "preregistrations"
+    locks = sorted(folder.glob("*.lock"))
+    assert "core-allocation.lock" in [lock.name for lock in locks]
+    for lock in locks:
+        payload = json.loads(lock.read_text())
+        prereg = folder / payload["file"]
+        assert file_sha256(prereg) == payload["sha256"], prereg.name
+        load_prereg(prereg)
+        data, body = front_matter(prereg.read_text())
+        if "## Constants hash" in body:
+            assert canonical_sha256(data) in body, prereg.name
 
 
 def test_the_template_carries_every_field_and_parses(repo_root):
