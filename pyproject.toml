@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.5.1"
+version = "0.6.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -26,6 +26,7 @@ dependencies = [
     "pydantic>=2.12,<3",
     "pydantic-settings>=2.11,<3",
     "PyYAML>=6.0.3,<7",
+    "yfinance>=1.7,<2",
 ]
 
 [project.scripts]
@@ -63,6 +64,7 @@ only-include = [
     "tests",
     "config",
     "docs",
+    "research",
     ".github",
     "AGENTS.md",
     "CHANGELOG.md",
@@ -105,6 +107,12 @@ plugins = ["pydantic.mypy"]
 module = ["exchange_calendars", "exchange_calendars.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# yfinance ships no type information; its use is confined to research/data.py, which reads its
+# history frame through iteration and hands out standard-library types.
+module = ["yfinance", "yfinance.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
@@ -140,7 +148,7 @@ precision = 1
 show_missing = true
 skip_covered = true
 # Measured coverage minus one point; it only ever rises. docs/ROADMAP.md records each measurement.
-fail_under = 99.4
+fail_under = 99.5
 
 [tool.importlinter]
 root_packages = ["obliskiq"]
@@ -172,7 +180,7 @@ forbidden_modules = [
     "obliskiq.config", "obliskiq.store", "obliskiq.calendars", "obliskiq.quant",
     "obliskiq.ibkr", "obliskiq.data", "obliskiq.grid", "obliskiq.engines",
     "obliskiq.jurisdiction", "obliskiq.tax", "obliskiq.capital", "obliskiq.llm",
-    "obliskiq.decision", "obliskiq.execution", "obliskiq.orchestration",
+    "obliskiq.decision", "obliskiq.execution", "obliskiq.orchestration", "obliskiq.research",
     "obliskiq.scoreboard", "obliskiq.reporting", "obliskiq.server", "obliskiq.cli",
     "obliskiq.util", "obliskiq.errors", "obliskiq.env", "obliskiq.logging_setup",
 ]
@@ -187,6 +195,20 @@ name = "Jurisdiction policies never reach the broker, the network or execution"
 type = "forbidden"
 source_modules = ["obliskiq.jurisdiction"]
 forbidden_modules = ["obliskiq.ibkr", "httpx", "obliskiq.execution", "obliskiq.store"]
+
+[[tool.importlinter.contracts]]
+name = "The live decision path never reads research (DECISIONS D64)"
+type = "forbidden"
+source_modules = [
+    "obliskiq.decision", "obliskiq.execution", "obliskiq.ibkr", "obliskiq.engines",
+]
+forbidden_modules = ["obliskiq.research", "obliskiq.store.research"]
+
+[[tool.importlinter.contracts]]
+name = "Research never reaches execution or the broker"
+type = "forbidden"
+source_modules = ["obliskiq.research"]
+forbidden_modules = ["obliskiq.execution", "obliskiq.ibkr"]
 
 [[tool.importlinter.contracts]]
 name = "Calendars never reach the broker, the network or execution"

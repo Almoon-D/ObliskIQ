@@ -190,7 +190,7 @@ def test_a_bad_value_in_a_defaults_file_is_located_there(config_dir):
     _write(
         config_dir / "defaults" / "paths.yaml",
         "paths:\n  settings_audit_log: ../escape\n  database: d.db\n  manual_incidents: m.yaml\n"
-        "  ibkr_gateway: gw\n",
+        "  ibkr_gateway: gw\n  research_database: r.db\n",
     )
     (problem,) = _problems(config_dir)
     assert problem.startswith("config/defaults/paths.yaml: paths.settings_audit_log: must be")
@@ -201,7 +201,7 @@ def test_the_audit_log_must_stay_inside_the_data_dir(config_dir, value):
     _write(
         config_dir / "defaults" / "paths.yaml",
         f'paths:\n  settings_audit_log: "{value}"\n  database: d.db\n  manual_incidents: m.yaml\n'
-        "  ibkr_gateway: gw\n",
+        "  ibkr_gateway: gw\n  research_database: r.db\n",
     )
     assert "relative path inside the data directory" in _problems(config_dir)[0]
 

@@ -162,3 +162,27 @@ def test_every_order_path_read_is_bounded_or_a_listed_state_read() -> None:
     assert unbounded_reads(reads) == []
     assert set(functions) >= STATE_READS, "a listed state read no longer exists"
     assert {"positions_as_of", "cash_as_of"} <= set(reads), "the account snapshots keep as_of"
+
+
+# ── research history, the trial registry and tax lots (DECISIONS D27, D46) ──
+
+#: The harness's own records and the lot engine's state, read whole: series metadata describes a
+#: download, trials count whatever their date, lots are the engine's current state.
+RESEARCH_STATE_READS = {"research_series_info", "research_series_in", "trials_for", "tax_lots"}
+
+#: Names that write in ``store/research.py`` and ``store/lots.py``.
+RESEARCH_WRITE_PREFIXES = ("replace_", "record_", "save_")
+
+
+def test_every_research_read_is_bounded_or_a_listed_state_read() -> None:
+    from obliskiq.store import lots, research
+
+    functions = {**public_functions(research), **public_functions(lots)}
+    reads = {
+        name: function
+        for name, function in functions.items()
+        if not name.startswith(RESEARCH_WRITE_PREFIXES) and name not in RESEARCH_STATE_READS
+    }
+    assert set(reads) == {"research_observations"}, "a research read must bound itself by as_of"
+    assert unbounded_reads(reads) == []
+    assert set(functions) >= RESEARCH_STATE_READS, "a listed state read no longer exists"

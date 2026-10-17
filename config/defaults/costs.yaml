@@ -52,6 +52,75 @@ costs:
       source:
         origin: legacy/lite config.yaml, IBKR published fixed rate, documentation-derived and unverified @b1ebd49
         verify_live: true
+    # European shares, ETFs and ETCs on IBKR's fixed schedule, priced as DIRECT-ROUTED to the
+    # listing venue (0.10 % of value; IB SmartRouting is 0.05 % with a lower minimum, so a SMART
+    # order costs less than these rows say). Third-party exchange, clearing and regulatory fees are
+    # included in fixed pricing. One row per currency and minimum (docs/knowledge/costs.md).
+    - id: europe_eur
+      venues: [XETR, XLON, XAMS, XPAR, XMIL, XSWX]
+      asset_classes: [stock, etf, etc]
+      currency: EUR
+      kind: fraction_of_value
+      rate: "0.001"
+      minimum: "4.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: EUR-denominated shares, ETFs and ETCs on Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana and SIX, fixed pricing, direct-routed (0.10 % of value, minimum EUR 4.00)
+      source:
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.com/en/pricing/commissions-stocks.php), Fixed - Direct Routing column, read 2026-10-16
+        verify_live: true
+    - id: europe_usd
+      venues: [XLON, XAMS, XSWX]
+      asset_classes: [stock, etf, etc]
+      currency: USD
+      kind: fraction_of_value
+      rate: "0.001"
+      minimum: "6.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: USD-denominated shares, ETFs and ETCs on the LSE, Euronext Amsterdam and SIX, fixed pricing, direct-routed (0.10 % of value, minimum USD 6.00)
+      source:
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe", Fixed - Direct Routing column, read 2026-10-16
+        verify_live: true
+    - id: lse_gbp
+      venues: [XLON]
+      asset_classes: [stock, etf, etc]
+      currency: GBP
+      kind: fraction_of_value
+      rate: "0.001"
+      minimum: "4.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: GBP-denominated shares, ETFs and ETCs on the LSE, fixed pricing, direct-routed (0.10 % of value, minimum GBP 4.00)
+      source:
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (United Kingdom), Fixed - Direct Routing column, read 2026-10-16
+        verify_live: true
+    - id: six_gbp
+      venues: [XSWX]
+      asset_classes: [stock, etf, etc]
+      currency: GBP
+      kind: fraction_of_value
+      rate: "0.001"
+      minimum: "6.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: GBP-denominated shares, ETFs and ETCs on SIX, fixed pricing, direct-routed (0.10 % of value, minimum GBP 6.00)
+      source:
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (Switzerland), Fixed - Direct Routing column, read 2026-10-16
+        verify_live: true
+    - id: six_chf
+      venues: [XSWX]
+      asset_classes: [stock, etf, etc]
+      currency: CHF
+      kind: fraction_of_value
+      rate: "0.001"
+      minimum: "6.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: CHF-denominated shares, ETFs and ETCs on SIX, fixed pricing, direct-routed (0.10 % of value, minimum CHF 6.00)
+      source:
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (Switzerland), Fixed - Direct Routing column, read 2026-10-16
+        verify_live: true
     - id: us_treasury
       venues: null
       asset_classes: [bond]

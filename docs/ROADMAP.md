@@ -13,8 +13,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
-| 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | next | |
-| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | planned | |
+| 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | next | |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
@@ -37,6 +37,56 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 4b — Research harness (2026-10-16 → 2026-10-17, v0.6.0)
+
+**Landed.**
+- Tax (`tax/`, `jurisdiction/`, DECISIONS D74): `TaxPolicy` beside `EligibilityPolicy`;
+  `es_irpf` and the `generic` template, with every value and its source under `tax:` in
+  `config/jurisdictions/es.yaml`; the lot engine (FIFO, the two-month rule matched unit by unit
+  with deferral and release, the hooks `tax_cost`, `wash_sale_conflict`, `harvestable_losses`),
+  the ledger (offsets, a four-year carry-forward, the savings scale with its tax years, the
+  foreign-tax credit, payment by 30 June) and `tax_lots`. `docs/knowledge/tax-es.md` cites each
+  rule's article and the BOE text read on 2026-10-16. `test_no_tax_constants` keeps tax values
+  out of code.
+- Research data (`research/data.py`, `research/xlsx.py`, `store/research.py`, D72, D73): the
+  research store in its own file, series source-tagged and point in time (as observed, vintages
+  or a declared lag), loaders for yfinance, Ken French, AQR, FRED, ALFRED and the ECB on fixtures
+  recorded on 2026-10-16, base-currency conversion, coverage and survivorship.
+- The harness (`research/simulate.py`, `stats.py`, `decide.py`, `strategies.py`, `prereg.py`,
+  `registry.py`, `study.py`, `report.py`, D75, D76): the simulator with delta execution, costs on
+  the listing venue and tax as it arises; the statistics of D62–D63 against closed forms; the
+  decision rule with a property test that every interval lands in exactly one outcome; the trial
+  registry, the lock verified against git, single-shot confirmation runs and budgeted
+  exploration; the report.
+- `obliskiq research data load|coverage`, `research power`, `research run [--explore]`,
+  `research lock`; `research/preregistrations/TEMPLATE.md`, `research/explore/README.md`.
+- European commissions on Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana and SIX
+  (D77): a UCITS ETF order is priced end to end and filled in shadow.
+
+**Acceptance.** A toy study (two ETFs on Xetra, rebalanced against held) runs end to end through
+`obliskiq research run` on a pre-registration merged and locked in a git repository, and its
+liquidation values (11,916.9865 and 11,930.9185), its taxes and its primary effect match the
+hand calculation written out in `tests/unit/test_research_study.py`. A rotating portfolio pays
+2024's tax in July 2025 that buy-and-hold defers to the horizon. Perturbing every observation
+published after the horizon changes no output.
+- Tests: 3,275 passing. Coverage measured 99.83 %; floor raised from 99.4 % to 99.5 %. Every
+  module in `research/`, `tax/` and `jurisdiction/` at 100 % (`yfinance_history`, the one call
+  that reaches Yahoo, is marked network code).
+
+**SESSION_PROMPTS edits.** Session 4c: the harness runs one candidate against one reference per
+pre-registration; 4c extends it to several candidates in a pull request of its own, writes the
+lock with `obliskiq research lock`, and the confirmation report is `research/reports/<id>.md`.
+Session 7: the open lots are saved whole; the engine's loss windows and ledger need persistence
+beside them.
+
+**Deferred.** No real-data study (4c, 4d). The engine's loss windows and ledger are not
+persisted (Session 7). Currency conversions are free in the simulator and no currency balance is
+held (Session 5's currency manager, D69's currency lots in Session 7).
+
+**Live findings.** No IBKR call. Vendor formats recorded in `docs/knowledge/research-sources.md`:
+a plain client got HTTP 429 from Yahoo, yfinance got through; ALFRED's answer does not echo the
+API key. IBKR's European fixed schedule read on its published page.
 
 ### Design review (owner request, 2026-10-16, v0.5.1)
 
@@ -541,6 +591,11 @@ settles it.
 | The lag between a fill and the positions and trades reads, for the reconciliation grace period | review | 5 |
 | A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | 5 |
 | A fresh unattended Gateway login after IBKR's daily reset on the machine | review | T1 |
+| European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`) against an executed UCITS order, and whether the executor routes direct or SMART (the SMART column is half) | 4b | T1 (the paper order test), 5, 18 (TCA) |
+| The US treaty withholding rate of 15 % against the BOE text of the Spain–US convention and its 2013 protocol | 4b | 7 |
+| Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 7 |
+| The savings scale for tax year 2027 (the table is verified through 2026) | 4b | the monthly tax-source check (§5.16), 2027 |
+| `yfinance_history` against Yahoo from the deployment machine (the call is network code outside the coverage floor; its frame is pinned by a fixture) | 4b | 4c |
 
 ## Follow-ups
 
@@ -549,9 +604,15 @@ settles it.
   Before Session 10: an LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).
-- Session 4b: European commission rows (Xetra, LSE, Euronext, Borsa Italiana, SIX) so the cost
-  model prices UCITS orders and shadow fills them (D69); the tax engine moves here from
-  Session 7.
+- Session 4c: extend the harness to several candidates against the equity reference (one test
+  each, Bonferroni across them) and add the core's variants as strategies (D76).
+- Session 5: route direct or SMART and make the European commission rows follow the routing
+  (D77); price currency conversions (IBKR's FX commission) so the simulator can stop treating
+  them as free (D75).
+- Session 7: persist the lot engine's open loss windows and its ledger beside `tax_lots` (D74);
+  the annual export of realised results and deferred losses.
+- Session 7: apply the personal and family minimum to the savings base if the owner's general
+  base leaves part of it unused (the engine errs high without it).
 - Session 5: the executor gives the cost model the listing venue, never `SMART` (D67).
 - Session 5: `holding_assignments` holds the registry and the gate refuses a conid held without a
   sleeve; reconciliation registers what the bot did not open as `unmanaged`, and the executor

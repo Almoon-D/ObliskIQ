@@ -17,7 +17,7 @@ PACKAGE = ROOT / "src" / "obliskiq"
 PLANNED = (
     "config", "domain", "store", "calendars", "ibkr", "data", "quant", "grid", "engines",
     "jurisdiction", "tax", "capital", "llm", "decision", "execution", "orchestration",
-    "scoreboard", "reporting", "server", "cli",
+    "research", "scoreboard", "reporting", "server", "cli",
 )  # fmt: skip
 
 SPDX = "SPDX-License-Identifier: AGPL-3.0-or-later"

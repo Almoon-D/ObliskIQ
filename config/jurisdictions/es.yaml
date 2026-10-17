@@ -1,8 +1,73 @@
 # Jurisdiction profile: Spain. Rules of tax residence as data; the policies it selects are
-# registered in the obliskiq.jurisdiction package.
+# registered in the obliskiq.jurisdiction package. Every tax rule below is cited, with an official
+# source, in docs/knowledge/tax-es.md. Not tax advice.
 id: es
 name: Spain
 policies:
   # What may be bought: the skeleton allowlist (config/defaults/eligibility.yaml) until Session 8
   # registers eu_priips and selects it here.
   eligibility: skeleton
+  # How gains are taxed: Spain's IRPF on the savings base (jurisdiction/tax_es_irpf.py).
+  tax: es_irpf
+
+tax:
+  # Homogeneous securities are sold first in, first out (LIRPF art. 37.2; art. 94.1.a for funds).
+  lot_method: fifo
+  # RIRPF art. 8, applied conservatively: the same ISIN, or the same issuer and tracked index.
+  homogeneity: same_isin_or_issuer_and_index
+  # LIRPF art. 33.5.f (listed: two months before or after the loss sale) and 33.5.g (unlisted:
+  # one year). The loss is integrated as the homogeneous securities still held are sold.
+  wash_sale:
+    listed_months: 2
+    unlisted_months: 12
+  loss_offset:
+    # Negative balances carry forward for four years (art. 49.1.a and b, last paragraphs).
+    carry_forward_years: 4
+    # A negative balance of one component offsets up to 25 % of the other's positive balance.
+    cross_offset_fraction: "0.25"
+    source: LIRPF art. 49 (BOE-A-2006-20764, consolidated text read 2026-10-16)
+  # The savings scale: the state part (art. 66.1) plus the regional part (art. 76), as amended by
+  # Ley 7/2024 from 1 January 2025. The personal and family minimum is not applied (the tax errs
+  # high). Verify every year: the bot alerts when the table is used for a year it does not cover.
+  savings_rate_table:
+    first_tax_year: 2025
+    verified_through_tax_year: 2026
+    verified_on: 2026-10-16
+    source: LIRPF arts. 66.1 and 76 as amended by Ley 7/2024 disp. final 7 (BOE-A-2024-26694); BOE consolidated text read 2026-10-16
+    brackets:
+      - up_to: "6000"
+        rate: "0.19"
+      - up_to: "50000"
+        rate: "0.21"
+      - up_to: "200000"
+        rate: "0.23"
+      - up_to: "300000"
+        rate: "0.27"
+      - up_to: null
+        rate: "0.30"
+  # The tax of year N is paid with the return, by 30 June of N + 1 (paying in full; the optional
+  # 60/40 split would defer 40 % to early November).
+  payment:
+    month: 6
+    day: 30
+    years_after: 1
+    source: Orden HAC/277/2026 art. 7.1 (BOE-A-2026-7041), filing and payment 8 April to 30 June 2026 for tax year 2025
+  # Deducción por doble imposición internacional (art. 80): the lesser of the tax paid abroad and
+  # the average effective rate, expressed with two decimals of a percent, on the foreign income.
+  foreign_tax_credit:
+    average_rate_percent_decimals: 2
+    source: LIRPF art. 80 (BOE-A-2006-20764, consolidated text read 2026-10-16)
+  # What a source country withholds on dividends paid to a resident of Spain, by treaty. A country
+  # without a row is not stated: income from it cannot be simulated.
+  withholding_at_source:
+    - country: US
+      rate: "0.15"
+      confirmation: secondary
+      source: Spain–United States tax convention of 22 February 1990, art. 10.2.b, as amended by the 2013 protocol in force 27 November 2019; secondary sources read 2026-10-16
+  # Tax-free switches between funds (art. 94.1.a) are not assumed available at IBKR until
+  # verified; ETF switches are always sales.
+  fund_switch_deferral_at_broker: false
+  # A swap partner differs from what it replaces in issuer and in tracked index.
+  swap_partner:
+    differ_in_issuer: true
+    differ_in_index: true

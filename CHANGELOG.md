@@ -5,6 +5,58 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.6.0] - 2026-10-17
+
+Session 4b — Research harness. One harness whose output can move capital, under every rule of
+`src/`: point-in-time research history, a monthly walk-forward simulator that prices costs and
+Spanish tax with the code the live path will use, the statistics and decision rule of DECISIONS
+D62–D63, the trial registry and the pre-registration lock, and reports that say sufficient,
+insufficient, inconclusive or not evaluable with what they cannot conclude. No IBKR call was
+made and no real-data study was run (Sessions 4c and 4d).
+
+### Added
+
+- `tax/` and `jurisdiction/`: the `TaxPolicy` protocol beside `EligibilityPolicy`; `es_irpf`
+  (FIFO, conservative homogeneity, the two-month rule with deferral and release, offsets and a
+  four-year carry-forward, the 2025–2026 savings scale with its tax years, payment by 30 June of
+  the next year, withholding and the foreign-tax credit, switches and swap partners) and the
+  `generic` template, selected by `config/jurisdictions/es.yaml`, which carries every value with
+  its source; the lot engine with `tax_cost`, `wash_sale_conflict` and `harvestable_losses`;
+  the tax ledger; the `TaxLot` domain and `tax_lots` table. `docs/knowledge/tax-es.md` cites the
+  article and an official source per rule (not tax advice). A test keeps every tax constant out
+  of code.
+- `research/data.py`: the research store (`paths.research_database`, migration 004:
+  `research_series`, `research_history` with vintages, `research_trials`) and loaders for
+  yfinance end-of-day prices, the Ken French and AQR libraries, FRED and ALFRED and the ECB
+  reference rates, each series with its vendor, download stamp, content hash, availability kind
+  and bias notes; conversion to the base currency; coverage and survivorship reports. Loaders
+  are tested on recorded fixtures (`tests/fixtures/research/`).
+- `research/simulate.py`: delta execution, the cost model on every leg on the listing venue,
+  the lot engine, tax paid at its payment date and at the terminal liquidation, fail-closed on
+  a missing price, rate or cost.
+- `research/stats.py`, `research/decide.py`: log growth of liquidation value, drawdowns and
+  breach probabilities, a seeded block bootstrap, Newey–West, Fama–MacBeth, power and the
+  detectable effect, n_eff from a panel, the deflated Sharpe, Bonferroni intervals, the
+  break-even cost multiplier; the D62 rule, its labels and power beside it.
+- `research/registry.py`, `research/prereg.py`, `research/study.py`, `research/report.py`: the
+  trial registry with the trial budget, the lock verified against git, a portfolio comparison
+  with a paired bootstrap and robustness, and the Markdown report.
+- `obliskiq research data load|coverage`, `research power`, `research run [--explore]` and
+  `research lock`.
+- `research/preregistrations/TEMPLATE.md` with every field of D63, `research/explore/README.md`
+  and `research/reports/`.
+- IBKR's fixed commissions for shares, ETFs and ETCs on Xetra, the LSE, Euronext Amsterdam and
+  Paris, Borsa Italiana and SIX (`fraction_of_value` schedules); a UCITS order is priced and
+  filled in shadow.
+- Dependency: `yfinance>=1.7,<2` (DECISIONS D72).
+
+### Changed
+
+- `config validate` builds the tax policy the profile selects, so missing tax data fails at
+  load.
+- Import contracts: the live decision path never imports research or the research store;
+  research never imports execution or the broker.
+
 ## [0.5.1] - 2026-10-16
 
 Design review (owner request): evidence before machinery. A red-team of the plan against the

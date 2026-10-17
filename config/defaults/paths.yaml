@@ -4,6 +4,9 @@ paths:
   settings_audit_log: settings-audit.jsonl
   # The SQLite store: instruments, market data, macro series and run records.
   database: obliskiq.db
+  # The research store: research history and the trial registry (`obliskiq research`). Kept apart
+  # from the database above, which the live path uses.
+  research_database: research.db
   # Manual incidents (halts, exceptional closures) the owner enters; see
   # config/manual-incidents.example.yaml. Read by the calendars; a malformed file blocks every
   # venue until it is fixed.

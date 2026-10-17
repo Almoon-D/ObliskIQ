@@ -191,6 +191,20 @@ def open_store(
     )
 
 
+def open_research_store(
+    settings: ObliskConfig, data_dir: Path, *, migrations_directory: Path | None = None
+) -> Store:
+    """The research store: ``paths.research_database`` inside the data directory. It holds the
+    same schema; research history and the trial registry live only here."""
+    store_settings = settings.store
+    return open_database(
+        data_dir / settings.paths.research_database,
+        busy_timeout_ms=store_settings.busy_timeout_ms,
+        synchronous=store_settings.synchronous,
+        migrations_directory=migrations_directory,
+    )
+
+
 def _apply_pragmas(
     connection: sqlite3.Connection, target: str, busy_timeout_ms: int, synchronous: str
 ) -> None:

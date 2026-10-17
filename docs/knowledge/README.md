@@ -47,5 +47,10 @@ the observation that settled it.
   (the ledger's rates, whatif amounts, position and live-order lag); live shapes join it with the
   paper order test.
 
+- `research-sources.md` — the formats the research loaders read from Yahoo (through `yfinance`),
+  the Ken French and AQR libraries, FRED and ALFRED and the ECB, and how each is placed in time.
+- `tax-es.md` — Spain's rules on the savings base as the `es_irpf` policy applies them, each with
+  its article and the official text it was read in (not tax advice).
+
 More files are added by the sessions that verify them (`ibkr-capabilities.md`,
-`macro-sources.md`, `tax-es.md`, …); none is written ahead of the evidence.
+`macro-sources.md`, …); none is written ahead of the evidence.

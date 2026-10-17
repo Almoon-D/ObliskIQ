@@ -1191,3 +1191,126 @@ H8 (an option against a share with a stop, for a sufficient signal) needs option
 the chain collector stores it from Session 8, and buying history is the owner's decision. A
 VIX-based simulation is exploration only: VIX is a 30-day S&P 500 measure and represents neither
 three-to-six-month nor single-name options.
+
+## Session 4b — Research harness (2026-10-17)
+
+### D72 · Dependencies: yfinance for prices; no workbook library, no pandas in our code
+
+Runtime adds `yfinance>=1.7,<2` (1.7.0, the latest release at least two weeks old; 0.2.x is
+superseded), the loader of Yahoo end-of-day prices the session names. It brings pandas,
+`curl_cffi` and lxml with it. As with `exchange_calendars` (D24), no pandas type leaves the one
+module that touches it: `research/data.py` reads yfinance's frame through `iterrows()` and hands
+out `YahooBar`s; the call itself (`yfinance_history`) is the only code that reaches Yahoo and is
+left out of the coverage floor as network code, its frame shape pinned by a recorded fixture.
+A mypy override confines yfinance's missing types to that module. AQR's data sets are `.xlsx`
+workbooks; they are read by a minimal stdlib reader (`research/xlsx.py`: shared and inline
+strings, numbers, booleans, Excel serial dates) rather than openpyxl, because the harness needs
+the values of one sheet and a reader that refuses anything else is smaller than a dependency.
+Rejected: calling Yahoo's chart endpoint with httpx (it answered HTTP 429 to a plain client on
+2026-10-16; yfinance's browser impersonation got through), and openpyxl.
+
+### D73 · The research store and point-in-time research history
+
+Research history lives in its own database file (`paths.research_database`), opened with the
+same migrations: the live store and its backups do not carry downloads, and an import contract
+keeps `obliskiq.research` and `obliskiq.store.research` away from decision, execution, engines
+and the broker ("live decision code never reads research data"). Migration 004 adds
+`research_series` (vendor, URL, download stamp, payload SHA-256, how availability was derived,
+bias notes) and `research_history` (one row per period and vintage, `observed_on` and
+`available_on`; every read is bounded by `available_on <= as_of` and returns the latest vintage
+of each period). A reload replaces a series whole, so rows a vendor dropped do not linger.
+Availability is one of three kinds, each named on the series: `as_observed` (an exchange close,
+an ECB rate), `vintages` (ALFRED's `realtime_start`) and `release_lag` (a declared lag after the
+period for libraries revised without vintages: Ken French, AQR, FRED's CSV), the last labelled
+in the bias notes. Series metadata and trials are the harness's own records and are read whole
+(D46's rule). Conversion to the base currency uses ECB rates, which go stale after
+`research.data.max_fx_age_days`; a value without a fresh rate is left out, never interpolated.
+
+### D74 · The tax engine (§5.16)
+
+`TaxPolicy` sits beside `EligibilityPolicy` in the registry; `es.yaml` selects `es_irpf` and
+carries every value under `tax:` with its source, and `generic` (FIFO, no wash-sale rule) is
+the template. The lot engine applies a policy; the ledger settles each year once, in order, and
+a settled year refuses any later event (a deferral found after its year settled fails loudly
+rather than landing in another year). Choices, each conservative where the law leaves room:
+
+- Homogeneity (RIRPF art. 8): the same ISIN, or the same issuer and tracked index; ETFs and
+  funds count together as collective investments.
+- The two-month rule (LIRPF art. 33.5.f): matched unit by unit, oldest purchase first, against
+  homogeneous units bought in the window and still held, then against purchases in the window
+  after the sale; a unit takes one loss; a deferred loss rides on its units and is released in
+  proportion as they are sold, as part of that sale's result, so a release into another loss
+  sale inside a window is deferred again.
+- Offsets (art. 49): one 25 % allowance per year and direction, shared by the year's own and the
+  carried negatives.
+- The savings scale records the tax years it was verified for (2025–2026, Ley 7/2024); the
+  personal and family minimum is not applied; a year outside the table is labelled.
+- A year's tax is paid in full on 30 June of the next year (Orden HAC/277/2026 art. 7.1); the
+  60/40 split, which would defer 40 % to November, is not used.
+- Costs enter the basis and the proceeds (art. 35), spread and slippage included.
+- Withholding at source: one row, the US treaty rate of 15 %, confirmed from secondary sources
+  only; income from a country without a row cannot be simulated.
+
+The hooks a decision asks — `tax_cost`, `wash_sale_conflict`, `harvestable_losses` — run the
+trade on a copy of the engine. Lots are saved whole (`tax_lots`); open loss windows and the
+ledger are not yet persisted, which Session 7 does when it wires the engine to fills. A test
+holds `tax/` and `jurisdiction/tax*.py` to structural numbers and two listed unit facts.
+
+### D75 · The simulator (§1, D60)
+
+Monthly walk-forward on the month ends of a calendar instrument. At each date: income since the
+last date (withheld at source, credited at this date, converted at its ex-date's rate); the tax
+of every year whose payment date has come; the strategy's weights of the value after that tax,
+from a view of what was public on the date; delta execution with the legacy backtester's 0.5 % no-trade band
+(legacy `delta_no_trade_band_pct`), sells first, the tax paid, then buys scaled by one common
+factor found by bisection so the cash covers notional and every leg's cost (a minimum
+commission makes proportional scaling never converge); whole units by default. Weights above 1
+or below 0 are refused (no leverage, no shorting). Every leg is priced by `quant/costs.py` on the
+listing venue, scaled by the cost multiplier; an unpriced leg, a missing or stale price or rate,
+a sale costing more than it raises, or tax the account cannot pay stops the run, and the study
+reports not evaluable. At the horizon everything is sold, every open year is settled and its
+tax paid; losses still carried are worth nothing. Currency conversions are instant and free and
+no currency balance is held (Session 5 adds the currency manager; D69's currency lots follow).
+The mark-to-market series is taken after each date's trades and tax, and before the terminal
+sale at the horizon. The legacy's √252-on-monthly bug cannot recur: growth is `ln(V_T/V_0)` over
+calendar years (`research.simulation.days_per_year`, the legacy 365.25), and the bootstrap
+works on months.
+
+### D76 · The study, the lock and the registry in code (D62, D63)
+
+A pre-registration is Markdown whose front matter carries every field of D63; `PreregSpec`
+validates it. This build runs one study kind, a portfolio comparison: a candidate against a
+reference, the primary effect their difference in annualised after-tax log growth of
+liquidation value. Its interval comes from a paired moving-block bootstrap of whole months
+(every instrument's return, its income yield and every rate together), both strategies
+simulated on each path so each path pays its own tax; the interval has level 1 − 2α/m. Power is
+the probability that the interval's lower end exceeds zero when the effect is θ,
+`Φ(θ/se − z_{1−α/m})`, and the detectable effect `(z_{1−α/m} + z_p)·se` is its exact inverse;
+before data, `research power` takes se from the declared per-observation sd, periods and n_eff.
+The adequacy checks are the data being loaded, each series' availability among the
+pre-registered kinds, coverage of the rebalance dates and the effective observations; the
+survivorship report is always computed and printed with what a universe listed today cannot
+show. Robustness: the sign in each subperiod, and the break-even multiplier by re-running the
+historical path at scaled costs (a cost at which a strategy cannot trade is no effect), against
+the declared cost uncertainty; a portfolio comparison has no placebo and says so. The deflated
+Sharpe is taken on the monthly excess log returns across every trial the registry holds for the
+id. The lock (`<id>.lock`: file, SHA-256, merge commit) is verified against git before any data
+is read: the file unchanged, the commit an ancestor of HEAD and holding that exact text.
+`obliskiq research lock` writes it (a command beyond the prompt's list: Session 4c needs it,
+and a lock written by hand would be the weakest link). A confirmation run is single-shot once
+it has an outcome (only a not-evaluable run may be repeated after the data are fixed) and writes
+`research/reports/<id>.md`; `--explore` runs without a lock, is counted in the registry, stops at
+the pre-registered trial budget and is labelled never evidence. Rejected: deciding power as the
+probability of a sufficient outcome at θ (about α by construction, so it says nothing), and
+treating a robustness failure as not evaluable (it is reported beside the outcome).
+
+### D77 · European commissions (D69)
+
+IBKR's fixed schedule for shares, ETFs and ETCs on Xetra, the LSE, Euronext Amsterdam and
+Paris, Borsa Italiana and SIX, read on its published page on 2026-10-16, priced as **direct
+routing** to the listing venue: 0.10 % of value with a minimum of EUR 4.00, USD 6.00, GBP 4.00
+(LSE) or 6.00 (SIX) and CHF 6.00, no maximum, third-party fees included. The page's
+SmartRouting column is half that (0.05 %, lower minimums); the order path's routing is Session
+5's choice, so the higher figure stands until then and `docs/knowledge/costs.md` records both.
+A new schedule kind, `fraction_of_value`, prices on the trade value. Rows are grouped by
+currency and minimum; every row keeps `verify_live: true`.

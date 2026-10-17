@@ -103,6 +103,22 @@ SHAPE = {
         "original_terms:TEXT!, resized_quantity:TEXT!, state:TEXT!, created_at:TEXT!, "
         "updated_at:TEXT!, detail:TEXT!"
     ),
+    # 004_research_tax
+    "research_series": (
+        "series_id:TEXT!*, dataset_id:TEXT!, vendor:TEXT!, field:TEXT!, units:TEXT!, "
+        "currency:TEXT, frequency:TEXT!, point_in_time:TEXT!, source_url:TEXT!, "
+        "downloaded_at:TEXT!, content_sha256:TEXT!, bias_notes:TEXT!"
+    ),
+    "research_history": ("series_id:TEXT!*, observed_on:TEXT!*, available_on:TEXT!*, value:REAL!"),
+    "research_trials": (
+        "trial_id:TEXT!*, study_id:TEXT!, stage:TEXT!, recorded_at:TEXT!, spec_sha256:TEXT!, "
+        "inputs_sha256:TEXT!, parameters:TEXT!, metric:TEXT!, estimate:REAL, sharpe:REAL, "
+        "observations:INTEGER, outcome:TEXT"
+    ),
+    "tax_lots": (
+        "lot_id:TEXT!*, security:TEXT!, acquired_on:TEXT!, quantity:TEXT!, cost:TEXT!, "
+        "deferred_loss:TEXT!, replacement_units:TEXT!, saved_at:TEXT!"
+    ),
     "snapshots": (
         "snapshot_date:TEXT!*, conid:INTEGER!*, last:REAL, bid:REAL, ask:REAL, "
         "volume:INTEGER, implied_vol:REAL, implied_vol_source:TEXT, "
@@ -139,6 +155,11 @@ INDEXES = {
     "ix_approvals_intent",
     "ix_clearances_issued",
     "ix_stop_resizes_state",
+    # 004_research_tax
+    "ix_research_series_dataset",
+    "ix_research_history_available",
+    "ix_research_trials_study",
+    "ix_tax_lots_security",
 }
 
 STAMP = "2026-10-09T22:30:00Z"

@@ -94,3 +94,24 @@ class WriteRefusedError(ExecutionError):
 
 class ModeChangeRefusedError(ExecutionError):
     """A mode upgrade the rules do not allow (the live levels need the promotion gate)."""
+
+
+class TaxError(ObliskError):
+    """The tax engine cannot account for an event: a lot that is not held, a settled year
+    reopened, a rule the profile does not state. Nothing is guessed."""
+
+
+class ResearchError(ObliskError):
+    """The research harness cannot produce a result it can stand behind."""
+
+
+class PreregistrationError(ResearchError):
+    """A pre-registration is unlocked, changed since its lock, or malformed: no run happens."""
+
+
+class SimulationError(ResearchError):
+    """A simulation step cannot be priced or marked honestly (a missing price, an unpriced cost)."""
+
+
+class DataSourceError(ResearchError):
+    """A research data source answered with something the loader cannot read as data."""
