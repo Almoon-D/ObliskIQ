@@ -1428,3 +1428,35 @@ Rejected:
 - keeping the refusal: one rare path makes the whole test not evaluable;
 - negative proceeds: cash would fall below zero, which the mandate forbids;
 - a new pre-registration: a new id for a change no constant needs.
+
+## Session 4d — First selection hypothesis (2026-10-17)
+
+### D84 · The data audit and the choice of H1 (D62, D71)
+
+`research/reports/selection-data-audit.md` measured, before any pre-registration, the data each
+batch-1 selection hypothesis would stand on. A hypothesis has adequate data when every input is
+point in time, the share of its point-in-time universe without usable outcome data is at most
+5 % in every year of the sample (the bias a lost share m can cause is about m times the lost
+names' outcome gap, and performance delistings lose about 30 % in their last month), the
+signal's inputs exist, and the sample spans ten years. Power is reported beside these, never as
+a criterion (D62).
+
+- **H2** (insider-purchase clusters): the SEC's data sets are point in time from 2006, and 17,257
+  clusters would carry about 1,030 effective observations; but free prices (Yahoo, under the
+  reported symbol and the current ticker, with the reported price as an identity check) miss
+  74.5 % of the 2006 events and still 11.6 % of the 2025 ones. Not adequate.
+- **H4** (the stock-level composite): the same prices miss 76.5 % of a seeded sample of 2006
+  issuers and 12.5 % in 2025; point-in-time fundamentals start in 2009. Not adequate.
+- **H1** (country momentum through UCITS): MSCI's endpoint serves 51 of the 53 countries in MSCI
+  ACWI since 2001; Venezuela and Russia are not served, at most 4.1 % of the members on a date.
+  Adequate.
+
+H1 is tested, with H5 beside it. Its cross-asset half is left out: through UCITS it has four
+government bond markets and a handful of commodities with short or spot-only histories, too few
+for a cross-section, and ranking asset classes is the core's trend tilt (4c). H2 and H4 are
+`idea` entries in the pattern registry with the data that would make them evaluable (a
+survivorship-free US price history with delisting returns: CRSP, or Norgate at US$630 a year,
+read 2026-10-17), the owner's purchase decision. Rejected: testing H2 or H4 on the survivors
+(a bias of unknown sign as large as the effect), restricting them to the last two years
+(too few observations for a development and a confirmation sample), and testing their
+components on published portfolios (a different hypothesis from the registered composite).
