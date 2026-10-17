@@ -15,7 +15,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
-| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | in progress (the audit chose H1; the harness for it) | v0.7.3, v0.8.0 |
+| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -38,7 +38,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4d — First selection hypothesis (2026-10-17, v0.7.3 → v0.8.0)
+### Session 4d — First selection hypothesis (2026-10-17, v0.7.3 → v0.8.1)
 
 **The data audit** (Step 1, its own pull request before the pre-registration):
 `research/reports/selection-data-audit.md`, DECISIONS D84. Measured on 2026-10-17, with the scripts
@@ -66,6 +66,55 @@ in `research/explore/selection_audit/` (exploration, D64):
 - Datasets for the 51 MSCI country indices MSCI serves; the cross-section template.
 - At the study's size (51 members, daily rows, 225 month ends) one run takes about ten seconds on
   synthetic random walks (a timing check, no real data read).
+
+**The pre-registration** `research/preregistrations/selection-country-momentum.md` merged on its
+own (89ea75e) and is locked there (`selection-country-momentum.lock`). Its power before data: 0.38
+for H1 at theta 2 % a year (detectable 3.37 %), 0.34 for H5 at 1 % (detectable 1.80 %).
+
+**Exploration** on the development sample (2001-12 to 2007-12, two trials, never evidence,
+`research/reports/selection-country-momentum-exploration-20261017T174052Z.md`): H1 +4.19 % a year,
+inconclusive; H5 −4.15 %, insufficient. It showed no defect of the harness, and nothing was changed.
+
+**The confirmation run** (once, inputs SHA-256 `968bf6af…`) wrote
+`research/reports/selection-country-momentum.md` (D87). Every adequacy check passed:
+
+- at most 2.3 % of the members on a date were not served (Russia, until March 2022);
+- coverage was 100 %;
+- the sample had 224 months.
+
+Each interval is at level 0.95 (Bonferroni over two tests).
+
+| Test | Estimate / yr | Interval | Outcome | Power at theta |
+|---|---|---|---|---|
+| H1 country momentum (theta 2 %) | −1.04 % | [−3.76 %, 1.39 %] | insufficient (low power) | 0.329 |
+| H5 volatility-scaled stop (theta 1 %) | −5.46 % | [−7.92 %, −3.92 %] | insufficient (negative, low power) | 0.162 |
+
+- **What it shows.** H1's top third of countries by 12-1 momentum grew 1.04 % a year less after
+  costs and tax than holding every member equally (0.98 % less before tax). An effect of 2 % a
+  year is ruled out, and the effect is below theta even without costs. The top group turned over
+  216 % a year and cost about EUR 48,000 against EUR 10,000 for the universe.
+- **H5.** The stop fired 588 times. It cost 5.46 % a year against the same group without it,
+  below zero in both subperiods.
+- **Robustness.**
+  - H1's sign differs between 2008–2016 (−3.09 %) and 2017–2026 (+0.82 %).
+  - The lagged placebo shows nothing (−0.12 %, [−2.76 %, 1.87 %]).
+  - No break-even cost multiplier exists for either test.
+- **Selection.** The registry counts four trials (two exploratory); the deflated Sharpe of each
+  test is far below what the best of four would show by chance (probability 0.000).
+- **What follows** (D87): both are `retired` in the new `research/pattern_registry.yaml`, where H2
+  and H4 are `idea` entries with the data they need. No batch-1 selection hypothesis earns
+  capital or a shadow run.
+- **Reproduce.** `obliskiq research data load msci_<country>_eur ...` (the 51 country datasets),
+  then `obliskiq research run research/preregistrations/selection-country-momentum.md` on a
+  fresh research store. The run is single-shot, so the store must not already hold this id's
+  confirmation.
+
+**SESSION_PROMPTS edits.** Session 8: no universe comes first for Session 4d's hypothesis, since
+none was left in shadow (D87).
+
+**Tests.** 3,474 passing, coverage 99.84 %. `cross_section.py`, `cross_section_report.py` and the
+stop are at 100 %. A test holds `research/pattern_registry.yaml` to its lifecycle until Session
+15's loader.
 
 **Live findings.** No IBKR call. SEC, Yahoo, MSCI and Tiingo formats and behaviour recorded in
 `docs/knowledge/research-sources.md`: Yahoo throttled silently after about 1,700 rapid symbols,
@@ -722,6 +771,10 @@ settles it.
 
 ## Follow-ups
 
+- **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
+  with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
+  would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
+  (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought.
 - **Owner, before Session 13:** choose a point on Session 4c's frontier — the drawdown
   tolerance, the probability of breaching it, the horizon — recorded in DECISIONS (D60). The
   frontier is in `research/reports/core-allocation.md`; its points resolve to the equity

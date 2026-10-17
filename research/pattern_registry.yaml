@@ -1,0 +1,74 @@
+# The research registry of hypotheses (MASTER_PLAN §5.9; DECISIONS D62, D65, D71). Every
+# hypothesis has a lifecycle status: idea → pre-registered → tested → shadow → active → retired.
+# An entry names its pre-registration and report, its outcome under the decision rule, and what
+# its status means: a `shadow` entry its grading rule, a `retired` one its result, an `idea` the
+# data it needs. Session 4d created this file with batch 1's selection hypotheses; Session 15
+# adds the legacy pattern definitions and the loader that reads it.
+patterns:
+  - id: selection-country-momentum
+    hypothesis: H1
+    title: Country momentum through UCITS
+    status: retired
+    preregistration: research/preregistrations/selection-country-momentum.md
+    lock: research/preregistrations/selection-country-momentum.lock
+    report: research/reports/selection-country-momentum.md
+    test: H1 country momentum
+    outcome:
+      decision: insufficient
+      labels: [low power]
+      estimate_a_year: "-0.0104"
+      interval: ["-0.0376", "0.0139"]
+      theta: "0.02"
+      power: "0.329"
+      sample: 2008-01 to 2026-09
+    result: >-
+      Over 2008-2026 the top third of MSCI ACWI countries by 12-1 momentum grew 1.04 % a year
+      less after costs and Spanish tax than holding every member equally (0.98 % less before
+      tax); the interval [-3.76 %, 1.39 %] rules out an effect of 2 % a year at level 0.95. The
+      effect is below theta even without costs, the sign flips between 2008-2016 (-3.09 %) and
+      2017-2026 (+0.82 %), and the lagged placebo shows nothing (-0.12 %). Its cross-asset half
+      and other universes are not tested; only a new pre-registration revives it.
+  - id: selection-country-momentum-stop
+    hypothesis: H5
+    title: A volatility-scaled stop on the country-momentum top group
+    status: retired
+    preregistration: research/preregistrations/selection-country-momentum.md
+    lock: research/preregistrations/selection-country-momentum.lock
+    report: research/reports/selection-country-momentum.md
+    test: H5 volatility-scaled stop
+    outcome:
+      decision: insufficient
+      labels: [negative, low power]
+      estimate_a_year: "-0.0546"
+      interval: ["-0.0792", "-0.0392"]
+      theta: "0.01"
+      power: "0.162"
+      sample: 2008-01 to 2026-09
+    result: >-
+      The trailing stop (two daily standard deviations scaled to a month below the peak, filled
+      at the close that reached it) cost 5.46 % a year after costs and tax against the same top
+      group without it, the interval entirely below zero: 588 stops in 224 months, each sale and
+      re-entry paid at the illiquid tier, in both subperiods. Protective exits stay a risk control
+      (DECISIONS D67), not an edge, for this signal.
+  - id: selection-insider-clusters
+    hypothesis: H2
+    title: Insider-purchase clusters (SEC Form 4)
+    status: idea
+    audit: research/reports/selection-data-audit.md
+    data_needed: >-
+      Daily US stock prices that keep delisted companies, with their delisting returns, from 2006
+      (CRSP; Norgate US Platinum, US$630 a year on 2026-10-17); free prices miss 74.5 % of the
+      2006 events and 11.6 % of the 2025 ones. Or the events collected forward from the SEC
+      (Session 10), where survivorship cannot arise.
+  - id: selection-stock-composite
+    hypothesis: H4
+    title: >-
+      A stock-level composite: nearness to the 52-week high, 12-1 momentum with a crash guard,
+      profitability
+    status: idea
+    audit: research/reports/selection-data-audit.md
+    data_needed: >-
+      The same survivorship-free US price history as H2 (free prices miss 76.5 % of the 2006
+      issuers sampled and 12.5 % in 2025), and point-in-time fundamentals before 2009 if the
+      test is to start earlier (the SEC's XBRL data sets give them from 2009, every filer from
+      mid-2011).

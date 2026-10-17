@@ -1505,3 +1505,34 @@ worst a daily series can show); a touch inside a session that recovers by the cl
 and a close published after its day cannot trigger it. The cash waits for the next rebalance date,
 where the strategy may buy the name again. Rejected: filling at the stop level (it assumes the
 fill a gap denies) and an intraday model (the index proxies have closes only).
+
+### D87 · The first selection verdict: H1 and H5 insufficient (D62, D65, D71)
+
+The one confirmation run of `selection-country-momentum` (lock at 89ea75e; report
+`research/reports/selection-country-momentum.md`), 2008-01 to 2026-09 after costs and Spanish tax:
+
+- **H1** (the top third of MSCI ACWI countries by 12-1 momentum against every member equally):
+  −1.04 % a year, interval [−3.76 %, 1.39 %] at level 0.95. **Insufficient**: an effect of
+  2 % a year is ruled out. The effect is below theta even without costs, and its sign differs
+  between 2008–2016 and 2017–2026. The lagged placebo shows nothing.
+- **H5** (the same top group with a trailing volatility stop against it without one):
+  −5.46 % a year, [−7.92 %, −3.92 %]. **Insufficient, negative.**
+
+What follows (D62, D65):
+
+- Both are `retired` in `research/pattern_registry.yaml`, and only a new pre-registration
+  revives them.
+- No batch-1 selection hypothesis earns capital or a shadow run. The satellite starts with
+  the Hunter's components in shadow (Session 15) and selection inside a thesis by the plan's
+  rules (§5.5 item 8). It has no tested selection signal.
+- A stop is a risk control for satellite shares (D67, §5.11), not an edge for this signal. Its
+  cost in growth is measured: on country ETFs at the illiquid tier it cost more than five
+  points a year.
+- Session 8 no longer builds a universe for this hypothesis first (SESSION_PROMPTS edit).
+- H2 and H4 wait for survivorship-free data, the owner's purchase decision (D84).
+
+Rejected:
+
+- Re-running H1 with other constants on the same sample: a search over the confirmation
+  sample, which D63 forbids.
+- Reading the inconclusive development sample (+4.19 % a year, exploration) as evidence: D64.
