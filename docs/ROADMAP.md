@@ -15,7 +15,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
-| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | planned | |
+| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | in progress (the audit chose H1) | v0.7.3 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -37,6 +37,27 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 4d — First selection hypothesis (2026-10-17, v0.7.3)
+
+**The data audit** (Step 1, its own pull request before the pre-registration):
+`research/reports/selection-data-audit.md`, DECISIONS D84. Measured on 2026-10-17, with the scripts
+in `research/explore/selection_audit/` (exploration, D64):
+
+- **H2** (insider-purchase clusters): the SEC's insider data sets are point in time from 2006Q1
+  (17,257 clusters of three insiders in 6,262 issuers), but free prices miss 74.5 % of the 2006
+  events and 11.6 % of the 2025 ones. Not adequate.
+- **H4** (the stock-level composite): the same prices miss 76.5 % of the sampled 2006 issuers and
+  12.5 % in 2025; point-in-time fundamentals start in 2009. Not adequate.
+- **H1** (country momentum through UCITS): MSCI serves 51 of the 53 countries in MSCI ACWI since
+  2001 (not Venezuela or Russia), at most 4.1 % of the members on a date. Adequate, and chosen.
+- What would make H2 and H4 evaluable: a survivorship-free US price history with delisting
+  returns (CRSP; Norgate US Platinum at US$630 a year), the owner's decision.
+
+**Live findings.** No IBKR call. SEC, Yahoo, MSCI and Tiingo formats and behaviour recorded in
+`docs/knowledge/research-sources.md`: Yahoo throttled silently after about 1,700 rapid symbols,
+and reuses a delisted company's symbol for another; MSCI's endpoint does not serve Russia or
+Venezuela.
 
 ### Session 4c — Core verdict (2026-10-17, v0.7.0 → v0.7.2)
 

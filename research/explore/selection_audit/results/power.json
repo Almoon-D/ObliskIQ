@@ -1,0 +1,31 @@
+{
+ "h1": {
+  "detectable_a_year_at_floor": 0.024513067852567186,
+  "detectable_a_year_declared": 0.0336939815122363,
+  "members": 47,
+  "months": 224,
+  "n_eff_per_month": 2.2804948541517125
+ },
+ "h2_all": {
+  "detectable_six_months": 0.03647699395641869,
+  "events": 17257,
+  "half_years": 42,
+  "n_eff": 1028.0286478734135,
+  "se_six_months": 0.01302012650573167
+ },
+ "h2_matched": {
+  "detectable_six_months": 0.03764616206815107,
+  "events": 8324,
+  "half_years": 42,
+  "n_eff": 965.1657110680825,
+  "se_six_months": 0.013437450278063635
+ },
+ "h4": {
+  "detectable_a_year": [
+   0.03727784494117822,
+   0.07455568988235645
+  ],
+  "months": 183
+ },
+ "z": 2.801585218112968
+}

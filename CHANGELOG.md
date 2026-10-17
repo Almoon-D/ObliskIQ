@@ -5,6 +5,28 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.7.3] - 2026-10-17
+
+Session 4d, first part — the selection data audit. Before any pre-registration, the data each
+batch-1 selection hypothesis would stand on are measured, and the hypothesis is chosen by them
+(DECISIONS D84). No IBKR call.
+
+### Added
+
+- `research/reports/selection-data-audit.md`: point-in-time sources, spans, the share of each
+  universe lost to survivorship by year, independent observations and the effect detectable at
+  power 0.8 for H1, H2 and H4. Free prices miss most insider-purchase events and most stocks of
+  the early years, so H2 and H4 are not evaluable with free data; MSCI's country indices lose at
+  most 4.1 % of the countries in MSCI ACWI on a date, so H1 (country momentum through UCITS) is
+  chosen, with H5 beside it. The report states what would make H2 and H4 evaluable and its cost.
+- `research/explore/selection_audit/`: the scripts that measured it (exploration, never evidence).
+
+### Changed
+
+- `docs/knowledge/research-sources.md` records the SEC insider data sets, the SEC ticker list and
+  XBRL frames, Yahoo's behaviour with delisted and reused symbols and its throttling, MSCI's
+  country indices and index search, and Tiingo's public ticker list.
+
 ## [0.7.2] - 2026-10-17
 
 Session 4c, last part — the core verdict. The locked pre-registration `core-allocation` ran

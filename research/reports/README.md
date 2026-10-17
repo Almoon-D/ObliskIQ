@@ -9,3 +9,4 @@ exploratory run says so at the top and is never evidence (DECISIONS D64).
 | Report | Session | Outcome |
 |---|---|---|
 | `core-allocation.md` | 4c, the core verdict | every candidate inconclusive (sign uncertain, low power); the frontier for the owner's choice |
+| `selection-data-audit.md` | 4d, the selection data audit (not a run of the harness) | H2 and H4 not evaluable with free data; H1 chosen |
