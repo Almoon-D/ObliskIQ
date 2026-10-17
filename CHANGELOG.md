@@ -5,6 +5,34 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.0] - 2026-10-17
+
+Session 4d, second part — the harness for the chosen selection hypothesis. A selection signal is
+tested as a cross-section, and the simulator carries a protective stop for H5. The
+pre-registration and its run follow in their own pull requests. No IBKR call.
+
+### Added
+
+- The cross-section study kind (`kind: cross_section`, DECISIONS D85): members of a universe over
+  stated spans, a member the vendor does not serve named without a series and counted as lost to
+  survivorship on every date; the universe and the momentum top group (enter within the top
+  fraction, kept within a wider one, a lagged signal as the placebo), trading only what changes
+  and reset to equal weights once a year; each portfolio simulated with costs and tax and
+  liquidated; each test the Fama–MacBeth series of the candidate's monthly excess log return,
+  its mean with a block-bootstrap interval and Newey–West beside it, the sign in each subperiod,
+  the break-even cost multiplier and the placebo; exploration on the development sample and the
+  confirmation run on the later one. `research/cross_section.py`, `research/cross_section_report.py`,
+  `research/preregistrations/TEMPLATE-cross-section.md`.
+- A trailing volatility stop in the simulator (`Simulator.run(..., stop=StopRule)`, D86): watched
+  on daily closes between rebalance dates, filled at the first close at or below it, so a gap is
+  borne in full.
+- Datasets for the MSCI standard country indices, net total return in EUR, of the 51 countries
+  in MSCI ACWI since 2001 that MSCI serves.
+
+### Changed
+
+- `obliskiq research power`, `run` and `data coverage` read either kind of pre-registration.
+
 ## [0.7.3] - 2026-10-17
 
 Session 4d, first part — the selection data audit. Before any pre-registration, the data each

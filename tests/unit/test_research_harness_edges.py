@@ -365,7 +365,7 @@ def test_research_lock_refuses_a_commit_it_cannot_find(repo_root, tmp_path):
 
 
 def test_month_ends_keep_only_the_study_window():
-    from obliskiq.research.study import _month_ends
+    from obliskiq.research.study import month_ends
 
     rows = [
         Observation(observed_on=date(2023, 12, 29), available_on=date(2023, 12, 29), value=1.0),
@@ -373,7 +373,7 @@ def test_month_ends_keep_only_the_study_window():
         Observation(observed_on=date(2024, 1, 31), available_on=date(2024, 1, 31), value=1.0),
         Observation(observed_on=date(2024, 2, 29), available_on=date(2025, 1, 1), value=1.0),
     ]
-    assert _month_ends(rows, date(2024, 1, 1), date(2024, 12, 31)) == (date(2024, 1, 31),)
+    assert month_ends(rows, date(2024, 1, 1), date(2024, 12, 31)) == (date(2024, 1, 31),)
 
 
 def test_a_run_without_data_reports_no_estimate(repo_root, tmp_path, monkeypatch):

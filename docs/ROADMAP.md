@@ -15,7 +15,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | next (owner), beside 4b–4d | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
-| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | in progress (the audit chose H1) | v0.7.3 |
+| 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | in progress (the audit chose H1; the harness for it) | v0.7.3, v0.8.0 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -38,7 +38,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4d — First selection hypothesis (2026-10-17, v0.7.3)
+### Session 4d — First selection hypothesis (2026-10-17, v0.7.3 → v0.8.0)
 
 **The data audit** (Step 1, its own pull request before the pre-registration):
 `research/reports/selection-data-audit.md`, DECISIONS D84. Measured on 2026-10-17, with the scripts
@@ -53,6 +53,19 @@ in `research/explore/selection_audit/` (exploration, D64):
   2001 (not Venezuela or Russia), at most 4.1 % of the members on a date. Adequate, and chosen.
 - What would make H2 and H4 evaluable: a survivorship-free US price history with delisting
   returns (CRSP; Norgate US Platinum at US$630 a year), the owner's decision.
+
+**The harness** (its own pull request, before the pre-registration, v0.8.0):
+- The cross-section study kind (DECISIONS D85): members over stated spans, a member the vendor
+  does not serve named without a series and counted as lost on every date; the universe and the
+  momentum top group with a keep buffer and a lagged placebo, trading only what changes and
+  reset once a year; the Fama–MacBeth series of each test's monthly excess log return after
+  costs and tax, its block-bootstrap interval with Newey–West beside it, the sign in each
+  subperiod, the break-even cost multiplier and the placebo; the development and confirmation
+  samples. `obliskiq research power`, `run` and `data coverage` read either kind.
+- A trailing volatility stop in the simulator, watched on daily closes, a gap borne in full (D86).
+- Datasets for the 51 MSCI country indices MSCI serves; the cross-section template.
+- At the study's size (51 members, daily rows, 225 month ends) one run takes about ten seconds on
+  synthetic random walks (a timing check, no real data read).
 
 **Live findings.** No IBKR call. SEC, Yahoo, MSCI and Tiingo formats and behaviour recorded in
 `docs/knowledge/research-sources.md`: Yahoo throttled silently after about 1,700 rapid symbols,

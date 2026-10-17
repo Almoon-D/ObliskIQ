@@ -18,7 +18,13 @@ At each rebalance date, in order:
    commission on a few units) is not made, as no executor would place it: the units stay held
    and the run counts it. Each sale goes through the lot engine (FIFO, the wash-sale rule) and
    each purchase opens a lot whose cost includes the leg's costs.
-5. At the **horizon** everything is sold, every year still open is settled and its tax paid:
+5. With a **protective stop** (``Simulator.run(..., stop=...)``), every position is watched on
+   the daily closes until the next date: the stop trails the highest close since the position
+   was opened by a multiple of its recent daily volatility, fixed at the last date, and the
+   whole position is sold at the first close at or below it. A close below the stop fills at
+   that close, so a gap through the stop is borne in full; a touch inside a session that
+   recovers by the close is not seen. The cash waits for the next date.
+6. At the **horizon** everything is sold, every year still open is settled and its tax paid:
    what is left is the liquidation value (a position no sale can turn into cash counts as
    nothing).
 
@@ -36,7 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import calendar
 import math
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -160,6 +166,14 @@ class IndexedSeries:
     @property
     def first(self) -> date | None:
         return self.rows[0].observed_on if self.rows else None
+
+    def through(self, on: date) -> int:
+        """How many rows describe days on or before ``on`` (an index into ``rows``)."""
+        return bisect_right(self._ordinals, on.toordinal())
+
+    def after(self, on: date, through: date) -> list[Observation]:
+        """The rows describing days after ``on`` and on or before ``through``."""
+        return self.rows[self.through(on) : bisect_left(self._ordinals, through.toordinal() + 1)]
 
 
 class PanelIndex:
@@ -359,6 +373,14 @@ class MarketView:
         """``key``'s trend state on ``as_of`` against ``cash`` (see :meth:`Pricing.trend`)."""
         return self._priced().trend(key, cash, rule, self._as_of)
 
+    def close(self, key: str) -> Decimal | None:
+        """``key``'s base-currency price on ``as_of`` if a fresh one exists, else ``None``."""
+        pricing = self._priced()
+        listing = pricing.listing_price(key, self._as_of)
+        if listing is None:
+            return None
+        return pricing.to_base(listing, pricing.instruments[key].currency, self._as_of)
+
 
 class Book:
     """What a strategy may know of the account on a date: units, base-currency values, the
@@ -426,6 +448,33 @@ class Strategy(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class StopRule:
+    """A trailing protective stop: ``multiple`` times the standard deviation of the daily log
+    returns of the last ``volatility_sessions`` sessions, scaled by the square root of
+    ``horizon_sessions``, below the highest close since entry (module docstring, step 5)."""
+
+    volatility_sessions: int
+    horizon_sessions: int
+    multiple: float
+
+    def __post_init__(self) -> None:
+        if self.volatility_sessions < 2 or self.horizon_sessions < 1 or self.multiple <= 0:
+            raise ValueError("a stop needs two sessions of volatility, a horizon and a multiple")
+
+    def distance(self, closes: Sequence[float]) -> float | None:
+        """The stop's log distance below the peak from the last closes; ``None`` while there
+        are too few of them or they do not move."""
+        if len(closes) < self.volatility_sessions + 1:
+            return None
+        window = [math.log(b / a) for a, b in pairwise(closes[-self.volatility_sessions - 1 :])]
+        mean = sum(window) / len(window)
+        variance = sum((r - mean) ** 2 for r in window) / (len(window) - 1)
+        if variance <= 0:
+            return None
+        return self.multiple * math.sqrt(variance) * math.sqrt(self.horizon_sessions)
+
+
+@dataclass(frozen=True, slots=True)
 class SimulationSettings:
     """The mechanics a run uses; ``cost_multiplier`` scales every leg's cost (1 is the model)."""
 
@@ -468,6 +517,8 @@ class SimulationResult:
     cost_labels: frozenset[str]
     #: Sales not made because their costs would exceed what they raise.
     unsold: int = 0
+    #: Positions sold at their protective stop.
+    stops: int = 0
 
     @property
     def period_log_returns(self) -> tuple[float, ...]:
@@ -487,9 +538,12 @@ class _State:
     traded: Decimal = ZERO
     trades: int = 0
     unsold: int = 0
+    stops: int = 0
     withheld: Decimal = ZERO
     labels: set[str] = field(default_factory=set)
     taxes: list[TaxPayment] = field(default_factory=list)
+    #: The day each position was opened, for its trailing stop.
+    entries: dict[str, date] = field(default_factory=dict)
 
 
 class Simulator:
@@ -617,7 +671,9 @@ class Simulator:
 
     # ── a run ──
 
-    def run(self, strategy: Strategy, dates: Sequence[date]) -> SimulationResult:
+    def run(
+        self, strategy: Strategy, dates: Sequence[date], *, stop: StopRule | None = None
+    ) -> SimulationResult:
         if len(dates) < 2 or list(dates) != sorted(set(dates)):
             raise SimulationError(
                 "a run needs at least two rebalance dates in strictly rising order"
@@ -627,7 +683,7 @@ class Simulator:
         nav: list[float] = []
         previous: date | None = None
         *trading, horizon = dates
-        for on in trading:
+        for on, following in pairwise(dates):
             if previous is not None:
                 self._receive_income(previous, on, engine, state)
             liability = self._taxes_due(on, engine, state, through=None)
@@ -636,6 +692,9 @@ class Simulator:
             weights = strategy.targets(MarketView(self._pricing, on), book)
             self._rebalance(weights, marked, liability, on, engine, state)
             nav.append(float(self._marked(on, state)))
+            state.entries = {key: state.entries.get(key, on) for key in state.units}
+            if stop is not None:
+                self._watch(stop, on, following, engine, state)
             previous = on
         self._receive_income(trading[-1], horizon, engine, state)
         liability = self._taxes_due(horizon, engine, state, through=None)
@@ -663,7 +722,44 @@ class Simulator:
             summaries=engine.ledger.settled(),
             cost_labels=frozenset(state.labels),
             unsold=state.unsold,
+            stops=state.stops,
         )
+
+    def _watch(
+        self, stop: StopRule, on: date, until: date, engine: LotEngine, state: _State
+    ) -> None:
+        """Sell each position at the first daily close after ``on`` and through ``until`` at
+        or below its trailing stop (module docstring, step 5)."""
+        for key in sorted(state.units):
+            series = self._pricing.index.price_series(key)
+            end = series.through(on)
+            # The last closes public by ``on``, newest first, as many as the volatility reads.
+            recent: list[float] = []
+            index = end - 1
+            while index >= 0 and len(recent) <= stop.volatility_sessions:
+                if series.rows[index].available_on <= on:
+                    recent.append(series.rows[index].value)
+                index -= 1
+            distance = stop.distance(recent[::-1])
+            if distance is None:
+                continue
+            # The peak runs from the last close on or before the day the position was opened.
+            opened = max(series.through(state.entries[key]) - 1, 0)
+            peak = max(
+                (row.value for row in series.rows[opened:end] if row.available_on <= on),
+                default=None,
+            )
+            if peak is None:
+                continue
+            for row in series.after(on, until):
+                if row.available_on > row.observed_on:
+                    continue  # not public on the day it describes: no stop could act on it
+                if row.value <= peak * math.exp(-distance):
+                    if self._sell(key, state.units[key], row.observed_on, engine, state):
+                        state.stops += 1
+                        del state.entries[key]
+                    break
+                peak = max(peak, row.value)
 
     def _marked(self, on: date, state: _State) -> Decimal:
         """Cash plus every position at its price on ``on``, in the base currency."""

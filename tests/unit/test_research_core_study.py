@@ -28,9 +28,9 @@ from obliskiq.research.study import (
     StrategyStats,
     StudyRunner,
     _Draws,
-    _less_costs,
     _months,
     gather,
+    less_costs,
     run_paths,
 )
 from obliskiq.store import open_research_store
@@ -244,10 +244,10 @@ def test_an_index_proxy_loses_its_vehicles_expense_ratio_day_by_day():
         Observation(observed_on=date(2024, 1, 1), available_on=date(2024, 1, 1), value=100.0),
         Observation(observed_on=date(2025, 1, 1), available_on=date(2025, 1, 1), value=100.0),
     )
-    first, second = _less_costs(rows, D("0.002"), 366.0)
+    first, second = less_costs(rows, D("0.002"), 366.0)
     assert first.value == 100.0
     assert second.value == pytest.approx(100 * math.exp(-0.002))
-    assert _less_costs(rows, None, 366.0) is rows
+    assert less_costs(rows, None, 366.0) is rows
 
 
 # ── the frontier's rule on hand-made draws ──
