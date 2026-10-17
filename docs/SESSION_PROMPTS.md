@@ -1301,8 +1301,8 @@ DELIVERABLES
    and date per file) and IBKR market-scanner runs per venue; normalised, de-duplicated
    across listings, resolved through secdef on demand and pinned when a thesis needs
    them; refreshed on a configured cadence; point-in-time (a stock enters a cell on the
-   date the file showed it). The universe Session 4d's hypothesis needs comes first; every
-   other cell has candidates or a declared reason.
+   date the file showed it). Session 4d left no selection hypothesis in shadow (DECISIONS
+   D87), so no cell comes first; every cell has candidates or a declared reason.
 3. Venue profiles: extend venues.yaml with the fields it lacks, each value with a source
    and date — trading permission required, market-data cost and availability (MASTER_PLAN
    §5.13 price list), currency, lot conventions. Settlement lag (Session 7) and

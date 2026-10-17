@@ -5,6 +5,31 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.1] - 2026-10-17
+
+Session 4d, last part — the first selection verdict. The locked pre-registration
+`selection-country-momentum` ran once on its confirmation sample, after an exploration on its
+development sample (DECISIONS D87). No IBKR call.
+
+### Added
+
+- `research/reports/selection-country-momentum.md`: H1, the top third of MSCI ACWI countries by
+  12-1 momentum held through UCITS, against every member equally, 2008–2026 after costs and
+  Spanish tax: −1.04 % a year, interval [−3.76 %, 1.39 %], insufficient at theta 2 %. H5, the
+  same group with a trailing volatility stop: −5.46 % a year, [−7.92 %, −3.92 %], insufficient
+  and negative. The report gives survivorship by year, every portfolio before and after tax,
+  the excess year by year, robustness, the placebo and selection across trials.
+- `research/reports/selection-country-momentum-exploration-20261017T174052Z.md`: the exploratory
+  run on 2001–2007, labelled never evidence.
+- `research/preregistrations/selection-country-momentum.lock`.
+- `research/pattern_registry.yaml`: H1 and H5 `retired` with their results, H2 and H4 `idea`
+  with the data they need; a test keeps its entries well formed.
+
+### Changed
+
+- `docs/SESSION_PROMPTS.md`: Session 8 no longer builds a universe for Session 4d's hypothesis
+  first.
+
 ## [0.8.0] - 2026-10-17
 
 Session 4d, second part — the harness for the chosen selection hypothesis. A selection signal is
