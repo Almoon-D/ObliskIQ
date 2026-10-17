@@ -24,8 +24,7 @@ from obliskiq.domain.research import (
     TrialStage,
 )
 from obliskiq.errors import PreregistrationError
-from obliskiq.jurisdiction import TAX_POLICIES, load_profile
-from obliskiq.quant.costs import CostBook
+from obliskiq.jurisdiction import load_profile
 from obliskiq.research.decide import Outcome
 from obliskiq.research.prereg import load_prereg
 from obliskiq.research.registry import TrialRegistry, lock_path, verify_lock, write_lock
@@ -102,9 +101,7 @@ EFFECT = math.log(float(REBALANCED) / float(HELD)) / YEARS
 
 @pytest.fixture
 def runner(repo_root: Path, shipped_settings: ObliskConfig) -> StudyRunner:
-    profile = load_profile(repo_root / "config", "es")
-    policy = TAX_POLICIES.resolve(profile, shipped_settings)
-    return StudyRunner(shipped_settings, policy, CostBook.from_config(shipped_settings))
+    return StudyRunner(shipped_settings, load_profile(repo_root / "config", "es"))
 
 
 def run_study(runner: StudyRunner, prereg_path: Path, store: Store):
@@ -152,6 +149,33 @@ def test_the_same_inputs_and_seed_give_the_same_result(
     assert first.decision.interval == second.decision.interval
     assert first.inputs_sha256 == second.inputs_sha256
     assert first.candidate.median_log_growth == second.candidate.median_log_growth
+
+
+def test_a_changed_cost_or_tax_rule_changes_the_inputs_hash(
+    repo_root, prereg_path, data_dir, shipped_settings
+):
+    profile = load_profile(repo_root / "config", "es")
+    assert profile.tax is not None
+    commissions = [
+        c.model_copy(update={"rate": c.rate * 2}) for c in shipped_settings.costs.commissions
+    ]
+    costlier = shipped_settings.model_copy(
+        update={"costs": shipped_settings.costs.model_copy(update={"commissions": commissions})}
+    )
+    withholding = [
+        row.model_copy(update={"rate": row.rate * 2}) for row in profile.tax.withholding_at_source
+    ]
+    taxed = profile.model_copy(
+        update={"tax": profile.tax.model_copy(update={"withholding_at_source": withholding})}
+    )
+    runners = [
+        StudyRunner(shipped_settings, profile),
+        StudyRunner(costlier, profile),
+        StudyRunner(shipped_settings, taxed),
+    ]
+    with open_research_store(shipped_settings, data_dir) as store:
+        digests = {run_study(r, prereg_path, store).inputs_sha256 for r in runners}
+    assert len(digests) == len(runners)
 
 
 def test_nothing_published_after_the_horizon_changes_any_output(

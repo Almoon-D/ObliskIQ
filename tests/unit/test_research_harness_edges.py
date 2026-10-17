@@ -22,8 +22,7 @@ from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, run
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.research import Observation, Vendor
 from obliskiq.errors import DataSourceError, PreregistrationError, SimulationError
-from obliskiq.jurisdiction import TAX_POLICIES, load_profile
-from obliskiq.quant.costs import CostBook
+from obliskiq.jurisdiction import load_profile
 from obliskiq.research import registry
 from obliskiq.research.decide import Label, Outcome
 from obliskiq.research.prereg import load_prereg
@@ -51,8 +50,7 @@ def write(tmp_path: Path, text: str, name: str = "toy_rotation.md") -> Path:
 
 @pytest.fixture
 def runner(repo_root: Path, shipped_settings: ObliskConfig) -> StudyRunner:
-    policy = TAX_POLICIES.resolve(load_profile(repo_root / "config", "es"), shipped_settings)
-    return StudyRunner(shipped_settings, policy, CostBook.from_config(shipped_settings))
+    return StudyRunner(shipped_settings, load_profile(repo_root / "config", "es"))
 
 
 def run_study(runner: StudyRunner, path: Path, store: Store):

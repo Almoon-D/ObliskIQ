@@ -28,14 +28,15 @@ from ..config.schema import ObliskConfig
 from ..domain.research import Observation, ResearchSeries, Trial
 from ..domain.tax import SecurityIdentity
 from ..errors import SimulationError
-from ..jurisdiction.tax import TaxPolicy
+from ..jurisdiction.profile import JurisdictionProfile
+from ..jurisdiction.tax_policies import TAX_POLICIES
 from ..quant.costs import CostBook
 from ..store import Store
 from ..store.research import research_observations, research_series_info
 from .data import SurvivorshipReport, survivorship
 from .decide import AdequacyCheck, Decision, decide
 from .prereg import InstrumentSpec, Prereg
-from .registry import PreregLock, TrialRegistry, inputs_sha256, sharpes
+from .registry import PreregLock, TrialRegistry, canonical_sha256, inputs_sha256, sharpes
 from .simulate import EURO, Panel, SimInstrument, SimulationResult, SimulationSettings, Simulator
 from .stats import (
     Breakeven,
@@ -336,12 +337,19 @@ def _not_run(name: str) -> StrategyStats:
 
 
 class StudyRunner:
-    """Runs portfolio comparisons with one configuration, one tax policy and one cost book."""
+    """Runs portfolio comparisons with one configuration and one jurisdiction profile: the tax
+    policy and the cost book come from them, and their content enters every run's inputs hash."""
 
-    def __init__(self, settings: ObliskConfig, policy: TaxPolicy, costs: CostBook) -> None:
+    def __init__(self, settings: ObliskConfig, profile: JurisdictionProfile) -> None:
         self._settings = settings
-        self._policy = policy
-        self._costs = costs
+        self._policy = TAX_POLICIES.resolve(profile, settings)
+        self._costs = CostBook.from_config(settings)
+        self._rules_sha256 = {
+            "costs": canonical_sha256(settings.costs.model_dump(mode="json")),
+            "tax": canonical_sha256(
+                None if profile.tax is None else profile.tax.model_dump(mode="json")
+            ),
+        }
 
     def _simulation(self, prereg: Prereg, multiplier: Decimal) -> SimulationSettings:
         mechanics = self._settings.research.simulation
@@ -415,7 +423,10 @@ class StudyRunner:
             "whole_units": mechanics.whole_units,
             "max_price_age_days": mechanics.max_price_age_days,
             "max_fx_age_days": mechanics.max_fx_age_days,
+            "days_per_year": mechanics.days_per_year,
+            "base_currency": mechanics.base_currency,
             "policy": self._policy.policy_id,
+            **self._rules_sha256,
         }
         digest = inputs_sha256(spec_sha256=prereg.sha256, series=hashes, parameters=parameters)
         coverage = self._coverage(inputs)

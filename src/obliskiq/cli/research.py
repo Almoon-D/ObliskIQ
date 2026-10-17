@@ -23,8 +23,6 @@ import httpx
 from ..config.schema_research import Dataset
 from ..domain.research import TrialStage
 from ..errors import ObliskError
-from ..jurisdiction import TAX_POLICIES
-from ..quant.costs import CostBook
 from ..research.data import (
     Sources,
     coverage_by_year,
@@ -191,8 +189,7 @@ def _run(loaded: Loaded, out: TextIO) -> int:
     try:
         lock = None if explore else verify_lock(prereg.path)
         root = Git(prereg.path).root
-        policy = TAX_POLICIES.resolve(loaded.profile, settings)
-        runner = StudyRunner(settings, policy, CostBook.from_config(settings))
+        runner = StudyRunner(settings, loaded.profile)
         with open_research_store(settings, loaded.env.require_data_dir()) as store:
             registry = TrialRegistry(store)
             if explore:
