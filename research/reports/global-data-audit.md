@@ -67,11 +67,11 @@ Daily or monthly returns in EUR, one series per block.
 
 | Block | Why | Source (vendor) | Span verified 2026-10-17 | Cost | Point in time | Gap |
 |---|---|---|---|---|---|---|
-| Equity: world, EM, 51 countries | growth exposure; country breadth | MSCI end-of-day endpoint | daily from 2000-12-29 (already in `docs/knowledge/`); monthly or pre-1997 requests refused (`error_code` 100, 300) | free | as observed; restated without vintages | regional indices (North America, Europe, Japan, Pacific ex Japan, EM regions): codes not yet probed |
-| Equity: developed regions, long | development window before 2001 | Ken French data library (Bloomberg-based) | Developed 3 factors monthly from 1990-07; the Europe and Emerging files answer, spans not read | free | revised without vintages | a factor-model market return, not an investable index |
+| Equity: world, EM, 51 countries | growth exposure; country breadth | MSCI end-of-day endpoint | daily from 2000-12-29, the regional indices included (North America, Europe, EMU, Pacific ex Japan, EM Asia, EM Latin America, EM EMEA); monthly or pre-1997 requests refused (`error_code` 100, 300) | free | as observed; restated without vintages | nothing before 2000-12-29 |
+| Equity: developed regions, long | development window before 2001 | Ken French data library (Bloomberg-based) | Developed and Europe monthly from 1990-07, Emerging from 1989-07 | free | revised without vintages | a factor-model market return, not an investable index |
 | Euro government, core | duration in the base currency | Bundesbank Svensson curve | daily from 1997-08 (in hand) | free | as observed | Germany only |
-| Euro government, periphery | the spread risk Bunds miss (2010–12) | ECB Data Portal, `IRS` (convergence 10-year yields) | Italy from 1991-03, Spain from 1991-11, monthly | free | as published | monthly and 10-year only; daily all-issuer curve from 2004 not yet probed |
-| Euro inflation-linked | the IL role for a EUR investor | candidates: Agence France Trésor (OAT€i), Bundesbank price tables of linkers; HICP index from the ECB (`ICP`, from 1996-01) | HICP verified; linker prices **not found yet** | free (expected) | to be established | **the main gap**: no series yet for this role |
+| Euro government, periphery | the spread risk Bunds miss (2010–12) | ECB Data Portal, `IRS` (convergence 10-year yields) | Italy from 1991-03, Spain from 1991-11, monthly; the all-issuer curve (`G_N_C`, every euro-area government) daily from 2004-09-06 | free | as published | before 2004, monthly 10-year yields only, so returns would have to be approximated from yields and duration (a stated bias) |
+| Euro inflation-linked | the IL role for a EUR investor | iShares € Inflation Linked Govt Bond UCITS ETF (`IBCI`) on Yahoo from 2008-01-02 (Amsterdam, Milan, London; Xetra from 2009); before 2008 only candidates: the Bundesbank's monthly price tables of linkers (PDF), Agence France Trésor (OAT€i); HICP index from the ECB (`ICP`, from 1996-01) | IBCI and HICP verified; no series before 2008 found | free | as observed (IBCI) | **the main gap**: a euro proxy exists from 2008 only; before that, the role has a US proxy (a stated bias) or a later start |
 | US Treasuries | UST role | FRED H.15 constant-maturity yields | vendor verified; spans not probed | free | latest revision (yields are not revised) | none expected |
 | Japanese government bonds | data for risk and regime (not a §5.4 role) | Ministry of Finance, `jgbcme_all.csv` | daily from 1974-09-24 | free | as observed | a role would need an owner decision |
 | Gold | GOLD role | GLD (from 2004-11), GC=F continuous futures (from 2000-08); LBMA refused the container (403); the Bundesbank serves only the Frankfurt fixing in DM to 1998 | as stated | free | as observed | LBMA or WGC daily prices need registration and a licence check |
@@ -88,7 +88,7 @@ Daily or monthly returns in EUR, one series per block.
 | Carry | bond term spreads from the curves above (free); equity dividend yields (paid with MSCI fundamentals); commodity curves (IBKR live as data; history paid, not verified) | partly | mixed | none |
 | Growth and inflation regime | OECD composite leading indicators: 22 areas, the US, Canada, Japan and the UK from 1960, Spain from 1985, China from 1992, India from 1994 (verified) | yes, latest revision only | free | US nowcasts (Atlanta and New York Fed) are free and US only; a backtest needs CLI vintages (OECD's original-release database, not probed) |
 | Financial stress | ECB CISS: euro area and US daily from 1980-01 (verified) | yes, latest revision only | free | the excess bond premium is US only; FRED's ICE BofA spreads now hold only three years (euro high-yield OAS from 2023-10-17, verified), so they cannot back a backtest |
-| Variance risk premium (H6) | VIX (Cboe); VSTOXX for the euro area; Nikkei VI | VIX yes; the others not probed | free (expected) | VIX alone measures the S&P 500 |
+| Variance risk premium (H6) | VIX (Cboe); VSTOXX for the euro area; Nikkei VI | VIX yes; `stoxx.com` failed TLS verification from the container (the proxy's CA bundle did not help), Nikkei VI not probed | free (expected) | VIX alone measures the S&P 500 |
 | Positioning | CFTC COT: US exchanges, global commodities, FX and index futures (in hand); EU commodity positions under MiFID II (from 2018, not probed) | partly | free | none: the vendor is in the US, the exposure is global |
 
 ## Single names outside the US (the satellite)
@@ -115,9 +115,10 @@ hypothesis has to come first.
 
 ## What to gather first, in order
 
-1. **For the static-against-adaptive test of the core.** Euro inflation-linked bonds (the gap)
-   and the euro periphery. Then the equity regions, if a pre-registration estimates risk by region
-   rather than by world and EM.
+1. **For the static-against-adaptive test of the core** (Session 4e). The IL role's proxy:
+   a euro series from 2008, or a US one before it with its bias stated. The euro periphery
+   (all-issuer curve from 2004). The equity regions (MSCI, from 2000), if a pre-registration
+   estimates risk by region rather than by world and EM.
 2. **For a regime-conditioned core** (H6 made global). CISS, OECD CLI with vintages, term
    spreads from the curves, VSTOXX beside VIX.
 3. **Country valuations.** Bought only if a pre-registered hypothesis needs them.
@@ -125,12 +126,9 @@ hypothesis has to come first.
 
 ## To verify before a pre-registration names a source
 
-- Euro linker prices (AFT, Bundesbank tables) and their history.
-- The ECB all-issuer daily curve.
-- MSCI regional index codes.
+- Euro linker prices before 2008 (AFT, the Bundesbank's tables).
 - The variant of `^SPGSCI`.
 - OECD CLI vintages.
-- VSTOXX and Nikkei VI histories.
+- VSTOXX (from a host the container can verify) and Nikkei VI histories.
 - BIS effective exchange rates.
-- The spans of the Ken French Europe and Emerging files.
 - For each, its adjustments, continuity, currency and how closely it matches the vehicle.

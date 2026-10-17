@@ -1383,7 +1383,7 @@ re-estimated risk balance could not be tested from 2005; MASTER_PLAN §5.4's cov
 says so. `quant/risk_budget.py` (cyclical coordinate descent on the convex risk-budgeting problem,
 the legacy `_risk_parity` fixed) and `quant/trend.py` are in `quant/` so that Session 13's engine
 uses the same code. Rejected: a risk balance re-estimated monthly from a short window, and
-placeholder vehicles priced as if they were funds.
+placeholder vehicles priced as if they were funds. The data limitation is narrowed by D90.
 
 ### D81 · The simulator at bootstrap scale
 
@@ -1542,3 +1542,109 @@ Rejected:
 - Re-running H1 with other constants on the same sample: a search over the confirmation
   sample, which D63 forbids.
 - Reading the inconclusive development sample (+4.19 % a year, exploration) as evidence: D64.
+
+## Owner decisions (2026-10-17)
+
+### D88 · The drawdown tolerance, exposure caps and the option budget (D60; MASTER_PLAN §1, §11)
+
+The owner set the drawdown tolerance at **30 % from the previous peak of the portfolio's total
+value**, measured as D60's mark-to-market NAV. The horizon is very long, and the objective
+stays D60's: compound growth of wealth net of costs and tax.
+
+**Meaning.** The tolerance is the limit D60's research uses to filter candidates. A candidate
+respects it when the share of simulated paths whose drawdown reaches 30 % is at most the
+acceptable probability, and the core's variant is chosen by the same rule. It is **not** a
+guaranteed maximum loss, and **not** an order to sell when it is reached. The breakers of
+§5.11 keep thresholds and keys of their own, and this entry sets none of them to 30 %.
+
+**Open.** These stay open. Reports show their implications without assuming a value
+(`research/reports/drawdown-tolerance-implications.md`). Until the probability and the horizon
+are set, Session 13's precondition is unmet.
+
+- the acceptable probability of breaching the tolerance;
+- the numeric horizon over which that probability is evaluated;
+- whether holdings the bot does not manage count toward the portfolio's value.
+
+**Exposure caps by asset class.** None is set. They are configuration keys that are absent by
+default, so no limit applies until the owner writes one. When present, they are read on
+look-through exposure (D69) over the whole book (Session 17). The mandate's own constraints
+(§2) are unchanged.
+
+**Options.** The sleeve's premium budget stays at most 5 % (§11 row 2; lite's
+`option_sleeve.budget_pct`), with lite's penalty balance as documented (§5.6). Neither is
+reinterpreted.
+
+Rejected:
+
+- reading the tolerance as a stop or a liquidation trigger (the owner's ruling);
+- setting caps by asset class now;
+- assuming a probability or horizon on the owner's behalf.
+
+### D89 · Adaptation is a requirement; it earns capital by test (D62, D65; MASTER_PLAN §5.4)
+
+The owner requires the allocation to adapt to market conditions and opportunities, within the
+owner's limits, through validated rules. A fixed portfolio does not replace that requirement
+because it is easier to test.
+
+**How the requirement is met.**
+
+- **The target.** It is the neutral allocation for the owner's risk level and limits, plus every
+  adaptation that is sufficient under D62.
+- **Weight and execution.** Each adaptation is weighted by its evidence (D65), capped by the
+  limits, and traded through the bands and the tax-aware rules.
+- **Before it is sufficient.** An adaptation that is not yet sufficient runs in shadow, graded on
+  outcomes after its signals (§5.19).
+- **The static variants.** Session 4c's static variants are the fallback while no adaptation is
+  sufficient, and the benchmark each adaptation must beat after tax.
+- **Configuration.** Every adaptive parameter is configuration, pre-registered, and off until its
+  test is sufficient.
+
+**One mechanism at a time.** The mechanisms are tested separately, so that an outcome can be
+attributed:
+
+- risk estimation (the covariance behind the weights);
+- scaling total risk;
+- timing returns (trend, value, carry, macro);
+- opportunities (the satellite).
+
+Risk estimation comes first (Session 4e). Its forecasts can be scored against realised risk on
+daily data, which is expected to give more power than a growth test; the power is computed
+before any data are read, not assumed.
+
+Rejected:
+
+- one combined "adaptive portfolio" tested at once: a failure cannot be attributed, and its
+  power is the lowest;
+- adopting an adaptation without a test.
+
+### D90 · D80's data limitation is narrower than stated (D78, D80)
+
+D80 said that no multi-year covariance estimate existed before 2005 and that a re-estimated
+risk balance could not be tested from 2005. That holds for the proxies Session 4c chose:
+
+| Proxy | From |
+|---|---|
+| GLD | 2004-11 |
+| CRSOX | 2004-12 |
+| TIP | 2003-12 |
+| IEF | 2002-07 |
+
+It does not hold in general, for two reasons:
+
+- **Longer candidates exist**, each with a bias of its own (`docs/knowledge/research-sources.md`,
+  `research/reports/global-data-audit.md`).
+- **A history is not required.** An estimator that shrinks toward a declared matrix and adds data
+  as they arrive needs no history before its first date.
+
+Session 4c's result stands as run. A re-estimated variant is a new pre-registration (Session
+4e), whose estimator is specified in full:
+
+- the prior's weight in equivalent observations;
+- the decay;
+- the blend of short and long windows;
+- the shrinkage;
+- the largest weight change a month.
+
+The same audit found that 4c's IL role holds US inflation through TIP, where a euro investor's
+role calls for euro HICP-linked bonds. A euro proxy exists only from 2008 (the audit), so a test
+from 2005 states that bias or starts later.

@@ -33,8 +33,10 @@ A global, autonomous portfolio manager for one IBKR account that:
 1. **Survives first.** A diversified, regime-agnostic core that cannot blow up: no
    leverage, no short premium, no shorting, nothing the owner's jurisdiction forbids.
 2. **Compounds second.** The core carries documented premia — multi-asset exposure and
-   systematic trend following — in the variant the owner picks from the after-tax frontier
-   that the objective below scores (§5.4).
+   systematic trend following — and adapts its allocation within the owner's limits through
+   rules that pass a pre-registered test; until one does, it holds the variant the owner's
+   tolerance picks from the after-tax frontier that the objective below scores (§5.4,
+   DECISIONS D89).
 3. **Hunts asymmetry third.** A satellite that searches every market IBKR reaches for the
    few stocks, sectors and assets that move far more than the market — dislocations,
    reflexive loops, crowded positioning, forced selling, informed buying — corroborates them
@@ -80,7 +82,7 @@ entry), the resolution is recorded in `DECISIONS.md` and the stricter risk outco
 | Prohibited | Futures and futures options (curves are data only), leveraged/inverse ETPs (rejected at ingestion by resolved description), CFDs, FX forwards, any written option. | universe ingestion + gates |
 | Leverage | None. Gross ≤ 100% of managed capital; no negative cash balance in any currency (a negative balance is a loan). Spot FX conversion to fund a trade is allowed. | pre-trade checks + whatif |
 | Short exposure | None. Bearish = underweight or long put. | expression selector |
-| Positions | An absolute minimum position derived from commissions (DECISIONS D66); lite's maximum initial size, sector, country and single-foreign-currency limits, restated per sleeve and read on look-through exposure (D69); winners are not trimmed to fit; no averaging down without a re-underwrite carrying a new dated catalyst. | `config/defaults/positions.yaml` |
+| Positions | An absolute minimum position derived from commissions (DECISIONS D66); lite's maximum initial size, sector, country and single-foreign-currency limits, restated per sleeve and read on look-through exposure (D69); exposure caps by asset class are optional keys, none set (D88); winners are not trimmed to fit; no averaging down without a re-underwrite carrying a new dated catalyst. | `config/defaults/positions.yaml`, `config/owner.yaml` |
 | Option sleeve | Lite rules: shared premium pool, continuous penalty balance, concurrency cap, minimum premium, catalyst-driven tenor window, zombie test on two sessions, computed mandatory close; options preference: single-stock options, then UCITS ETF options, then US ETF options with mandatory close. | `engines/options_sleeve` + gates |
 | Data | Free sources (several free keys allowed) plus the IBKR market data the owner's main username subscribes to and shares with its paper account. Quote policy per asset class (§5.13). | `config/sources.yaml`, `market_data.*` |
 | Orders | Limit-capped only: patient limits, IBKR algos with a limit cap, stop-limit protective exits. Never a plain market order. | execution policy |
@@ -282,12 +284,18 @@ cycles. All of these live in config with a source per value.
   an overlay to cash, sized to each drawdown limit of the pre-registered grid. The two
   references of §1 are on the frontier too, so either can be the owner's pick (DECISIONS
   D60, D79).
+- **Adaptation** (DECISIONS D89). The allocation adapts within the owner's limits: the
+  neutral allocation for the owner's risk level, plus each adaptation a pre-registered test
+  found sufficient, weighted by its evidence; one not yet sufficient runs in shadow. The
+  static variants are the fallback and the benchmark. Mechanisms are tested one at a time —
+  risk estimation (Session 4e), total-risk scaling, return timing (trend, value, carry,
+  macro) — each with its parameters in configuration.
 - **Risk balance** (A–C). 25% of risk per environment in A and B; equal risk contribution
   inside a basket. No leverage, so risk comes from duration, not borrowing.
-- **Covariance.** The registered variants hold static risk-balance weights computed from a
-  declared long-run covariance in the base currency (DECISIONS D80); an estimate (EWMA blended
-  with a multi-year estimate, Ledoit–Wolf shrinkage) is built only when a pre-registered variant
-  re-estimates its weights.
+- **Covariance.** The variants 4c registered hold static risk-balance weights computed from a
+  declared long-run covariance in the base currency (DECISIONS D80, D90). Session 4e tests
+  re-estimated weights against them: an estimate (EWMA blended with a multi-year estimate,
+  Ledoit–Wolf shrinkage toward the declared matrix), fully specified in its pre-registration.
 - **Optimizer.** The legacy `_risk_parity` compared absolute risk contributions to 1/n
   without dividing by portfolio volatility. It is fixed (risk-contribution shares) and
   solved with a convex formulation, verified against closed forms (two assets; diagonal
@@ -509,7 +517,9 @@ decision only when its activation condition holds (§2).
   base-currency real terms — always including unmanaged and external holdings (positions
   the owner holds elsewhere, entered by hand and flagged stale after a configured age).
 - **Breakers.** Rolling-month drawdown → freeze new buys and audit; hard peak-to-trough →
-  force `shadow` and alert.
+  force `shadow` and alert. Their thresholds are keys of their own: the owner's drawdown
+  tolerance (§11, DECISIONS D88) is a research and selection limit, neither a breaker threshold
+  nor an order to sell.
 - **Inertia.** Intents only for a band breach, an approved thesis, a scale-up confirmation,
   a fired trigger, stop, zombie or mandatory close, a cash-flow reservation or a risk breach;
   monthly turnover and realised-gain budgets.
@@ -955,6 +965,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant Session 13 builds |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it |
+| 4e | Adaptive risk estimation | the core's covariance re-estimated against the declared one: a risk-forecast study kind, pre-registration, one confirmation run (DECISIONS D89, D90) |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR |
@@ -963,7 +974,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates |
-| 13 | Core engine | the variants 4c registered, risk budgeting where they need it, the tax-aware trend tilt, rebalancing |
+| 13 | Core engine | the variants 4c registered and any 4e found sufficient, risk budgeting, the tax-aware trend tilt, rebalancing |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series |
 | 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents |
@@ -986,7 +997,7 @@ reuse its prompt.
 | # | Question | Decision |
 |---|---|---|
 | 1 | Account size, minimum ticket, core lines | Any size. `trading.min_trade` supports an absolute amount, a % of managed capital, or both combined; never below the commission floor. Core granularity follows capital. |
-| 2 | Capital budgets | In `config/owner.yaml` (defaults: core 70, equity satellite 20, option premium 5, cash ≥ 5), moved by the capital allocation rule (§5.19) up to an owner-set ceiling. |
+| 2 | Capital budgets | In `config/owner.yaml` (defaults: core 70, equity satellite 20, option premium 5, cash ≥ 5), moved by the capital allocation rule (§5.19) up to an owner-set ceiling; option premium at most 5, with lite's penalty balance (DECISIONS D88). |
 | 3 | Autonomy | Fully autonomous in paper, all sleeves. Live autonomy set at promotion. |
 | 4 | LLM providers | Modular registry; expected a low-cost provider with a monthly budget and free Gemini as backup. |
 | 5 | Machine | Free tiers being sought; deployment is provider-agnostic. |
@@ -998,11 +1009,15 @@ reuse its prompt.
 | 11 | Base currency | Selectable; EUR today; other currencies held as working balances. |
 | 12 | Withdrawals | Planned as soon as announced; the bot asks before cutting protected positions. |
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
-| 14 | Objective (DECISIONS D60) | After-tax log growth of liquidation value within a drawdown limit, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The drawdown tolerance is open (below). |
+| 14 | Objective (DECISIONS D60) | After-tax log growth of liquidation value within a drawdown limit, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long. |
 | 15 | Scale (D66) | Capabilities that pay only at larger capital are built in Session 19a, before 1.0.0, and run by computed activation conditions. |
+| 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the portfolio's total value: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Its probability and horizon are open (below). |
+| 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
+| 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient; the static variants are the fallback and the benchmark. |
 
-Open: the drawdown tolerance, the probability of breaching it and the horizon — needed before
-Session 13 builds a variant from Session 4c's frontier, not before the research; the LLM
+Open: the probability of breaching the drawdown tolerance, the numeric horizon it is evaluated
+over and whether unmanaged holdings count toward it — needed before Session 13 builds a variant,
+not before the research (`research/reports/drawdown-tolerance-implications.md`); the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
 holdings to release; the paper managed-capital cap; the satellite budget ceiling; whether
 IBKR supports Spanish tax-free fund switches; whether a hedge inside a UCITS share class fits

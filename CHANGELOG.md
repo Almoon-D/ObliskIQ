@@ -5,6 +5,34 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.3] - 2026-10-17
+
+The owner's drawdown tolerance and adaptation requirement, D80's data limitation narrowed, a desk
+audit of global data, and a new research session for adaptive risk estimation. Documents and one
+exploration script; no code or configuration changed. No IBKR call.
+
+### Added
+
+- `docs/DECISIONS.md` D88 (a 30 % drawdown tolerance, neither a guaranteed maximum loss nor an
+  order to sell, with its probability and horizon open; optional exposure caps by asset class;
+  the option budget and penalty unchanged), D89 (adaptation as a requirement, earned by test one
+  mechanism at a time) and D90 (D80's limitation holds for 4c's proxies only).
+- `research/reports/global-data-audit.md`: where the research leans on US data, the criteria for
+  a region to add information, the blocks and variables a global adaptive core needs, with
+  sources, spans, costs and gaps.
+- `research/reports/drawdown-tolerance-implications.md` and
+  `research/explore/drawdown_horizon/horizon.py`: what the open probability and horizon imply.
+- `docs/SESSION_PROMPTS.md`: Session 4e, adaptive risk estimation.
+- `docs/knowledge/research-sources.md`: the sources the audit probed.
+
+### Changed
+
+- `docs/MASTER_PLAN.md`: adaptation in §1 and §5.4, the covariance line, optional caps in §2,
+  breaker thresholds apart from the tolerance in §5.11, Session 4e in §10, §11's owner decisions
+  and open items.
+- `docs/SESSION_PROMPTS.md`: Sessions 13, 17 and 21 after D88–D90.
+- `docs/ROADMAP.md`: Session 4e, the owner's follow-up, the log entry.
+
 ## [0.8.2] - 2026-10-17
 
 A documentation review at the owner's request, after Session 4d: the documents that steer later

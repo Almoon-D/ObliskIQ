@@ -1,7 +1,7 @@
 # ObliskIQ — Session Prompts
 
 Committed by Session 1 as `docs/SESSION_PROMPTS.md`. Build sessions 1–20 (with 4a, 4b and
-19a; there is no Session 14), research sessions 4c, 4d and 21, and the owner's T1, run in
+19a; there is no Session 14), research sessions 4c, 4d, 4e and 21, and the owner's T1, run in
 order, one PR each (a pre-registration in a PR of its own), merged and released by the agent
 itself (protocol in `AGENTS.md`). The design lives in `docs/MASTER_PLAN.md`; this file says
 what each session does. Section F holds the templates for feature and maintenance sessions
@@ -66,7 +66,7 @@ in an environment is readable by the session's code, which is why this one holds
 credentials and capped keys only.
 
 **Network access:** `Custom`, with "include defaults" ticked and the domains in §D.
-Switch to `Full` only for Sessions 3, 4b, 4c, 4d, 9, 10 and 21 (the Gateway download and
+Switch to `Full` only for Sessions 3, 4b, 4c, 4d, 4e, 9, 10 and 21 (the Gateway download and
 login, issuer sites, central-bank and regulator feeds, long research histories), then
 back to `Custom`.
 
@@ -191,6 +191,7 @@ paste the masked output into a short follow-up session that records it.
 | 4b | Research harness | Fable 5.1 (else Opus 5.5) | xhigh | **Full** | — |
 | 4c | Core verdict | Opus 5.5 | xhigh | **Full** | — |
 | 4d | First selection hypothesis | Opus 5.5 | xhigh | **Full** | — |
+| 4e | Adaptive risk estimation | Opus 5.5 | xhigh | **Full** | — |
 | 5 | Execution mechanics | Fable 5.1 (else Opus 5.5) | xhigh | Custom | conversion and stop-limit tests |
 | 6 | Walking skeleton | Opus 5.5 | xhigh | Custom | one supervised cycle |
 | 7 | Capital, cash flows and tax | Opus 5.5 | xhigh | Custom | read-only |
@@ -984,6 +985,74 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
+## Session 4e — Adaptive risk estimation
+
+**Launcher:** `Execute Session 4e exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+Runs any time after Session 4d and before Session 13.
+
+```
+You are building ObliskIQ, session 4e. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §1, §5.4, §5.9 and DECISIONS D60, D62–D64, D80, D88–D90 carefully). Network
+is open for research data. No IBKR call. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 4d merged. Otherwise STOP. The probability of breaching the owner's
+drawdown tolerance and the horizon are open (D88): the study reports over a grid and never
+assumes a value for the owner.
+
+GOAL: the first test of adaptation (D89), one mechanism: does re-estimating the core's
+covariance forecast its risk better than the declared matrix Session 4c used, and what does it
+change in the after-tax book under the owner's 30 % tolerance?
+
+READ: research/reports/global-data-audit.md and docs/knowledge/research-sources.md (sources
+and their gaps); research/preregistrations/core-allocation.md (the static A it is compared
+with); src/obliskiq/research/ and src/obliskiq/quant/risk_budget.py.
+
+STEP 1 — Data, before anything else: the audit's open items this study needs (the IL role: a
+euro proxy from 2008 or a US one before it, its bias stated; the euro periphery; the equity
+regions if risk is estimated by region), each checked for adjustments, distributions,
+continuity, currency and match to the vehicle, and recorded in docs/knowledge. Choose sources
+and span on those checks alone, never on a return or statistic. If the data cannot support the
+study, record it as not evaluable with what would make it evaluable, and stop.
+
+STEP 2 — Harness, in its own PR merged before Step 3:
+- quant/covariance.py: EWMA, a multi-year window, their blend, Ledoit–Wolf shrinkage toward a
+  declared target, in the base currency; tested against closed forms and an independent
+  implementation.
+- A risk-forecast study kind in research/: each estimator's forecast, point in time and out of
+  sample, of the next month's realised variance of a fixed-weight portfolio (static A's
+  weights), scored by a pre-registered loss; the paired block-bootstrap interval of the loss
+  difference; the decision rule (D62); the trial registry.
+- risk_balance strategies that re-estimate their weights from an estimator, with a largest
+  weight change per rebalance, under A's bands, minimum trade and tax-aware execution.
+
+STEP 3 — Pre-registration in its own PR, merged before Step 4: research/preregistrations/
+core-risk-estimation.md from the template.
+- Static A (the declared matrix) against at most three adaptive specifications, each fixed in
+  full: the prior's weight in equivalent observations, half-lives, the blend, the shrinkage
+  rule, the largest weight change, the warm-up and evaluation dates.
+- Primary outcome: risk-forecast accuracy, θ in loss units with its justification.
+- Secondary outcomes, paired against static A after costs and Spanish tax: annualised log
+  growth, turnover, tax paid, and the share of paths reaching 30 % for each horizon and
+  probability of a pre-registered grid.
+- Power before data for each; a low power is reported as such, never as evidence against
+  adaptation. Bonferroni across the specifications; robustness (subperiods, the break-even
+  cost multiplier); the lock.
+
+STEP 4 — Exploration on the development window with every trial in the registry; one
+confirmation run; research/reports/core-risk-estimation.md with each outcome, its labels, power
+and limits, and what it cannot conclude. A sufficient specification becomes a variant Session
+13 builds beside the static ones (D89); the others are recorded with their result.
+
+ACCEPTANCE: the data checks are committed before the harness, the harness is merged before the
+pre-registration, and the pre-registration is on main before the confirmation run; the verdict
+is reproducible by one command; the report states each outcome with its labels, power and
+limits.
+Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
 ## Session 5 — Execution mechanics
 
 **Launcher:** `Execute Session 5 exactly as specified in docs/SESSION_PROMPTS.md on main.`
@@ -1590,24 +1659,27 @@ You are building ObliskIQ, session 13. AGENTS.md is your operating manual; MASTE
 the design (read §1, §2, §4, §5.2, §5.4, §5.16 and DECISIONS D60, D61 carefully). Money
 paths fail closed. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–12 merged, Session 4c's report on main, and the owner's choice of a
-point on its frontier (the drawdown tolerance, its probability and the horizon) recorded in
-DECISIONS (D60). Otherwise STOP and ask the owner for that choice.
+PRECONDITION: Sessions 1–12 merged, Sessions 4c's and 4e's reports on main, and the owner's
+choice of a point on the frontier (the drawdown tolerance, its probability and the horizon)
+recorded in DECISIONS (D60; D88 records the tolerance, 30 %, and leaves the probability and
+the horizon open). Otherwise STOP and ask the owner for that choice.
 
-GOAL: the core as the owner's point on Session 4c's frontier selects it — the variants 4c
-registered, the chosen one by default — with tax- and cost-aware rebalancing, built on the same research
+GOAL: the core as the owner's point on the frontier selects it — the variants 4c registered and
+any specification 4e found sufficient, the chosen one by default — with tax- and cost-aware
+rebalancing, built on the same research
 code paths so the live core and the tested core cannot drift apart.
 
-READ: research/preregistrations/core-allocation.md and research/reports/core-allocation.md
+READ: research/preregistrations/core-allocation.md, research/reports/core-allocation.md and
+research/reports/core-risk-estimation.md
 (binding: every constant comes from there); src/obliskiq/research/simulate.py and
 src/obliskiq/research/strategies.py (the rebalancing, tilt and tax-aware execution the verdict
 used); src/obliskiq/quant/risk_budget.py and src/obliskiq/quant/trend.py (Session 4c, DECISIONS
 D80, D82).
 
 DELIVERABLES
-- quant/covariance.py (EWMA, multi-year, Ledoit–Wolf, blend, base currency) only if the
-  chosen variant re-estimates its weights; the registered variants hold static weights from a
-  declared covariance (D80), so by default none is built.
+- quant/covariance.py exists if Session 4e built it; engines/core uses it for a specification
+  4e found sufficient (D89, D90). Session 4c's variants hold static weights from a declared
+  covariance (D80).
 - quant/risk_budget.py exists (Session 4c: cyclical coordinate descent, closed forms and an
   independent Newton solve in tests). Add the check against skfolio (test-only) and port the
   remaining still-valid cases of legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py.
@@ -1845,9 +1917,11 @@ DELIVERABLES
    (sector, country, single foreign currency); correlation clusters; liquidity (days to
    exit); FX in base-currency real terms — always over the whole book including unmanaged
    and external holdings (Session 7; stale external data makes the report UNRELIABLE,
-   never a number).
+   never a number); the optional exposure caps by asset class (D88), absent by default and
+   read on look-through exposure.
 5. decision/breakers.py: rolling-month drawdown → freeze new buys and audit; hard
-   peak-to-trough → force shadow and alert.
+   peak-to-trough → force shadow and alert. Each threshold is a key of its own; the owner's
+   drawdown tolerance (D88) is not one of them and never orders a sale.
 6. decision/inertia.py: intents only for a band breach, an approved thesis, a share
    scale-up confirmation, a fired trigger, stop, zombie or mandatory close, a cash
    reservation, or a risk breach; monthly turnover and realised-gain budgets; tax hooks
@@ -2167,7 +2241,8 @@ evaluable — and only the sufficient ones can earn capital.
 STEP 1 — Data audit and pre-registration, in its own PR merged before Step 2 (AGENTS.md
 session workflow): research/preregistrations/batch-2.md from the template, covering H3
 (forced selling: spin-offs and index deletions), H6 (the core's risk conditioned on the
-variance risk premium, the excess bond premium and trend), H9 (COT hedging pressure for
+variance risk premium, the excess bond premium and trend, with euro-area measures beside the US
+ones: research/reports/global-data-audit.md), H9 (COT hedging pressure for
 commodity ETCs), the Hunter's components each alone and their k-of-n agreement rule as a
 registered combination beside them, the batch-1 candidates Session 4d did not choose, and the
 §6.4 re-test group: exact definitions (respecified where the legacy logic misstated the
