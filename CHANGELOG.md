@@ -5,6 +5,27 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.2] - 2026-10-17
+
+A documentation review at the owner's request, after Session 4d: the documents that steer later
+sessions now agree with each other and with the code. Documents only; no code or configuration
+changed. No IBKR call.
+
+### Changed
+
+- `AGENTS.md` and `README.md` describe the core as the variant the owner picks from Session 4c's
+  frontier, and the transports as the Gateway for paper and OAuth for live (DECISIONS D42, D60);
+  the README's status lists what is built.
+- `docs/SESSION_PROMPTS.md`: no subagents in §B and §C (the owner removed `.claude/agents/`);
+  the opening count of sessions; Session 6's skeleton roles; Sessions 10 and 15 after Session
+  4d's verdict; the feature-session template's path to weight follows D62, D65 and D66.
+- `docs/MASTER_PLAN.md`: the two references can be the owner's pick from the frontier (§5.4);
+  no selection hypothesis is sufficient yet (§5.5); Session 3 built both transports (§10).
+- `docs/DECISIONS.md`: D5, D9 and D12 name the entries that superseded them, D22 is marked
+  withdrawn, and D61 cites the right entry for the pricing of both legs.
+- `docs/ROADMAP.md`: T1's status; the review's log entry.
+- `docs/knowledge/README.md` lists every research source.
+
 ## [0.8.1] - 2026-10-17
 
 Session 4d, last part — the first selection verdict. The locked pre-registration

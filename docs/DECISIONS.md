@@ -46,6 +46,8 @@ classifier never said "bull" in 125 windows (§3.1; `analyzer.py` is not ported,
 snapshotted); its overlay de-risked 45 of 125 months (`legacy/old/ObliskIQ/docs/STRATEGY_V2_DESIGN.md:217`)
 and v1.1 failed its gate, OOS Sharpe 0.801 vs SPY 0.858 (`…/STRATEGY_V1_1_VERDICT.md:13`).
 Trend has the stronger evidence (Moskowitz, Ooi & Pedersen 2012); bands-only is the fallback.
+Narrowed by D60 and D61: the risk balance and the tilt are candidates of Session 4c's test, and
+the core runs the point the owner picks from its frontier.
 
 ### D6 · Options: one block when IV is cheap, on real-time quotes (§4, §5.6, §5.13)
 
@@ -76,7 +78,9 @@ route of record (`legacy/lite/docs/DECISIONS.md:248-250`) and ran it live on 202
 Parallel computation runs through a process pool (`compute.workers`) and the code stays
 thread-safe; Session 14 benchmarks 3.14t and switches only if it is clearly faster with every
 dependency available. Evidence: numpy releases the GIL inside its kernels; 3.14t is slower
-single-threaded and not every scientific wheel ships a free-threaded build.
+single-threaded and not every scientific wheel ships a free-threaded build. Narrowed by D61:
+the benchmark is dropped (there is no Session 14), and 3.14t is reconsidered only if profiling
+calls for it (MASTER_PLAN §7).
 
 ### D10 · One long-format measurement store, many views (§4, §5.7)
 
@@ -96,7 +100,8 @@ sample sizes and 0 of 31 once they were purged (`legacy/old/docs/PROVENANCE_PURG
 Its budget rises one step when the lower confidence bound of its graded excess return is above
 zero after the minimum sample, up to the owner's ceiling, and halves on an interval wholly
 below zero. Evidence: 58% of US stocks returned less than one-month T-bills over their
-lifetimes and 4.3% of firms created all net wealth 1926–2016 (Bessembinder 2018).
+lifetimes and 4.3% of firms created all net wealth 1926–2016 (Bessembinder 2018). Replaced by
+D65: capital follows the research outcome, and live results are monitored against a twin.
 
 ### D13 · Four pillars, three exclusions (§5.2)
 
@@ -181,7 +186,8 @@ explicit file list, so `legacy/` cannot leak into it.
 `.claude/agents/*.md` set `model:` to `opus`, `sonnet` or `haiku` with the `effort:` of
 SESSION_PROMPTS §C.1. The aliases resolve to the newest model of each family — today the ones
 §C.1 names — so the files carry no version identifiers and follow a family forward; pinning a
-version would be a new entry here.
+version would be a new entry here. Withdrawn: the owner removed `.claude/agents/` on
+2026-10-16, and the end-of-session review is the session agent's own (AGENTS.md).
 
 ### D23 · The LLM contract also keeps out the broker
 
@@ -987,7 +993,7 @@ Sessions 4b (research harness), 4c (the core verdict) and 4d (one selection hypo
 before Session 5, and the owner runs T1 on the deployment machine in parallel (D68). A historical
 test needs none of Sessions 5–12, so waiting for them delayed the result that decides what to
 build. Session 14 is absorbed into 4c: work an earlier entry gives to Session 14 (D30's inference
-keys, D31's pricing of both legs) belongs to 4c, and D9's benchmark of 3.14t is dropped because
+keys and its pricing of both legs) belongs to 4c, and D9's benchmark of 3.14t is dropped because
 no decision depends on it (standard CPython stays). Session 13 builds the variant the owner picks from 4c's frontier.
 Session 19a builds what pays only at larger capital (D66). Session 21 is the second research
 batch. Session 5 runs as written plus D67's additions: it is independent of the strategy, and

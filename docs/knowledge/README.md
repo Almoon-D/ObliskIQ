@@ -48,7 +48,9 @@ the observation that settled it.
   paper order test.
 
 - `research-sources.md` — the formats the research loaders read from Yahoo (through `yfinance`),
-  the Ken French and AQR libraries, FRED and ALFRED and the ECB, and how each is placed in time.
+  the Ken French and AQR libraries, FRED and ALFRED, the ECB and its Data Portal, MSCI and the
+  Bundesbank, and how each is placed in time; what the selection data audit read from the SEC
+  and Tiingo; the vendors that refused the container.
 - `tax-es.md` — Spain's rules on the savings base as the `es_irpf` policy applies them, each with
   its article and the official text it was read in (not tax advice).
 
