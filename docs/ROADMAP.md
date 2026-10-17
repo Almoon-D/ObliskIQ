@@ -55,8 +55,12 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 - The simulator at bootstrap scale: indexed series, kept prices, closes and trend states, worker
   processes that leave the result unchanged; the lot engine's copy built field by field (D81).
 - Fixed: a rounding excess of replacement units after a part sale of a lot that carries a
-  deferred loss (D81).
-- Tests: 3,393 passing; coverage 99.83 %; every module in `research/`, `quant/risk_budget.py`
+  deferred loss (D81). Found in self-review, before any run: Decimal residues that could sum a
+  tax-held book's weights above 1 (the run would have been not evaluable) or sell a kept
+  position by one unit, now a weight quantum and a unit residue; a reduction's tax priced on its
+  sales together (`LotEngine.trial_tax`); a structure subperiod annualised over the months it
+  holds.
+- Tests: 3,400 passing; coverage 99.83 %; every module in `research/`, `quant/risk_budget.py`
   and `quant/trend.py` at 100 %.
 
 **Next in this session.** The pre-registration `research/preregistrations/core-allocation.md` in

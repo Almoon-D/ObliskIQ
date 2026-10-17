@@ -86,8 +86,8 @@ class Book:
     def units_for(self, key: str, value: Decimal) -> Decimal:
         return value
 
-    def sale_tax(self, key: str, quantity: Decimal) -> Decimal:
-        return self.taxes.get(key, D(0)) * quantity
+    def sales_tax(self, sales: list[tuple[str, Decimal]]) -> Decimal:
+        return sum((self.taxes.get(key, D(0)) * units for key, units in sales), D(0))
 
     def purchase_defers_loss(self, key: str) -> bool:
         return key in self.defers
@@ -133,6 +133,20 @@ def test_the_tilt_scales_a_falling_role_down_to_its_floor_and_cash_takes_the_res
     assert scales == {"EQ": D("0.25"), "BD": D(1), "CASH": D(1)}
     with pytest.raises(SimulationError, match="EQ lacks the 13 month ends"):
         strategy.role_targets(View({"EQ": None}))
+
+
+def test_a_held_reduction_on_unround_values_never_sums_above_one():
+    # Without the weight quantum these values summed 1E-27 above 1, which the simulator refuses
+    # as leverage (every candidate would then be not evaluable).
+    strategy = core({"EQ": D("0.5"), "BD": D("0.5")}, tilt=True, tax=True)
+    values = {"EQ": D("48.248772095"), "BD": D("42.7460397"), "CASH": D("0.41")}
+    investable = sum(values.values(), D(0))
+    book = Book(values, investable=investable, taxes={"EQ": D("0.2")})
+    weights = strategy.targets(View({"EQ": 0.4}), book)
+    assert weights is not None
+    assert sum(weights.values(), D(0)) <= 1
+    # EQ keeps its weight: rounded down to the quantum, a residue below its value.
+    assert D(0) <= values["EQ"] - weights["EQ"] * investable < D("1e-15")
 
 
 def test_a_costly_trend_reduction_is_held_and_alone_trades_nothing():

@@ -6,13 +6,17 @@ report's rows when nothing respects a point or no interval exists.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import math
 from dataclasses import replace
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
+import numpy as np
 import pytest
-from research_core_toy import CORE_TOY, NOW, put_core_toy
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from research_core_toy import CORE_TOY, NOW, month_ends, put_core_toy
 
 from obliskiq.domain.enums import AssetClass
 from obliskiq.domain.research import Observation
@@ -24,7 +28,7 @@ from obliskiq.quant.trend import TrendRule
 from obliskiq.research.decide import AdequacyCheck
 from obliskiq.research.prereg import StudySpec, load_prereg
 from obliskiq.research.registry import TrialRegistry
-from obliskiq.research.report import render
+from obliskiq.research.report import _grid, render
 from obliskiq.research.simulate import (
     Book,
     MarketView,
@@ -33,9 +37,11 @@ from obliskiq.research.simulate import (
     Pricing,
     SimInstrument,
     SimulationSettings,
+    share,
+    whole,
 )
 from obliskiq.research.strategies import build_strategy
-from obliskiq.research.structure import structure_check
+from obliskiq.research.structure import overlay_returns, structure_check
 from obliskiq.research.study import FrontierPoint, StudyRunner
 from obliskiq.store import open_research_store
 from obliskiq.tax.lots import LotEngine
@@ -207,18 +213,54 @@ def es(repo_root) -> EsIrpfTaxPolicy:
 def test_the_book_answers_from_the_lot_engine(es):
     engine = LotEngine(es, [instrument(k).security for k in ("A", "B")])
     engine.acquire("A", on=date(2025, 1, 2), quantity=D(10), cost=D(1000))
+    engine.acquire("B", on=date(2025, 1, 2), quantity=D(10), cost=D(1000))
     on = date(2025, 6, 30)
-    book = Book({"A": D(10)}, lambda _: D(120), D(1200), engine, on)
-    assert (book.price("A"), book.value("A"), book.value("B")) == (D(120), D(1200), D(0))
-    assert book.weight("A") == D(1)
+    prices = {"A": D(120), "B": D(80)}
+    book = Book({"A": D(10), "B": D(10)}, prices.__getitem__, D(2000), engine, on)
+    assert (book.price("A"), book.value("A"), book.value("B")) == (D(120), D(1200), D(800))
+    assert book.weight("A") == D("0.6")
     assert book.basis("A") == D(1000)
     assert book.units_for("A", D(250)) == D(2)
-    # Selling 5 units at 120 realises 100 of gain: 19 % of it.
-    assert book.sale_tax("A", D(5)) == D(19)
-    assert book.sale_tax("A", D(0)) == D(0)
+    # A value a rounding residue short of whole units is those units.
+    assert book.units_for("A", D(360) - D("1e-24")) == D(3)
+    # Selling 5 A at 120 realises 100 of gain: 19 % of it. Selling 5 B at 80 alone loses 100
+    # and saves nothing this year; together the loss offsets the gain.
+    assert book.sales_tax([("A", D(5))]) == D(19)
+    assert book.sales_tax([("B", D(5))]) == D(0)
+    assert book.sales_tax([("A", D(5)), ("B", D(5))]) == D(0)
+    assert book.sales_tax([("A", D(0))]) == book.sales_tax([]) == D(0)
     assert book.purchase_defers_loss("B") is False
     empty = Book({}, lambda _: D(1), D(0), engine, on)
     assert empty.weight("A") == D(0)
+
+
+@settings(max_examples=200, deadline=None)
+@given(
+    held=st.lists(
+        st.tuples(
+            st.integers(min_value=1, max_value=100_000),
+            st.decimals(min_value="0.01", max_value="5000", places=6),
+        ),
+        min_size=1,
+        max_size=12,
+    ),
+    cash=st.decimals(min_value="0", max_value="1000", places=9),
+)
+def test_shares_never_sum_above_one_and_round_trip_to_the_units_held(held, cash):
+    values = [D(units) * price for units, price in held]
+    total = sum(values, D(0)) + cash
+    weights = [share(value, total) for value in values]
+    assert sum(weights, D(0)) <= 1
+    for (units, price), weight in zip(held, weights, strict=True):
+        assert whole(total * weight / price) == units
+
+
+def test_whole_units_round_as_asked_away_from_a_residue():
+    assert whole(D("2.9999999999999")) == D(3)
+    assert whole(D("3.0000000000001"), ROUND_CEILING) == D(3)
+    assert whole(D("2.99")) == D(2)
+    assert whole(D("2.01"), ROUND_CEILING) == D(3)
+    assert share(D(1), D(3)) == D("0.33333333333333333333")
 
 
 def test_the_engine_says_a_purchase_would_defer_a_loss_as_its_conflict_hook_does(es):
@@ -280,6 +322,37 @@ def test_a_subperiod_without_months_is_left_out(tmp_path):
     )  # fmt: skip
     assert result.subperiods == ()
     assert result.months_reduced == 0  # a steady rise is never reduced
+
+
+def test_a_structure_subperiod_is_annualised_over_the_months_it_holds(tmp_path):
+    prereg = load_prereg(write(tmp_path, CORE_TOY))
+    spec = prereg.spec.structure
+    assert spec is not None
+    year = (date(1990, 1, 1), date(1990, 12, 31))
+    spec = spec.model_copy(update={"subperiods": [year]})
+    months = month_ends(date(1990, 1, 31), 24)
+    market, cash = [-0.02] * 24, [0.001] * 24
+    rule = TrendRule(momentum_months=3, average_months=2, hysteresis=0.02, floor=0.25)
+    checks = (AdequacyCheck("history", True, "ok"),)
+    result = structure_check(
+        spec, months, market, cash, checks, rule=rule, bootstrap=prereg.spec.bootstrap,
+        limits=prereg.spec.drawdown_limits, alpha=0.05, days_per_year=365.25,
+    )  # fmt: skip
+    overlay, _, start = overlay_returns(
+        np.array(market), np.array(cash), rule, float(spec.cost_per_leg)
+    )
+    # The tilt first trades after April: the year holds May to December, eight months.
+    held = [d for d in months[start + 1 :] if d <= year[1]]
+    assert (months[start], len(held)) == (date(1990, 4, 30), 8)
+    gap = math.log(float(np.prod(1 + overlay[: len(held)])) / 0.98 ** len(held))
+    years = (held[-1] - months[start]).days / 365.25
+    assert result.subperiods[0].growth_difference == pytest.approx(gap / years)
+
+
+def test_a_grid_label_keeps_the_digits_it_was_written_with():
+    assert [_grid(D(x)) for x in ("0.025", "0.1", "0.125", "0.5", "1")] == [
+        "2.5%", "10%", "12.5%", "50%", "100%",
+    ]  # fmt: skip
 
 
 def test_the_report_says_when_nothing_respects_a_point_or_a_check_failed(

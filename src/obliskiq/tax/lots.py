@@ -24,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import calendar
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
@@ -402,22 +402,25 @@ class LotEngine:
         twin._sequence = self._sequence
         return twin
 
+    def _make(self, trade: ProposedTrade) -> tuple[Decimal, Decimal]:
+        """Make ``trade`` at the price it names: what it counts in the year's gains and the loss
+        the wash-sale rule sets aside."""
+        notional = trade.quantity * trade.price
+        if trade.side == "sell":
+            results = self.dispose(
+                trade.security, on=trade.on, quantity=trade.quantity, proceeds=notional
+            )
+            realised = sum((r.counted for r in results), ZERO)
+            return realised, sum((r.deferred for r in results), ZERO)
+        lot = self.acquire(trade.security, on=trade.on, quantity=trade.quantity, cost=notional)
+        return ZERO, lot.deferred_loss
+
     def tax_cost(self, trade: ProposedTrade) -> TaxCostEstimate:
         """The tax ``trade`` would add to its year, at the price it names, before trading costs."""
         year = trade.on.year
         before = self._ledger.provisional(year)
         trial = self._copy()
-        notional = trade.quantity * trade.price
-        if trade.side == "sell":
-            results = trial.dispose(
-                trade.security, on=trade.on, quantity=trade.quantity, proceeds=notional
-            )
-            realised = sum((r.counted for r in results), ZERO)
-            deferred = sum((r.deferred for r in results), ZERO)
-        else:
-            lot = trial.acquire(trade.security, on=trade.on, quantity=trade.quantity, cost=notional)
-            realised = ZERO
-            deferred = lot.deferred_loss
+        realised, deferred = trial._make(trade)
         after = trial.ledger.provisional(year)
         return TaxCostEstimate(
             trade=trade,
@@ -427,6 +430,22 @@ class LotEngine:
             tax_year=year,
             rate_table_covers_year=after.rate_table_covers_year,
         )
+
+    def trial_tax(self, trades: Sequence[ProposedTrade]) -> Decimal:
+        """The tax ``trades`` would add to their year made together, in order, at the prices they
+        name and before trading costs: a loss on one offsets a gain on another as the year would
+        (:meth:`tax_cost` prices one trade alone). Nothing here changes."""
+        if not trades:
+            return ZERO
+        years = {trade.on.year for trade in trades}
+        if len(years) > 1:
+            raise TaxError(f"a trial of several trades needs one tax year, got {sorted(years)}")
+        year = trades[0].on.year
+        before = self._ledger.provisional(year)
+        trial = self._copy()
+        for trade in trades:
+            trial._make(trade)
+        return trial.ledger.provisional(year).tax_due - before.tax_due
 
     def wash_sale_conflict(self, trade: ProposedTrade) -> WashSaleConflict | None:
         """Whether ``trade`` would defer a loss, and how much."""

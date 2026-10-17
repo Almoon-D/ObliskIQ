@@ -18,7 +18,8 @@ The core's variants (MASTER_PLAN §5.4) are one mechanism with different static 
   (``quant.trend``: 12-month momentum over cash and a 10-month moving average, hysteresis, a
   floor above zero); the weight freed goes to the cash role.
 - **Tax-aware execution** with the tilt: a trend reduction is made only while the tax it would
-  cost is at most a pre-registered fraction of the value sold (its assumed benefit), else the
+  cost (its sales together, so a loss on one vehicle offsets a gain on another) is at most a
+  pre-registered fraction of the value sold (its assumed benefit), else the
   role keeps its weight; losses are taken freely; a purchase that would defer a loss under the
   wash-sale rule goes to the role's swap partner, which differs in issuer and index.
 
@@ -47,7 +48,7 @@ from .prereg import (
     StrategySpec,
     StudySpec,
 )
-from .simulate import Book, MarketView
+from .simulate import Book, MarketView, share
 
 type Weights = Mapping[str, Decimal]
 
@@ -232,12 +233,11 @@ class CoreStrategy:
             if role == cash_role or scales[role] >= ONE or current[role] <= target:
                 continue
             amount = (current[role] - target) * book.investable
-            tax = sum(
-                (
-                    book.sale_tax(key, book.units_for(key, value))
+            tax = book.sales_tax(
+                [
+                    (key, book.units_for(key, value))
                     for key, value in self._sale_plan(role, amount, book)
-                ),
-                ZERO,
+                ]
             )
             if tax > rule.benefit_fraction * amount:
                 held[role] = current[role]
@@ -279,8 +279,14 @@ class CoreStrategy:
         return order[0]
 
     def _vehicle_weights(self, targets: Mapping[str, Decimal], book: Book) -> dict[str, Decimal]:
+        """Each vehicle's weight, rounded down to the weight quantum: a residue of the arithmetic
+        above can never make them sum above 1."""
         if book.investable <= ZERO:
-            return {self.vehicles[role].primary: w for role, w in targets.items() if w > ZERO}
+            return {
+                self.vehicles[role].primary: share(w, ONE)
+                for role, w in targets.items()
+                if w > ZERO
+            }
         weights: dict[str, Decimal] = {}
         for role, target in targets.items():
             vehicles = self.vehicles[role]
@@ -295,7 +301,7 @@ class CoreStrategy:
                     values[key] -= value
             for key, value in values.items():
                 if value > ZERO:
-                    weights[key] = value / book.investable
+                    weights[key] = share(value, book.investable)
         return weights
 
 

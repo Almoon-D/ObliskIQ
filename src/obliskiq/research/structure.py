@@ -153,7 +153,13 @@ def structure_check(
         mask = np.array([sub_first <= d <= sub_last for d in dated])
         if not mask.any():
             continue
-        span = years_between(sub_first, sub_last, days_per_year=days_per_year)
+        # Over the months it holds: from the month end before its first return to its last.
+        held_months = np.flatnonzero(mask)
+        span = years_between(
+            months[start + held_months[0]],
+            months[start + 1 + held_months[-1]],
+            days_per_year=days_per_year,
+        )
         part_overlay = np.concatenate([[1.0], np.cumprod(1 + overlay[mask])])
         part_held = np.concatenate([[1.0], np.cumprod(1 + held[mask])])
         subperiods.append(

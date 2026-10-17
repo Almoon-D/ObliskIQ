@@ -56,6 +56,14 @@ drawdown. The pre-registration and its one run follow in their own pull requests
 - A part sale of a lot whose units all carry a deferred loss could leave a rounding excess of
   replacement units that the lot's own invariant refused; they are capped at the units left
   (D81).
+- Target weights are rounded down to a quantum at which they add up exactly, so a Decimal
+  residue can no longer sum them above 1 (which the simulator refuses as leverage), and a unit
+  count within a residue of a whole number is that number, so a position kept at its weight is
+  not sold by one unit.
+- A trend reduction's tax is priced on its sales together (`LotEngine.trial_tax`), so a loss on
+  one vehicle offsets a gain on the other as the year would.
+- The structure check annualises a subperiod over the months it holds; the report prints a grid
+  value with the digits it was written with (2.5 %, not 2 %).
 
 ## [0.6.0] - 2026-10-17
 

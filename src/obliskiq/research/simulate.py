@@ -37,7 +37,7 @@ from bisect import bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, localcontext
 from itertools import pairwise
 from operator import attrgetter
 from typing import Final, Protocol
@@ -60,11 +60,34 @@ EURO: Final = "EUR"
 SCALE_BISECTIONS: Final = 30
 #: Months in a year, for stepping through month ends.
 MONTHS_PER_YEAR: Final = 12
+#: A target weight's last decimal place. Weights at this quantum add up exactly in Decimal's 28
+#: significant digits, and rounded down they never sum above the values they came from.
+WEIGHT_QUANTUM: Final = Decimal("1e-20")
+#: A unit count this close to a whole number is that number: what Decimal rounding leaves of a
+#: round trip from units to a weight and back, far below any quantity a venue trades.
+UNIT_RESIDUE: Final = Decimal("1e-9")
 
 
 def exact(value: float) -> Decimal:
     """A float as the decimal its shortest representation spells."""
     return Decimal(repr(value))
+
+
+def share(value: Decimal, total: Decimal) -> Decimal:
+    """``value / total`` rounded down to :data:`WEIGHT_QUANTUM`: shares of one total computed
+    this way never sum above 1, so a rounding residue is never read as leverage."""
+    with localcontext() as context:
+        context.rounding = ROUND_FLOOR
+        return (value / total).quantize(WEIGHT_QUANTUM)
+
+
+def whole(units: Decimal, rounding: str = ROUND_FLOOR) -> Decimal:
+    """``units`` as whole units, rounded by ``rounding``; a count within :data:`UNIT_RESIDUE` of
+    a whole number is that number, so a position kept at its weight is not sold by one unit."""
+    nearest = units.to_integral_value()
+    if abs(units - nearest) <= UNIT_RESIDUE:
+        return nearest
+    return units.to_integral_value(rounding=rounding)
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,16 +394,19 @@ class Book:
 
     def units_for(self, key: str, value: Decimal) -> Decimal:
         """The whole units of ``key`` that ``value`` buys or sells, rounded down."""
-        return (value / self._price(key)).to_integral_value(rounding=ROUND_FLOOR)
+        return whole(value / self._price(key))
 
-    def sale_tax(self, key: str, quantity: Decimal) -> Decimal:
-        """The tax a sale of ``quantity`` units now would add to the year (negative: saved)."""
-        if quantity <= ZERO:
-            return ZERO
-        trade = ProposedTrade(
-            security=key, side="sell", quantity=quantity, price=self._price(key), on=self.on
-        )
-        return self._engine.tax_cost(trade).tax
+    def sales_tax(self, sales: Sequence[tuple[str, Decimal]]) -> Decimal:
+        """The tax that selling each ``(key, units)`` now, together, would add to the year
+        (negative: saved); a loss on one sale offsets a gain on another as the year would."""
+        trades = [
+            ProposedTrade(
+                security=key, side="sell", quantity=units, price=self._price(key), on=self.on
+            )
+            for key, units in sales
+            if units > ZERO
+        ]
+        return self._engine.trial_tax(trades)
 
     def purchase_defers_loss(self, key: str) -> bool:
         """Whether buying ``key`` now would defer a loss under the wash-sale rule."""
@@ -568,7 +594,7 @@ class Simulator:
 
     def _units(self, value: Decimal, price: Decimal, rounding: str = ROUND_FLOOR) -> Decimal:
         units = value / price
-        return units.to_integral_value(rounding=rounding) if self._settings.whole_units else units
+        return whole(units, rounding) if self._settings.whole_units else units
 
     # ── a run ──
 
@@ -703,7 +729,7 @@ class Simulator:
         prices = {key: self._base_price(key, on) for key in state.units}
         if weights is None:
             weights = (
-                {key: q * prices[key] / marked for key, q in state.units.items()}
+                {key: share(q * prices[key], marked) for key, q in state.units.items()}
                 if marked > ZERO
                 else {}
             )

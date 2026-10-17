@@ -48,6 +48,12 @@ def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2%}"
 
 
+def _grid(value: Decimal) -> str:
+    """A pre-registered fraction (a limit, a probability, an aspiration) as a percent, with
+    the digits it was written with (2.5 % stays 2.5 %)."""
+    return f"{value.scaleb(2).normalize():f}%"
+
+
 def _money(value: Decimal | None) -> str:
     return "n/a" if value is None else f"{value:,.2f}"
 
@@ -117,8 +123,8 @@ def _frontier_lines(result: StudyResult) -> list[str]:
 
     rows = (
         (
-            f"{float(point.limit):.0%}",
-            f"{float(point.probability):.0%}",
+            _grid(point.limit),
+            _grid(point.probability),
             point.chosen or "none",
             against(point.chosen),
             point.best or "none",
@@ -151,7 +157,7 @@ def _frontier_lines(result: StudyResult) -> list[str]:
 
 
 def _structure_arm(name: str, arm: StructureArm) -> list[str]:
-    breach = ", ".join(f"{float(limit):.0%}: {p:.1%}" for limit, p in arm.breach)
+    breach = ", ".join(f"{_grid(limit)}: {p:.1%}" for limit, p in arm.breach)
     return [name, _percent(arm.log_growth), _percent(arm.max_drawdown), breach or "n/a"]
 
 
@@ -394,7 +400,7 @@ def render(result: StudyResult) -> str:
                 "Turnover / yr",
                 "Median bootstrap growth",
                 "P5 terminal wealth multiple",
-                *(f"Median minus ln(1 + {float(a):.0%})" for a in aspirations),
+                *(f"Median minus ln(1 + {_grid(a)})" for a in aspirations),
             ),
             (
                 (
@@ -420,7 +426,7 @@ def render(result: StudyResult) -> str:
         "Probability that a bootstrap path's mark-to-market drawdown reaches each limit:",
         "",
         *_table(
-            ("Portfolio", *(f"{float(limit):.0%}" for limit in limits)),
+            ("Portfolio", *(_grid(limit) for limit in limits)),
             (
                 (s.name, *([f"{p:.1%}" for _, p in s.breach] or ["n/a"] * len(limits)))
                 for s in result.portfolios
