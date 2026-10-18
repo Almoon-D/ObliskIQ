@@ -20,7 +20,7 @@ from ..util.timeutil import utc_stamp
 from .decide import Decision
 from .forecast import ForecastCheck
 from .long_history import HistoryResult
-from .simulate import SimulationResult
+from .simulate import MONTHS_PER_YEAR, SimulationResult
 from .structure import StructureArm, StructureResult
 from .study import CandidateTest, StrategyStats, StudyResult, simulation_notes
 
@@ -744,7 +744,10 @@ def render(result: StudyResult) -> str:
     limits = spec.drawdown_limits
     within = "" if spec.owner_point is None else f" within {spec.owner_point.horizon_years} years"
     path_months = max(len(result.dates) - 1, 0)
-    if spec.owner_point is not None and path_months < spec.owner_point.horizon_years * 12:
+    if (
+        spec.owner_point is not None
+        and path_months < spec.owner_point.horizon_years * MONTHS_PER_YEAR
+    ):
         within = (
             f" within a path of {path_months} months (shorter than the owner's horizon of "
             f"{spec.owner_point.horizon_years} years)"
