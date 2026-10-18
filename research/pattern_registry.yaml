@@ -50,6 +50,89 @@ patterns:
       group without it, the interval entirely below zero: 588 stops in 224 months, each sale and
       re-entry paid at the illiquid tier, in both subperiods. Protective exits stay a risk control
       (DECISIONS D67), not an edge, for this signal.
+  - id: core-risk-scaling-e-fast
+    title: Global equity (WORLD 90 %, EM 10 %) scaled to 8.91 % by a 21-day EWMA
+    status: tested
+    preregistration: research/preregistrations/core-risk-scaling.md
+    lock: research/preregistrations/core-risk-scaling.lock
+    report: research/reports/core-risk-scaling.md
+    test: E-fast
+    outcome:
+      decision: inconclusive
+      labels: [sign uncertain, outside the owner's point, low power]
+      estimate_a_year: "0.0156"
+      interval: ["-0.0207", "0.0458"]
+      theta: "0.01"
+      power: "0.044"
+      sample: 2004-12 to 2026-09
+    comparison:
+      against: E-declared
+      decision: inconclusive
+      estimate_a_year: "0.0006"
+      interval: ["-0.0106", "0.0090"]
+      theta: "0.005"
+    owner_point: 30 % reached on 20.9 % of 20-year paths (the point allows 5 %)
+    result: >-
+      Over 2004-2026 it grew 1.56 % a year more than static A after costs and Spanish tax, an
+      interval from -2.07 % to 4.58 %, and 0.06 % more than the same base held at its declared
+      share. It reached a 30 % drawdown on 20.9 % of 20-year paths against 46.8 % for that share
+      and 0.0 % for A: outside the owner's point, so it earns neither capital nor a shadow run
+      (DECISIONS D95).
+  - id: core-risk-scaling-e-blend
+    title: Global equity (WORLD 90 %, EM 10 %) scaled to 8.91 % by a 21-day EWMA and a year's window
+    status: tested
+    preregistration: research/preregistrations/core-risk-scaling.md
+    lock: research/preregistrations/core-risk-scaling.lock
+    report: research/reports/core-risk-scaling.md
+    test: E-blend
+    outcome:
+      decision: inconclusive
+      labels: [sign uncertain, outside the owner's point, low power]
+      estimate_a_year: "0.0134"
+      interval: ["-0.0254", "0.0482"]
+      theta: "0.01"
+      power: "0.039"
+      sample: 2004-12 to 2026-09
+    comparison:
+      against: E-declared
+      decision: inconclusive
+      estimate_a_year: "-0.0016"
+      interval: ["-0.0142", "0.0094"]
+      theta: "0.005"
+    owner_point: 30 % reached on 22.0 % of 20-year paths (the point allows 5 %)
+    result: >-
+      Over 2004-2026 it grew 1.34 % a year more than static A after costs and Spanish tax, an
+      interval from -2.54 % to 4.82 %, and 0.16 % less than the same base held at its declared
+      share. It reached a 30 % drawdown on 22.0 % of 20-year paths: outside the owner's point,
+      so it earns neither capital nor a shadow run (DECISIONS D95).
+  - id: core-risk-scaling-b-fast
+    title: The global 60/40 (WORLD 60 %, EGB_INT 40 %) scaled to 9.15 % by a 21-day EWMA
+    status: retired
+    preregistration: research/preregistrations/core-risk-scaling.md
+    lock: research/preregistrations/core-risk-scaling.lock
+    report: research/reports/core-risk-scaling.md
+    test: B-fast
+    outcome:
+      decision: inconclusive
+      labels: [sign uncertain, outside the owner's point, low power]
+      estimate_a_year: "0.0133"
+      interval: ["-0.0179", "0.0413"]
+      theta: "0.01"
+      power: "0.055"
+      sample: 2004-12 to 2026-09
+    comparison:
+      against: B-declared
+      decision: insufficient
+      estimate_a_year: "-0.0051"
+      interval: ["-0.0123", "0.0021"]
+      theta: "0.005"
+    owner_point: 30 % reached on 16.2 % of 20-year paths (the point allows 5 %)
+    result: >-
+      Over 2004-2026 it grew 1.33 % a year more than static A after costs and Spanish tax, an
+      interval from -1.79 % to 4.13 %, but 0.51 % less than the 60/40 held whole, an interval
+      from -1.23 % to 0.21 % that rules out half a point a year from re-estimating volatility. It
+      reached a 30 % drawdown on 16.2 % of 20-year paths against 40.1 % for the 60/40 held
+      whole: outside the owner's point (DECISIONS D95).
   - id: selection-insider-clusters
     hypothesis: H2
     title: Insider-purchase clusters (SEC Form 4)

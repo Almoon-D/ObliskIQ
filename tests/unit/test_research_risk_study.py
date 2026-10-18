@@ -155,6 +155,7 @@ def test_the_report_states_every_section(result):
     impossible = render(replace(result, block_rule=replace(result.block_rule, possible=False)))
     assert "no block length can respect it" in impossible
     assert "Each path is 3.91 years long." in render(result)
+    assert "drawdown reaches each limit within 3 years:" in render(result)
     short = replace(result.reference, marks=replace(result.reference.marks, years=2.0))
     assert "**shorter than the owner's 3 years**" in render(replace(result, reference=short))
 
@@ -216,6 +217,9 @@ def test_the_development_window_tests_the_comparisons_alone(repo_root, shipped_s
     assert "Development window: 2019-02-01 to 2019-12-31" in text
     assert "Not computed in an exploration on the development window." in text
     assert "## The owner's point" not in text
+    assert "S1 against T1: not run in an exploration on the development window." in text
+    assert "Not run in an exploration on the development window." in text
+    assert "reaches each limit within a path of 10 months (shorter than the owner's" in text
 
 
 def test_a_day_missing_inside_a_month_makes_the_study_not_evaluable(

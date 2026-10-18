@@ -20,7 +20,7 @@ from ..util.timeutil import utc_stamp
 from .decide import Decision
 from .forecast import ForecastCheck
 from .long_history import HistoryResult
-from .simulate import SimulationResult
+from .simulate import MONTHS_PER_YEAR, SimulationResult
 from .structure import StructureArm, StructureResult
 from .study import CandidateTest, StrategyStats, StudyResult, simulation_notes
 
@@ -355,7 +355,9 @@ def _forecast_lines(forecasts: Sequence[ForecastCheck], registered: bool) -> lis
         "the base's daily returns over that month, scored by QLIKE (r/f - ln(r/f) - 1, zero for "
         "a perfect forecast), beside the declared matrix's constant forecast. A forecast that "
         "follows recent volatility beats a constant one almost by construction, so this says "
-        "nothing about growth at the owner's point.",
+        "nothing about growth at the owner's point. The interval is a moving-block bootstrap's: "
+        "the first and last months fall in fewer blocks, so on a short sample it can sit beside "
+        "the mean.",
         "",
     ]
     if not forecasts:
@@ -404,6 +406,8 @@ def _history_lines(histories: Sequence[HistoryResult], result: StudyResult) -> l
         "whole months reaching each limit within each horizon.",
         "",
     ]
+    if result.development is not None:
+        return [*lines, "Not run in an exploration on the development window.", ""]
     for history in histories:
         hs = history.spec
         lines += [
@@ -524,8 +528,10 @@ def _structure_lines(structure: StructureResult | None) -> list[str]:
     return lines
 
 
-def _robustness_lines(test: CandidateTest) -> list[str]:
+def _robustness_lines(test: CandidateTest, development: bool) -> list[str]:
     robustness = test.robustness
+    if robustness is None and development:
+        return [f"- {test.name}: not run in an exploration on the development window."]
     if robustness is None:
         return [f"- {test.name}: not run (the outcome is not evaluable)."]
     parts = ", ".join(
@@ -737,6 +743,15 @@ def render(result: StudyResult) -> str:
     ]
     limits = spec.drawdown_limits
     within = "" if spec.owner_point is None else f" within {spec.owner_point.horizon_years} years"
+    path_months = max(len(result.dates) - 1, 0)
+    if (
+        spec.owner_point is not None
+        and path_months < spec.owner_point.horizon_years * MONTHS_PER_YEAR
+    ):
+        within = (
+            f" within a path of {path_months} months (shorter than the owner's horizon of "
+            f"{spec.owner_point.horizon_years} years)"
+        )
     lines += [
         f"Probability that a bootstrap path's mark-to-market drawdown reaches each limit{within}:",
         "",
@@ -789,7 +804,11 @@ def render(result: StudyResult) -> str:
         "",
         "## Robustness",
         "",
-        *(line for test in result.tests for line in _robustness_lines(test)),
+        *(
+            line
+            for test in result.tests
+            for line in _robustness_lines(test, result.development is not None)
+        ),
         "",
         f"- Placebo: {result.tests[0].robustness.placebo}"
         if result.tests and result.tests[0].robustness is not None

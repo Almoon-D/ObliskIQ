@@ -1685,9 +1685,9 @@ choice of a point on the frontier (the drawdown tolerance, its probability and t
 recorded in DECISIONS (D60; D88 and D91: 30 % of the value the bot manages, reached on at most
 5 % of 20-year paths, which resolves to A on Session 4c's frontier). Otherwise STOP and ask the owner for that choice.
 
-GOAL: the core as the owner's point on the frontier selects it — the variants 4c registered and
-any specification 4e found sufficient, the chosen one by default — with tax- and cost-aware
-rebalancing, built on the same research
+GOAL: the core as the owner's point on the frontier selects it — the variants 4c registered (4e
+found no total-risk specification sufficient, D95), the chosen one by default — with tax- and
+cost-aware rebalancing, built on the same research
 code paths so the live core and the tested core cannot drift apart.
 
 READ: research/preregistrations/core-allocation.md, research/reports/core-allocation.md and
@@ -1698,9 +1698,9 @@ used); src/obliskiq/quant/risk_budget.py and src/obliskiq/quant/trend.py (Sessio
 D80, D82).
 
 DELIVERABLES
-- quant/covariance.py exists if Session 4e built it; engines/core uses it to scale total risk
-  for a specification 4e found sufficient (D89, D90, D92). Session 4c's variants hold static
-  weights from a declared covariance (D80).
+- quant/covariance.py exists (Session 4e) for research. 4e found no specification sufficient
+  (D95), so engines/core does not scale total risk. Session 4c's variants hold static weights
+  from a declared covariance (D80).
 - quant/risk_budget.py exists (Session 4c: cyclical coordinate descent, closed forms and an
   independent Newton solve in tests). Add the check against skfolio (test-only) and port the
   remaining still-valid cases of legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py.
