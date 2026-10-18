@@ -16,6 +16,19 @@ bands, the trend tilt and the tax-aware rule. A frontier (``frontier``) and the 
 aspiration (``aspiration``) are reported beside the tests; ``structure`` registers a pre-tax
 check of the tilt on the longest history, which is descriptive and never an outcome.
 
+Scaling total risk (DECISIONS D92) adds a strategy, ``total_risk``: fixed relative weights among
+the risky roles (its base) and a risky share of a target volatility over the forecast one,
+capped at one, with a floor and a largest change; the rest in the cash role. Its estimator is one
+of ``study.core.scaling.estimators`` (``quant.covariance``) or the declared matrix itself (a
+declared twin). ``study.twins`` are portfolios simulated and reported beside the candidates but
+tested against the reference only through ``comparisons``, the secondary tests (each a portfolio
+against another, with its own theta). The study may mark the account on daily closes
+(``marks``), state the owner's point (a drawdown limit, the largest share of paths reaching it
+over a horizon) and a grid of horizons, a block-length sensitivity, a long-history check, a
+forecast check of each estimator (never an outcome) and a development window for exploration.
+A field left out is not registered; the locked pre-registrations of earlier studies leave them
+out.
+
 A **cross-section** (``kind: cross_section``, MASTER_PLAN §5.9) tests a selection signal: a
 universe of members held through one kind of vehicle, each a member over stated spans (a member
 the vendor does not serve is named with no series, and counts as lost to survivorship), a
@@ -44,12 +57,19 @@ from ..domain.enums import AssetClass
 from ..domain.research import PointInTime
 from ..domain.tax import Isin, SecurityKind
 from ..errors import PreregistrationError
+from ..quant.covariance import EstimatorRule
 from .registry import file_sha256
 
 #: The line that opens and closes the front matter.
 FRONT_MATTER_FENCE = "---"
 #: Months in a year (a reset month is one of them).
 MONTHS_PER_YEAR = 12
+#: The estimator a declared twin names: the declared matrix itself.
+DECLARED = "declared"
+#: A block-length sensitivity compares at least this many lengths (D92 rule 3).
+MIN_SENSITIVITY_LENGTHS = 3
+#: Twice the longest lookback must fit in this share of the sample for blocks to respect it.
+LOOKBACK_SAMPLE_SHARE = Decimal(1) / 3
 
 type Positive = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
 type Key = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]+$")]
@@ -128,11 +148,50 @@ class EquityOverlaySpec(FrozenModel):
     simplicity: PositiveInt
 
 
+class TotalRiskSpec(FrozenModel):
+    """Fixed relative weights among the risky roles (``base``) held at a risky share of
+    ``target_volatility`` over the forecast volatility of the base, capped at one, at least
+    ``floor`` and moved by at most ``max_change`` from the share held; the rest in the cash role
+    (DECISIONS D92). ``estimator`` names one of ``study.core.scaling.estimators``, or
+    ``declared``: the declared matrix, a constant forecast and so a static portfolio, the
+    specification's declared twin. ``tax_aware`` buys through swap partners when the primary
+    would defer a loss; ``hold_costly_reductions`` also holds a reduction whose tax exceeds the
+    core's benefit fraction of the value sold."""
+
+    name: NonEmptyText
+    strategy: Literal["total_risk"]
+    base: dict[Key, Share]
+    target_volatility: Positive
+    floor: Fraction
+    max_change: Share
+    estimator: Key
+    tax_aware: bool
+    hold_costly_reductions: bool
+    simplicity: PositiveInt
+
+    @model_validator(mode="after")
+    def _a_base(self) -> Self:
+        if sum(self.base.values()) != 1:
+            raise ValueError(f"strategy {self.name}'s base weights must sum to 1")
+        if self.hold_costly_reductions and not self.tax_aware:
+            raise ValueError(f"strategy {self.name} holds reductions only when tax-aware")
+        return self
+
+    @property
+    def declared(self) -> bool:
+        return self.estimator == DECLARED
+
+
 type StrategySpec = Annotated[
-    FixedWeightsSpec | BuyAndHoldSpec | BandedWeightsSpec | RiskBalanceSpec | EquityOverlaySpec,
+    FixedWeightsSpec
+    | BuyAndHoldSpec
+    | BandedWeightsSpec
+    | RiskBalanceSpec
+    | EquityOverlaySpec
+    | TotalRiskSpec,
     Field(discriminator="strategy"),
 ]
-type CoreStrategySpec = BandedWeightsSpec | RiskBalanceSpec | EquityOverlaySpec
+type CoreStrategySpec = BandedWeightsSpec | RiskBalanceSpec | EquityOverlaySpec | TotalRiskSpec
 
 
 class RoleSpec(FrozenModel):
@@ -184,15 +243,76 @@ class TaxAwareSpec(FrozenModel):
     benefit_fraction: Rate
 
 
+class EstimatorSpec(FrozenModel):
+    """An estimator of daily covariance (``quant.covariance``), its lengths in trading days:
+    an EWMA's half-life, a window, the EWMA's share of their blend, Ledoit-Wolf shrinkage toward
+    the declared matrix or none, and the prior's weight in equivalent observations."""
+
+    half_life_days: Positive | None
+    window_days: PositiveInt | None
+    ewma_share: Annotated[Decimal, Field(ge=0, le=1, allow_inf_nan=False)]
+    shrinkage: Literal["ledoit_wolf", "none"]
+    prior_observations: Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        self.rule()
+        return self
+
+    def rule(self, scale: float = 1.0) -> EstimatorRule:
+        """The rule in observations of a series with ``scale`` observations a trading day (a
+        monthly series has about 12 / 261); a window is at least two observations."""
+        try:
+            return EstimatorRule(
+                half_life=None
+                if self.half_life_days is None
+                else float(self.half_life_days) * scale,
+                window=None
+                if self.window_days is None
+                else max(2, round(self.window_days * scale)),
+                ewma_share=float(self.ewma_share),
+                shrinkage=self.shrinkage == "ledoit_wolf",
+                prior_observations=float(self.prior_observations) * scale,
+            )
+        except ValueError as exc:
+            raise ValueError(f"estimator: {exc}") from None
+
+
+class ScalingSpec(FrozenModel):
+    """What the total-risk strategies share: the first day of the daily data their estimators
+    read (the warm-up starts there), the trading days in a year on the daily calendar (the
+    declared yearly matrix over them is its daily target) and the estimators by name."""
+
+    estimation_start: date
+    periods_per_year: PositiveInt
+    estimators: dict[Key, EstimatorSpec] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _names(self) -> Self:
+        if DECLARED in self.estimators:
+            raise ValueError(f"'{DECLARED}' names the declared matrix, not an estimator")
+        return self
+
+    def lookback_months(self, estimator: str) -> Decimal:
+        """An estimator's lookback in months (D92 rule 3); the declared matrix reads none."""
+        if estimator == DECLARED:
+            return Decimal(0)
+        days = Decimal(repr(self.estimators[estimator].rule().lookback))
+        return days * MONTHS_PER_YEAR / self.periods_per_year
+
+
 class CoreSpec(FrozenModel):
-    """What the core's variants share (MASTER_PLAN §5.4)."""
+    """What the core's variants share (MASTER_PLAN §5.4). ``tilt`` and ``tax_aware`` are needed
+    by the strategies that tilt or trade tax-aware, ``scaling`` by those that scale total
+    risk."""
 
     cash_role: Key
     environments: dict[Key, list[Key]]
     risk: RiskSpec
     bands: BandsSpec
-    tilt: TiltSpec
-    tax_aware: TaxAwareSpec
+    tilt: TiltSpec | None = None
+    tax_aware: TaxAwareSpec | None = None
+    scaling: ScalingSpec | None = None
 
     @model_validator(mode="after")
     def _risk_covers_the_environments(self) -> Self:
@@ -225,10 +345,36 @@ class StudySpec(FrozenModel):
     core: CoreSpec | None
     reference: StrategySpec
     candidates: list[StrategySpec] = Field(min_length=1)
+    twins: list[StrategySpec] = Field(default_factory=list)
 
     @property
     def portfolios(self) -> list[StrategySpec]:
-        return [self.reference, *self.candidates]
+        """The reference, the candidates and the twins, in that order."""
+        return [self.reference, *self.candidates, *self.twins]
+
+    def lookback_months(self) -> Decimal:
+        """The longest lookback any portfolio reads, in months (D92 rule 3): the tilt's window,
+        a total-risk strategy's estimator."""
+        longest = Decimal(0)
+        for strategy in self.portfolios:
+            if self.core is None:
+                break
+            if isinstance(strategy, TotalRiskSpec) and self.core.scaling is not None:
+                longest = max(longest, self.core.scaling.lookback_months(strategy.estimator))
+            elif (
+                isinstance(strategy, RiskBalanceSpec | EquityOverlaySpec)
+                and strategy.tilt
+                and self.core.tilt is not None
+            ):
+                tilt = self.core.tilt
+                longest = max(longest, Decimal(max(tilt.momentum_months + 1, tilt.average_months)))
+        return longest
+
+    def months(self) -> int:
+        """The months from the first month end to the horizon."""
+        return (
+            (self.end.year - self.start.year) * MONTHS_PER_YEAR + self.end.month - self.start.month
+        )
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
@@ -274,6 +420,8 @@ class StudySpec(FrozenModel):
                 raise ValueError(f"strategy {strategy.name} weights unknown roles {unknown_roles}")
             if sum(strategy.weights.values()) > 1:
                 raise ValueError(f"strategy {strategy.name} weights sum above 1")
+        elif isinstance(strategy, TotalRiskSpec):
+            self._check_total_risk(strategy, core)
         elif isinstance(strategy, RiskBalanceSpec):
             if set(strategy.budgets) != set(core.environments):
                 raise ValueError(
@@ -284,12 +432,46 @@ class StudySpec(FrozenModel):
                 raise ValueError(f"strategy {strategy.name}'s budgets must sum to 1")
         elif strategy.equity not in self.roles or strategy.equity == core.cash_role:
             raise ValueError(f"strategy {strategy.name} names {strategy.equity}, not a risky role")
+        tilts = isinstance(strategy, RiskBalanceSpec | EquityOverlaySpec) and strategy.tilt
+        if tilts and (core.tilt is None or core.tax_aware is None):
+            raise ValueError(f"strategy {strategy.name} tilts: study.core.tilt and tax_aware")
+
+    @staticmethod
+    def _check_total_risk(strategy: TotalRiskSpec, core: CoreSpec) -> None:
+        risky = set(core.risk.volatilities)
+        unknown = sorted(set(strategy.base) - risky)
+        if unknown:
+            raise ValueError(
+                f"strategy {strategy.name}'s base holds roles without a declared risk: {unknown}"
+            )
+        if core.scaling is None:
+            raise ValueError(f"strategy {strategy.name} scales total risk: study.core.scaling")
+        if not strategy.declared and strategy.estimator not in core.scaling.estimators:
+            raise ValueError(f"strategy {strategy.name} names no estimator {strategy.estimator}")
+        if strategy.hold_costly_reductions and core.tax_aware is None:
+            raise ValueError(
+                f"strategy {strategy.name} holds costly reductions: study.core.tax_aware"
+            )
+
+
+class SensitivitySpec(FrozenModel):
+    """Block lengths the bootstrap is repeated with (D92 rule 3), each with ``n_boot`` paths."""
+
+    block_months: list[PositiveInt] = Field(min_length=MIN_SENSITIVITY_LENGTHS)
+    n_boot: PositiveInt
+
+    @model_validator(mode="after")
+    def _distinct(self) -> Self:
+        if len(set(self.block_months)) != len(self.block_months):
+            raise ValueError("the sensitivity's block lengths must be distinct")
+        return self
 
 
 class BootstrapSpec(FrozenModel):
     n_boot: PositiveInt
     block_months: PositiveInt
     seed: Annotated[int, Field(ge=0)]
+    sensitivity: SensitivitySpec | None = None
 
 
 class AdequacySpec(FrozenModel):
@@ -343,6 +525,78 @@ class StructureSpec(FrozenModel):
         return self
 
 
+class ComparisonSpec(FrozenModel):
+    """A secondary test: ``candidate``'s annualised log growth of liquidation value after costs
+    and tax minus ``against``'s, paired, with its theta and the standard deviation a month the
+    power calculation assumes before data."""
+
+    name: NonEmptyText
+    candidate: NonEmptyText
+    against: NonEmptyText
+    theta: Positive
+    theta_justification: NonEmptyText
+    sd_per_period: Positive
+
+
+class OwnerPointSpec(FrozenModel):
+    """The owner's point (D91): a drawdown limit reached on at most ``probability`` of the paths
+    within ``horizon_years``."""
+
+    limit: Annotated[Decimal, Field(gt=0, lt=1)]
+    probability: Share
+    horizon_years: PositiveInt
+
+
+class SeriesSumSpec(FrozenModel):
+    """A role's history: one ``level`` series, or ``returns`` series (decimal, simple) summed
+    period by period (an excess return and a bill)."""
+
+    kind: Literal["level", "returns"]
+    series: list[NonEmptyText] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _one_level(self) -> Self:
+        if self.kind == "level" and len(self.series) != 1:
+            raise ValueError("a level history is one series")
+        return self
+
+
+class LongHistorySpec(FrozenModel):
+    """A longer history for the breach at the owner's point (D92 rule 4): each role's series
+    and the cash's, before tax at a flat cost a leg, its own bootstrap. The estimators' lengths
+    in trading days become this history's observations through ``periods_per_year``; the
+    estimators read its data from ``data_start`` and its months are evaluated from ``start``."""
+
+    name: NonEmptyText
+    frequency: Literal["daily", "monthly"]
+    periods_per_year: PositiveInt
+    currency: NonEmptyText
+    data_start: date
+    start: date
+    end: date
+    roles: dict[Key, SeriesSumSpec] = Field(min_length=1)
+    cash: SeriesSumSpec
+    point_in_time: list[PointInTime] = Field(min_length=1)
+    cost_per_leg: Fraction
+    block_months: PositiveInt
+    n_boot: PositiveInt
+    biases: list[NonEmptyText] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        if not self.data_start <= self.start < self.end:
+            raise ValueError(f"long history {self.name}: data_start <= start < end")
+        return self
+
+
+class ForecastCheckSpec(FrozenModel):
+    """Each estimator's forecast of its base's next-month realised variance, scored by a loss
+    against the declared matrix's constant forecast: a check that the estimator works, never an
+    outcome (D92)."""
+
+    loss: Literal["qlike"]
+
+
 class PreregSpec(FrozenModel):
     """Every field of a pre-registration (D63)."""
 
@@ -372,25 +626,97 @@ class PreregSpec(FrozenModel):
     adequacy: AdequacySpec
     power: PowerSpec
     structure: StructureSpec | None
+    comparisons: list[ComparisonSpec] = Field(default_factory=list)
+    marks: Literal["month_end", "daily"] = "month_end"
+    owner_point: OwnerPointSpec | None = None
+    breach_horizons_years: list[PositiveInt] = Field(default_factory=list)
+    long_history: list[LongHistorySpec] = Field(default_factory=list)
+    forecast_check: ForecastCheckSpec | None = None
+    development: SampleSpec | None = None
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
         for first, last in self.subperiods:
             if not self.study.start <= first < last <= self.study.end:
                 raise ValueError(f"subperiod {first} to {last} is not inside the study")
-        candidates = len(self.study.candidates)
-        if self.tests_in_confirmation != candidates:
+        tests = len(self.study.candidates) + len(self.comparisons)
+        if self.tests_in_confirmation != tests:
             raise ValueError(
                 f"tests_in_confirmation is {self.tests_in_confirmation} but the study tests "
-                f"{candidates} candidate(s), one test each"
+                f"{len(self.study.candidates)} candidate(s) and {len(self.comparisons)} "
+                "comparison(s), one test each"
             )
         names = {candidate.name for candidate in self.study.candidates}
         unknown = sorted(set(self.power.by_candidate or {}) - names)
         if unknown:
             raise ValueError(f"power.by_candidate names no candidate: {unknown}")
-        if self.structure is not None and self.study.core is None:
-            raise ValueError("the structure check uses the core's tilt: study.core is needed")
+        if self.structure is not None and (self.study.core is None or self.study.core.tilt is None):
+            raise ValueError("the structure check uses the core's tilt: study.core.tilt is needed")
+        self._check_comparisons()
+        self._check_breach()
+        self._check_blocks()
+        self._check_checks()
         return self
+
+    def _check_comparisons(self) -> None:
+        portfolios = [strategy.name for strategy in self.study.portfolios]
+        tests = [candidate.name for candidate in self.study.candidates]
+        for comparison in self.comparisons:
+            unknown = sorted({comparison.candidate, comparison.against} - set(portfolios))
+            if unknown:
+                raise ValueError(f"comparison {comparison.name} names unknown portfolios {unknown}")
+            if comparison.candidate == comparison.against:
+                raise ValueError(f"comparison {comparison.name} compares a portfolio with itself")
+            tests.append(comparison.name)
+        if len(tests) != len(set(tests)):
+            raise ValueError("every candidate and comparison needs a distinct name")
+
+    def _check_breach(self) -> None:
+        point = self.owner_point
+        if point is not None and point.limit not in self.drawdown_limits:
+            raise ValueError("the owner's limit must be one of drawdown_limits")
+        if self.breach_horizons_years and point is None:
+            raise ValueError("breach_horizons_years needs the owner's point")
+
+    def _check_blocks(self) -> None:
+        """D92 rule 3, for a study that scales total risk: blocks of at least twice the longest
+        lookback, unless twice it exceeds a third of the sample (the report then says so)."""
+        if not any(isinstance(s, TotalRiskSpec) for s in self.study.portfolios):
+            return
+        needed = 2 * self.study.lookback_months()
+        respectable = needed <= LOOKBACK_SAMPLE_SHARE * self.study.months()
+        if respectable and self.bootstrap.block_months < needed:
+            raise ValueError(
+                f"blocks of {self.bootstrap.block_months} months are shorter than twice the "
+                f"longest lookback ({needed:.1f} months; DECISIONS D92 rule 3)"
+            )
+
+    def _check_checks(self) -> None:
+        core = self.study.core
+        scaled = [s for s in self.study.portfolios if isinstance(s, TotalRiskSpec)]
+        if self.forecast_check is not None and not any(not s.declared for s in scaled):
+            raise ValueError("the forecast check needs a total-risk strategy with an estimator")
+        if self.long_history and not scaled:
+            raise ValueError("the long-history check runs total-risk strategies")
+        if core is not None and self.long_history:
+            for history in self.long_history:
+                unknown = sorted(set(history.roles) - set(core.risk.volatilities))
+                if unknown:
+                    raise ValueError(f"long history {history.name} names roles {unknown}")
+        if core is not None and core.scaling is not None:
+            first = self.study.start
+            if self.development is not None:
+                first = min(first, self.development.start)
+            if core.scaling.estimation_start > first:
+                raise ValueError(
+                    "the scaling's estimation_start must be on or before the study's start and "
+                    "the development window's"
+                )
+        if self.development is not None:
+            if not self.comparisons:
+                raise ValueError("exploration on a development window runs the comparisons")
+            if self.development.end >= self.study.start:
+                raise ValueError("the development window must end before the study starts")
 
     def sd_per_period(self, candidate: str) -> Decimal:
         """The power calculation's standard deviation for ``candidate``."""

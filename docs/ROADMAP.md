@@ -16,7 +16,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
-| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | in progress (data checks done, D93) | v0.8.6 |
+| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | in progress (data checks and harness done, D93, D94) | v0.8.6, v0.9.0 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -39,7 +39,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4e — Total-risk scaling (2026-10-18, v0.8.6)
+### Session 4e — Total-risk scaling (2026-10-18, v0.8.6 → v0.9.0)
 
 **The data checks** (Step 1, its own pull request before the harness; DECISIONS D93). Every
 series the study and its long-history check read was checked on 2026-10-18 for metadata, span,
@@ -58,6 +58,23 @@ statistic was computed.
 - New loaders: Ken French's daily tables and AQR's text dates (`kf_developed_daily`,
   `aqr_century_market`).
 - One stale value: CRSOX repeats its net asset value on five sessions in May 2014.
+
+**The harness** (Step 2, its own pull request before the pre-registration, v0.9.0; D94):
+
+- `quant/covariance.py`: an EWMA, a window and their blend; Ledoit–Wolf shrinkage toward the
+  declared matrix; a prior in equivalent observations. Tested against closed forms and an
+  independent implementation.
+- The `total_risk` strategy in the core's own mechanism: a risky share of a target volatility
+  over the forecast one, capped at one, with a floor and a largest change. Its declared twin.
+  Comparisons beside the tests against the reference.
+- Daily marks inside resampled months (D88) and the drawdown on them: the owner's point within its
+  horizon, a grid of horizons, episodes per decade and the share of time beyond.
+- D92 rule 3 at validation, and a block-length sensitivity.
+- The forecast check (QLIKE, never an outcome) and the long-history check (before tax, by month or
+  day).
+- A development window for exploration. A candidate outside the owner's point cannot be
+  sufficient.
+- The toy study runs every part end to end in about four seconds.
 
 No IBKR call.
 

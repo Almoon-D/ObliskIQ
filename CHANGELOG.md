@@ -5,6 +5,34 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.9.0] - 2026-10-18
+
+Session 4e, Step 2: the harness for scaling total risk, merged before the pre-registration.
+No IBKR call.
+
+### Added
+
+- `quant/covariance.py`: an EWMA, a window and their blend, Ledoit–Wolf shrinkage toward a
+  declared target for weighted observations, and a prior in equivalent observations.
+- `research/daily.py`: a study's daily history on its calendar, paths of whole months with their
+  days, daily marks and drawdown statistics.
+- The `total_risk` strategy, its declared twin, `study.twins` and secondary `comparisons`.
+- Pre-registration fields: `marks`, `owner_point`, `breach_horizons_years`,
+  `bootstrap.sensitivity`, `forecast_check`, `long_history` and `development`.
+- `research/forecast.py`: the forecast check, never an outcome.
+- `research/long_history.py`: the long-history check.
+- Reports: comparisons, the owner's point, block lengths and their sensitivity, the forecast and
+  long-history checks.
+- `docs/DECISIONS.md` D94.
+
+### Changed
+
+- A candidate outside the owner's point cannot be sufficient (label `outside the owner's point`).
+- D92 rule 3 is refused at validation for a total-risk study.
+- `core.tilt` and `core.tax_aware` are needed only by the strategies that use them.
+- The simulator's weight quantum is 1e-24.
+- `obliskiq research power` prints each comparison.
+
 ## [0.8.6] - 2026-10-18
 
 Session 4e, Step 1: the data checks, before the harness. No IBKR call.

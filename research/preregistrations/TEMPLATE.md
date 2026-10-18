@@ -58,14 +58,18 @@ study:
         tracked_index: MSCI World
         listed: true
   # The core's variants name roles: each role's primary vehicle and swap partner (instrument
-  # keys), and what the variants share (environments, declared long-run risk, bands, the tilt,
-  # the tax-aware rule). Both null when only fixed_weights and buy_and_hold are named.
+  # keys), and what the variants share (environments, declared long-run risk, bands, and where
+  # used the tilt, the tax-aware rule and `scaling`: the estimators of a total-risk strategy,
+  # their daily data's start and the trading days in a year). Both null when only fixed_weights
+  # and buy_and_hold are named.
   roles: null
   core: null
   reference:
     name: the reference
-    strategy: buy_and_hold       # fixed_weights, buy_and_hold, banded_weights, risk_balance or
-                                 # equity_overlay
+    strategy: buy_and_hold       # fixed_weights, buy_and_hold, banded_weights, risk_balance,
+                                 # equity_overlay or total_risk (a base, a target volatility, a
+                                 # floor, a largest change, an estimator or `declared`, tax_aware,
+                                 # hold_costly_reductions)
     weights: {WORLD: "1"}
     simplicity: 1                # the frontier resolves to the lowest rank, then turnover
   candidates:                    # each one is tested against the reference
@@ -73,10 +77,14 @@ study:
       strategy: fixed_weights
       weights: {WORLD: "1"}
       simplicity: 2
+  twins: []                      # simulated and reported, tested only through `comparisons`
+comparisons: []                  # secondary tests: {name, candidate, against, theta,
+                                 # theta_justification, sd_per_period}; each counts in Bonferroni
 bootstrap:
   n_boot: 1000                   # paired moving-block bootstrap paths
-  block_months: 12
+  block_months: 12               # at least twice the longest lookback a portfolio reads (D92)
   seed: 20261016
+  sensitivity: null              # {block_months: [three or more], n_boot}
 drawdown_limits: ["0.2", "0.35"] # the probability of breaching each is reported (D60)
 frontier: null                   # {breach_probabilities: [...]}: with drawdown_limits, the grid
 aspiration: null                 # yearly growth rates reported as a distance, never a gate
@@ -101,6 +109,13 @@ power:                           # stated before any data: `obliskiq research po
   rho: "0"                       # average correlation between names in a period
 structure: null                  # a pre-tax check of the tilt on the longest history
                                  # (descriptive, never an outcome)
+marks: month_end                 # or daily: drawdowns on daily closes (D88)
+owner_point: null                # {limit, probability, horizon_years} (D91): outside it a
+                                 # candidate cannot be sufficient (D92)
+breach_horizons_years: []        # the owner's limit reached within each horizon (needs the point)
+long_history: []                 # longer histories for the breach (D92 rule 4), before tax
+forecast_check: null             # {loss: qlike}: each estimator's forecast, never an outcome
+development: null                # {start, end}: exploration runs the comparisons there
 ---
 
 # Title

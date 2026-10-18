@@ -1,7 +1,8 @@
 """The report of a study run: what was read and with which hashes and seeds, whether the data
-were adequate, each candidate's outcome with its labels and power, the frontier, every portfolio
-before and after tax and year by year, the robustness checks, the structure check, the biases,
-the tax rules applied, and what the test cannot conclude (DECISIONS D60, D62, D64).
+were adequate, each candidate's outcome with its labels and power, the comparisons, the frontier,
+the owner's point, every portfolio before and after tax and year by year, the robustness checks,
+the block lengths, the structure, forecast and long-history checks, the biases, the tax rules
+applied, and what the test cannot conclude (DECISIONS D60, D62, D64, D92).
 
 An exploratory run says so at the top and is never evidence: only a confirmation run of a merged,
 locked pre-registration counts.
@@ -17,9 +18,11 @@ from typing import Final
 
 from ..util.timeutil import utc_stamp
 from .decide import Decision
+from .forecast import ForecastCheck
+from .long_history import HistoryResult
 from .simulate import SimulationResult
 from .structure import StructureArm, StructureResult
-from .study import SIMULATION_NOTES, CandidateTest, StrategyStats, StudyResult
+from .study import CandidateTest, StrategyStats, StudyResult, simulation_notes
 
 #: The note a report carries about the universe it measured (D62's "survivorship measured").
 SURVIVORSHIP_NOTE: Final = (
@@ -77,12 +80,18 @@ def _interval(decision: Decision) -> str:
     return f"[{_percent(low)}, {_percent(high)}]"
 
 
-def _run_row(stats: StrategyStats, run: SimulationResult | None) -> list[str]:
+def _run_row(
+    stats: StrategyStats, run: SimulationResult | None, *, daily: bool = False
+) -> list[str]:
+    """A run's row; with ``daily`` its drawdown is the one on daily closes (the study's marks)."""
+    worst = None if run is None else run.max_drawdown
+    if daily:
+        worst = None if stats.marks is None else stats.marks.worst
     return [
         stats.name,
         _money(None if run is None else run.liquidation_value),
         _percent(None if run is None else run.log_growth),
-        _percent(None if run is None else run.max_drawdown),
+        _percent(worst),
         _money(None if run is None else run.costs),
         _money(None if run is None else run.tax_paid),
         "n/a" if run is None else str(run.trades),
@@ -118,6 +127,8 @@ def _unsold(stats: StrategyStats) -> str:
 def _frontier_lines(result: StudyResult) -> list[str]:
     if result.prereg.spec.frontier is None:
         return ["No frontier was pre-registered."]
+    if result.development is not None:
+        return ["Not computed in an exploration on the development window."]
     if not result.frontier:
         return ["Not computed: the bootstrap did not run (see the adequacy checks)."]
     tests = {test.name: test for test in result.tests}
@@ -162,6 +173,294 @@ def _frontier_lines(result: StudyResult) -> list[str]:
             rows,
         ),
     ]
+
+
+def _test_rows(tests: Sequence[CandidateTest], *, against: bool) -> list[str]:
+    head = ["Candidate" if not against else "Comparison"]
+    if against:
+        head += ["Candidate minus", "theta"]
+    head += [
+        "Outcome",
+        "Estimate / yr",
+        "Interval",
+        "Power to detect theta",
+        "Detectable at target power",
+        "Before data: power / detectable",
+    ]
+    return _table(
+        head,
+        (
+            (
+                test.name,
+                *((f"{test.candidate} minus {test.against}", _percent(test.decision.theta))
+                  if against else ()),
+                _outcome(test.decision),
+                _percent(test.estimate),
+                _interval(test.decision),
+                _number(test.decision.power, SHORT_DIGITS),
+                _percent(test.detectable),
+                f"{test.declared_power:.3f} / {_percent(test.declared_detectable)}",
+            )
+            for test in tests
+        ),
+    )  # fmt: skip
+
+
+def _comparison_lines(result: StudyResult) -> list[str]:
+    spec = result.prereg.spec
+    if not spec.comparisons:
+        return []
+    justifications = "".join(
+        f"\n- {c.name}: theta {_percent(float(c.theta))}, {c.theta_justification}"
+        for c in spec.comparisons
+    )
+    return [
+        "## Comparisons",
+        "",
+        "Secondary tests, in the same Bonferroni count: each portfolio's annualised log growth of "
+        "liquidation value after costs and tax minus the other's, paired on the same paths."
+        + justifications,
+        "",
+        *_test_rows([t for t in result.tests if t.comparison], against=True),
+        "",
+    ]
+
+
+def _point_lines(result: StudyResult) -> list[str]:
+    spec = result.prereg.spec
+    point = spec.owner_point
+    if point is None or result.development is not None:
+        return []
+    marks = "daily closes" if spec.marks == "daily" else "month-end marks"
+    horizons = spec.breach_horizons_years
+    at = list(spec.drawdown_limits).index(point.limit)
+
+    def respects(stats: StrategyStats) -> str:
+        if stats.point is None:
+            return "n/a"
+        return "yes" if stats.point <= float(point.probability) else "**no**"
+
+    def rate(stats: StrategyStats) -> tuple[str, str]:
+        if not stats.rates:
+            return "n/a", "n/a"
+        _, per_decade, share = stats.rates[at]
+        return f"{per_decade:.2f}", f"{share:.2%}"
+
+    years = None if result.reference.marks is None else result.reference.marks.years
+    length = (
+        "Each path is as long as the sample"
+        if years is None
+        else f"Each path is {years:.2f} years long"
+    )
+    if years is not None and years < point.horizon_years:
+        length += f", **shorter than the owner's {point.horizon_years} years**"
+    rows = (
+        (
+            s.name,
+            "n/a" if s.point is None else f"{s.point:.1%}",
+            respects(s),
+            *([f"{p:.1%}" for _, p in s.horizons] or ["n/a"] * len(horizons)),
+            *rate(s),
+            _percent(None if s.marks is None else s.marks.worst),
+        )
+        for s in result.portfolios
+    )
+    return [
+        "## The owner's point",
+        "",
+        f"The owner's point (DECISIONS D91): a drawdown of {_grid(point.limit)} from the running "
+        f"peak reached on at most {_grid(point.probability)} of {point.horizon_years}-year paths, "
+        f"measured on {marks}. A candidate that does not respect it cannot be sufficient "
+        "(D92). Beside it, the share of paths reaching the limit within each horizon, and its "
+        "rate: drawdown episodes reaching it per decade and the share of time beyond it, over "
+        f"the paths. {length}.",
+        "",
+        *_table(
+            (
+                "Portfolio",
+                f"Reaches {_grid(point.limit)} within {point.horizon_years} years",
+                "Respects the point",
+                *(f"within {years} years" for years in horizons),
+                "Episodes per decade",
+                "Share of time beyond",
+                "Deepest fall on the historical path",
+            ),
+            rows,
+        ),
+        "",
+    ]
+
+
+def _block_lines(result: StudyResult) -> list[str]:
+    rule = result.block_rule
+    spec = result.prereg.spec
+    if rule is None:
+        return []
+    if not rule.possible:
+        verdict = (
+            "twice it exceeds a third of the sample, so no block length can respect it (D92 rule 3)"
+        )
+    elif rule.respected:
+        verdict = "the blocks are at least twice it, as D92 rule 3 asks"
+    else:
+        verdict = "**the blocks are shorter than twice it** (D92 rule 3)"
+    lines = [
+        "## Block lengths",
+        "",
+        f"The longest lookback a portfolio reads is {rule.lookback_months:.1f} months (an EWMA "
+        f"counts three half-lives, a window its length); the bootstrap's blocks are "
+        f"{rule.block_months} months in a sample of {rule.sample_months}: {verdict}.",
+        "",
+    ]
+    if not result.sensitivity:
+        return [*lines, "No block-length sensitivity was registered or run.", ""]
+    names = [name for name, _ in result.sensitivity[0].intervals]
+    portfolios = [name for name, _ in result.sensitivity[0].points]
+    point = spec.owner_point
+    lines += [
+        "The bootstrap repeated with each registered block length (same seed): each test's "
+        "interval at the confirmation level"
+        + (
+            f", and each portfolio's share of paths reaching {_grid(point.limit)} within "
+            f"{point.horizon_years} years."
+            if point is not None
+            else "."
+        ),
+        "",
+        *_table(
+            ("Blocks (months)", "Paths", *names, *(f"{name} reaches it" for name in portfolios)),
+            (
+                (
+                    str(row.block_months),
+                    str(row.n_boot),
+                    *(f"[{_percent(low)}, {_percent(high)}]" for _, (low, high) in row.intervals),
+                    *(f"{p:.1%}" for _, p in row.points),
+                )
+                for row in result.sensitivity
+            ),
+        ),
+        "",
+    ]
+    return lines
+
+
+def _forecast_lines(forecasts: Sequence[ForecastCheck], registered: bool) -> list[str]:
+    if not registered:
+        return []
+    lines = [
+        "## Forecast check",
+        "",
+        "A check that each estimator works, **never an outcome** (DECISIONS D92): its forecast "
+        "of the base's next-month variance from each rebalance date, against the variance of "
+        "the base's daily returns over that month, scored by QLIKE (r/f - ln(r/f) - 1, zero for "
+        "a perfect forecast), beside the declared matrix's constant forecast. A forecast that "
+        "follows recent volatility beats a constant one almost by construction, so this says "
+        "nothing about growth at the owner's point.",
+        "",
+    ]
+    if not forecasts:
+        return [*lines, "Not run (see the adequacy checks).", ""]
+    return [
+        *lines,
+        *_table(
+            (
+                "Strategy",
+                "Estimator",
+                "Months",
+                "Mean loss",
+                "Declared's mean loss",
+                "Difference",
+                "Interval",
+                "Months it did better",
+            ),
+            (
+                (
+                    f.name,
+                    f.estimator,
+                    str(f.months),
+                    f"{f.mean_loss:.4f}",
+                    f"{f.mean_declared:.4f}",
+                    f"{f.difference:.4f}",
+                    f"[{f.interval[0]:.4f}, {f.interval[1]:.4f}]",
+                    f"{f.share_better:.1%}",
+                )
+                for f in forecasts
+            ),
+        ),
+        "",
+    ]
+
+
+def _history_lines(histories: Sequence[HistoryResult], result: StudyResult) -> list[str]:
+    spec = result.prereg.spec
+    if not spec.long_history:
+        return []
+    lines = [
+        "## Long-history check",
+        "",
+        "Descriptive, before tax and never an outcome (DECISIONS D92 rule 4): each total-risk "
+        "strategy on the longest history its roles have, at a flat cost a leg, its estimator's "
+        "lengths converted to the history's observations; the share of moving-block paths of "
+        "whole months reaching each limit within each horizon.",
+        "",
+    ]
+    for history in histories:
+        hs = history.spec
+        lines += [
+            f"### {hs.name}",
+            "",
+            f"{hs.frequency}, {hs.currency}, data from {hs.data_start.isoformat()}, evaluated "
+            f"from {hs.start.isoformat()} to {hs.end.isoformat()}; {hs.n_boot} paths of "
+            f"{history.path_months} months in {hs.block_months}-month blocks; "
+            f"{_percent(float(hs.cost_per_leg))} a leg.",
+            "",
+            *(f"- Bias: {bias}" for bias in hs.biases),
+            "",
+            *_table(
+                ("Check", "Passed", "Detail"),
+                ((c.name, "yes" if c.passed else "**no**", c.detail) for c in history.checks),
+            ),
+            "",
+        ]
+        if history.skipped:
+            lines += [
+                f"- Not run (its roles lack a history here): {', '.join(history.skipped)}",
+                "",
+            ]
+        if not history.runs:
+            lines += ["Not run.", ""]
+            continue
+        first = "n/a" if history.first is None else history.first.isoformat()
+        last = "n/a" if history.last is None else history.last.isoformat()
+        columns = [(limit, h) for limit, h, _ in history.runs[0].breach]
+        lines += [
+            f"From {first} to {last} ({history.months} months).",
+            "",
+            *_table(
+                (
+                    "Strategy",
+                    "Log growth / yr",
+                    "Deepest fall",
+                    "Median path growth / yr",
+                    *(
+                        f"{_grid(limit)} {'anywhere' if h is None else f'within {h} y'}"
+                        for limit, h in columns
+                    ),
+                ),
+                (
+                    (
+                        run.name,
+                        _percent(run.growth),
+                        _percent(run.stats.worst),
+                        _percent(run.median_growth),
+                        *(f"{p:.1%}" for _, _, p in run.breach),
+                    )
+                    for run in history.runs
+                ),
+            ),
+            "",
+        ]
+    return lines
 
 
 def _structure_arm(name: str, arm: StructureArm) -> list[str]:
@@ -319,6 +618,10 @@ def render(result: StudyResult) -> str:
     tests = spec.tests_in_confirmation
     level = 1 - 2 * result.alpha / tests
     stage = "EXPLORATORY — never evidence (DECISIONS D64)" if result.explore else "Confirmation run"
+    window = result.development
+    first, last = (study.start, study.end) if window is None else (window.start, window.end)
+    primary = [test for test in result.tests if not test.comparison]
+    daily = spec.marks == "daily"
     lock = result.lock
     aspirations = spec.aspiration or []
     lines = [f"# {spec.title}", "", f"**{stage}.** Study `{spec.id}` ({spec.kind}).", ""]
@@ -334,7 +637,16 @@ def render(result: StudyResult) -> str:
         f"- alpha {result.alpha} ({result.alpha_source}), {tests} test(s) in the confirmation "
         f"run (Bonferroni), each interval at level {level:.4f}; target power "
         f"{result.target_power} ({result.target_power_source})",
-        f"- Horizon: {study.start.isoformat()} to {study.end.isoformat()}, "
+        *(
+            [
+                f"- Development window: {window.start.isoformat()} to {window.end.isoformat()}; "
+                "the comparisons' portfolios only, each comparison one exploratory trial"
+            ]
+            if window is not None
+            else []
+        ),
+        f"- Marks: {'daily closes' if spec.marks == 'daily' else 'month ends'}",
+        f"- Horizon: {first.isoformat()} to {last.isoformat()}, "
         f"{len(result.dates)} rebalance dates"
         + (
             f" ({result.dates[0].isoformat()} to {result.dates[-1].isoformat()})"
@@ -349,34 +661,21 @@ def render(result: StudyResult) -> str:
         f"liquidation value after costs and tax minus {study.reference.name}'s. theta "
         f"{_percent(float(spec.theta))}: {spec.theta_justification}",
         "",
-        *_table(
-            (
-                "Candidate",
-                "Outcome",
-                "Estimate / yr",
-                "Interval",
-                "Power to detect theta",
-                "Detectable at target power",
-                "Before data: power / detectable",
-            ),
-            (
-                (
-                    test.name,
-                    _outcome(test.decision),
-                    _percent(test.estimate),
-                    _interval(test.decision),
-                    _number(test.decision.power, SHORT_DIGITS),
-                    _percent(test.detectable),
-                    f"{test.declared_power:.3f} / {_percent(test.declared_detectable)}",
-                )
-                for test in result.tests
-            ),
+        *(
+            _test_rows(primary, against=False)
+            if primary
+            else [
+                "None in this run: an exploration on the development window tests the "
+                "comparisons only."
+            ]
         ),
         "",
+        *_comparison_lines(result),
         "## The frontier",
         "",
         *_frontier_lines(result),
         "",
+        *_point_lines(result),
         "## What this test cannot conclude",
         "",
         *(
@@ -401,7 +700,7 @@ def render(result: StudyResult) -> str:
                 "Portfolio",
                 "Liquidation value",
                 "Log growth / yr",
-                "Max drawdown",
+                "Max drawdown (daily closes)" if daily else "Max drawdown",
                 "Costs",
                 "Tax paid",
                 "Trades",
@@ -412,7 +711,7 @@ def render(result: StudyResult) -> str:
             ),
             (
                 (
-                    *_run_row(stats, stats.historical),
+                    *_run_row(stats, stats.historical, daily=daily),
                     _percent(stats.turnover),
                     _percent(stats.median_log_growth),
                     _number(stats.terminal_wealth_p5, SHORT_DIGITS),
@@ -437,8 +736,9 @@ def render(result: StudyResult) -> str:
         "",
     ]
     limits = spec.drawdown_limits
+    within = "" if spec.owner_point is None else f" within {spec.owner_point.horizon_years} years"
     lines += [
-        "Probability that a bootstrap path's mark-to-market drawdown reaches each limit:",
+        f"Probability that a bootstrap path's mark-to-market drawdown reaches each limit{within}:",
         "",
         *_table(
             ("Portfolio", *(_grid(limit) for limit in limits)),
@@ -457,7 +757,7 @@ def render(result: StudyResult) -> str:
                 "Portfolio",
                 "Liquidation value",
                 "Log growth / yr",
-                "Max drawdown",
+                "Max drawdown (month ends)" if daily else "Max drawdown",
                 "Costs",
                 "Tax paid",
                 "Trades",
@@ -467,7 +767,8 @@ def render(result: StudyResult) -> str:
         "",
         "## Static weights",
         "",
-        "Each core strategy's weights by role before the tilt.",
+        "Each core strategy's weights by role before the tilt (a total-risk strategy's at its "
+        "declared share).",
         "",
         *_weights_table(result.portfolios),
         "",
@@ -494,9 +795,12 @@ def render(result: StudyResult) -> str:
         if result.tests and result.tests[0].robustness is not None
         else "- Placebo: not run",
         "",
+        *_block_lines(result),
+        *_forecast_lines(result.forecasts, spec.forecast_check is not None),
+        *_history_lines(result.long_history, result),
         "## Selection across trials",
         "",
-        f"- Trials of this study, this run's candidates included: {result.trials}",
+        f"- Trials of this study, this run's tests included: {result.trials}",
         *(
             f"- {test.name}: deflated Sharpe n/a"
             if test.deflated is None
@@ -542,7 +846,7 @@ def render(result: StudyResult) -> str:
         "## Bias notes",
         "",
         *(f"- {note}" for note in notes),
-        *(f"- {note}" for note in SIMULATION_NOTES),
+        *(f"- {note}" for note in simulation_notes(spec.marks)),
         "",
         "Unverified figures the costs rest on: "
         + (", ".join(f"`{label}`" for label in result.cost_labels) or "none")
