@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.8.5"
+version = "0.8.6"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"

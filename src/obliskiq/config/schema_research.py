@@ -99,7 +99,7 @@ class KenFrenchDataset(FrozenModel):
     vendor: Literal["ken_french"]
     file: NonEmptyText
     section: NonNegativeInt
-    frequency: Literal["monthly", "annual"]
+    frequency: Literal["daily", "monthly", "annual"]
     columns: list[NonEmptyText] | None
     release_lag_days: NonNegativeInt
     bias_notes: Notes
@@ -113,6 +113,8 @@ class AqrDataset(FrozenModel):
     header_row: PositiveInt
     columns: list[NonEmptyText] = Field(min_length=1)
     units: Literal["decimal", "percent"]
+    # How column A spells a date: an Excel serial number, or text as month/day/year.
+    date_format: Literal["excel_serial", "month_day_year"]
     release_lag_days: NonNegativeInt
     bias_notes: Notes
 

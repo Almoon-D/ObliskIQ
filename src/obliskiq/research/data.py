@@ -82,9 +82,12 @@ ECB_MISSING: Final = "N/A"
 FRED_MISSING: Final = "."
 #: The ECB reference rates' own currency.
 EURO: Final = "EUR"
-#: Ken French's date stamps: YYYYMM for a month, YYYY for a year.
+#: Ken French's date stamps: YYYYMMDD for a day, YYYYMM for a month, YYYY for a year.
+_DAY_STAMP_LENGTH: Final = 8
 _MONTH_STAMP_LENGTH: Final = 6
 _YEAR_STAMP_LENGTH: Final = 4
+#: AQR's text dates, month/day/year (``07/30/1926``).
+_MONTH_DAY_YEAR: Final = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
 #: The Bundesbank's spelling of a day without a value.
 BUNDESBANK_MISSING: Final = "."
 #: A row of a daily series opens with its day.
@@ -157,9 +160,9 @@ def parse_ken_french(
     """The columns of one table of a Ken French CSV archive, in decimals.
 
     A table starts at a header row that begins with a comma and runs to the next blank line.
-    ``section`` counts tables from 0; a stamp of six digits is a month (its last day), of four
-    a year (31 December). Values are percent and become decimals; the library's own missing
-    markers are left out.
+    ``section`` counts tables from 0; a stamp of eight digits is a day, of six a month (its last
+    day), of four a year (31 December). Values are percent and become decimals; the library's
+    own missing markers are left out.
     """
     lines = _zip_text(content, "latin-1").splitlines()
     tables: list[list[str]] = []
@@ -182,17 +185,17 @@ def parse_ken_french(
     unknown = sorted(set(wanted) - set(names))
     if unknown:
         raise DataSourceError(f"{dataset.file} has no column(s) {unknown} (columns: {names})")
-    expected = _MONTH_STAMP_LENGTH if dataset.frequency == "monthly" else _YEAR_STAMP_LENGTH
+    expected = {
+        "daily": _DAY_STAMP_LENGTH,
+        "monthly": _MONTH_STAMP_LENGTH,
+        "annual": _YEAR_STAMP_LENGTH,
+    }[dataset.frequency]
     out: dict[str, Points] = {name: [] for name in wanted}
     for row in rows:
         stamp, *cells = (cell.strip() for cell in row.split(","))
         if len(stamp) != expected or not stamp.isdigit():
             raise DataSourceError(f"{dataset.file}: {stamp!r} is not a {dataset.frequency} stamp")
-        day = (
-            _month_end(int(stamp[:_YEAR_STAMP_LENGTH]), int(stamp[_YEAR_STAMP_LENGTH:]))
-            if dataset.frequency == "monthly"
-            else _year_end(int(stamp))
-        )
+        day = _stamp_day(stamp, dataset)
         if len(cells) != len(names):
             raise DataSourceError(f"{dataset.file}: row {stamp} has {len(cells)} values")
         for name, cell in zip(names, cells, strict=True):
@@ -201,9 +204,42 @@ def parse_ken_french(
     return out
 
 
+def _stamp_day(stamp: str, dataset: KenFrenchDataset) -> date:
+    """The day a Ken French stamp of the dataset's frequency names."""
+    year = int(stamp[:_YEAR_STAMP_LENGTH])
+    if dataset.frequency == "annual":
+        return _year_end(year)
+    month = int(stamp[_YEAR_STAMP_LENGTH:_MONTH_STAMP_LENGTH])
+    try:
+        if dataset.frequency == "monthly":
+            return _month_end(year, month)
+        return date(year, month, int(stamp[_MONTH_STAMP_LENGTH:]))
+    except ValueError:  # calendar.monthrange and date refuse a month or day that does not exist
+        raise DataSourceError(f"{dataset.file}: {stamp!r} is not a date") from None
+
+
+def _aqr_day(stamp: object, dataset: AqrDataset, number: int) -> date | None:
+    """The date in column A of a row, in the dataset's format; ``None`` for a row without one."""
+    if stamp is None or stamp == "":
+        return None
+    if dataset.date_format == "excel_serial":
+        if not isinstance(stamp, float):
+            raise DataSourceError(f"{dataset.file} row {number}: date {stamp!r} is not a serial")
+        return excel_serial_date(stamp)
+    found = _MONTH_DAY_YEAR.fullmatch(str(stamp).strip())
+    if found is None:
+        raise DataSourceError(f"{dataset.file} row {number}: {stamp!r} is not month/day/year")
+    month, day, year = (int(part) for part in found.groups())
+    try:
+        return date(year, month, day)
+    except ValueError:
+        raise DataSourceError(f"{dataset.file} row {number}: {stamp!r} is not a date") from None
+
+
 def parse_aqr(content: bytes, dataset: AqrDataset) -> dict[str, Points]:
     """The named columns of an AQR workbook sheet: the header row names them, column A dates
-    them (Excel serials), and every row below the header with a date is an observation."""
+    them (Excel serials or month/day/year text, as the dataset says), and every row below the
+    header with a date is an observation; an empty cell is a missing value."""
     sheet = read_sheet(content, dataset.sheet)
     header = sheet.get(dataset.header_row, {})
     positions = {str(value).strip(): letters for letters, value in header.items()}
@@ -217,15 +253,12 @@ def parse_aqr(content: bytes, dataset: AqrDataset) -> dict[str, Points]:
     out: dict[str, Points] = {name: [] for name in dataset.columns}
     for number in sorted(n for n in sheet if n > dataset.header_row):
         row = sheet[number]
-        stamp = row.get("A")
-        if stamp is None:
+        day = _aqr_day(row.get("A"), dataset, number)
+        if day is None:
             continue
-        if not isinstance(stamp, float):
-            raise DataSourceError(f"{dataset.file} row {number}: date {stamp!r} is not a serial")
-        day = excel_serial_date(stamp)
         for name in dataset.columns:
             cell = row.get(positions[name])
-            if cell is None:
+            if cell is None or cell == "":
                 continue
             if not isinstance(cell, float):
                 raise DataSourceError(f"{dataset.file} row {number} {name}: {cell!r}")
@@ -533,7 +566,7 @@ async def load_dataset(
         url = f"{data.ken_french.base_url}{dataset.file}"
         content = await sources.fetch(url, None)
         columns = parse_ken_french(content, dataset, data.ken_french.missing_markers)
-        frequency = Frequency.MONTHLY if dataset.frequency == "monthly" else Frequency.ANNUAL
+        frequency = Frequency(dataset.frequency)
         return _factor_series(
             dataset,
             columns,

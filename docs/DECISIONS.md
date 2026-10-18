@@ -1783,3 +1783,68 @@ Rejected:
   sample already read (D63);
 - choosing the target volatility from 4c's breach table: a constant fitted to an outcome already
   seen.
+
+## Session 4e — Total-risk scaling (2026-10-18)
+
+### D93 · The data of Session 4e, chosen on the checks alone (D78, D88, D92)
+
+Step 1 checked every series the study and its long-history check read
+(`research/explore/risk_scaling_data/`, recorded in `docs/knowledge/research-sources.md`):
+metadata, span, duplicates, impossible values, continuity on the weekday calendar and alignment
+with MSCI's calculation days. No return or statistic was computed, and nothing below was chosen
+on one.
+
+**The main sample keeps Session 4c's proxies.** Static A is the benchmark (D91, D92), and a base
+is a fixed mix of 4c's roles, so each role keeps its one proxy in every portfolio:
+
+- MSCI World and Emerging Markets, net, in EUR;
+- the 5- and 17-year constant-maturity Bund zeros;
+- the euro cash index (EONIA, then the euro short-term rate);
+- TIP, IEF, GLD and CRSOX at ECB reference rates.
+
+The bases will hold only WORLD, EM, EGB_INT, EGB_LONG and CASH, the roles that have a long
+history. So no euro inflation-linked proxy is loaded (none holds IL), and the ECB's all-issuer
+curve is not added: it would change A's euro bond proxy, the benchmark D91 fixed. The Bund-only
+bias (no periphery spread in 2010–12) is stated instead.
+
+**Daily data.** D88's drawdown on daily closes and an estimator of daily risk need a daily grid.
+
+- The grid is MSCI's calculation days: a level on every weekday from 2000-12-29, holidays
+  included, without a gap, a repeated value or a splice.
+- Every other series carries its latest value public on the day, within the existing age limit
+  of seven days. The checks bound how often that happens: TARGET, German and US holidays, at most
+  three weekdays in a row.
+- CRSOX repeats one net asset value on five sessions in May 2014, which a daily grid reads as
+  four days without a move. It is stated, not repaired.
+
+**The span.**
+
+- The evaluation starts on 2004-12-31, the first month end on which every proxy of A has a price
+  (CRSOX's first row), and ends on 2026-09-30, the last month end before the session: 21.75
+  years, enough for D91's 20-year horizon.
+- The estimators read daily data from 2000-12-29, MSCI's first level. That is the warm-up; the
+  bootstrap keeps the real days before its first date.
+
+**The long histories** (D92 rule 4), each with its own cash rate:
+
+| History | Roles it covers | Frequency, currency | Span | Cash |
+|---|---|---|---|---|
+| MSCI | WORLD, EM, EGB_INT, EGB_LONG | daily, EUR | from 2000-12-29 | the euro cash index |
+| Ken French developed | WORLD; EM mapped to it | daily, USD | 1990-07-02 to 2026-08-31 | its US one-month bill |
+| AQR *Century of Factor Premia* | equity indices for WORLD and EM, fixed income for the bond roles | monthly, local excess returns | 1926-07 to 2026-02 | the US one-month bill (`ff3_market.RF`) |
+
+- Ken French's emerging markets are monthly only (from 1989-07). An EM role is therefore mapped
+  to the developed market there, and the report states it.
+- AQR stamps each month with its last business day and Ken French with the calendar month end.
+  The two are joined by month.
+- AQR's market columns are excess returns over local cash, so a total return built on the US
+  bill is a currency-hedged one; a EUR investor's currency risk is absent. The workbook does not
+  say how the columns weight their countries.
+- AQR's history is monthly, so a daily estimator cannot run on it as specified. The
+  pre-registration states how its rule reads monthly returns there, and the report labels it.
+
+Rejected:
+
+- Ken French's daily US market from 1926: the US alone, the convenience bias D92 names.
+- The euro all-issuer curve and IBCI, for the reasons above.
+- Session 4c's start (2005-12): it waited for the tilt's 12-month lookback, and A reads none.

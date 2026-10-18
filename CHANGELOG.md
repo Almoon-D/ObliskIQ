@@ -5,6 +5,27 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.6] - 2026-10-18
+
+Session 4e, Step 1: the data checks, before the harness. No IBKR call.
+
+### Added
+
+- Research datasets `kf_developed_daily` (Ken French's developed markets and the US bill, daily
+  from July 1990) and `aqr_century_market` (AQR's equity-index and fixed-income market returns,
+  monthly from July 1926).
+- `research/explore/risk_scaling_data/`: the checks of every series Session 4e reads, and their
+  output of 2026-10-18.
+- `docs/DECISIONS.md` D93: the sources, the daily grid, the span and the long histories, chosen
+  on the checks alone.
+- `docs/knowledge/research-sources.md`: the formats of the two new files and the daily continuity
+  of the core's proxies.
+
+### Changed
+
+- The Ken French loader reads daily tables (eight-digit stamps); the AQR loader reads text dates
+  as month/day/year (`date_format`) and skips empty cells; a stamp that names no date is refused.
+
 ## [0.8.5] - 2026-10-18
 
 Session 4e decided on the objective, at the owner's request. Documents only; no code or
