@@ -14,7 +14,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
 | T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | open (owner): not yet run, due before Session 6 (D68) | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
-| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
+| 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
 | 4e | Adaptive risk estimation | data checks, covariance estimators and a risk-forecast study kind, pre-registration, one confirmation run (D89, D90) | planned (any time after 4d, before 13) | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
@@ -38,6 +38,20 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### The owner's point (owner request, 2026-10-18, v0.8.4)
+
+The owner accepted the proposal for the probability: 30 % reached on at most 5 % of 20-year
+paths (D91).
+
+- On Session 4c's frontier the point resolves to A, the static risk balance.
+- A reaches 30 % on 0.1 % of paths, with a median after-tax log growth of 3.22 % a year.
+- Session 13's precondition is met.
+- Session 4e reports this point beside its grid.
+
+Documents only. No IBKR call.
+
+**SESSION_PROMPTS edits.** Session 4e's precondition, Session 13's precondition.
 
 ### Owner decisions and the global data audit (owner request, 2026-10-17, v0.8.3)
 
@@ -878,12 +892,9 @@ settles it.
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
   (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought.
-- **Owner, before Session 13:** the drawdown tolerance is 30 % of the value the bot manages,
-  over a very long horizon (D88). Still open: the probability of breaching it, and whether it is
-  stated over a number of years or as a rate (`research/reports/drawdown-tolerance-implications.md`). At 30 % Session 4c's
-  frontier resolves to A or the 60/40, and no candidate's growth is shown to differ from the
-  reference's; Session 4e may add adaptive specifications. If the point is a tilted variant, note that on the historical path the tax-aware
-  rule held every trend reduction once gains built up (Session 4c log). Before Session 10: an
+- **Owner:** the point is set (D91). Session 13 builds A, the static risk balance: 30 % reached
+  on at most 5 % of 20-year paths. Session 4e may add adaptive specifications that respect the
+  same point. Before Session 10: an
   LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).
