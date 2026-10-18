@@ -87,6 +87,7 @@ def aqr(**overrides: Any) -> AqrDataset:
         "header_row": 18,
         "columns": ["TSMOM", "TSMOM^EQ"],
         "units": "decimal",
+        "date_format": "excel_serial",
         "release_lag_days": 45,
         "bias_notes": ["test"],
     }
@@ -119,6 +120,30 @@ def test_the_ken_french_annual_table_is_its_second_section():
     dataset = ken_french(section=1, frequency="annual", columns=["Mkt-RF"])
     columns = parse_ken_french(fixture("ken_french_ff3_factors.zip"), dataset, MISSING)
     assert columns["Mkt-RF"][0] == (date(1927, 12, 31), pytest.approx(0.2944))
+
+
+def test_the_ken_french_daily_table_gives_each_day():
+    dataset = ken_french(
+        id="kf_developed_daily",
+        file="Developed_3_Factors_Daily_CSV.zip",
+        frequency="daily",
+        columns=["Mkt-RF", "RF"],
+    )
+    columns = parse_ken_french(fixture("ken_french_developed_daily.zip"), dataset, MISSING)
+    assert columns["Mkt-RF"][0] == (date(1990, 7, 2), pytest.approx(0.0069))
+    # 4 July is a US holiday, but the developed markets traded.
+    assert date(1990, 7, 4) in [day for day, _ in columns["RF"]]
+    assert columns["RF"][-1] == (date(2026, 8, 31), pytest.approx(0.0001))
+    assert len(columns["Mkt-RF"]) == len(columns["RF"]) == 15
+
+
+@pytest.mark.parametrize(
+    ("frequency", "stamp"), [("daily", "19900230"), ("daily", "19901301"), ("monthly", "202413")]
+)
+def test_a_ken_french_stamp_that_names_no_date_is_refused(frequency, stamp):
+    text = f",A\n{stamp}, 1.0\n"
+    with pytest.raises(DataSourceError, match=f"'{stamp}' is not a date"):
+        parse_ken_french(zipped("x.csv", text), ken_french(frequency=frequency), MISSING)
 
 
 @pytest.mark.parametrize(
@@ -163,6 +188,29 @@ def test_the_aqr_workbook_gives_dated_factor_returns():
     assert columns["TSMOM^EQ"][0] == (date(1985, 1, 31), pytest.approx(0.15337570278299956))
     assert len(columns["TSMOM"]) == 24
     assert columns["TSMOM"][-1][0] == date(1986, 12, 31)
+
+
+def test_the_aqr_century_workbook_gives_market_returns_dated_as_text():
+    dataset = aqr(
+        id="aqr_century_market",
+        file="Century-of-Factor-Premia-Monthly.xlsx",
+        sheet="Century of Factor Premia",
+        header_row=19,
+        columns=["Equity indices Market", "Fixed income Market"],
+        date_format="month_day_year",
+    )
+    columns = parse_aqr(fixture("aqr_century_factor_premia_monthly.xlsx"), dataset)
+    equity = columns["Equity indices Market"]
+    assert equity[0] == (date(1926, 7, 30), pytest.approx(0.042890994779579916))
+    assert columns["Fixed income Market"][0] == (
+        date(1926, 7, 30),
+        pytest.approx(0.002894815341381575),
+    )
+    # Five dated rows; the empty rows below the table are skipped.
+    assert [day for day, _ in equity] == [
+        date(1926, 7, 30), date(1926, 8, 31), date(1926, 9, 30), date(1926, 10, 29),
+        date(1926, 11, 30),
+    ]  # fmt: skip
 
 
 def test_aqr_percent_units_are_scaled_and_missing_columns_refused():

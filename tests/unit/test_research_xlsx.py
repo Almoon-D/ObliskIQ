@@ -129,6 +129,7 @@ def aqr(**overrides: Any) -> AqrDataset:
         "header_row": 1,
         "columns": ["X"],
         "units": "decimal",
+        "date_format": "excel_serial",
         "release_lag_days": 0,
         "bias_notes": ["n"],
     }
@@ -154,6 +155,35 @@ def test_aqr_rows_without_a_date_or_a_value_are_skipped_and_bad_cells_refused():
     )
     with pytest.raises(DataSourceError, match="row 2 X: 'n/a'"):
         parse_aqr(text_value, aqr())
+
+
+def test_aqr_text_dates_are_read_as_month_day_year():
+    header = row(1, '<c r="B1" t="inlineStr"><is><t>X</t></is></c>')
+
+    def dated(text: str, value: str = "0.5") -> bytes:
+        return workbook(
+            header
+            + row(
+                2, f'<c r="A2" t="inlineStr"><is><t>{text}</t></is></c>', f'<c r="B2">{value}</c>'
+            )
+        )
+
+    text = aqr(date_format="month_day_year")
+    assert parse_aqr(dated("07/30/1926", "<v>0.5</v>"), text) == {"X": [(date(1926, 7, 30), 0.5)]}
+    # A row whose cells are empty strings (below the table) and an empty value are skipped.
+    empty = workbook(
+        header
+        + row(2, '<c r="A2" t="inlineStr"><is><t></t></is></c>')
+        + row(3, '<c r="A3" t="inlineStr"><is><t>1/2/2026</t></is></c>',
+              '<c r="B3" t="inlineStr"><is><t></t></is></c>')
+    )  # fmt: skip
+    assert parse_aqr(empty, text) == {"X": []}
+    with pytest.raises(DataSourceError, match="'1926-07-30' is not month/day/year"):
+        parse_aqr(dated("1926-07-30"), text)
+    with pytest.raises(DataSourceError, match="'02/30/1926' is not a date"):
+        parse_aqr(dated("02/30/1926"), text)
+    with pytest.raises(DataSourceError, match="is not a serial"):
+        parse_aqr(dated("07/30/1926"), aqr())
 
 
 def test_the_ecb_file_skips_blank_rows():

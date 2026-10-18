@@ -16,7 +16,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
-| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | planned (any time after 4d, before 13) | |
+| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | in progress (data checks done, D93) | v0.8.6 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -38,6 +38,28 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 4e — Total-risk scaling (2026-10-18, v0.8.6)
+
+**The data checks** (Step 1, its own pull request before the harness; DECISIONS D93). Every
+series the study and its long-history check read was checked on 2026-10-18 for metadata, span,
+duplicates, impossible values, continuity and alignment with MSCI's calculation days
+(`research/explore/risk_scaling_data/`, `docs/knowledge/research-sources.md`). No return or
+statistic was computed.
+
+- The main sample keeps Session 4c's proxies (A is the benchmark), read on a daily grid of MSCI's
+  calculation days. It runs from 2004-12-31, the first month end on which every proxy of A has a
+  price, to 2026-09-30, with daily data from 2000-12-29 for the estimators.
+- The bases hold only WORLD, EM, the two euro bond roles and cash. No euro inflation-linked proxy
+  or periphery curve is needed.
+- Long histories: MSCI in EUR, daily from 2000; Ken French's developed markets, daily from
+  1990-07 in USD (EM mapped to them); AQR's *Century of Factor Premia*, monthly from 1926-07,
+  excess returns over local cash plus the US bill.
+- New loaders: Ken French's daily tables and AQR's text dates (`kf_developed_daily`,
+  `aqr_century_market`).
+- One stale value: CRSOX repeats its net asset value on five sessions in May 2014.
+
+No IBKR call.
 
 ### Session 4e decided on the objective (owner request, 2026-10-18, v0.8.5)
 

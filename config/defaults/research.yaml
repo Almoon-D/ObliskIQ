@@ -93,7 +93,8 @@ research:
   # <id>.<field>. vendor yahoo: `symbol` (Yahoo's ticker), `currency`, `start`. ken_french: `file`
   # (the zip under base_url), `section` (0 is the first table), `frequency` (monthly or annual),
   # `columns` (null: all), `release_lag_days`. aqr: `file`, `sheet`, `header_row` (1-based),
-  # `columns`, `units` (decimal or percent), `release_lag_days`. fred: `series`, `vintages` (true
+  # `columns`, `units` (decimal or percent), `date_format` (excel_serial or month_day_year),
+  # `release_lag_days`. fred: `series`, `vintages` (true
   # reads ALFRED and needs FRED_API_KEY), `frequency`, `units`, `release_lag_days` (used without
   # vintages), `start`. ecb: `currencies`. Every record adds its own bias notes.
   datasets:
@@ -118,6 +119,7 @@ research:
       header_row: 18
       columns: [TSMOM, TSMOM^EQ, TSMOM^FI, TSMOM^CM, TSMOM^FX]
       units: decimal
+      date_format: excel_serial
       release_lag_days: 45
       bias_notes:
         - Moskowitz, Ooi and Pedersen time-series momentum factors, excess returns.
@@ -149,6 +151,32 @@ research:
       release_lag_days: 0
       bias_notes:
         - The US market's excess return and the one-month bill, monthly; public at the month's close (the market's return and the bill's yield were known then; the library's values are a later reconstruction).
+    # The developed markets' excess return and the US one-month bill, daily from July 1990 in USD
+    # (Bloomberg data), public at the day's close: the market's return and the bill's rate were
+    # known then; the library recomputes them later (docs/knowledge/research-sources.md).
+    - id: kf_developed_daily
+      vendor: ken_french
+      file: Developed_3_Factors_Daily_CSV.zip
+      section: 0
+      frequency: daily
+      columns: [Mkt-RF, RF]
+      release_lag_days: 0
+      bias_notes:
+        - Developed markets (23 countries, the US included), value-weighted, from Bloomberg data; a factor model's market return, not an investable index; in USD, unhedged.
+        - The US one-month Treasury bill as a daily simple rate that compounds to the month's rate.
+    # AQR's market returns of equity indices and of government bonds across countries, monthly
+    # from July 1926, each an excess return over local cash; public at the month's close.
+    - id: aqr_century_market
+      vendor: aqr
+      file: Century-of-Factor-Premia-Monthly.xlsx
+      sheet: Century of Factor Premia
+      header_row: 19
+      columns: [Equity indices Market, Fixed income Market]
+      units: decimal
+      date_format: month_day_year
+      release_lag_days: 0
+      bias_notes:
+        - Ilmanen, Israel, Lee, Moskowitz and Thapar (2021), extended by AQR; each month's excess return over each country's local cash, before costs and fees, gross of currency (local-currency returns); equity indices of up to 43 markets and 10-year government bonds of up to 26, fewer before the 1950s; the weighting of the market columns is not stated in the workbook.
     - id: msci_world_eur
       vendor: msci
       index_code: "990100"
