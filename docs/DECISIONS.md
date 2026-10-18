@@ -1547,9 +1547,9 @@ Rejected:
 
 ### D88 · The drawdown tolerance, exposure caps and the option budget (D60; MASTER_PLAN §1, §11)
 
-The owner set the drawdown tolerance at **30 % from the previous peak of the portfolio's total
-value**, measured as D60's mark-to-market value of what the bot manages. Holdings the bot does
-not manage do not count toward it (owner). The horizon is very long: the owner does not need the
+The owner set the drawdown tolerance at **30 % from the previous peak of the portfolio's
+value**: D60's mark-to-market NAV of everything the bot manages. Holdings the bot does not
+manage do not count toward it (owner). The horizon is very long: the owner does not need the
 money now. The objective stays D60's: compound growth of wealth net of costs and tax.
 
 **Meaning.** The tolerance is the limit D60's research uses to filter candidates. A candidate
