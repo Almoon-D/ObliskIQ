@@ -407,3 +407,7 @@ def test_research_power_states_each_comparison(repo_root, tmp_path):
     text = out.getvalue()
     assert "S1 against T1" in text
     assert "0.50%" in text
+    # The comparison table's columns line up whatever the names' lengths.
+    table = [line for line in text.splitlines() if "against" in line or "comparison" in line]
+    assert len(table) == 3
+    assert len({len(line) for line in table}) == 1
