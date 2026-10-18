@@ -5,6 +5,24 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.9.2] - 2026-10-18
+
+Session 4e, follow-up: the scope of the total-risk verdict, after an outside review. No IBKR call
+and no new run.
+
+### Changed
+
+- `docs/DECISIONS.md` D95 states what the test does not show:
+  - adaptation in general: only total-risk scaling of fixed bases was tested, and D89 stands;
+  - that estimation cannot add growth: B-fast rules out half a point a year, not every effect;
+  - a breach probability free of its resampling model: 3.7–22.0 % for the candidates across the
+    registered block lengths, and A's 0.0 % is no path in 5,000, not zero risk;
+  - the whole managed book.
+- `docs/MASTER_PLAN.md`: a blend with a multi-year window was not tested; the adaptation row
+  says what 4e found and that the other mechanisms are untested.
+- `docs/ROADMAP.md`: two owner follow-ups, the next adaptation test and a check of the whole
+  managed book against the owner's point.
+
 ## [0.9.1] - 2026-10-18
 
 Session 4e, last part: the total-risk verdict. The locked pre-registration `core-risk-scaling`

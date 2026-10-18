@@ -299,7 +299,8 @@ cycles. All of these live in config with a source per value.
   scaling total risk with an estimate (an EWMA, alone or blended with a year's window, Ledoit–Wolf
   shrinkage toward the declared matrix), fully specified in its pre-registration. No
   specification was sufficient or respected the owner's point, so the core does not scale total
-  risk (DECISIONS D95). Re-estimated risk-balance weights are a later test (DECISIONS D92).
+  risk (DECISIONS D95). A blend with a multi-year window was not tested. Re-estimated
+  risk-balance weights are a later test (DECISIONS D92).
 - **Optimizer.** The legacy `_risk_parity` compared absolute risk contributions to 1/n
   without dividing by portfolio volatility. It is fixed (risk-contribution shares) and
   solved with a convex formulation, verified against closed forms (two assets; diagonal
@@ -1019,7 +1020,7 @@ reuse its prompt.
 | 15 | Scale (D66) | Capabilities that pay only at larger capital are built in Session 19a, before 1.0.0, and run by computed activation conditions. |
 | 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count), the peak taken once a day at the last cycle's NAV: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Reached on at most 5 % of 20-year paths (D91), which resolves to A on Session 4c's frontier. |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
-| 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient on the objective at the owner's point (D92); the static variants are the fallback and the benchmark. Total-risk scaling is tested first. |
+| 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient on the objective at the owner's point (D92); the static variants are the fallback and the benchmark. Total-risk scaling was tested first (Session 4e: none sufficient, D95); the other mechanisms are untested. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
