@@ -14,8 +14,9 @@ exploration script; no code or configuration changed. No IBKR call.
 ### Added
 
 - `docs/DECISIONS.md` D88 (a 30 % drawdown tolerance on the value the bot manages, over a very
-  long horizon, neither a guaranteed maximum loss nor an order to sell, with its probability and
-  how that probability is stated open; optional exposure caps by asset class;
+  long horizon, measured from a peak taken once a day at the last cycle's NAV, neither a
+  guaranteed maximum loss nor an order to sell, with its probability and how that probability is
+  stated open; optional exposure caps by asset class;
   the option budget and penalty unchanged), D89 (adaptation as a requirement, earned by test one
   mechanism at a time) and D90 (D80's limitation holds for 4c's proxies only).
 - `research/reports/global-data-audit.md`: where the research leans on US data, the criteria for

@@ -72,7 +72,8 @@ How to read it:
 - **The adaptive variants are not here.** The ones D89 asks for are not on this frontier; a later
   pre-registration adds them.
 - **Limits of the sample.** 2005–2026 is one sample with strong equity returns, and the bootstrap
-  reshuffles its own months. Month-end marks understate falls inside a month. All of these
+  reshuffles its own months. Month-end marks understate falls inside a month, while D88 measures
+  the drawdown on daily closes, so these shares err low against it. All of these
   probabilities are for about 20.75 years.
 
 ## How the horizon moves the probability (illustration)

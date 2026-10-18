@@ -1558,6 +1558,15 @@ acceptable probability, and the core's variant is chosen by the same rule. It is
 guaranteed maximum loss, and **not** an order to sell when it is reached. The breakers of
 §5.11 keep thresholds and keys of their own, and this entry sets none of them to 30 %.
 
+**Measurement** (owner). The peak is the highest managed NAV taken at the day's last decision
+cycle (US-late, §5.14). It is updated once a day, when that NAV exceeds it. The drawdown at any
+moment is one minus the managed NAV over the peak. A value read inside the day is measured
+against the peak but never raises it, so an intraday or delayed quote cannot lift the peak.
+The owner allowed an update at every cycle if that were simpler. It is not: the daily rule is
+one update in one cycle, and it matches the daily closes research measures on. Session 4c
+measured month-end marks, which understate a fall inside a month; later studies measure daily
+closes.
+
 **Open.** These stay open. Reports show their implications without assuming a value
 (`research/reports/drawdown-tolerance-implications.md`). Until both are set, Session 13's
 precondition is unmet.

@@ -50,6 +50,8 @@ configuration changed. No IBKR call.
   holdings do not count. The horizon is very long (the owner does not need the money now).
   - It is a research and selection limit, not a guaranteed maximum loss and not an order to sell.
     No breaker threshold is set from it.
+  - The peak is the managed NAV at the day's last cycle, raised once a day; the drawdown is
+    measured from it at every cycle.
   - The probability of breaching it is open, and so is how it is stated: over a number of years,
     or as a rate that needs none.
 - **No exposure caps by asset class.** They become optional configuration keys, absent by

@@ -517,7 +517,8 @@ decision only when its activation condition holds (§2).
   base-currency real terms — always including unmanaged and external holdings (positions
   the owner holds elsewhere, entered by hand and flagged stale after a configured age).
 - **Breakers.** Rolling-month drawdown → freeze new buys and audit; hard peak-to-trough →
-  force `shadow` and alert. Their thresholds are keys of their own: the owner's drawdown
+  force `shadow` and alert; the peak is D88's (the managed NAV at the day's last cycle). Their
+  thresholds are keys of their own: the owner's drawdown
   tolerance (§11, DECISIONS D88) is a research and selection limit, neither a breaker threshold
   nor an order to sell.
 - **Inertia.** Intents only for a band breach, an approved thesis, a scale-up confirmation,
@@ -1011,7 +1012,7 @@ reuse its prompt.
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
 | 14 | Objective (DECISIONS D60) | After-tax log growth of liquidation value within a drawdown limit, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
 | 15 | Scale (D66) | Capabilities that pay only at larger capital are built in Session 19a, before 1.0.0, and run by computed activation conditions. |
-| 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count): the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Its probability, and how that probability is stated, are open (below). |
+| 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count), the peak taken once a day at the last cycle's NAV: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Its probability, and how that probability is stated, are open (below). |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient; the static variants are the fallback and the benchmark. |
 

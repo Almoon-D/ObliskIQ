@@ -1033,7 +1033,8 @@ core-risk-estimation.md from the template.
   rule, the largest weight change, the warm-up and evaluation dates.
 - Primary outcome: risk-forecast accuracy, θ in loss units with its justification.
 - Secondary outcomes, paired against static A after costs and Spanish tax: annualised log
-  growth, turnover, tax paid, and the breach of 30 % both as the share of paths reaching it
+  growth, turnover, tax paid, and the breach of 30 % (on daily closes from the running peak,
+  D88) both as the share of paths reaching it
   over each horizon of a pre-registered grid and as a rate (breaches per decade, the share of
   time beyond it).
 - Power before data for each; a low power is reported as such, never as evidence against
@@ -1921,8 +1922,10 @@ DELIVERABLES
    never a number); the optional exposure caps by asset class (D88), absent by default and
    read on look-through exposure.
 5. decision/breakers.py: rolling-month drawdown → freeze new buys and audit; hard
-   peak-to-trough → force shadow and alert. Each threshold is a key of its own; the owner's
-   drawdown tolerance (D88) is not one of them and never orders a sale.
+   peak-to-trough → force shadow and alert. The peak is D88's: the managed NAV at the day's
+   last cycle, stored and raised once a day when that NAV exceeds it, with the drawdown from it
+   reported every cycle. Each threshold is a key of its own; the owner's drawdown tolerance
+   (D88) is not one of them and never orders a sale.
 6. decision/inertia.py: intents only for a band breach, an approved thesis, a share
    scale-up confirmation, a fired trigger, stop, zombie or mandatory close, a cash
    reservation, or a risk breach; monthly turnover and realised-gain budgets; tax hooks
