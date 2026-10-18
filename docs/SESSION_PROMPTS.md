@@ -191,7 +191,7 @@ paste the masked output into a short follow-up session that records it.
 | 4b | Research harness | Fable 5.1 (else Opus 5.5) | xhigh | **Full** | — |
 | 4c | Core verdict | Opus 5.5 | xhigh | **Full** | — |
 | 4d | First selection hypothesis | Opus 5.5 | xhigh | **Full** | — |
-| 4e | Adaptive risk estimation | Opus 5.5 | xhigh | **Full** | — |
+| 4e | Total-risk scaling | Opus 5.5 | xhigh | **Full** | — |
 | 5 | Execution mechanics | Fable 5.1 (else Opus 5.5) | xhigh | Custom | conversion and stop-limit tests |
 | 6 | Walking skeleton | Opus 5.5 | xhigh | Custom | one supervised cycle |
 | 7 | Capital, cash flows and tax | Opus 5.5 | xhigh | Custom | read-only |
@@ -985,7 +985,7 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
-## Session 4e — Adaptive risk estimation
+## Session 4e — Total-risk scaling
 
 **Launcher:** `Execute Session 4e exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
 
@@ -993,63 +993,82 @@ Runs any time after Session 4d and before Session 13.
 
 ```
 You are building ObliskIQ, session 4e. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §1, §5.4, §5.9 and DECISIONS D60, D62–D64, D80, D88–D90 carefully). Network
-is open for research data. No IBKR call. Finish with the end-of-session protocol.
+the design (read §1, §5.4, §5.9 and DECISIONS D60, D62–D64, D79, D80, D88–D92 carefully).
+Network is open for research data. No IBKR call. Finish with the end-of-session protocol.
 
 PRECONDITION: Session 4d merged. Otherwise STOP. The owner's point is 30 % reached on at most
 5 % of 20-year paths (D91): the study reports that point beside a grid of horizons and
 probabilities.
 
-GOAL: the first test of adaptation (D89), one mechanism: does re-estimating the core's
-covariance forecast its risk better than the declared matrix Session 4c used, and what does it
-change in the after-tax book under the owner's 30 % tolerance?
+GOAL: the first test of adaptation (D89, D92), one mechanism: does scaling the core's total
+risk by a re-estimated volatility, on bases with more equity than A, grow the after-tax book
+more than static A while respecting the owner's 30 % point?
 
 READ: research/reports/global-data-audit.md and docs/knowledge/research-sources.md (sources
-and their gaps); research/preregistrations/core-allocation.md (the static A it is compared
-with); src/obliskiq/research/ and src/obliskiq/quant/risk_budget.py.
+and their gaps); research/preregistrations/core-allocation.md and
+research/reports/core-allocation.md (static A, the benchmark, and what 4c already showed of
+2005–2026); src/obliskiq/research/ and src/obliskiq/quant/.
 
-STEP 1 — Data, before anything else: the audit's open items this study needs (the IL role: a
-euro proxy from 2008 or a US one before it, its bias stated; the euro periphery; the equity
-regions if risk is estimated by region), each checked for adjustments, distributions,
-continuity, currency and match to the vehicle, and recorded in docs/knowledge. Choose sources
-and span on those checks alone, never on a return or statistic. If the data cannot support the
-study, record it as not evaluable with what would make it evaluable, and stop.
+STEP 1 — Data, before anything else: the series the bases need (their equity roles and the
+cash role in EUR; the IL role's euro proxy from 2008 only if a base holds IL) and the longest
+histories the long-history check needs (MSCI from 2000, Ken French's developed regions from
+1990, AQR's Century of Factor Premia from 1926, a cash rate for each), each checked for
+adjustments, distributions, continuity, currency and match to the vehicle, and recorded in
+docs/knowledge. Choose sources and span on those checks alone, never on a return or statistic.
+If the data cannot support the study, record it as not evaluable with what would make it
+evaluable, and stop.
 
 STEP 2 — Harness, in its own PR merged before Step 3:
 - quant/covariance.py: EWMA, a multi-year window, their blend, Ledoit–Wolf shrinkage toward a
   declared target, in the base currency; tested against closed forms and an independent
   implementation.
-- A risk-forecast study kind in research/: each estimator's forecast, point in time and out of
-  sample, of the next month's realised variance of a fixed-weight portfolio (static A's
-  weights), scored by a pre-registered loss; the paired block-bootstrap interval of the loss
-  difference; the decision rule (D62); the trial registry.
-- risk_balance strategies that re-estimate their weights from an estimator, with a largest
-  weight change per rebalance, under A's bands, minimum trade and tax-aware execution.
+- A total-risk strategy in research/: fixed relative weights among the risky roles; a risky
+  share of a target volatility over the forecast volatility, point in time, capped at one (no
+  leverage), with a pre-registered floor and a largest change per rebalance; the rest in the
+  cash role; under A's bands, minimum trade and tax-aware execution. Its declared twin applies
+  the same rule to the declared matrix.
+- The bootstrap (D92): blocks at least twice the longest lookback a candidate reads, a
+  sensitivity over at least three block lengths, and the drawdown on daily closes inside each
+  resampled month (D88).
+- The long-history check (D92): the breach at the owner's point and the growth on the longest
+  history each candidate's roles have, its currency, vendor and index biases stated.
+- The forecast check: each estimator's out-of-sample forecast of the next month's realised
+  variance of its base, scored by a pre-registered loss; reported as a check that the
+  estimator works, never as an outcome (D92).
 
 STEP 3 — Pre-registration in its own PR, merged before Step 4: research/preregistrations/
-core-risk-estimation.md from the template.
-- Static A (the declared matrix) against at most three adaptive specifications, each fixed in
-  full: the prior's weight in equivalent observations, half-lives, the blend, the shrinkage
-  rule, the largest weight change, the warm-up and evaluation dates.
-- Primary outcome: risk-forecast accuracy, θ in loss units with its justification.
-- Secondary outcomes, paired against static A after costs and Spanish tax: annualised log
-  growth, turnover, tax paid, and the breach of 30 % (on daily closes from the running peak,
-  D88) both as the share of paths reaching it
-  over each horizon of a pre-registered grid and as a rate (breaches per decade, the share of
-  time beyond it).
+core-risk-scaling.md from the template.
+- Static A, the benchmark, against at most three specifications and their declared twins, each
+  fixed in full: the base (a fixed mix of 4c's roles), the target volatility and the rule that
+  sizes it to the owner's point (design falls and the declared matrix, never 4c's breach
+  table), the risky share's floor and largest change, the estimator (the prior's weight in
+  equivalent observations, half-lives, the blend, the shrinkage rule), the bands, the warm-up
+  and evaluation dates, the block lengths. No trend tilt: return timing is another mechanism
+  (D89).
+- Primary outcome (D92): each candidate's annualised log growth of liquidation value after
+  costs and Spanish tax minus static A's, paired; θ with its justification. A candidate that
+  does not respect the owner's point on daily closes is reported but cannot be sufficient.
+- Secondary: each specification against its declared twin (what estimation adds); turnover;
+  tax paid; the breach of 30 % (on daily closes from the running peak, D88) as the share of
+  paths reaching it over each horizon of a pre-registered grid and as a rate (breaches per
+  decade, the share of time beyond it); the frontier at the owner's point with every candidate
+  under D79's rule.
 - Power before data for each; a low power is reported as such, never as evidence against
-  adaptation. Bonferroni across the specifications; robustness (subperiods, the break-even
-  cost multiplier); the lock.
+  adaptation. Bonferroni across every test of the run; robustness (subperiods, the break-even
+  cost multiplier, the block lengths, the long history); what of 2005–2026 its author had seen
+  in 4c's report; the lock.
 
 STEP 4 — Exploration on the development window with every trial in the registry; one
-confirmation run; research/reports/core-risk-estimation.md with each outcome, its labels, power
+confirmation run; research/reports/core-risk-scaling.md with each outcome, its labels, power
 and limits, and what it cannot conclude. A sufficient specification becomes a variant Session
-13 builds beside the static ones (D89); the others are recorded with their result.
+13 builds beside the static ones (D89); an inconclusive-positive one that respects the point
+runs in shadow; the others are recorded with their result. A new point on the frontier is the
+owner's choice (D60), recorded in DECISIONS.
 
 ACCEPTANCE: the data checks are committed before the harness, the harness is merged before the
 pre-registration, and the pre-registration is on main before the confirmation run; the verdict
 is reproducible by one command; the report states each outcome with its labels, power and
-limits.
+limits, the forecast check apart from the outcomes.
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
@@ -1672,16 +1691,16 @@ rebalancing, built on the same research
 code paths so the live core and the tested core cannot drift apart.
 
 READ: research/preregistrations/core-allocation.md, research/reports/core-allocation.md and
-research/reports/core-risk-estimation.md
+research/reports/core-risk-scaling.md
 (binding: every constant comes from there); src/obliskiq/research/simulate.py and
 src/obliskiq/research/strategies.py (the rebalancing, tilt and tax-aware execution the verdict
 used); src/obliskiq/quant/risk_budget.py and src/obliskiq/quant/trend.py (Session 4c, DECISIONS
 D80, D82).
 
 DELIVERABLES
-- quant/covariance.py exists if Session 4e built it; engines/core uses it for a specification
-  4e found sufficient (D89, D90). Session 4c's variants hold static weights from a declared
-  covariance (D80).
+- quant/covariance.py exists if Session 4e built it; engines/core uses it to scale total risk
+  for a specification 4e found sufficient (D89, D90, D92). Session 4c's variants hold static
+  weights from a declared covariance (D80).
 - quant/risk_budget.py exists (Session 4c: cyclical coordinate descent, closed forms and an
   independent Newton solve in tests). Add the check against skfolio (test-only) and port the
   remaining still-valid cases of legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py.

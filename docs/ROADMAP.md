@@ -16,7 +16,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
-| 4e | Adaptive risk estimation | data checks, covariance estimators and a risk-forecast study kind, pre-registration, one confirmation run (D89, D90) | planned (any time after 4d, before 13) | |
+| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | planned (any time after 4d, before 13) | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -38,6 +38,31 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 4e decided on the objective (owner request, 2026-10-18, v0.8.5)
+
+A challenge of D89–D91 at the owner's request; the owner accepted its four rules (D92).
+
+- **The binding limit is growth.** At the owner's point A reaches 30 % on 0.1 % of paths against
+  the 5 % allowed, with a median after-tax log growth of 3.22 % a year.
+- **The gate.** An adaptation is sufficient on D60's objective against static A at the owner's
+  point. A forecast's accuracy is a check that the estimator works: a forecast that follows
+  recent volatility beats a constant one almost by construction.
+- **The mechanism.** Session 4e scales total risk (a risky share of target volatility over
+  forecast volatility, capped at one, the rest in cash) on bases with more equity than A, each
+  paired with its declared twin; no trend tilt. Re-estimated risk-balance weights come later.
+- **The bootstrap.** 4c's 12-month blocks cut the tilt's 12-month window: on a path about 54 % of
+  it comes from an unrelated block ((L + 1) / (2b), checked by simulation). Later studies use
+  blocks of at least twice the longest lookback and report a sensitivity over block lengths.
+- **The long history.** The breach at the point is also measured on the longest history each
+  candidate allows (MSCI from 2000, Ken French from 1990, AQR from 1926). A's breach rests on
+  2005–2026 alone.
+- 4c's result and D91 stand: Session 13 builds A by default.
+
+Documents only. No IBKR call.
+
+**SESSION_PROMPTS edits.** §C (4e's row), Session 4e (goal, reading, steps, the study's id
+`core-risk-scaling`), Session 13 (the 4e report's path, `quant/covariance.py` scaling total risk).
 
 ### The owner's point (owner request, 2026-10-18, v0.8.4)
 
@@ -891,10 +916,11 @@ settles it.
 - **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
-  (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought.
+  (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought. The
+  satellite has no tested selection signal (D87), and this is the cheapest step toward one.
 - **Owner:** the point is set (D91). Session 13 builds A, the static risk balance: 30 % reached
-  on at most 5 % of 20-year paths. Session 4e may add adaptive specifications that respect the
-  same point. Before Session 10: an
+  on at most 5 % of 20-year paths. Session 4e may add specifications that scale total risk,
+  sufficient only on after-tax growth against A at the same point (D92). Before Session 10: an
   LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).

@@ -288,14 +288,17 @@ cycles. All of these live in config with a source per value.
   neutral allocation for the owner's risk level, plus each adaptation a pre-registered test
   found sufficient, weighted by its evidence; one not yet sufficient runs in shadow. The
   static variants are the fallback and the benchmark. Mechanisms are tested one at a time —
-  risk estimation (Session 4e), total-risk scaling, return timing (trend, value, carry,
-  macro) — each with its parameters in configuration.
+  total-risk scaling on a re-estimated volatility (Session 4e), re-estimated risk-balance
+  weights, return timing (trend, value, carry, macro) — each with its parameters in
+  configuration. An adaptation is sufficient on the objective (§1) against static A at the
+  owner's point, never on a forecast's accuracy (DECISIONS D92).
 - **Risk balance** (A–C). 25% of risk per environment in A and B; equal risk contribution
   inside a basket. No leverage, so risk comes from duration, not borrowing.
 - **Covariance.** The variants 4c registered hold static risk-balance weights computed from a
-  declared long-run covariance in the base currency (DECISIONS D80, D90). Session 4e tests
-  re-estimated weights against them: an estimate (EWMA blended with a multi-year estimate,
-  Ledoit–Wolf shrinkage toward the declared matrix), fully specified in its pre-registration.
+  declared long-run covariance in the base currency (DECISIONS D80, D90). Session 4e scales
+  total risk with an estimate (EWMA blended with a multi-year estimate, Ledoit–Wolf shrinkage
+  toward the declared matrix), fully specified in its pre-registration; re-estimated
+  risk-balance weights are a later test (DECISIONS D92).
 - **Optimizer.** The legacy `_risk_parity` compared absolute risk contributions to 1/n
   without dividing by portfolio volatility. It is fixed (risk-contribution shares) and
   solved with a convex formulation, verified against closed forms (two assets; diagonal
@@ -427,8 +430,9 @@ expression, a pattern — lives in `research/pattern_registry.yaml` with a lifec
   another region); Bonferroni across the confirmation run and the deflated Sharpe across
   every trial. Dependence is explicit: cross-sectional effects as a monthly Fama–MacBeth
   series with Newey–West lags at least the horizon, events clustered by date, block
-  bootstrap; minimum samples in effective observations, n_eff = n / (1 + (n − 1)ρ) per
-  non-overlapping period. Robustness: the sign in every pre-registered subperiod, a placebo
+  bootstrap with blocks at least twice the longest lookback a strategy reads and a
+  sensitivity over block lengths (D92); minimum samples in effective observations,
+  n_eff = n / (1 + (n − 1)ρ) per non-overlapping period. Robustness: the sign in every pre-registered subperiod, a placebo
   that must fail, and a break-even cost multiplier above the declared cost uncertainty.
 - **Combinations.** A few combinations with a stated mechanism are pre-registered and tested
   beside their components on the same sample, every one counted as a trial; none is found by
@@ -966,7 +970,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant Session 13 builds |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it |
-| 4e | Adaptive risk estimation | the core's covariance re-estimated against the declared one: a risk-forecast study kind, pre-registration, one confirmation run (DECISIONS D89, D90) |
+| 4e | Total-risk scaling | the core's risky share scaled by a re-estimated volatility, against static A on the objective at the owner's point: estimators, a bootstrap that respects lookbacks, a long-history check, pre-registration, one confirmation run (DECISIONS D89, D90, D92) |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR |
@@ -1014,7 +1018,7 @@ reuse its prompt.
 | 15 | Scale (D66) | Capabilities that pay only at larger capital are built in Session 19a, before 1.0.0, and run by computed activation conditions. |
 | 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count), the peak taken once a day at the last cycle's NAV: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Reached on at most 5 % of 20-year paths (D91), which resolves to A on Session 4c's frontier. |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
-| 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient; the static variants are the fallback and the benchmark. |
+| 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient on the objective at the owner's point (D92); the static variants are the fallback and the benchmark. Total-risk scaling is tested first. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which

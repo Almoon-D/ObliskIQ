@@ -115,10 +115,13 @@ hypothesis has to come first.
 
 ## What to gather first, in order
 
-1. **For the static-against-adaptive test of the core** (Session 4e). The IL role's proxy:
-   a euro series from 2008, or a US one before it with its bias stated. The euro periphery
-   (all-issuer curve from 2004). The equity regions (MSCI, from 2000), if a pre-registration
-   estimates risk by region rather than by world and EM.
+1. **For the static-against-adaptive test of the core** (Session 4e, total-risk scaling,
+   DECISIONS D92). The bases' equity roles and the cash role in EUR, and the longest equity
+   and cash histories for the long-history check (MSCI from 2000, Ken French's developed
+   regions from 1990, AQR from 1926). The IL role's proxy if a base holds IL: a euro series
+   from 2008, or a US one before it with its bias stated. The euro periphery (all-issuer curve
+   from 2004) if a base holds euro bonds. The equity regions (MSCI, from 2000), if a
+   pre-registration estimates risk by region rather than by world and EM.
 2. **For a regime-conditioned core** (H6 made global). CISS, OECD CLI with vintages, term
    spreads from the curves, VSTOXX beside VIX.
 3. **Country valuations.** Bought only if a pre-registered hypothesis needs them.

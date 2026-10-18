@@ -5,6 +5,28 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.5] - 2026-10-18
+
+Session 4e decided on the objective, at the owner's request. Documents only; no code or
+configuration changed. No IBKR call.
+
+### Added
+
+- `docs/DECISIONS.md` D92: an adaptation is sufficient on after-tax growth against static A at the
+  owner's point, a forecast's accuracy being a check; total-risk scaling is tested first, without
+  the trend tilt and beside its declared twin; a pre-registration whose candidates read a lookback
+  uses blocks of at least twice it with a sensitivity over block lengths; the breach is also
+  measured on the longest history the candidates allow.
+
+### Changed
+
+- `docs/SESSION_PROMPTS.md`: Session 4e becomes total-risk scaling (study `core-risk-scaling`);
+  Session 13 reads its report and uses `quant/covariance.py` to scale total risk.
+- `docs/MASTER_PLAN.md` §5.4 (adaptation, covariance), §5.9 (block length), §10 (Session 4e) and
+  §11 (row 18); D89 points to D92.
+- `docs/ROADMAP.md`: Session 4e's row, the owner's follow-ups, the log entry.
+- `research/reports/global-data-audit.md`: what Session 4e gathers first.
+
 ## [0.8.4] - 2026-10-18
 
 The owner's point on Session 4c's frontier. Documents only; no code or configuration changed.
