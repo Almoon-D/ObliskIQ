@@ -16,6 +16,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner picks a frontier point) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
+| 4e | Adaptive risk estimation | data checks, covariance estimators and a risk-forecast study kind, pre-registration, one confirmation run (D89, D90) | planned (any time after 4d, before 13) | |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -24,7 +25,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
-| 13 | Core engine | the variants 4c registered, risk budgeting where they need it, tax-aware trend tilt, rebalancing | planned | |
+| 13 | Core engine | the variants 4c registered and any 4e found sufficient, risk budgeting, tax-aware trend tilt, rebalancing | planned | |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series | planned | |
 | 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents | planned | |
@@ -37,6 +38,68 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Owner decisions and the global data audit (owner request, 2026-10-17, v0.8.3)
+
+A challenge of the static core (D80) at the owner's request, the owner's decisions it led to,
+and a desk audit of the global data. Documents and one exploration script; no code or
+configuration changed. No IBKR call.
+
+**The owner's decisions** (D88, D89):
+- **Drawdown tolerance: 30 %** from the previous peak of the value the bot manages; unmanaged
+  holdings do not count. The horizon is very long (the owner does not need the money now).
+  - It is a research and selection limit, not a guaranteed maximum loss and not an order to sell.
+    No breaker threshold is set from it.
+  - The peak is the managed NAV at the day's last cycle, raised once a day; the drawdown is
+    measured from it at every cycle.
+  - The probability of breaching it is open, and so is how it is stated: over a number of years,
+    or as a rate that needs none.
+- **No exposure caps by asset class.** They become optional configuration keys, absent by
+  default; the mandate is unchanged.
+- **The option sleeve** keeps its premium budget of at most 5 % and lite's penalty balance.
+- **Adaptation is a requirement.** The allocation adapts within the owner's limits through
+  rules a pre-registered test finds sufficient, one mechanism at a time. The static variants
+  are the fallback and the benchmark. Risk estimation comes first, in a new Session 4e.
+
+**D80 narrowed** (D90): no multi-year estimate before 2005 holds for the proxies 4c chose, not
+in general. An estimator shrunk toward the declared matrix needs no pre-history. 4c's result
+stands.
+
+**The audit** (`research/reports/global-data-audit.md`, availability probed on 2026-10-17, no
+return or statistic computed). US data are used by convenience in three places:
+- 4c's IL role (TIP);
+- 4c's structure check (US market only, where AQR's *Century of Factor Premia* covers
+  several markets from 1926);
+- H6's measures (VIX, the excess bond premium).
+
+Gold, commodities and Treasuries are US vendors with global or intended exposure, not bias.
+
+- Main gap: euro inflation-linked bonds. A Yahoo series exists only from 2008 (`IBCI`).
+- Verified free and global:
+  - MSCI regional indices from 2000;
+  - the ECB all-issuer curve from 2004 and convergence yields for Italy and Spain from 1991;
+  - the ECB CISS from 1980;
+  - OECD leading indicators for 22 areas;
+  - JGB yields from 1974;
+  - AQR multi-asset data from 1926 and 1972;
+  - Ken French regions from 1989–1990.
+- Traps: FRED's ICE BofA spreads hold three years only; `stoxx.com` failed TLS verification
+  from the container.
+
+**The tolerance's implications** (`research/reports/drawdown-tolerance-implications.md`):
+- 4c's frontier at 30 % resolves to A at 5–10 % and to the 60/40 at 25–50 %.
+- The equity reference respects 30 % only at a probability of at least 72.3 % (paths of about
+  20.75 years).
+- An illustration from assumptions alone (`research/explore/drawdown_horizon/horizon.py`) shows
+  the probability rising with the horizon.
+
+**SESSION_PROMPTS edits.**
+- The opening paragraph and the network note (4e).
+- §C (4e's row).
+- Session 4e (new).
+- Session 13 (precondition, goal, reading, `quant/covariance.py` from 4e).
+- Session 17 (optional exposure caps; breaker thresholds apart from the tolerance).
+- Session 21 (H6 with euro-area measures).
 
 ### Documentation review (owner request, 2026-10-17, v0.8.2)
 
@@ -815,11 +878,11 @@ settles it.
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
   (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought.
-- **Owner, before Session 13:** choose a point on Session 4c's frontier — the drawdown
-  tolerance, the probability of breaching it, the horizon — recorded in DECISIONS (D60). The
-  frontier is in `research/reports/core-allocation.md`; its points resolve to the equity
-  reference, the 60/40, A or D10, and no candidate's growth is shown to differ from the
-  reference's. If the point is a tilted variant, note that on the historical path the tax-aware
+- **Owner, before Session 13:** the drawdown tolerance is 30 % of the value the bot manages,
+  over a very long horizon (D88). Still open: the probability of breaching it, and whether it is
+  stated over a number of years or as a rate (`research/reports/drawdown-tolerance-implications.md`). At 30 % Session 4c's
+  frontier resolves to A or the 60/40, and no candidate's growth is shown to differ from the
+  reference's; Session 4e may add adaptive specifications. If the point is a tilted variant, note that on the historical path the tax-aware
   rule held every trend reduction once gains built up (Session 4c log). Before Session 10: an
   LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
