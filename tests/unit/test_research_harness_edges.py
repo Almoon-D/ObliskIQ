@@ -29,7 +29,7 @@ from obliskiq.research.prereg import load_prereg
 from obliskiq.research.registry import Git, file_sha256, write_lock
 from obliskiq.research.simulate import Panel
 from obliskiq.research.strategies import build_strategy
-from obliskiq.research.study import StudyRunner, _growth, _months, _synthetic, gather
+from obliskiq.research.study import StudyRunner, _growth, _months, _synthetic, _Test, gather
 from obliskiq.store import Store, open_research_store
 from obliskiq.store.research import replace_research_series, research_series_in
 
@@ -202,7 +202,8 @@ def test_the_breakeven_search_reads_an_untradeable_cost_as_no_effect(
             raise SimulationError("costs more than it raises")
         return {"rebalanced": winner, "held": loser}
 
-    robustness = runner._robustness(prereg, inputs, "rebalanced", "held", 0.1, simulate)
+    test = _Test("rebalanced", "rebalanced", "held", 0.01, 0.02, comparison=False)
+    robustness = runner._robustness(prereg, inputs.panel, inputs.dates, test, 0.1, simulate)
     # The effect holds up to the model's own costs and vanishes past them: break-even near 1.
     assert robustness.breakeven.status == "found"
     assert robustness.breakeven.multiplier == pytest.approx(1, abs=0.001)

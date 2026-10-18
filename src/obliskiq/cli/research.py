@@ -195,6 +195,21 @@ def _power(loaded: Loaded, out: TextIO) -> int:
         detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
         chance = power(theta, se, alpha=alpha, tests=tests)
         print(f"  {candidate.name:<24} {se:>10.4%} {chance:>7.3f} {detectable:>18.4%}", file=out)
+    if spec.comparisons:
+        print(
+            f"  {'comparison':<24} {'theta':>7} {'se a year':>10} {'power':>7} "
+            f"{f'detectable at {target:g}':>18}",
+            file=out,
+        )
+    for comparison in spec.comparisons:
+        se = declared_se(prereg, comparison.name)
+        detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
+        chance = power(float(comparison.theta), se, alpha=alpha, tests=tests)
+        print(
+            f"  {comparison.name:<24} {float(comparison.theta):>7.2%} {se:>10.4%} {chance:>7.3f} "
+            f"{detectable:>18.4%}",
+            file=out,
+        )
     return EXIT_OK
 
 

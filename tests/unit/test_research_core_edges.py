@@ -260,7 +260,18 @@ def test_whole_units_round_as_asked_away_from_a_residue():
     assert whole(D("3.0000000000001"), ROUND_CEILING) == D(3)
     assert whole(D("2.99")) == D(2)
     assert whole(D("2.01"), ROUND_CEILING) == D(3)
-    assert share(D(1), D(3)) == D("0.33333333333333333333")
+    assert share(D(1), D(3)) == D("0.333333333333333333333333")
+
+
+def test_one_unit_worth_a_millionth_of_a_percent_comes_back_as_one_unit():
+    # Hypothesis found it: at a weight quantum of 1e-20, one unit at 0.01 in an account of
+    # about a billion lost its round trip (the weight kept nine significant digits).
+    held = [(1, D("0.01")), (1, D("0.01")), (20892, D("4999.999911")), (3, D("0.012351")),
+            (16879, D("4521.311154")), (93949, D("4042.621742")), (93949, D("5000"))]  # fmt: skip
+    values = [D(units) * price for units, price in held]
+    total = sum(values, D(0))
+    for (units, price), value in zip(held, values, strict=True):
+        assert whole(total * share(value, total) / price) == units
 
 
 def test_the_engine_says_a_purchase_would_defer_a_loss_as_its_conflict_hook_does(es):

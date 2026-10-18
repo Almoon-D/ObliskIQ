@@ -1848,3 +1848,88 @@ Rejected:
 - Ken French's daily US market from 1926: the US alone, the convenience bias D92 names.
 - The euro all-issuer curve and IBCI, for the reasons above.
 - Session 4c's start (2005-12): it waited for the tilt's 12-month lookback, and A reads none.
+
+### D94 · The harness for scaling total risk (D88, D90, D92)
+
+**The estimator** (`quant/covariance.py`), each step a constant a pre-registration fixes:
+
+- weights over the daily observations: an EWMA by its half-life, an equal weight on a window,
+  or their blend, each part summing to 1 over the observations it has;
+- the second moment about zero (RiskMetrics: a daily mean is small beside its spread and is not
+  estimated), with Kish's effective number of observations;
+- Ledoit–Wolf shrinkage toward the declared matrix. For a target not estimated from the sample
+  the covariance term of their optimal intensity is zero; the intensity is written for weighted
+  observations and equals theirs with equal weights;
+- a prior worth a stated number of observations of the declared matrix, which is the estimate
+  before any data (D90).
+
+Tests hold it to closed forms (equal weights, the EWMA's limit of effective observations,
+Ledoit and Wolf's equal-weight formula) and to an independent implementation written as loops. A
+lookback is three half-lives of an EWMA and the length of a window (D92 rule 3).
+
+**The strategy.** `total_risk` is the core's own mechanism, `CoreStrategy`: its bands, the
+no-trade band, whole units, the sale order and the swap partners. Only the targets differ: a
+risky share of the target volatility over the base's forecast volatility, capped at one, at
+least the floor and at most the largest change from the share held, the rest in the cash role.
+The declared twin forecasts with the declared matrix, so its share is constant and it is a
+static portfolio.
+
+Tax-aware execution has two parts:
+
+- buying through a swap partner when the primary would defer a loss;
+- holding a reduction whose tax exceeds a benefit fraction (`hold_costly_reductions`).
+
+The second is a separate switch. Held reductions would switch the mechanism off when embedded
+gains are largest, which is after a long rise and before a fall; the pre-registration chooses.
+
+**Daily data.**
+
+- A study that reads daily risk or marks daily builds a daily history on its calendar
+  instrument's days, each instrument in the base currency at the latest price and rate public
+  that day.
+- A month's daily returns sum to the change between its month-end prices, so the daily and
+  monthly views of a path agree. A bootstrap month carries its days.
+- The account is marked on each day from the holdings after the last rebalance (D88). A day
+  without a price inside a month makes the run not evaluable.
+- The drawdown statistics are the deepest fall, when each limit is first reached, the share of
+  marks beyond it and the episodes reaching it.
+
+**Tests and decisions.**
+
+- Twins are simulated beside the candidates and tested only through registered comparisons.
+- Every test counts in Bonferroni and is one trial.
+- A candidate outside the owner's point is labelled so and cannot be sufficient: an interval that
+  would make it so makes it inconclusive (positive).
+- D92 rule 3 is refused at validation for a study that scales total risk, and every report
+  states the lookback, the blocks and whether they respect it. A registered sensitivity repeats
+  the bootstrap with other block lengths.
+
+**The forecast check** scores each estimator's forecast of its base's next-month variance with
+QLIKE (Patton 2011). It is compared with the declared matrix's constant forecast, with a
+block-bootstrap interval of the mean difference. It is reported apart from the outcomes.
+
+**The long-history check.**
+
+- Each total-risk strategy whose base a registered history covers is run before tax, at a flat
+  cost a leg. The estimator's lengths are converted to the history's observations through its
+  periods a year.
+- The real days before the history's start are kept before every path.
+- Paths of whole months are as long as the owner's horizon. Return series are joined by month.
+
+**A development window.** An exploratory run there simulates the comparisons' portfolios on
+their own instruments, before the study's start, and tests the comparisons only. There is no
+frontier, owner's point, sensitivity or long history, and no minimum of effective observations:
+it is never evidence.
+
+**The weight quantum** of the simulator is 1e-24 rather than 1e-20. A property test found a
+one-unit position worth about a millionth of a percent of a billion-euro account that lost its
+round trip. No result of Session 4c or 4d depends on it.
+
+Rejected:
+
+- Estimating risk from monthly returns. The forecast check and D88's marks need days, and one
+  observation a month cannot follow volatility.
+- A separate simulator for total risk: it would drift from the core's execution, which Session
+  13 builds on.
+- Calendar dates synthesised for each resampled day: a path's rows and its rebalance dates are
+  all a strategy and the marks read.

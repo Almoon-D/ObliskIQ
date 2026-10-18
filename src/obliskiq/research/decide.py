@@ -15,6 +15,10 @@ L against theta, then U against theta, and nothing else. Power is a label beside
 never an outcome: an inconclusive result under low power is reported as such and is never read
 as evidence against.
 
+A test of an adaptation at the owner's point (DECISIONS D92) says whether its candidate respects
+that point. One that does not is labelled *outside the owner's point* and cannot be sufficient:
+an interval that would make it so makes it inconclusive (positive) instead.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -36,6 +40,7 @@ class Label(StrEnum):
     SIGN_UNCERTAIN = "sign uncertain"
     LOW_POWER = "low power"
     POWER_UNKNOWN = "power unknown"
+    OUTSIDE_POINT = "outside the owner's point"
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +93,11 @@ def decide(
     power: float | None,
     target_power: float,
     checks: tuple[AdequacyCheck, ...],
+    respects_point: bool | None = None,
 ) -> Decision:
-    """Apply the rule of D62. ``theta`` must be positive (the smallest effect worth having)."""
+    """Apply the rule of D62. ``theta`` must be positive (the smallest effect worth having).
+    ``respects_point`` is whether the candidate respects the owner's point (``None``: not
+    measured); one that does not cannot be sufficient (D92)."""
     if not math.isfinite(theta) or theta <= 0:
         raise ValueError(f"theta is a positive effect, got {theta}")
     if not 0 < target_power < 1:
@@ -105,8 +113,11 @@ def decide(
         outcome = Outcome.NOT_EVALUABLE
     else:
         low, high = interval
-        if low >= theta:
+        if low >= theta and respects_point is not False:
             outcome = Outcome.SUFFICIENT
+        elif low >= theta:
+            outcome = Outcome.INCONCLUSIVE
+            labels.append(Label.POSITIVE)
         elif high < theta:
             outcome = Outcome.INSUFFICIENT
             if high < 0:
@@ -114,11 +125,18 @@ def decide(
         else:
             outcome = Outcome.INCONCLUSIVE
             labels.append(Label.POSITIVE if low > 0 else Label.SIGN_UNCERTAIN)
+        if respects_point is False:
+            labels.append(Label.OUTSIDE_POINT)
         if power is None:
             labels.append(Label.POWER_UNKNOWN)
         elif power < target_power:
             labels.append(Label.LOW_POWER)
     limits = list(_LIMITS[outcome])
+    if Label.OUTSIDE_POINT in labels:
+        limits.append(
+            "That the candidate may receive capital: it does not respect the owner's point, so "
+            "it cannot be sufficient whatever its growth (DECISIONS D92)."
+        )
     if outcome is Outcome.INCONCLUSIVE and Label.LOW_POWER in labels:
         limits.append(
             "Anything against the effect: the test had low power to detect theta, so an "

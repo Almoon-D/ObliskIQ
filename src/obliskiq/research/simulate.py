@@ -31,7 +31,13 @@ At each rebalance date, in order:
 Money is ``Decimal``; prices and rates read from research history are floats and are converted
 exactly (their shortest representation). The series of mark-to-market values is recorded after
 each date's trades and tax; at the horizon it records the value before the terminal sale, and
-the liquidation value is kept beside it.
+the liquidation value is kept beside it. So is what was held after each date's trades (cash,
+units and their prices), from which ``research.daily`` marks the account on every day between
+two dates.
+
+A panel may carry a **daily path** (``research.daily``): the base-currency daily returns of its
+instruments through each rebalance date. A strategy reads an estimate of their covariance on a
+date from it (``MarketView.covariance``), as of that date and nothing later.
 
 A run **before tax** (``SimulationSettings.taxed`` false) trades the same way and records every
 lot, but no tax is withheld, settled or paid: it is the same strategy's pre-tax result, so a
@@ -51,14 +57,18 @@ from itertools import pairwise
 from operator import attrgetter
 from typing import Final, Protocol
 
+import numpy as np
+
 from ..domain.enums import AssetClass
 from ..domain.research import Observation
 from ..domain.tax import ProposedTrade, SecurityIdentity, TaxYearSummary
 from ..errors import SimulationError
 from ..jurisdiction.tax import TaxPolicy
 from ..quant.costs import CostBook, LegCost, OrderTerms
+from ..quant.covariance import CovarianceSeries, Estimate, EstimatorRule
 from ..quant.trend import TrendRule, TrendState, trend_state
 from ..tax.lots import LotEngine
+from .daily import DailyPath, Holding
 from .stats import annualised_log_growth, max_drawdown, years_between
 
 ZERO = Decimal(0)
@@ -70,8 +80,10 @@ SCALE_BISECTIONS: Final = 30
 #: Months in a year, for stepping through month ends.
 MONTHS_PER_YEAR: Final = 12
 #: A target weight's last decimal place. Weights at this quantum add up exactly in Decimal's 28
-#: significant digits, and rounded down they never sum above the values they came from.
-WEIGHT_QUANTUM: Final = Decimal("1e-20")
+#: significant digits, and rounded down they never sum above the values they came from. It is
+#: fine enough that one unit of a position worth a millionth of a percent of the account comes
+#: back as one unit (a quantum of 1e-20 lost it in a billion-euro account).
+WEIGHT_QUANTUM: Final = Decimal("1e-24")
 #: A unit count this close to a whole number is that number: what Decimal rounding leaves of a
 #: round trip from units to a weight and back, far below any quantity a venue trades.
 UNIT_RESIDUE: Final = Decimal("1e-9")
@@ -122,11 +134,13 @@ class SimInstrument:
 @dataclass(frozen=True, slots=True)
 class Panel:
     """Point-in-time observations: prices in the listing currency and income per unit by
-    instrument key, and euro reference rates (units per euro) by currency."""
+    instrument key, and euro reference rates (units per euro) by currency; and, for a study that
+    reads daily risk, the daily path of its instruments."""
 
     prices: Mapping[str, tuple[Observation, ...]]
     income: Mapping[str, tuple[Observation, ...]]
     fx: Mapping[str, tuple[Observation, ...]]
+    daily: DailyPath | None = None
 
 
 def _visible(rows: Sequence[Observation], as_of: date) -> list[Observation]:
@@ -199,6 +213,11 @@ class PanelIndex:
         #: Listing prices and reference rates by key and date, as read on that date.
         self.listing_prices: dict[tuple[str, date], Decimal | None] = {}
         self.rates: dict[tuple[str, date], Decimal | None] = {}
+        #: The daily path's returns of a set of instruments, and the estimates read from them.
+        self.daily_series: dict[tuple[str, ...], CovarianceSeries] = {}
+        self.estimates: dict[
+            tuple[tuple[str, ...], EstimatorRule, bytes, date], Estimate | None
+        ] = {}
 
     def price_series(self, key: str) -> IndexedSeries:
         return self.prices.get(key) or IndexedSeries(())
@@ -306,6 +325,29 @@ class Pricing:
             )
         return self.index.trends[memo]
 
+    def covariance(
+        self, keys: Sequence[str], rule: EstimatorRule, target: np.ndarray, as_of: date
+    ) -> Estimate | None:
+        """The estimate of ``keys``' daily covariance from the panel's daily path through
+        ``as_of`` (a rebalance date), shrunk toward ``target`` (daily units) as ``rule`` says."""
+        daily = self.index.panel.daily
+        if daily is None:
+            raise SimulationError("the panel has no daily path: no daily risk can be estimated")
+        names = tuple(keys)
+        prior = np.ascontiguousarray(target, dtype=float)
+        memo = (names, rule, prior.tobytes(), as_of)
+        if memo not in self.index.estimates:
+            if names not in self.index.daily_series:
+                columns = daily.returns[:, [daily.column(key) for key in names]]
+                if np.isnan(columns).any():
+                    raise SimulationError(
+                        f"{', '.join(names)} lack a daily price from the start of the daily path"
+                    )
+                self.index.daily_series[names] = CovarianceSeries(columns)
+            series = self.index.daily_series[names]
+            self.index.estimates[memo] = series.estimate(daily.rows_through(as_of), prior, rule)
+        return self.index.estimates[memo]
+
     @staticmethod
     def _month(first: date, offset: int) -> date:
         """The last day of the month ``offset`` months after ``first``'s."""
@@ -372,6 +414,13 @@ class MarketView:
     def trend(self, key: str, cash: str, rule: TrendRule) -> TrendState | None:
         """``key``'s trend state on ``as_of`` against ``cash`` (see :meth:`Pricing.trend`)."""
         return self._priced().trend(key, cash, rule, self._as_of)
+
+    def covariance(
+        self, keys: Sequence[str], rule: EstimatorRule, target: np.ndarray
+    ) -> Estimate | None:
+        """The estimate of ``keys``' daily covariance as of ``as_of`` (see
+        :meth:`Pricing.covariance`)."""
+        return self._priced().covariance(keys, rule, target, self._as_of)
 
     def close(self, key: str) -> Decimal | None:
         """``key``'s base-currency price on ``as_of`` if a fresh one exists, else ``None``."""
@@ -519,6 +568,8 @@ class SimulationResult:
     unsold: int = 0
     #: Positions sold at their protective stop.
     stops: int = 0
+    #: What was held after each date's trades and tax, every date but the horizon.
+    holdings: tuple[Holding, ...] = ()
 
     @property
     def period_log_returns(self) -> tuple[float, ...]:
@@ -544,6 +595,7 @@ class _State:
     taxes: list[TaxPayment] = field(default_factory=list)
     #: The day each position was opened, for its trailing stop.
     entries: dict[str, date] = field(default_factory=dict)
+    holdings: list[Holding] = field(default_factory=list)
 
 
 class Simulator:
@@ -692,6 +744,13 @@ class Simulator:
             weights = strategy.targets(MarketView(self._pricing, on), book)
             self._rebalance(weights, marked, liability, on, engine, state)
             nav.append(float(self._marked(on, state)))
+            state.holdings.append(
+                Holding(
+                    cash=float(state.cash),
+                    units={key: float(q) for key, q in state.units.items()},
+                    prices={key: float(self._base_price(key, on)) for key in state.units},
+                )
+            )
             state.entries = {key: state.entries.get(key, on) for key in state.units}
             if stop is not None:
                 self._watch(stop, on, following, engine, state)
@@ -723,6 +782,7 @@ class Simulator:
             cost_labels=frozenset(state.labels),
             unsold=state.unsold,
             stops=state.stops,
+            holdings=tuple(state.holdings),
         )
 
     def _watch(
