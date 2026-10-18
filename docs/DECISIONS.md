@@ -1543,7 +1543,7 @@ Rejected:
   sample, which D63 forbids.
 - Reading the inconclusive development sample (+4.19 % a year, exploration) as evidence: D64.
 
-## Owner decisions (2026-10-17)
+## Owner decisions (2026-10-17 and 2026-10-18)
 
 ### D88 · The drawdown tolerance, exposure caps and the option budget (D60; MASTER_PLAN §1, §11)
 
@@ -1621,7 +1621,8 @@ attributed:
 
 Risk estimation comes first (Session 4e). Its forecasts can be scored against realised risk on
 daily data, which is expected to give more power than a growth test; the power is computed
-before any data are read, not assumed.
+before any data are read, not assumed. D92 puts scaling total risk first and makes a forecast's
+accuracy a check rather than the outcome.
 
 Rejected:
 
@@ -1694,3 +1695,91 @@ Rejected:
 
 - a rate form such as breaches per decade: the owner accepted a fixed span;
 - a looser probability on the strength of the aspiration.
+
+### D92 · Session 4e: total-risk scaling first, decided on the objective; bootstraps that respect lookbacks (D60, D63, D89, D91)
+
+The owner accepted a challenge of D89–D91 (2026-10-18). At the owner's point the binding limit is
+growth, not risk: A reaches 30 % on 0.1 % of paths against the 5 % allowed, and its median
+after-tax log growth is 3.22 % a year, with about 15 % in equities and 68 % in bonds. Session 4e
+as written would have tested the side that is already slack, on a proxy. Four rules follow.
+
+**1. An adaptation is sufficient on the objective.** The primary outcome of a test of adaptation
+is D60's: annualised log growth of liquidation value after costs and Spanish tax, minus static
+A's, paired. That is the benchmark "each adaptation must beat after tax" (D89).
+
+- A candidate that does not respect the owner's point (D91), measured on daily closes, is reported
+  but cannot be sufficient.
+- A forecast's accuracy is a check that an estimator works, reported beside the outcome and never
+  the outcome. A forecast that follows recent volatility beats a constant one almost by
+  construction (volatility clusters), so a test on it would be sufficient whatever it did to
+  growth. This is D60's rejection of Sharpe against the 60/40 as the gate, applied to a forecast
+  loss.
+- An inconclusive-positive candidate that respects the point runs in shadow (§5.9); none is built
+  on its forecast alone.
+- The report places every candidate on the frontier at the owner's point under D79's rule. A new
+  variant chosen from it is the owner's authorisation (D60), recorded here.
+
+**2. Scaling total risk comes first.** D89's order changes.
+
+- Re-estimating the risk balance's weights moves weight among roles of a book that stays fully
+  invested and about two-thirds bonds. In a fall of stocks and bonds together (2022) it has
+  nowhere to go, and A's risk is already fifty times below the limit.
+- Scaling total risk acts on the binding limit. The share in the risky roles is a target
+  volatility over the forecast volatility, capped at one (no leverage); the rest is in the cash
+  role. It runs on bases with more equity than A, sized by a rule fixed before data so that they
+  approach the point instead of staying far inside it.
+- It is one mechanism. The relative weights among the risky roles stay static, there is no trend
+  tilt (return timing is another mechanism), and each specification is paired with its declared
+  twin: the same rule on the declared matrix, a static portfolio. The pair attributes what
+  estimation adds.
+- The estimator is the one D90 lists (the prior's weight, the decay, the blend, the shrinkage, the
+  largest change), in `quant/covariance.py`. Re-estimated risk-balance weights stay a later test,
+  under rule 1.
+
+**3. A bootstrap respects the lookbacks it resamples.** A moving-block bootstrap cuts every signal
+whose window spans a block join: the window then reads months from an unrelated period. For a
+lookback of L months and blocks of b ≥ L months, the share of the window from another block is
+(L + 1) / (2b) on average (checked by simulation). With 4c's 12-month blocks and the tilt's
+12-month momentum it is about 54 %, so a tilted variant's breach and growth on the paths err
+toward those of a randomly timed tilt.
+
+- The symptom is in 4c. D50 fell at most 19.79 % on the real path but reached 30 % on 58.5 % of
+  the paths, against 72.3 % for the equity reference held. On 1927–2026 the tilt cut the US
+  market's largest drawdown from 83.65 % to 49.19 % (the structure check: before tax, US only,
+  descriptive).
+- A pre-registration whose candidates read a lookback sets blocks of at least twice the longest
+  one (24 months or more for the tilt, about a quarter of the window from another block) and
+  reports a sensitivity over at least three block lengths. Longer blocks leave fewer independent
+  blocks and wider intervals; the sensitivity shows by how much.
+- An EWMA's lookback counts as three half-lives, a window's as its length. Where twice the
+  lookback exceeds a third of the sample, the bootstrap cannot respect it, and the report says so.
+
+**4. The breach is also measured on a longer history.** A 20.75-year sample holds few crises, and
+Session 4c has already read 2005–2026.
+
+- A test at the owner's point measures the breach, as a pre-registered robustness check, on the
+  longest history each candidate's roles allow (the global audit: MSCI from 2000, Ken French's
+  developed regions from 1990, AQR's *Century of Factor Premia* from 1926). It uses the base
+  currency where a series exists in it, and states the currency, vendor and index biases.
+  It is the only part of the evidence that 4c did not read.
+- The pre-registration states what of 2005–2026 its author had seen in 4c's report, and sizes its
+  candidates from design falls and the declared matrix, not from 4c's breach table.
+- Static A cannot be simulated before 2004 on its proxies. Its breach rests on 2005–2026 alone,
+  a span in which bonds gained from falling yields, and every report says so.
+
+**What does not change.** 4c's result stands as run, with its 12-month blocks. D91 stands: A is
+the neutral allocation and the benchmark, and `core.variant` defaults to A. A's margin over D30
+at the point (D30 reached 30 % on 5.7 % of paths, with a median 1.14 points a year higher and a
+real-path drawdown of 11.99 % against A's 10.95 %) is not evidence that A grows more or risks
+less: rule 3's bias counts against D30's tilt, and month-end marks count the other way. A later
+study that compares tilted variants at the point applies rules 3 and 4.
+
+Rejected:
+
+- running Session 4e as written: its primary would be sufficient almost by construction, its
+  growth outcome underpowered, and a variant would be built on a forecast;
+- scaling total risk with the trend tilt on: two mechanisms in one outcome (D89);
+- re-running 4c with longer blocks or more candidates on 2005–2026: a search over a confirmation
+  sample already read (D63);
+- choosing the target volatility from 4c's breach table: a constant fitted to an outcome already
+  seen.
