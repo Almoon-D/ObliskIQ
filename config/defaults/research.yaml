@@ -91,12 +91,12 @@ research:
 
   # Datasets `obliskiq research data load` knows. Each loads one or more series named
   # <id>.<field>. vendor yahoo: `symbol` (Yahoo's ticker), `currency`, `start`. ken_french: `file`
-  # (the zip under base_url), `section` (0 is the first table), `frequency` (monthly or annual),
-  # `columns` (null: all), `release_lag_days`. aqr: `file`, `sheet`, `header_row` (1-based),
-  # `columns`, `units` (decimal or percent), `date_format` (excel_serial or month_day_year),
-  # `release_lag_days`. fred: `series`, `vintages` (true
-  # reads ALFRED and needs FRED_API_KEY), `frequency`, `units`, `release_lag_days` (used without
-  # vintages), `start`. ecb: `currencies`. Every record adds its own bias notes.
+  # (the zip under base_url), `section` (0 is the first table), `frequency` (daily, monthly or
+  # annual), `columns` (null: all), `release_lag_days`. aqr: `file`, `sheet`, `header_row`
+  # (1-based), `columns`, `units` (decimal or percent), `date_format` (excel_serial or
+  # month_day_year), `release_lag_days`. fred: `series`, `vintages` (true reads ALFRED and needs
+  # FRED_API_KEY), `frequency`, `units`, `release_lag_days` (used without vintages), `start`. ecb:
+  # `currencies`. Every record adds its own bias notes.
   datasets:
     - id: ecb_fx
       vendor: ecb
