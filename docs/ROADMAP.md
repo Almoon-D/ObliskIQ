@@ -16,7 +16,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
-| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | in progress (data checks and harness done, D93, D94) | v0.8.6, v0.9.0 |
+| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | done (every candidate inconclusive and outside the owner's point; A stays, D95) | v0.8.6, v0.9.0, v0.9.1 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -25,7 +25,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
-| 13 | Core engine | the variants 4c registered and any 4e found sufficient, risk budgeting, tax-aware trend tilt, rebalancing | planned | |
+| 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | planned | |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series | planned | |
 | 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents | planned | |
@@ -39,7 +39,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4e — Total-risk scaling (2026-10-18, v0.8.6 → v0.9.0)
+### Session 4e — Total-risk scaling (2026-10-18, v0.8.6 → v0.9.1)
 
 **The data checks** (Step 1, its own pull request before the harness; DECISIONS D93). Every
 series the study and its long-history check read was checked on 2026-10-18 for metadata, span,
@@ -76,7 +76,89 @@ statistic was computed.
   sufficient.
 - The toy study runs every part end to end in about four seconds.
 
-No IBKR call.
+**The pre-registration** `research/preregistrations/core-risk-scaling.md` merged on its own
+(69c8cc8) and is locked there (`core-risk-scaling.lock`). It sets static A against three total-risk
+specifications and two declared twins:
+
+- E-fast and E-blend: WORLD 90 % and EM 10 % at a target of 8.91 %, with the fast estimator (a
+  21-day EWMA) or the blend (half that EWMA, half a 261-day window).
+- B-fast: WORLD 60 % and EGB_INT 40 % at 9.15 %, with the fast estimator.
+- E-declared and B-declared: the same bases at their declared shares (58.8 % and 100 %).
+
+Its targets are sized so that a design fall equals the owner's 30 %. Six tests: each candidate
+against A (theta 1 % a year) and against its twin (0.5 %), with Bonferroni over all six. Its
+power before data: 0.040 and 0.045 against A (detectable 5.05 % and 4.61 % a year), and 0.085 and
+0.239 against the twins (1.59 % and 0.96 %).
+
+**Exploration** on the development window (2001-01 to 2004-11), three trials, never evidence
+(`research/reports/core-risk-scaling-exploration-20261018T141123Z.md`). Each comparison was
+inconclusive, from −0.67 % to −0.08 % a year. The run showed three wordings of the development
+run's report to fix (robustness and the long history "not run there", a path shorter than the
+horizon); no computation and no constant changed.
+
+**The confirmation run** (once, inputs SHA-256 `581a488c…`, 24 minutes on four workers) wrote
+`research/reports/core-risk-scaling.md` (D95). Every adequacy check passed: coverage 100 %, 261
+months. Each interval is at level 0.9833 (Bonferroni over six tests).
+
+| Test | Estimate / yr | Interval | Outcome | Power at theta |
+|---|---|---|---|---|
+| E-fast against A (theta 1 %) | 1.56 % | [−2.07 %, 4.58 %] | inconclusive (sign uncertain, outside the owner's point, low power) | 0.044 |
+| E-blend against A | 1.34 % | [−2.54 %, 4.82 %] | inconclusive (sign uncertain, outside the owner's point, low power) | 0.039 |
+| B-fast against A | 1.33 % | [−1.79 %, 4.13 %] | inconclusive (sign uncertain, outside the owner's point, low power) | 0.055 |
+| E-fast against E-declared (theta 0.5 %) | 0.06 % | [−1.06 %, 0.90 %] | inconclusive (sign uncertain, outside the owner's point, low power) | 0.124 |
+| E-blend against E-declared | −0.16 % | [−1.42 %, 0.94 %] | inconclusive (sign uncertain, outside the owner's point, low power) | 0.087 |
+| B-fast against B-declared | −0.51 % | [−1.23 %, 0.21 %] | insufficient (outside the owner's point, low power) | 0.247 |
+
+- **The owner's point.** Shares of 20-year paths reaching 30 % on daily closes:
+
+  | Portfolio | Reaches 30 % |
+  |---|---|
+  | A | 0.0 % |
+  | E-fast | 20.9 % |
+  | E-blend | 22.0 % |
+  | B-fast | 16.2 % |
+  | E-declared | 46.8 % |
+  | B-declared | 40.1 % |
+
+  Scaling halved the breach of each base held at its declared share, but no candidate came near
+  5 %. On the one history the twins fell 33.12 % and 31.05 %, the candidates 24.55 % to 29.25 %
+  and A 14.73 %.
+- **What estimation adds.** Nothing measurable in growth: E-fast +0.06 % and E-blend −0.16 % a year
+  against their twin. For B-fast an effect of 0.5 % is ruled out. Each candidate turned over
+  64–116 % a year against 18 % for its twin. Its growth over A came from the base's equity, not
+  from scaling.
+- **Robustness.**
+  - Against A, the sign holds in both halves for every candidate. The break-even cost multipliers
+    are 3.05–3.27, below the declared cost uncertainty of 3.67.
+  - With 12- and 36-month blocks the candidates' breaches are about as above. With 60-month
+    blocks (paths nearer the one history) E-fast's is 4.9 % and B-fast's 3.7 %. The registered
+    blocks are 24 months.
+- **The long histories** (before tax, descriptive). Scaling lowered the breach on the daily
+  histories (MSCI in EUR: E-fast 15.6 % against its twin's 40.7 %; Ken French: 32.5 % against
+  45.8 %). It did not on AQR's monthly century (32.2 % against 20.9 %), where the estimators react
+  a month late.
+- **The forecast check** (never an outcome). Every estimator forecast its base's next-month
+  variance better than the declared constant (QLIKE −0.19 to −0.15, intervals below zero).
+- **Selection.** The registry counts nine trials (three exploratory). No test's deflated Sharpe
+  stands out from the best of nine (probabilities 0.000 to 0.246).
+- **What follows** (D95):
+  - No specification is sufficient, and no inconclusive one respects the point, so nothing goes to
+    Session 13 or to shadow.
+  - E-fast and E-blend are `tested` and B-fast `retired` in `research/pattern_registry.yaml`.
+  - The frontier at the owner's point still resolves to A, so no new point is offered for the
+    owner's choice (D60).
+- **Reproduce.** `obliskiq research data load ecb_fx ff3_market kf_developed_daily
+  aqr_century_market msci_world_eur msci_em_eur ecb_eonia ecb_estr bbk_bund_04y bbk_bund_05y
+  bbk_bund_16y bbk_bund_17y euro_cash bund_zero_05y bund_zero_17y tip ief gld crsox`, then
+  `obliskiq research run research/preregistrations/core-risk-scaling.md` on a fresh research
+  store. The run is single-shot, so the store must not already hold this id's confirmation.
+
+**SESSION_PROMPTS edits.** Session 13: 4e found no specification sufficient (D95), so the core
+engine does not scale total risk.
+
+**Tests.** `make check` green, coverage 99.85 %; the development run's report wording is tested.
+
+**Live findings.** No IBKR call. The sources behaved as Step 1 recorded.
 
 ### Session 4e decided on the objective (owner request, 2026-10-18, v0.8.5)
 
@@ -958,11 +1040,15 @@ settles it.
   (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought. The
   satellite has no tested selection signal (D87), and this is the cheapest step toward one.
 - **Owner:** the point is set (D91). Session 13 builds A, the static risk balance: 30 % reached
-  on at most 5 % of 20-year paths. Session 4e may add specifications that scale total risk,
-  sufficient only on after-tax growth against A at the same point (D92). Before Session 10: an
+  on at most 5 % of 20-year paths. Session 4e's total-risk specifications were neither
+  sufficient nor within that point, so A stays (D95). Before Session 10: an
   LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
   (D71).
+- Research harness: the moving-block bootstrap draws a sample's first and last months less often
+  than the others, so on a short sample its interval can sit beside the mean (Session 4e's
+  forecast check on 46 development months). A circular block bootstrap would not; a change applies
+  only to pre-registrations written after it.
 - Session 5: route direct or SMART and make the European commission rows follow the routing
   (D77); price currency conversions (IBKR's FX commission) so the simulator can stop treating
   them as free (D75).

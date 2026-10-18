@@ -295,10 +295,11 @@ cycles. All of these live in config with a source per value.
 - **Risk balance** (A–C). 25% of risk per environment in A and B; equal risk contribution
   inside a basket. No leverage, so risk comes from duration, not borrowing.
 - **Covariance.** The variants 4c registered hold static risk-balance weights computed from a
-  declared long-run covariance in the base currency (DECISIONS D80, D90). Session 4e scales
-  total risk with an estimate (EWMA blended with a multi-year estimate, Ledoit–Wolf shrinkage
-  toward the declared matrix), fully specified in its pre-registration; re-estimated
-  risk-balance weights are a later test (DECISIONS D92).
+  declared long-run covariance in the base currency (DECISIONS D80, D90). Session 4e tested
+  scaling total risk with an estimate (an EWMA, alone or blended with a year's window, Ledoit–Wolf
+  shrinkage toward the declared matrix), fully specified in its pre-registration. No
+  specification was sufficient or respected the owner's point, so the core does not scale total
+  risk (DECISIONS D95). Re-estimated risk-balance weights are a later test (DECISIONS D92).
 - **Optimizer.** The legacy `_risk_parity` compared absolute risk contributions to 1/n
   without dividing by portfolio volatility. It is fixed (risk-contribution shares) and
   solved with a convex formulation, verified against closed forms (two assets; diagonal
@@ -979,7 +980,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates |
-| 13 | Core engine | the variants 4c registered and any 4e found sufficient, risk budgeting, the tax-aware trend tilt, rebalancing |
+| 13 | Core engine | the variants 4c registered (4e found none sufficient, D95), risk budgeting, the tax-aware trend tilt, rebalancing |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series |
 | 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents |

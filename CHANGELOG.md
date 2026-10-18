@@ -5,6 +5,36 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.9.1] - 2026-10-18
+
+Session 4e, last part: the total-risk verdict. The locked pre-registration `core-risk-scaling`
+ran once after an exploration on its development window (DECISIONS D95). No IBKR call.
+
+### Added
+
+- `research/reports/core-risk-scaling.md`: three total-risk specifications against static A,
+  2004–2026 after costs and Spanish tax, on daily closes. E-fast +1.56 % a year
+  [−2.07 %, 4.58 %], E-blend +1.34 % [−2.54 %, 4.82 %] and B-fast +1.33 % [−1.79 %, 4.13 %]:
+  each inconclusive (sign uncertain, low power) and outside the owner's point (30 % reached on
+  16–22 % of 20-year paths). Against their declared twins, E-fast and E-blend are inconclusive
+  and B-fast is insufficient (−0.51 %, [−1.23 %, 0.21 %]). The owner's point still resolves to A.
+- `research/reports/core-risk-scaling-exploration-20261018T141123Z.md`: the exploration on
+  2001–2004, labelled never evidence.
+- `research/preregistrations/core-risk-scaling.lock`.
+- `research/pattern_registry.yaml`: E-fast and E-blend `tested`, B-fast `retired`.
+- `docs/DECISIONS.md` D95.
+
+### Changed
+
+- `docs/SESSION_PROMPTS.md` and `docs/MASTER_PLAN.md`: the core engine (Session 13) does not
+  scale total risk; 4e found no specification sufficient.
+
+### Fixed
+
+- A development run's report says that robustness and the long history are not run there, and
+  the breach table names a path shorter than the owner's horizon. The forecast check notes that
+  a moving-block interval can sit beside the mean on a short sample.
+
 ## [0.9.0] - 2026-10-18
 
 Session 4e, Step 2: the harness for scaling total risk, merged before the pre-registration.

@@ -1933,3 +1933,61 @@ Rejected:
   13 builds on.
 - Calendar dates synthesised for each resampled day: a path's rows and its rebalance dates are
   all a strategy and the marks read.
+
+### D95 · The total-risk verdict: nothing sufficient, nothing within the owner's point; A stays (D62, D89, D91, D92)
+
+The one confirmation run of `core-risk-scaling` (lock at 69c8cc8; report
+`research/reports/core-risk-scaling.md`), 2004-12 to 2026-09 after costs and Spanish tax, daily
+closes, each interval at level 0.9833 (Bonferroni over six tests):
+
+- **Against A** (theta 1 % a year): E-fast +1.56 % [−2.07 %, 4.58 %], E-blend +1.34 %
+  [−2.54 %, 4.82 %], B-fast +1.33 % [−1.79 %, 4.13 %]. Each is **inconclusive** (sign uncertain,
+  low power: about 0.04 to detect theta, as the pre-registration expected).
+- **Against its declared twin** (theta 0.5 %): E-fast +0.06 % [−1.06 %, 0.90 %] and E-blend
+  −0.16 % [−1.42 %, 0.94 %], inconclusive. B-fast −0.51 % [−1.23 %, 0.21 %], **insufficient**:
+  re-estimating volatility adds less than half a point a year to the 60/40 base at its declared
+  share.
+- **The owner's point** (30 % on at most 5 % of 20-year paths): E-fast 20.9 %, E-blend 22.0 %,
+  B-fast 16.2 %, so each is **outside** it. The twins are at 46.8 % and 40.1 %, A at 0.0 %.
+
+What it shows:
+
+- Scaling to a forecast volatility lowered the breach of each base held statically. It fell to
+  less than half on the main sample and on MSCI's history in EUR, and by a quarter to a third on
+  Ken French's (both before tax). It did not bring any base near the owner's point.
+- The bases were sized so that a design fall of 51 % (E) or 30 % (B) would take the twin to the
+  owner's limit. On the one history the twins fell 33.12 % and 31.05 %. MSCI World in EUR fell
+  53.4 % from June 2007 to March 2009, deeper than the design's 50 %.
+- What the candidates gained over A on the historical path came from their bases' equity. Their
+  twins grew about as much, and they turned over 64–116 % a year against the twins' 18 %.
+- The breach depends on the block length. With 60-month blocks, whose paths are nearer the one
+  history, E-fast's is 4.9 % and B-fast's 3.7 %. The registered blocks are 24 months (D92 rule 3),
+  and at 12 and 36 months the candidates' breaches are 14–20 %.
+- On AQR's monthly century the scaled E bases breached more than their twin (32 % against 21 %).
+  Estimators that read monthly returns react a month late at best.
+- Each estimator forecast its base's next-month variance better than the declared constant. This
+  is the forecast check, never an outcome: it is the growth at the owner's point that decides
+  (D92 rule 1).
+
+What follows (D62, D89, D92):
+
+- No specification is sufficient, and no inconclusive one respects the point. Session 13 builds
+  no total-risk variant, and nothing runs in shadow. `quant/covariance.py` stays for research.
+- `research/pattern_registry.yaml`:
+  - E-fast and E-blend are `tested`, inconclusive, outside the point.
+  - B-fast is `retired`: its estimator is insufficient against its twin.
+  - Only a new pre-registration revives any of them.
+- **The owner's point resolves to A.** The frontier at 30 % and 5 % has only A. Every other
+  point of the grid that any portfolio respects also resolves to A, since no candidate's growth
+  can be told apart from A's (no portfolio respects a 10 % limit).
+  There is no new point to offer the owner (D60), and D91 stands.
+- Session 13: no total-risk scaling (SESSION_PROMPTS edit).
+
+Rejected:
+
+- Lower targets, other estimators or longer blocks tried on the same sample. The sample is spent:
+  a new specification here would be a search over the confirmation sample, which D63 forbids.
+- Reading the 60-month sensitivity as respecting the point. The registered blocks are 24 months,
+  chosen before data by D92 rule 3.
+- Reading the forecast check, or the development window's comparisons (−0.67 % to −0.08 % a
+  year, exploration), as evidence (D64, D92).
