@@ -996,9 +996,9 @@ You are building ObliskIQ, session 4e. AGENTS.md is your operating manual; MASTE
 the design (read §1, §5.4, §5.9 and DECISIONS D60, D62–D64, D80, D88–D90 carefully). Network
 is open for research data. No IBKR call. Finish with the end-of-session protocol.
 
-PRECONDITION: Session 4d merged. Otherwise STOP. The probability of breaching the owner's
-drawdown tolerance, and whether it is stated over a number of years or as a rate, are open
-(D88): the study reports over a grid of both and never assumes a value for the owner.
+PRECONDITION: Session 4d merged. Otherwise STOP. The owner's point is 30 % reached on at most
+5 % of 20-year paths (D91): the study reports that point beside a grid of horizons and
+probabilities.
 
 GOAL: the first test of adaptation (D89), one mechanism: does re-estimating the core's
 covariance forecast its risk better than the declared matrix Session 4c used, and what does it
@@ -1663,8 +1663,8 @@ paths fail closed. Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 1–12 merged, Sessions 4c's and 4e's reports on main, and the owner's
 choice of a point on the frontier (the drawdown tolerance, its probability and the horizon)
-recorded in DECISIONS (D60; D88 records the tolerance, 30 % of the value the bot manages over
-a very long horizon, and leaves the probability and its form open). Otherwise STOP and ask the owner for that choice.
+recorded in DECISIONS (D60; D88 and D91: 30 % of the value the bot manages, reached on at most
+5 % of 20-year paths, which resolves to A on Session 4c's frontier). Otherwise STOP and ask the owner for that choice.
 
 GOAL: the core as the owner's point on the frontier selects it — the variants 4c registered and
 any specification 4e found sufficient, the chosen one by default — with tax- and cost-aware

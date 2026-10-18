@@ -1567,9 +1567,8 @@ one update in one cycle, and it matches the daily closes research measures on. S
 measured month-end marks, which understate a fall inside a month; later studies measure daily
 closes.
 
-**Open.** These stay open. Reports show their implications without assuming a value
-(`research/reports/drawdown-tolerance-implications.md`). Until both are set, Session 13's
-precondition is unmet.
+**Open** when this entry was made; D91 sets both. Reports show their implications without
+assuming a value (`research/reports/drawdown-tolerance-implications.md`).
 
 - the acceptable probability of breaching the tolerance;
 - how that probability is stated: over a number of years, or as a rate that needs none
@@ -1661,3 +1660,37 @@ Session 4c's result stands as run. A re-estimated variant is a new pre-registrat
 The same audit found that 4c's IL role holds US inflation through TIP, where a euro investor's
 role calls for euro HICP-linked bonds. A euro proxy exists only from 2008 (the audit), so a test
 from 2005 states that bias or starts later.
+
+### D91 · The owner's point on the frontier: 30 % at most 5 % of the time over 20 years (D60, D79, D88)
+
+The owner accepted the proposal of 2026-10-18. The drawdown tolerance of 30 % (D88) may be
+reached on at most 5 % of simulated 20-year paths, measured as the drawdown from the running
+peak. That is 95 % confidence of not reaching it over that span. The investment horizon stays
+very long: 20 years is the span over which the probability is evaluated, close to the
+20.75-year paths of Session 4c.
+
+**What it selects today.** On Session 4c's frontier, the point (30 %, 5 %) resolves to **A**,
+the static risk balance with wide bands.
+
+- Five portfolios respect the point: A, B, C, D10 and D20. A has the best median among them,
+  and the bootstrap tells none of the others apart from it.
+- A reaches 30 % on 0.1 % of paths. Its median after-tax log growth is 3.22 % a year.
+- A's comparison with the equity reference is inconclusive, like every candidate's.
+- The 60/40 (10.7 %) and D30 (5.7 %) do not respect the point.
+
+**What follows.**
+
+- **Session 13's precondition is met.** `core.variant` defaults to A when Session 13 adds the
+  key with its consumer.
+- **The point sets the neutral allocation of D89.** A specification Session 4e finds sufficient
+  is built beside it and earns weight by its evidence (D65). It must respect the same point.
+- **Studies measure this point.** Later studies report it beside their grid, with the drawdown
+  on daily closes (D88). Session 4c's month-end marks err low. A's margin (0.1 % against 5 %) is
+  wide; D30's (5.7 %) is not.
+- **The aspiration (D60) is far from A's median.** Closing that gap within this point is the
+  task of the satellite and of sufficient adaptations.
+
+Rejected:
+
+- a rate form such as breaches per decade: the owner accepted a fixed span;
+- a looser probability on the strength of the aspiration.

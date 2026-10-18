@@ -1,15 +1,18 @@
-# The owner's drawdown tolerance: what its two open values imply
+# The owner's drawdown tolerance: what its probability and horizon imply
 
 On 2026-10-17 the owner set the drawdown tolerance at **30 % from the previous peak** of the
 value the bot manages; unmanaged holdings do not count. The horizon is very long, and the owner
-does not need the money now (DECISIONS D88). Two things stay open:
+does not need the money now (DECISIONS D88). Two things were open when this report was written:
 
 - the probability of breaching it that is acceptable;
 - how that probability is stated: over a number of years, or as a rate.
 
-This report shows what each choice would imply, using two sources: Session 4c's published
-results, and an illustration built only from stated assumptions. It sets neither value and
-recommends none. It is not evidence for or against any portfolio (D64).
+The owner then chose 30 % reached on at most 5 % of 20-year paths, which resolves to A on
+Session 4c's frontier (D91).
+
+This report shows what each choice implies, using two sources: Session 4c's published results,
+and an illustration built only from stated assumptions. It recommends no value. It is not
+evidence for or against any portfolio (D64).
 
 ## What the probability measures
 

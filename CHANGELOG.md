@@ -5,6 +5,22 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.8.4] - 2026-10-18
+
+The owner's point on Session 4c's frontier. Documents only; no code or configuration changed.
+No IBKR call.
+
+### Added
+
+- `docs/DECISIONS.md` D91: the 30 % tolerance reached on at most 5 % of 20-year paths, which
+  resolves to A, the static risk balance; Session 13's precondition is met.
+
+### Changed
+
+- `docs/MASTER_PLAN.md` §11, `docs/SESSION_PROMPTS.md` (Sessions 4e and 13), `docs/ROADMAP.md`
+  and `research/reports/drawdown-tolerance-implications.md` record the point; D88 says that D91
+  sets what it left open.
+
 ## [0.8.3] - 2026-10-17
 
 The owner's drawdown tolerance and adaptation requirement, D80's data limitation narrowed, a desk
