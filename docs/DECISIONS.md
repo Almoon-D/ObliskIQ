@@ -1969,6 +1969,23 @@ What it shows:
   is the forecast check, never an outcome: it is the growth at the owner's point that decides
   (D92 rule 1).
 
+What it does not show:
+
+- **Adaptation in general.** It tested one mechanism: three fixed bases scaled against cash by two
+  estimators. Re-estimated risk-balance weights (D92), a blend with a multi-year window and
+  return timing are untested. D89 stands: A is the fallback and the benchmark while no
+  adaptation is sufficient. That is not a finding that the core should stay static.
+- **That estimation cannot add growth.** B-fast's interval against its twin rules out half a
+  point a year, not every positive effect. E-fast's and E-blend's hold zero.
+- **A breach probability free of its model.** Across the registered block lengths (12, 24, 36
+  and 60 months) the candidates' breaches range from 3.7 % to 22.0 % and the twins' from 19.0 %
+  to 56.3 %. A's range is 0.0 % to 0.2 %: its 0.0 % is no path in 5,000, not zero risk. The
+  verdict holds at 12, 24 and 36 months. At 60 months a path holds four or five blocks and comes
+  close to replaying the one history, in which no candidate fell 30 %.
+- **The whole book.** The point was measured on the core alone. The owner's tolerance applies to
+  everything the bot manages (D88), so the satellite and the option sleeve must be checked with
+  the core against the same point.
+
 What follows (D62, D89, D92):
 
 - No specification is sufficient, and no inconclusive one respects the point. Session 13 builds

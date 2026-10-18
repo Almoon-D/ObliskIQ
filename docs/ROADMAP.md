@@ -16,7 +16,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
-| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | done (every candidate inconclusive and outside the owner's point; A stays, D95) | v0.8.6, v0.9.0, v0.9.1 |
+| 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | done (every candidate inconclusive and outside the owner's point; A stays, D95) | v0.8.6, v0.9.0, v0.9.1, v0.9.2 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
@@ -39,7 +39,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
-### Session 4e — Total-risk scaling (2026-10-18, v0.8.6 → v0.9.1)
+### Session 4e — Total-risk scaling (2026-10-18, v0.8.6 → v0.9.2)
 
 **The data checks** (Step 1, its own pull request before the harness; DECISIONS D93). Every
 series the study and its long-history check read was checked on 2026-10-18 for metadata, span,
@@ -155,6 +155,17 @@ months. Each interval is at level 0.9833 (Bonferroni over six tests).
 
 **SESSION_PROMPTS edits.** Session 13: 4e found no specification sufficient (D95), so the core
 engine does not scale total risk.
+
+**The verdict's scope** (v0.9.2, after an outside review). D95 now also states what the test does
+not show:
+
+- adaptation in general: only total-risk scaling of fixed bases was tested;
+- that estimation cannot add growth: only half a point a year is ruled out, for B-fast;
+- a breach probability free of its resampling model;
+- the whole managed book.
+
+Two owner follow-ups record what no session yet covers: D89's next adaptation test, and checking
+the whole book against the owner's point.
 
 **Tests.** `make check` green, coverage 99.85 %; the development run's report wording is tested.
 
@@ -1049,6 +1060,14 @@ settles it.
   than the others, so on a short sample its interval can sit beside the mean (Session 4e's
   forecast check on 46 development months). A circular block bootstrap would not; a change applies
   only to pre-registrations written after it.
+- **Owner:** D89's next adaptation has no session. Re-estimated risk-balance weights (D92), a
+  blend with a multi-year window and return timing are untested (D95). Scheduling the next test,
+  and on what data, is the owner's decision: the 2004–2026 sample has now been read for total-risk
+  scaling, so a new pre-registration states what its author has seen.
+- **Owner:** no session checks the whole managed book against the owner's point. A's breach
+  (0.0 % of paths) was measured on the core alone, but the tolerance applies to everything the
+  bot manages (D88). The satellite (Session 15) and the option sleeve add to it. Sessions 15 and
+  17 are the natural places, and adding the check is a scope decision.
 - Session 5: route direct or SMART and make the European commission rows follow the routing
   (D77); price currency conversions (IBKR's FX commission) so the simulator can stop treating
   them as free (D75).
