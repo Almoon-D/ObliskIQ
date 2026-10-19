@@ -61,7 +61,7 @@ Read what the work in front of you needs, when it needs it.
 
 ## Session workflow
 
-1. Read the files above. Branch `s<NN>-<short-slug>` (feature sessions: `f-<short-slug>`) from an up-to-date `main`.
+1. Read the files above. Merge the open Dependabot pull requests whose CI is green; fix a red one or add it to Follow-ups (DECISIONS D96). Branch `s<NN>-<short-slug>` (feature sessions: `f-<short-slug>`) from an up-to-date `main`.
 2. Put your plan (5–15 bullets) at the top of the PR description. Do not wait for approval unless a stop condition applies.
 3. Keep to your prompt's scope; anything else goes to "Follow-ups" in the PR and ROADMAP.
 4. In the same PR update `docs/ROADMAP.md` (session log: landed, deferred, live findings, VERIFY-LIVE items), `docs/DECISIONS.md` (real decisions only), `CHANGELOG.md` (a section for the new version) and the version in `pyproject.toml` (minor per build session or feature, patch for fixes). Never create or push tags: the release workflow publishes

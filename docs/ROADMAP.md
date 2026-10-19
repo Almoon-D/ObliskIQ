@@ -12,7 +12,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
-| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test (SESSION_PROMPTS §A.5) | open (owner): not yet run, due before Session 6 (D68) | |
+| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | open (owner): not yet run, due before Session 6 (D68); not held for any pin (D96) | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
@@ -38,6 +38,36 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Dependency currency (owner request, 2026-10-19, v0.9.3)
+
+A proposal to run the newest stable version of everything, triggered by the Java 11 pin. Adopted
+with changes (D96): the newest stable release by default, every pin a registered exception with a
+reason, a review date and an exit, and green Dependabot pull requests merged at each session's
+start.
+
+- **The pile-up was unmerged updates.** Four Dependabot pull requests were open, the oldest from
+  2026-10-12. Almoon-D/ObliskIQ#14 (Playwright 1.64, numpy, pydantic, ruff 0.17 and others) and
+  Almoon-D/ObliskIQ#7 (setup-uv 10.3.0) passed `make check` on a merge with `main` and are merged.
+  Almoon-D/ObliskIQ#9 and #5 (cryptography 50) are red: 50 deprecates the finite-field
+  Diffie-Hellman whose parameters `oauth.py` loads, a follow-up.
+- **Java.** Session 3's readings do not separate Java 11 from 21: no version opened a session, and
+  the one Java 11 run that reached "Client login succeeds" still got `401`. The Gateway is built
+  for Java 8 and its guide says it was tested on OpenJDK 11; IBeam runs it on 17. Java 11 is
+  built by Temurin to at least October 2027, so the list stays `[11]` and T1 tries 21 and 25.
+  No root cause is known: the login fails in the cloud on every version.
+- **The OS.** Ubuntu 26.04 LTS on x86_64: Playwright supports it from 1.61, 22.04's support ends
+  in May 2027, and 24.04 is the fallback.
+- **Python 3.15.** Every locked package installs on 3.15.0 (PyYAML from its source). The suite
+  passes there except the three tests that pin 3.14. It moves after T1 (follow-up, by
+  2026-11-30).
+- **T1** is not held for any pin.
+
+**Tests.** `make check` green, coverage 99.85 %; no code path changed (a docstring and a
+configuration comment).
+
+**SESSION_PROMPTS edits.** §A.5: the OS, the JDKs, `playwright install --with-deps chromium`,
+the Java side test, and the record session setting the Java list.
 
 ### Session 4e — Total-risk scaling (2026-10-18, v0.8.6 → v0.9.2)
 
@@ -1037,6 +1067,8 @@ settles it.
 | The lag between a fill and the positions and trades reads, for the reconciliation grace period | review | 5 |
 | A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | 5 |
 | A fresh unattended Gateway login after IBKR's daily reset on the machine | review | T1 |
+| The Gateway login on Java 21 and on Java 25 (the side test; Session 3's readings do not separate Java 11 from 21) | D96 | T1 |
+| Playwright 1.64 (Chrome for Testing's headless shell) logs in on Ubuntu 26.04 with the pinned-key flag | D96 | T1 |
 | European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`) against an executed UCITS order, and whether the executor routes direct or SMART (the SMART column is half) | 4b | T1 (the paper order test), 5, 18 (TCA) |
 | The US treaty withholding rate of 15 % against the BOE text of the Spain–US convention and its 2013 protocol | 4b | 7 |
 | Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 7 |
@@ -1045,6 +1077,20 @@ settles it.
 
 ## Follow-ups
 
+- Dependency currency (D96), each with its review date:
+  - by 2026-11-30: Python 3.15. Widen `requires-python` to `<3.16`, try 3.15 in CI, then move
+    `.python-version`, CI, mypy's and ruff's targets, `tests/unit/test_packaging.py` and
+    MASTER_PLAN §7. The machine verifies it with one `preflight --read-only`.
+  - next Dependabot round: one uv version for CI and the machine, in `[tool.uv]
+    required-version`, read by `setup-uv` in place of `ci.yml`'s `version: "0.12.23"` (whether
+    setup-uv reads that key is to be confirmed in that pull request's CI log).
+  - before the live account's OAuth runs: cryptography 50 (Almoon-D/ObliskIQ#9, red;
+    Almoon-D/ObliskIQ#5 is the same update). Parse the DH parameter file without
+    `load_pem_parameters`, whose finite-field DH is deprecated (`oauth.py`); the exchange is
+    already `pow`.
+  - 2026-12-15: exchange-calendars past 2026-12-31 for XSHG, XBOM and XSES (the queue row above).
+  - T1's record, and 2027-07-01 at the latest: the Gateway's Java list. Temurin builds Java 11 to
+    at least October 2027; if no newer Java passes, D68's TWS API with IBC.
 - **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
@@ -1136,8 +1182,9 @@ settles it.
   Telegram.
 - Session 8: the route tag for `source` columns (lite refused unknown routes) belongs to the
   collectors that write rows; the history walk gains its store watermark there.
-- Session 19: the deployment image needs Java 11 for the Gateway (`ibkr.gateway.java_major_versions`)
-  and `playwright install chromium` matching Playwright 1.56.
+- Session 19: the deployment image's base is the OS D96 chose (Ubuntu 26.04), with the Java
+  versions `ibkr.gateway.java_major_versions` lists after T1 and
+  `playwright install --with-deps chromium` for the locked Playwright.
 - Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
   stamped with a period-end reference date, and the whole batch rolls back; relax or split it
   with the first live macro route.

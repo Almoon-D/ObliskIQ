@@ -128,9 +128,11 @@ Run this beside Sessions 4b–4d and finish it before Session 6. It proves what 
 session cannot: that the paper Gateway logs in unattended, and what IBKR's order endpoints
 really answer (DECISIONS D68).
 
-1. A small always-on Linux machine with a stable outbound address (a home machine or a VPS;
-   MASTER_PLAN §5.20). Install git, uv and Java 11; clone `Almoon-D/ObliskIQ` at the latest
-   release; `make setup`; `uv run playwright install chromium`.
+1. A small always-on machine with a stable outbound address (a home machine or a VPS;
+   MASTER_PLAN §5.20), running Ubuntu 26.04 LTS on x86_64 (DECISIONS D96; 24.04 if the next
+   command cannot install Chromium's dependencies). Install git, uv and the JDKs 11, 21 and 25;
+   clone `Almoon-D/ObliskIQ` at the latest release; `make setup`;
+   `uv run playwright install --with-deps chromium`.
 2. Put the paper variables of §A.3 in the machine's environment (never OAuth keys) and set
    `OBLISK_IBKR_GATEWAY_JAVA_HOME` to the Java 11 home.
 3. Day 1: `uv run obliskiq preflight --read-only`. It installs the Gateway, logs in
@@ -140,9 +142,19 @@ really answer (DECISIONS D68).
 5. `uv run obliskiq mode set paper --reason "T1 paper order test"`, then
    `uv run obliskiq preflight --paper-order-test` (one order per configured instrument that
    cannot fill, read and cancelled), then `uv run obliskiq mode set shadow --reason "T1 done"`.
-6. Paste the masked reports into a short session: *"Record T1's findings per SESSION_PROMPTS
+6. The Java side test, on each of the two days after that day's Java 11 run (D96): once with
+   Java 21, then once with Java 25. Before each run the previous one has exited and at least ten
+   minutes have passed. Point `OBLISK_IBKR_GATEWAY_JAVA_HOME` at that JDK, set
+   `ibkr: {gateway: {java_major_versions: [21]}}` (then `[25]`) in your local `config/owner.yaml`
+   (never committed), run `uv run obliskiq preflight --read-only`, and keep the masked report and
+   `java -version`. If IBKR refuses the password, stop the side runs for that day. If 21 fails
+   where 11 passed, also run Java 17, and Java 21 with
+   `JDK_JAVA_OPTIONS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"`.
+   Restore `config/owner.yaml` and the Java 11 home afterwards. The side test never decides T1.
+7. Paste the masked reports into a short session: *"Record T1's findings per SESSION_PROMPTS
    §A.5."* It records the shapes in `docs/knowledge/`, closes or re-dates the matching rows
-   of the ROADMAP's live verification queue, and bumps the patch version.
+   of the ROADMAP's live verification queue, sets `ibkr.gateway.java_major_versions` to the
+   versions that passed on both days, newest first (D96), and bumps the patch version.
 
 T1 passes when both logins complete unattended and both preflights finish. If the
 unattended login cannot complete on the machine, stop and choose (MASTER_PLAN §11): a spike

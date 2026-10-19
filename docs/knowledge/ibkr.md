@@ -290,3 +290,27 @@ expected but not yet seen.
 The decoders keep lite's live readings as their tests; the new field ids (`7633`, `7638`,
 `7087`, theta `7310` and vega `7311`) are IBKR's table and VERIFY-LIVE(snapshot field ids), as is
 VERIFY-LIVE(secdef search without secType).
+
+## The Gateway archive and its Java runtime (2026-10-19)
+
+- The download URL still serves the archive of Session 3: 10,542,956 bytes, the same SHA-256,
+  `Last-Modified` 2023-04-24. The beta archive (`clientportal.beta.gw.zip`) is also dated
+  2023-04-24. IBKR has published no later build. [DOC 2026-10-19]
+- The archive's own `doc/GettingStarted.md`: "The gateway requires Java 1.8 update 192 or higher to
+  run, and has been tested successfully with OpenJDK 11." It names no upper version. IBKR's current
+  *Installation & Authentication* page says only to download Java from java.com if none is
+  installed. [DOC 2026-10-19]
+- The jars are compiled for Java 8 (class-file version 52; the Gateway jar's manifest: built
+  2023-04-24 with Azul 1.8.0_332, `Javac-Target: 1.8`) and bundle vert.x 3.5.0, netty 4.1.15
+  (with `netty-tcnative-boringssl-static` 2.0.6), jackson 2.9 and snakeyaml 1.17. `bin/run.sh`
+  starts `java -server -Djava.net.preferIPv4Stack=true …` with no module options. [DOC 2026-10-19]
+- IBeam 0.5.13 (Docker Hub `voyz/ibeam`, 2026-09-20), the open-source automated Gateway login,
+  installs Debian bookworm's `default-jre`, which is OpenJDK 17 (`runtimes.md`). Whether its users'
+  logins succeed on it was not read. [DOC 2026-10-19]
+- What Session 3 shows about Java: the ten attempts of the first trial are not recorded by Java
+  version; the one that reached "Client login succeeds" ran on Java 11 and still had no session
+  (`401` on `sso/validate`, `tickle` and `auth/status`); the second trial, on Java 11, failed after
+  the password was accepted. No Java version produced a usable session, and the likely cause, the
+  container's changing outbound address, applied to every attempt whatever the Java. So the
+  readings do not separate Java 11 from Java 21.
+  VERIFY-LIVE(Gateway login on Java 21 and 25 on the deployment machine).

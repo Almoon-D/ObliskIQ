@@ -182,9 +182,10 @@ ibkr:
     # Where the Gateway listens, on this machine only.
     local_address: https://localhost:5000
     startup_timeout_seconds: 60.0
-    # Java major versions the Gateway may run on. On Java 21 this build accepts the password and
-    # then re-renders the login instead of opening the session; on Java 11 the same login succeeds
-    # [CP ✓ 2026-10-12]. The Gateway's own guide names OpenJDK 11. Another version is refused.
+    # Java major versions the Gateway may run on; another is refused before the Gateway starts.
+    # 11 is the version the Gateway's guide says it was tested on. No Java version has yet opened
+    # a session (docs/knowledge/ibkr.md), so this list is an exception to the newest-LTS rule,
+    # under test on the deployment machine (DECISIONS D96).
     java_major_versions: [11]
     # The shipped certificate expired in 2019 and names no host, so each install generates its own
     # key pair for localhost; clients pin that certificate.
