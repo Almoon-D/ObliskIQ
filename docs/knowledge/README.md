@@ -40,7 +40,7 @@ the observation that settled it.
   behind `costs.yaml`, and how well each was confirmed.
 - `ibkr.md` — the Client Portal Web API: pacing, sessions, field ids, units, search, history,
   the ledger, the trading schedule, the Client Portal Gateway, lite's live readings and
-  Session 3's Gateway trial.
+  Session 3's Gateway trial, and the Gateway archive's Java runtime.
 - `ibkr-orders.md` — the order endpoints, the order body, the cOID, warnings and their message
   ids with the reply policy, answers and errors, live orders, status, trades, whatif and
   cancel, as IBKR documents them and ibind implements them, and what the pre-trade gate relies on
@@ -52,6 +52,8 @@ the observation that settled it.
   included), FRED and ALFRED, the ECB and its Data Portal, MSCI and the Bundesbank, and how each
   is placed in time; the daily continuity of the core's proxies; what the selection data audit
   read from the SEC and Tiingo; the vendors that refused the container.
+- `runtimes.md` — Python, Java, Ubuntu, Playwright and uv: releases, support windows and
+  platform support, with the publisher's page and the date each was read.
 - `tax-es.md` — Spain's rules on the savings base as the `es_irpf` policy applies them, each with
   its article and the official text it was read in (not tax advice).
 

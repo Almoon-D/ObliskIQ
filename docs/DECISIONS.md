@@ -125,7 +125,8 @@ Python 3.14 (`>=3.14,<3.15`; every planned library ships 3.14 wheels, checked 20
 Pydantic v2, uv, ruff, `mypy --strict`, a coverage floor that only ratchets up. Rejected:
 NautilusTrader and ib_async (they need TWS or IB Gateway and an interactive login) and
 pandas_market_calendars (it wraps exchange_calendars, used directly). ibind is a reference,
-attributed where copied. A further dependency needs an entry here.
+attributed where copied. A further dependency needs an entry here. Narrowed by D96: the Python
+cap is an exception with a review date, and 3.15 is tried in CI before it moves.
 
 ### D16 · Owner decisions (§11)
 
@@ -476,7 +477,10 @@ dependency pinned to `>=1.56,<1.57`, the build whose Chromium (1194) the cloud i
 The login types key by key and waits before submitting (`keystroke_delay_ms`,
 `presubmit_wait_seconds`): submitted at once, IBKR answered "Authentication failed". A refused
 password is never retried (repeats can lock the username); an accepted password without a session
-is retried up to `max_attempts`.
+is retried up to `max_attempts`. Narrowed by D96: Playwright follows its newest release (the
+cloud image's Chromium no longer matters, since cloud sessions do not log in), and the Java list
+is an exception tested on the deployment machine, because the one observation behind it does
+not separate Java 11 from 21.
 
 **The login did not establish a session from the cloud container** (docs/knowledge/ibkr.md,
 "Session 3"). The transport is kept as built, because the failure is after IBKR accepted the
@@ -2008,3 +2012,77 @@ Rejected:
   chosen before data by D92 rule 3.
 - Reading the forecast check, or the development window's comparisons (−0.67 % to −0.08 % a
   year, exploration), as evidence (D64, D92).
+
+## Dependency currency (owner request, 2026-10-19)
+
+### D96 · The newest stable release by default; every pin is a registered exception (D15, D24, D34)
+
+The owner asked for the newest stable version of every runtime and dependency, upgraded often in
+small steps. Adopted with three changes, because the rule cannot hold literally: IBKR publishes
+one Gateway build, dated data has no version, and a major release can need code first
+(cryptography 50 deprecates the finite-field Diffie-Hellman whose PEM parameters `oauth.py`
+loads, so its update fails under `filterwarnings = error`). Versions and dates below are in
+`docs/knowledge/runtimes.md` and `docs/knowledge/ibkr.md`, read on 2026-10-19.
+
+- **The rule.** The newest stable release; for the OS and Java, the newest LTS. A `pyproject`
+  range runs from the version tested to the next major, never capped at a minor.
+- **Exceptions.** Each one is a row below with its reason, a review date and its exit. A comment
+  at the pin points here rather than restating the evidence.
+- **Merging.** The updates were piling up unmerged, not unseen: Dependabot opened them and none
+  was merged for a week. Each session starts by merging the green Dependabot pull requests; a red
+  one is fixed or recorded in the ROADMAP's follow-ups (AGENTS.md).
+- **Testing an upgrade.** CI runs `make check` on the pinned Python; a newer CPython is tried
+  there before the pin moves. What CI cannot exercise (Java, Chromium, the Gateway archive, the OS)
+  is checked by `obliskiq preflight --read-only` on the deployment machine before a release that
+  changes it is deployed, with the bot paused once it runs continuously. No test reads today's
+  date, so no review date can turn `main` red.
+
+| Pin | Value | Reason | Review | Exit |
+|---|---|---|---|---|
+| Client Portal Gateway | the 2023-04-24 archive by SHA-256 and size | the only build IBKR publishes, at an unversioned URL (D34) | when the install refuses a changed archive | pin the new archive after a read-only preflight |
+| Java for the Gateway | `java_major_versions: [11]` | the version the Gateway's guide names as tested; no version has opened a session yet | T1's record; 2027-07-01 at the latest | the newest LTS that passes T1's side test; failing that, D68's TWS API with IBC |
+| Python | `>=3.14,<3.15` | 3.15.0 is ten days old; the suite passes on it, CI has not run it | 2026-11-30 | 3.15 after T1, once CI is green on it |
+| uv in CI | `version: "0.12.23"` in `ci.yml` | none recorded; Dependabot does not read it | the next Dependabot round | one version for CI and machine in `[tool.uv] required-version` |
+| cryptography | `>=46,<47` | 50 deprecates the API `oauth.py` parses DH parameters with | before the live account's OAuth runs | parse the parameters without it (the exchange is already `pow`) |
+| exchange-calendars | 4.13.2, the newest | XSHG, XBOM and XSES end 2026-12-31 (D24) | 2026-12-15 | the release that extends them; until then those venues read closed |
+
+**Java.** The Gateway is compiled for Java 8 and bundles vert.x 3.5.0 and netty 4.1.15 (2017); its
+guide asks for Java 8u192 or later, "tested successfully with OpenJDK 11", and names no upper
+version. IBeam runs the same Gateway on OpenJDK 17. D34's reading was one attempt: the Java 11 run
+that reached "Client login succeeds" still had no session, a later Java 11 run failed, and the
+likely cause, the container's changing address, touched every attempt. So the record does not
+separate 11 from 21, and no root cause is known. Temurin builds 11 to at least October 2027, so
+11 is not yet a blocker: the review date is a quarter before that. T1 runs on 11 and tries 21
+and 25 beside it (SESSION_PROMPTS §A.5); a version joins the list after it passes on both days,
+and the newest that passes leads. If 21 fails where 11 passes, 17 and 21 with
+`JDK_JAVA_OPTIONS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"`
+narrow it down (old netty under JDK 17's strong encapsulation is a guess, not a finding).
+
+**The deployment OS is Ubuntu 26.04 LTS on x86_64.** Java does not decide it (every LTS from 11 to
+25 is packaged on 22.04, 24.04 and 26.04), nor Python (uv installs its own). Playwright does: it
+supports 26.04 from 1.61, and 1.64 is locked. 22.04's standard support ends in May 2027, which
+rules it out; 24.04 (to May 2029) is the fallback if Chromium's dependencies do not install on
+26.04 (to May 2031). x86_64, because on arm64 the Gateway's native TLS library and one development
+wheel are untried.
+
+**Python 3.15.** Every locked package has a 3.15 wheel except PyYAML 6.0.3, which builds from its
+source; the configuration loader uses its pure-Python `SafeLoader` anyway. On arm64, grimp (a
+development tool) has no 3.15 wheel. On 2026-10-19 a scratch copy with `requires-python` widened
+ran on CPython 3.15.0: ruff, mypy (also with `--python-version 3.15`) and the import contracts
+pass, and pytest passes 3,569 of 3,572 tests with no new warning; the three failures are the tests
+that pin 3.14. Python is not a property of the machine: uv reads `.python-version`, so moving to
+3.15 is a change to this repository that the machine takes with `uv sync`. It moves after T1, so
+T1 does not also test a new interpreter.
+
+**T1 is not held for any of this.** T1 tests an unattended login from a stable address and the
+order shapes. The Java question needs T1's own evidence, Playwright 1.64 is already merged, and
+Python, uv and cryptography do not touch the login.
+
+Rejected:
+
+- Pinning to whatever the cloud image carries (D34's Playwright cap). Cloud sessions no longer log
+  in (AGENTS.md) and the tests fake the browser.
+- A test that fails when a review date passes. It would turn `main` red on a date, not on a
+  change.
+- Moving Java to 25 before T1. No version is known to work; T1 would no longer tell the machine
+  from the runtime.

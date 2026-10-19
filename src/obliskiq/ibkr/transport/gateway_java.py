@@ -1,11 +1,10 @@
 """The Java runtime the Client Portal Gateway runs on, and the check that it is a known-good one.
 
-The Gateway build IBKR publishes (20230424154245) accepts the paper password on Java 21 and then
-re-renders the login form instead of opening the session; on Java 11 the same login succeeds
-[CP ✓ 2026-10-12]. So the runtime is chosen (``OBLISK_IBKR_GATEWAY_JAVA_HOME``, else the ``java``
-on ``PATH``) and its major version must be one ``ibkr.gateway.java_major_versions`` lists; any
-other is refused before the Gateway starts, with the reason, rather than failing at login with
-none.
+The Gateway build IBKR publishes (20230424154245) is compiled for Java 8, and its guide names
+OpenJDK 11 as tested; which newer versions log in is measured on the deployment machine
+(DECISIONS D96). So the runtime is chosen (``OBLISK_IBKR_GATEWAY_JAVA_HOME``, else the ``java`` on
+``PATH``) and its major version must be one ``ibkr.gateway.java_major_versions`` lists; any other
+is refused before the Gateway starts, with the reason, rather than failing at login with none.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -88,8 +87,8 @@ class JavaRuntime:
         major = await self.major_version()
         if major is None or major not in allowed:
             raise GatewayError(
-                f"the Gateway's Java runtime is version {major or 'unknown'}; this Gateway build "
-                f"is known to work on {', '.join(str(v) for v in allowed)} "
+                f"the Gateway's Java runtime is version {major or 'unknown'}; "
+                f"ibkr.gateway.java_major_versions allows {', '.join(str(v) for v in allowed)} "
                 "(set OBLISK_IBKR_GATEWAY_JAVA_HOME to such a runtime)"
             )
         return major
