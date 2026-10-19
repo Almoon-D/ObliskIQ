@@ -87,8 +87,8 @@ class JavaRuntime:
         major = await self.major_version()
         if major is None or major not in allowed:
             raise GatewayError(
-                f"the Gateway's Java runtime is version {major or 'unknown'}; this Gateway build "
-                f"is known to work on {', '.join(str(v) for v in allowed)} "
+                f"the Gateway's Java runtime is version {major or 'unknown'}; "
+                f"ibkr.gateway.java_major_versions allows {', '.join(str(v) for v in allowed)} "
                 "(set OBLISK_IBKR_GATEWAY_JAVA_HOME to such a runtime)"
             )
         return major

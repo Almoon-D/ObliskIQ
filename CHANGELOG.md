@@ -16,8 +16,8 @@ a registered exception with a reason, a review date and an exit (DECISIONS D96).
   minor and patch updates (numpy 2.5.4, pydantic 2.14.1, hypothesis, pre-commit, ruff 0.17) and
   `astral-sh/setup-uv` 10.3.0 are merged.
 - `ibkr.gateway.java_major_versions` stays `[11]`, as an exception: its comment and
-  `gateway_java.py`'s docstring no longer claim that Java 11 logs in where Java 21 does not.
-  Session 3's readings do not separate the two.
+  `gateway_java.py`'s docstring and refusal no longer claim that Java 11 logs in where Java 21
+  does not. Session 3's readings do not separate the two.
 - `docs/SESSION_PROMPTS.md` §A.5 (T1): Ubuntu 26.04 LTS on x86_64, the JDKs 11, 21 and 25,
   `playwright install --with-deps chromium`, and a Java 21 and 25 side test on both days.
 - `AGENTS.md`: a session starts by merging the green Dependabot pull requests.
