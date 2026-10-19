@@ -2021,7 +2021,7 @@ The owner asked for the newest stable version of every runtime and dependency, u
 small steps. Adopted with three changes, because the rule cannot hold literally: IBKR publishes
 one Gateway build, dated data has no version, and a major release can need code first
 (cryptography 50 deprecates the finite-field Diffie-Hellman whose PEM parameters `oauth.py`
-loads, so its update fails under `filterwarnings = error`). Versions and dates below are in
+loads; CI caught it because `filterwarnings = "error"` turns the deprecation into a failure). Versions and dates below are in
 `docs/knowledge/runtimes.md` and `docs/knowledge/ibkr.md`, read on 2026-10-19.
 
 - **The rule.** The newest stable release; for the OS and Java, the newest LTS. A `pyproject`
@@ -2029,8 +2029,13 @@ loads, so its update fails under `filterwarnings = error`). Versions and dates b
 - **Exceptions.** Each one is a row below with its reason, a review date and its exit. A comment
   at the pin points here rather than restating the evidence.
 - **Merging.** The updates were piling up unmerged, not unseen: Dependabot opened them and none
-  was merged for a week. Each session starts by merging the green Dependabot pull requests; a red
-  one is fixed or recorded in the ROADMAP's follow-ups (AGENTS.md).
+  was merged for a week. Each session starts by merging the green Dependabot patch and minor pull
+  requests; a red one is fixed or recorded in the ROADMAP's follow-ups (AGENTS.md). A major one is
+  merged only after its changelog is read and each removed or deprecated API is checked against
+  the paths CI fakes or cannot reach: the live OAuth transport, the Gateway and the browser (the
+  login tests fake Playwright whole). An update of any size to Playwright, the Gateway archive or
+  Java also needs `preflight --read-only` on the machine before a release carrying it is
+  deployed: a Playwright minor changes the browser build.
 - **Testing an upgrade.** CI runs `make check` on the pinned Python; a newer CPython is tried
   there before the pin moves. What CI cannot exercise (Java, Chromium, the Gateway archive, the OS)
   is checked by `obliskiq preflight --read-only` on the deployment machine before a release that
@@ -2044,7 +2049,6 @@ loads, so its update fails under `filterwarnings = error`). Versions and dates b
 | Python | `>=3.14,<3.15` | 3.15.0 is ten days old; the suite passes on it, CI has not run it | 2026-11-30 | 3.15 after T1, once CI is green on it |
 | uv in CI | `version: "0.12.23"` in `ci.yml` | none recorded; Dependabot does not read it | the next Dependabot round | one version for CI and machine in `[tool.uv] required-version` |
 | cryptography | `>=46,<47` | 50 deprecates the API `oauth.py` parses DH parameters with | before the live account's OAuth runs | parse the parameters without it (the exchange is already `pow`) |
-| exchange-calendars | 4.13.2, the newest | XSHG, XBOM and XSES end 2026-12-31 (D24) | 2026-12-15 | the release that extends them; until then those venues read closed |
 
 **Java.** The Gateway is compiled for Java 8 and bundles vert.x 3.5.0 and netty 4.1.15 (2017); its
 guide asks for Java 8u192 or later, "tested successfully with OpenJDK 11", and names no upper
@@ -2074,9 +2078,23 @@ that pin 3.14. Python is not a property of the machine: uv reads `.python-versio
 3.15 is a change to this repository that the machine takes with `uv sync`. It moves after T1, so
 T1 does not also test a new interpreter.
 
+**The calendars past 2026.** exchange-calendars 4.13.2, the newest release, ends XSHG, XBOM and
+XSES on 2026-12-31 (D24). No instrument trades there: the three venues are in the calendar layer
+(`venues.yaml`: phase windows and incidents), and no eligibility list, allowlist or jurisdiction
+names them. Past their coverage they read blocked, never open, and that is accepted. A venue the
+universe admits (Session 8) must be covered through `calendars.horizon_years`, by the library or
+by a `synthetic_calendars` entry as XSHE is.
+
 **T1 is not held for any of this.** T1 tests an unattended login from a stable address and the
 order shapes. The Java question needs T1's own evidence, Playwright 1.64 is already merged, and
-Python, uv and cryptography do not touch the login.
+Python, uv and cryptography do not touch the login. T1 changes the machine, the address, the OS
+and Playwright at once, the confounding found in the Java evidence; with no working baseline there
+is nothing to lose, so the failure path is fixed before the first login instead (SESSION_PROMPTS
+§A.5, "If a step fails"). Its first step after a password accepted without a session is one manual
+login through the Gateway on the machine: it tells the automation (Playwright, Java, the OS) from
+the environment (the address, the account) in one login. A lock or a refused password stops every
+side run until T1 has passed on Java 11. The side runs read a copy of `config/` through
+`OBLISK_CONFIG_DIR`, since `config/owner.yaml` is tracked.
 
 Rejected:
 

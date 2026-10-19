@@ -39,6 +39,30 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
+### Dependency currency, amended (owner request, 2026-10-19, v0.9.4)
+
+The proposal's author reviewed D96 and asked for four amendments; all are adopted, two with
+changes (D96).
+
+- **T1's failure path is fixed before the first login** (SESSION_PROMPTS §A.5, "If a step fails").
+  T1 changes machine, address, OS and Playwright at once; with no working baseline that is
+  accepted. A password accepted without a session is followed first by one manual Gateway login
+  on the machine, which tells the automation from the environment.
+- **Merging.** Green patch and minor Dependabot updates are merged at a session's start. A major
+  one needs its changelog read and the paths CI fakes checked. Playwright of any size, the
+  Gateway archive and Java also need a read-only preflight on the machine. cryptography 50 was
+  caught by `filterwarnings = "error"`, by design.
+- **The calendars.** No instrument trades on XSHG, XBOM or XSES; reading closed past 2026 is
+  accepted, and the dated review is replaced by Session 8's coverage precondition.
+- **The side test** reads a copy of `config/` through `OBLISK_CONFIG_DIR` (`config/owner.yaml`
+  is tracked), and after a locked username or a refused password no side run happens until T1
+  has passed on Java 11.
+
+**Tests.** `make check` green; documents only.
+
+**SESSION_PROMPTS edits.** §A.5: the side test's configuration and stop rule, and "If a step
+fails".
+
 ### Dependency currency (owner request, 2026-10-19, v0.9.3)
 
 A proposal to run the newest stable version of everything, triggered by the Java 11 pin. Adopted
@@ -1031,7 +1055,7 @@ settles it.
 | IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | T1 or the first command list after it |
 | Order window 30 min after the open and 15 before the close | 2 | 18 (TCA) |
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
-| Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`) | 2 | library upgrade; 6 (digest) |
+| Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`); no instrument trades there, so they read closed past it (D96) | 2 | 8 (if the universe admits one of them) |
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | T1 or the first command list after it |
 | US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
@@ -1069,6 +1093,7 @@ settles it.
 | A fresh unattended Gateway login after IBKR's daily reset on the machine | review | T1 |
 | The Gateway login on Java 21 and on Java 25 (the side test; Session 3's readings do not separate Java 11 from 21) | D96 | T1 |
 | Playwright 1.64 (Chrome for Testing's headless shell) logs in on Ubuntu 26.04 with the pinned-key flag | D96 | T1 |
+| A manual Gateway login on the machine through an SSH-forwarded browser, only if the unattended one is accepted without a session (whether IBKR treats it as local is unverified) | D96 | T1 |
 | European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`) against an executed UCITS order, and whether the executor routes direct or SMART (the SMART column is half) | 4b | T1 (the paper order test), 5, 18 (TCA) |
 | The US treaty withholding rate of 15 % against the BOE text of the Spain–US convention and its 2013 protocol | 4b | 7 |
 | Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 7 |
@@ -1088,7 +1113,8 @@ settles it.
     Almoon-D/ObliskIQ#5 is the same update). Parse the DH parameter file without
     `load_pem_parameters`, whose finite-field DH is deprecated (`oauth.py`); the exchange is
     already `pow`.
-  - 2026-12-15: exchange-calendars past 2026-12-31 for XSHG, XBOM and XSES (the queue row above).
+  - Session 8: a venue the universe admits is covered through `calendars.horizon_years`, by
+    the library or a `synthetic_calendars` entry (XSHG, XBOM and XSES end 2026-12-31).
   - T1's record, and 2027-07-01 at the latest: the Gateway's Java list. Temurin builds Java 11 to
     at least October 2027; if no newer Java passes, D68's TWS API with IBC.
 - **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
