@@ -5,6 +5,26 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.9.4] - 2026-10-19
+
+D96 amended after its proposer's review. Documents only; no IBKR call.
+
+### Changed
+
+- `docs/DECISIONS.md` D96: green Dependabot patch and minor updates are merged at a session's
+  start; a major one needs its changelog read and the paths CI fakes checked; Playwright, the
+  Gateway archive and Java also need a read-only preflight on the machine. XSHG, XBOM and XSES
+  carry no instrument, so reading closed past 2026 is accepted and Session 8 covers any venue it
+  admits. T1's failure path is fixed before the first login.
+- `docs/SESSION_PROMPTS.md` §A.5: the Java side test reads a copy of `config/` through
+  `OBLISK_CONFIG_DIR` (`config/owner.yaml` is tracked); after a locked username or a refused
+  password no side run happens until T1 has passed on Java 11; "If a step fails" lists the next
+  step for each failure, a manual Gateway login first when the password is accepted without a
+  session.
+- `AGENTS.md`: the merge rule's major-version and runtime cases point to D96.
+- `docs/ROADMAP.md`: the calendars row and follow-up moved to Session 8; a live-queue row for the
+  manual login.
+
 ## [0.9.3] - 2026-10-19
 
 Dependency currency, at the owner's request: the newest stable release by default, and every pin

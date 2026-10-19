@@ -144,23 +144,46 @@ really answer (DECISIONS D68).
    cannot fill, read and cancelled), then `uv run obliskiq mode set shadow --reason "T1 done"`.
 6. The Java side test, on each of the two days after that day's Java 11 run (D96): once with
    Java 21, then once with Java 25. Before each run the previous one has exited and at least ten
-   minutes have passed. Point `OBLISK_IBKR_GATEWAY_JAVA_HOME` at that JDK, set
-   `ibkr: {gateway: {java_major_versions: [21]}}` (then `[25]`) in your local `config/owner.yaml`
-   (never committed), run `uv run obliskiq preflight --read-only`, and keep the masked report and
-   `java -version`. If IBKR refuses the password, stop the side runs for that day. If 21 fails
-   where 11 passed, also run Java 17, and Java 21 with
+   minutes have passed. Copy `config/` outside the clone (`config/owner.yaml` is tracked, so it is
+   never edited for this), add `ibkr: {gateway: {java_major_versions: [21]}}` (then `[25]`) to the
+   copy's `owner.yaml`, and for that run only set `OBLISK_CONFIG_DIR` to the copy and
+   `OBLISK_IBKR_GATEWAY_JAVA_HOME` to that JDK. Run `uv run obliskiq preflight --read-only` and
+   keep the masked report and `java -version`. After a locked username or a refused password, no
+   side run until T1 has passed on Java 11. If 21 fails where 11 passed, also run Java 17, and
+   Java 21 with
    `JDK_JAVA_OPTIONS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"`.
-   Restore `config/owner.yaml` and the Java 11 home afterwards. The side test never decides T1.
+   The side test never decides T1.
 7. Paste the masked reports into a short session: *"Record T1's findings per SESSION_PROMPTS
    §A.5."* It records the shapes in `docs/knowledge/`, closes or re-dates the matching rows
    of the ROADMAP's live verification queue, sets `ibkr.gateway.java_major_versions` to the
    versions that passed on both days, newest first (D96), and bumps the patch version.
 
-T1 passes when both logins complete unattended and both preflights finish. If the
-unattended login cannot complete on the machine, stop and choose (MASTER_PLAN §11): a spike
-of the TWS API with IBC, or a daily manual login. From T1 on, a session's live step is a
-command list the session writes for you to run on the machine, with the bot paused; you
-paste the masked output into a short follow-up session that records it.
+T1 passes when both logins complete unattended and both preflights finish.
+
+**If a step fails** (fixed before the first login, D96). Every step is one login, at least ten
+minutes after the previous one; a locked username or a refused password stops all logins that day.
+Read the masked report to tell which case it is:
+
+- `playwright install --with-deps chromium` fails: reinstall the machine on Ubuntu 24.04, nothing
+  else changed.
+- The browser fails before submitting (the page does not load, the pinned key is rejected, a
+  selector is missing, a timeout): check out `v0.9.2` (Playwright 1.56) and run the preflight
+  once. If it logs in there, the record session decides Playwright's pin.
+- IBKR refuses the password ("Authentication failed" before the server's proof): no retry that
+  day; check the paper login in IBKR's portal, then retry once the next day.
+- The password is accepted and no session opens (the cloud's failure): one manual login through
+  the Gateway on the machine (`bin/run.sh root/conf.yaml` in its install directory,
+  `paths.ibkr_gateway` under the data directory, with the Java 11 home first on `PATH`; then
+  `https://localhost:5000` in a browser forwarded over SSH). If the manual login works, the
+  automation is at fault: run the Java 21 and 25 side runs, then `v0.9.2`, one per login. If it
+  fails too, the environment or the account is: stop and choose (MASTER_PLAN §11) between a spike
+  of the TWS API with IBC and a daily manual login, knowing that TWS also needs a login that works
+  from this address.
+- Day 1 passes and day 2 fails after the reset: the same cases, on day 2.
+
+From T1 on, a session's live step is a command list the session writes for you to run on the
+machine, with the bot paused; you paste the masked output into a short follow-up session that
+records it.
 
 ---
 
