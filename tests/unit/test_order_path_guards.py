@@ -146,11 +146,40 @@ def _receivers(attribute: str) -> dict[str, set[str]]:
 
 def test_only_the_write_boundary_places_or_modifies() -> None:
     assert _callers("place_idempotent") == {"execution/boundary.py"}
-    # The order client's modify is the boundary's to call; the exit coordinator modifies a stop
-    # through the boundary.
-    assert _callers("modify") == {"execution/boundary.py", "execution/exits.py"}
-    assert _receivers("modify")["execution/exits.py"] == {"_boundary"}
+    # The order client's modify is the boundary's to call; the exit coordinator (a stop's cut),
+    # the protective-exit manager (a stop's resize, roll-up or gap reprice) and the executor (a
+    # reprice) modify through the boundary.
+    through_the_boundary = {
+        "execution/exits.py",
+        "execution/protective.py",
+        "execution/executor.py",
+    }
+    assert _callers("modify") == {"execution/boundary.py", *through_the_boundary}
+    for module in through_the_boundary:
+        assert _receivers("modify")[module] == {"_boundary"}, module
     assert _receivers("modify")["execution/boundary.py"] == {"_client"}
+
+
+#: Order types that are not capped by a limit, in IBKR's spellings (the Web API's and TWS's).
+_UNCAPPED_ORDER_TYPES = frozenset(
+    {"MKT", "MARKET", "STP", "STOP", "MIT", "MOC", "MOO", "LOC", "TRAIL", "MIDPRICE", "REL"}
+)
+
+
+def test_no_module_spells_an_uncapped_order_type() -> None:
+    """No plain market order is constructible anywhere: no module under ``src/`` holds the name
+    of an order type that is not capped by a limit, so none can reach an order body."""
+    found = {
+        module: sorted(
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value.strip() in _UNCAPPED_ORDER_TYPES
+        )
+        for module, tree in _modules().items()
+    }
+    assert {module: names for module, names in found.items() if names} == {}
 
 
 def test_no_market_order_type_is_spelled_in_the_order_client() -> None:

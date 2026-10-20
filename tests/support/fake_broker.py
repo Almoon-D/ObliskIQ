@@ -6,8 +6,10 @@ refusal, a reused cOID, an answer lost after the order was taken, an order liste
 live-orders list that is not a complete snapshot, a fill that races a cancel. Session 4a adds
 what the pre-trade gate reads: the session and account endpoints, positions (which a fill moves,
 unless a test keeps them stale), the ledger, snapshots, contract rules, algos and the contract
-search. Session 5 extends it. Like IBKR, any request other than the reply invalidates an open
-warning. Shapes are IBKR's documented ones, not live captures (VERIFY-LIVE).
+search. Session 5 adds what execution needs: positions marked to market, currency conversions
+that move the cash of both currencies when they fill, and fills that settle cash when a test asks
+(``settle_cash``). Like IBKR, any request other than the reply invalidates an open warning. Shapes
+are IBKR's documented ones, not live captures (VERIFY-LIVE).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -26,6 +28,8 @@ import respx
 
 BASE = "https://gw.test/v1/api"
 ACCOUNT = "DUTEST1"
+#: IBKR's EUR.USD spot pair, as execution.currency.pairs names it.
+EURUSD = 12087792
 
 #: Snapshot field ids (config/defaults/ibkr.yaml): last, bid, ask, availability, the
 #: underlying's 30-day historical volatility, an option's own implied volatility.
@@ -135,6 +139,12 @@ class FakeBroker:
         self.trade_clock: Callable[[], datetime] | None = None
         #: Positions by conid (units), with their currency.
         self.positions: dict[int, tuple[Decimal, str]] = {}
+        #: Prices positions are marked at: a marked position reports its market value.
+        self.marks: dict[int, Decimal] = {}
+        #: Spot pairs by conid: (base, quote). A conversion's fill moves both cash balances.
+        self.pairs: dict[int, tuple[str, str]] = {EURUSD: ("EUR", "USD")}
+        #: Fills of securities move the cash of their currency (price times size, and a commission).
+        self.settle_cash = False
         #: Fills leave the positions as they were (a stale portfolio cache).
         self.stale_positions = False
         #: Cash per currency: (cash, rate to the base currency). The base currency is EUR.
@@ -144,7 +154,7 @@ class FakeBroker:
         self.unreadable_cash: set[str] = set()
         #: Snapshot rows by conid, keyed by field id.
         self.quotes: dict[int, dict[str, Any]] = {}
-        #: The positions, ledger or snapshot endpoint answers 503.
+        #: Endpoints that answer 503: positions, ledger, snapshot, orders, trades or rules.
         self.unavailable: set[str] = set()
         #: Contract search: (symbol, listing exchange, currency) by conid.
         self.contracts: dict[int, tuple[str, str, str]] = {}
@@ -152,6 +162,13 @@ class FakeBroker:
             "orderTypes": ["limit", "stop_limit"],
             "sizeIncrement": 1,
             "incrementRules": [{"lowerEdge": 0.0, "increment": 0.01}],
+        }
+        #: Trading rules by conid, where they differ from ``rules_answer``.
+        self.rules_by_conid: dict[int, dict[str, Any]] = {
+            EURUSD: {
+                "orderTypes": ["limit"],
+                "incrementRules": [{"lowerEdge": 0.0, "increment": 0.00005}],
+            }
         }
         self.algos_answer: dict[str, Any] = {"algos": [{"id": "Adaptive", "name": "Adaptive"}]}
         self._pending: dict[str, Pending] = {}
@@ -285,15 +302,22 @@ class FakeBroker:
         amount = Decimal(quantity) if quantity is not None else order.quantity - order.filled
         order.filled += amount
         order.status = "Filled" if order.filled >= order.quantity else "Submitted"
-        if not self.stale_positions and order.sec_type != "CASH":
+        size = amount
+        if order.sec_type == "CASH":
+            size = self._convert(order, amount, Decimal(price))
+        elif not self.stale_positions:
             held, currency = self.positions.get(order.conid, (Decimal(0), "USD"))
             signed = amount if order.side == "BUY" else -amount
             self.positions[order.conid] = (held + signed, currency)
+            if self.settle_cash:
+                cash, rate = self.cash.get(currency, (Decimal(0), None))
+                flow = amount * Decimal(price) * (-1 if order.side == "BUY" else 1)
+                self.cash[currency] = (cash + flow - Decimal("1.00"), rate)
         self.trades.append(
             {
                 "execution_id": f"exec-{order_id}-{len(self.trades)}",
                 "side": "B" if order.side == "BUY" else "S",
-                "size": float(amount),
+                "size": float(size),
                 "price": price,
                 "order_ref": order.coid,
                 "commission": "1.00",
@@ -305,6 +329,17 @@ class FakeBroker:
                 ),
             }
         )
+
+    def _convert(self, order: FakeOrder, amount: Decimal, rate: Decimal) -> Decimal:
+        """A conversion of ``amount`` of the currency it sells, at ``rate`` (quote per base):
+        both balances move; the trade's size is in the pair's base currency."""
+        base, quote = self.pairs[order.conid]
+        source, target = (quote, base) if order.side == "BUY" else (base, quote)
+        received = amount / rate if order.side == "BUY" else amount * rate
+        for currency, change in ((source, -amount), (target, received)):
+            cash, known = self.cash.get(currency, (Decimal(0), None))
+            self.cash[currency] = (cash + change, known)
+        return amount / rate if order.side == "BUY" else amount
 
     def live(self) -> list[FakeOrder]:
         return [o for o in self.orders.values() if o.status not in ("Filled", "Cancelled")]
@@ -427,6 +462,9 @@ class FakeBroker:
         return httpx.Response(200, json=self.whatif_answer)
 
     def _live_orders(self, request: httpx.Request) -> httpx.Response:
+        down = self._down("orders")
+        if down is not None:
+            return down
         self.live_order_reads += 1
         rows = []
         for order in self.orders.values():
@@ -440,6 +478,9 @@ class FakeBroker:
         return httpx.Response(200, json={"orders": answer, "snapshot": self.snapshot})
 
     def _trades(self, request: httpx.Request) -> httpx.Response:
+        down = self._down("trades")
+        if down is not None:
+            return down
         self.trade_reads += 1
         return httpx.Response(200, json=self.trades)
 
@@ -504,16 +545,19 @@ class FakeBroker:
             return down
         if page != "0":
             return httpx.Response(200, json=[])
-        rows = [
-            {
+        rows = []
+        for conid, (quantity, currency) in sorted(self.positions.items()):
+            row: dict[str, Any] = {
                 "acctId": ACCOUNT,
                 "conid": conid,
                 "position": float(quantity),
                 "currency": currency,
                 "assetClass": "STK",
             }
-            for conid, (quantity, currency) in sorted(self.positions.items())
-        ]
+            if conid in self.marks:
+                row["mktPrice"] = float(self.marks[conid])
+                row["mktValue"] = float(quantity * self.marks[conid])
+            rows.append(row)
         return httpx.Response(200, json=rows)
 
     def _ledger(self, request: httpx.Request) -> httpx.Response:
@@ -542,7 +586,11 @@ class FakeBroker:
         return httpx.Response(200, json=[self.quotes[c] for c in conids if c in self.quotes])
 
     def _rules(self, request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=self.rules_answer)
+        down = self._down("rules")
+        if down is not None:
+            return down
+        conid = int(self._json(request)["conid"])
+        return httpx.Response(200, json=self.rules_by_conid.get(conid, self.rules_answer))
 
     def _algos(self, request: httpx.Request, id: str) -> httpx.Response:
         return httpx.Response(200, json=self.algos_answer)

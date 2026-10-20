@@ -127,22 +127,22 @@ def test_a_ucits_etf_on_xetra_is_priced_end_to_end_and_filled_in_shadow(
     assert outcome.fill is not None, outcome.reason
     cost = outcome.cost
     assert cost is not None
-    # 30 units at 100: 0.10 % of 3,000 is 3.00, under the EUR 4.00 minimum.
-    assert (cost.commission.schedule_id, cost.commission.amount) == ("europe_eur", Decimal("4.00"))
+    # 30 units at 100: 0.05 % of 3,000 is 1.50, under the EUR 3.00 SmartRouting minimum.
+    assert (cost.commission.schedule_id, cost.commission.amount) == ("europe_eur", Decimal("3.00"))
     # An ETF has no market capitalisation, so the illiquid tier is assumed: 0.5 % spread and
     # 0.5 % slippage, 15.00 each, one unit of price per unit traded.
     assert (cost.spread_cost, cost.slippage_cost) == (Decimal("15.000"), Decimal("15.000"))
     assert outcome.fill.price == Decimal("101.0")
-    assert outcome.fill.commission == Decimal("4.00")
-    assert cost.total == Decimal("34.000")
+    assert outcome.fill.commission == Decimal("3.00")
+    assert cost.total == Decimal("33.000")
     assert "commission:europe_eur" in cost.unverified
     assert "tax_not_modelled" in cost.unverified
-    # Above the minimum the rate applies: 0.10 % of 10,000.
+    # Above the minimum the rate applies: 0.05 % of 10,000.
     large = book.commission(CostTerms("XETR", AssetClass.ETF, "EUR", Decimal(100), Decimal(100)))
-    assert large.amount == Decimal("10.000")
+    assert large.amount == Decimal("5.0000")
     # The same ETF in USD on the LSE has its own minimum.
     london = book.commission(CostTerms("XLON", AssetClass.ETF, "USD", Decimal(10), Decimal(50)))
-    assert (london.schedule_id, london.amount) == ("europe_usd", Decimal("6.00"))
+    assert (london.schedule_id, london.amount) == ("europe_usd", Decimal("4.00"))
     # A schedule on value needs the price.
     with pytest.raises(ValueError, match="needs the order's price"):
         book.commission(CostTerms("XETR", AssetClass.ETF, "EUR", Decimal(1)))
@@ -174,6 +174,6 @@ def test_every_core_venue_has_a_schedule(
         )
         assert (estimate.schedule_id, estimate.amount, estimate.gap) == (
             schedule,
-            Decimal("100.000"),
+            Decimal("50.0000"),
             None,
         )

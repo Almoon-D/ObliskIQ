@@ -19,7 +19,7 @@ def test_the_shipped_profile_selects_the_skeleton(repo_root: Any, shipped_settin
     assert policy.skeleton
     assert ELIGIBILITY_POLICIES in SHIPPED_POLICY_KINDS
     listed = {i.conid for i in shipped_settings.eligibility.skeleton_allowlist}
-    assert listed == {89005163, 8158}
+    assert listed == {89005163, 7089}
     for conid in listed:
         described = next(
             i for i in shipped_settings.eligibility.skeleton_allowlist if i.conid == conid

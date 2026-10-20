@@ -15,8 +15,8 @@ from obliskiq.execution.instruments import ConfiguredDirectory, prohibited_reaso
 
 def test_the_configured_directory_describes_the_allowlist(shipped_settings: Any) -> None:
     directory = ConfiguredDirectory.from_settings(shipped_settings)
-    assert directory.describe(8158) is not None
-    assert directory.describe(8158).symbol == "FCX"
+    assert directory.describe(7089) is not None
+    assert directory.describe(7089).symbol == "FCX"
     assert directory.describe(1) is None
     assert directory.listing_exchanges() == ("IBIS", "NYSE")
 

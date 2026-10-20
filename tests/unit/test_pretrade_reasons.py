@@ -12,8 +12,9 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from fake_broker import AVAILABILITY
+from fake_broker import AVAILABILITY, EURUSD
 from order_rig import (
+    EUR_ETF,
     FUTURE,
     FUTURE_OPTION,
     LEVERAGED,
@@ -21,6 +22,7 @@ from order_rig import (
     OPTION,
     STOCK,
     US_ETF,
+    spec,
     terms,
     whatif_answer,
     with_caps,
@@ -37,6 +39,9 @@ from obliskiq.domain.orders import (
     IntentState,
     OrderSide,
     PretradeClearance,
+    ReconcileFinding,
+    ReconcileRun,
+    ReconcileStatus,
     RiskEffect,
     Sleeve,
 )
@@ -196,16 +201,189 @@ async def test_reason_order_not_intents(rig: Any) -> None:
     )
 
 
-async def test_reason_conversion_unavailable(rig: Any) -> None:
-    for side in OrderSide:
-        stored = await rig.intent(
-            terms(side=side, cash="1000", conversion=True, conid=12087792),
-            role=IntentRole.CONVERSION,
-            reason="funding",
-        )
-        answer = await refused(rig, stored, Reason.CONVERSION_UNAVAILABLE)
-        assert "short" not in answer.codes  # a conversion is bounded by cash, not by I2
-    await cleared(rig, await rig.staged())
+# ── currency conversions ──
+
+
+def pair_quote(rig: Any, *, bid: str = "1.1649", ask: str = "1.1651", sigma: str = "8%") -> None:
+    """The EUR.USD quote: a reference of 1.165 dollars a euro."""
+    rig.broker.quote(EURUSD, bid=bid, ask=ask, last="1.165", sigma=sigma)
+
+
+async def conversion(
+    rig: Any,
+    *,
+    side: OrderSide = OrderSide.SELL,
+    cash: str = "1000",
+    limit: str = "1.162",
+    conid: int = EURUSD,
+) -> Any:
+    """A conversion intent: by default 1,000 euros sold for dollars at no less than 1.162."""
+    return await rig.intent(
+        terms(side=side, cash=cash, limit=limit, conversion=True, conid=conid),
+        role=IntentRole.CONVERSION,
+        reason="funding",
+    )
+
+
+async def test_a_conversion_inside_every_rule_is_cleared_against_what_it_converts_from(
+    rig: Any,
+) -> None:
+    pair_quote(rig)
+    clearance = await cleared(rig, await conversion(rig))
+    assert clearance.asset_class is AssetClass.FX
+    assert clearance.effect is RiskEffect.ADDS
+    assert (clearance.currency, clearance.notional) == ("EUR", Decimal(1000))
+    assert clearance.notional_base == Decimal(1000)
+    assert clearance.quote is not None
+    assert clearance.quote.conid == EURUSD
+    # A buy of the pair sells dollars for euros: it is cleared against the dollars.
+    back = await cleared(rig, await conversion(rig, side=OrderSide.BUY, limit="1.168"))
+    assert (back.currency, back.notional) == ("USD", Decimal(1000))
+    assert back.notional_base == Decimal(860)
+
+
+async def test_reason_conversion_pair(rig: Any) -> None:
+    pair_quote(rig)
+    unknown = await conversion(rig, conid=STOCK)
+    answer = await refused(rig, unknown, Reason.CONVERSION_PAIR)
+    assert "short" not in answer.codes  # a conversion is bounded by cash, not by I2
+    assert rig.broker.whatifs == []  # refused before the broker is touched
+    await cleared(rig, await conversion(rig))
+
+
+async def test_a_conversion_is_held_to_the_pairs_quote_and_collar(rig: Any) -> None:
+    stored = await conversion(rig)
+    await refused(rig, stored, Reason.QUOTE_POLICY)  # no quote for the pair yet
+    pair_quote(rig)
+    greedy = await conversion(rig, limit="1.10")  # selling euros at 1.10 is through the collar
+    assert "below the collar" in (await refused(rig, greedy, Reason.COLLAR)).reason
+    await cleared(rig, stored)
+
+
+async def test_a_conversion_cannot_borrow_or_spend_the_cash_others_need(rig: Any) -> None:
+    pair_quote(rig)
+    too_much = await conversion(rig, cash="12000")
+    answer = await refused(rig, too_much, Reason.MARGIN_USE)
+    assert "would borrow" in answer.reason
+    first = await cleared(rig, await conversion(rig, cash="6000"))
+    placed = await rig.boundary.place(first.intent_id, first)
+    assert placed.status is PlacementStatus.PLACED  # working: 6,000 euros committed
+    euros = await rig.staged(EUR_ETF, limit="100")  # 1,000 euros of a euro ETF
+    rig.broker.whatif_answer = whatif_answer("1001.00", "EUR")
+    await cleared(rig, euros)
+    second = await conversion(rig, cash="4000")
+    answer = await refused(rig, second, Reason.INSUFFICIENT_CASH)
+    assert "7000.00 committed" in answer.reason  # the conversion and the ETF buy
+
+
+async def test_reason_currency_cap(rig: Any) -> None:
+    pair_quote(rig)
+    rig.broker.nav = Decimal(20000)  # the cap is 16,000 euros of one foreign currency
+    stored = await conversion(rig)
+    answer = await refused(rig, stored, Reason.CURRENCY_CAP)
+    assert "single-foreign-currency cap" in answer.reason
+    rig.broker.nav = Decimal(100000)
+    await cleared(rig, stored)
+
+
+async def test_the_currency_cap_counts_conversions_still_working_into_the_currency(
+    rig: Any,
+) -> None:
+    pair_quote(rig)
+    rig.broker.cash = {"EUR": (Decimal(40000), None), "USD": (Decimal(0), Decimal("0.86"))}
+    rig.broker.nav = Decimal(20000)  # the cap is 16,000 euros of dollars
+    first = await cleared(rig, await conversion(rig, cash="10000"))
+    placed = await rig.boundary.place(first.intent_id, first)
+    assert placed.status is PlacementStatus.PLACED  # about 10,000 euros of dollars on the way
+    second = await conversion(rig, cash="10000")
+    answer = await refused(rig, second, Reason.CURRENCY_CAP)
+    assert "above the single-foreign-currency cap" in answer.reason
+    await cleared(rig, await conversion(rig, cash="5000"))
+
+
+async def test_reason_exposure_unreadable(rig: Any) -> None:
+    pair_quote(rig)
+    await rig.hold(STOCK, "10")  # dollars in a position IBKR reports no value for
+    stored = await conversion(rig)
+    answer = await refused(rig, stored, Reason.EXPOSURE_UNREADABLE)
+    assert str(STOCK) in answer.reason
+    rig.broker.marks[STOCK] = Decimal(100)
+    await cleared(rig, stored)
+
+
+async def test_a_conversion_out_of_a_currency_not_held_is_refused(rig: Any) -> None:
+    pair_quote(rig)
+    rig.broker.cash = {"EUR": (Decimal(10000), None)}
+    stored = await conversion(rig, side=OrderSide.BUY, limit="1.168")
+    assert "to convert from" in (await refused(rig, stored, Reason.CURRENCY_NOT_HELD)).reason
+    rig.broker.cash["USD"] = (Decimal(5000), None)
+    await refused(rig, stored, Reason.FX_RATE_UNAVAILABLE)
+
+
+async def test_a_conversion_the_whatif_refuses_is_refused(rig: Any) -> None:
+    pair_quote(rig)
+    rig.broker.whatif_answer = whatif_answer("1000", "EUR", error="no trading permission")
+    answer = await refused(rig, await conversion(rig), Reason.WHATIF_REFUSED)
+    assert "no trading permission" in answer.reason
+
+
+async def test_a_conversion_whose_whatif_fails_is_refused_and_a_check_clears_it(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from obliskiq.ibkr.errors import IbkrUpstreamError
+
+    pair_quote(rig)
+    stored = await conversion(rig)
+    assert await rig.gate.check(stored.intent, assume={}) is None  # a check issues nothing
+
+    async def broken(order_terms: Any) -> Any:
+        raise IbkrUpstreamError("whatif unavailable")
+
+    monkeypatch.setattr(rig.reader, "whatif", broken)
+    answer = await refused(rig, stored, Reason.WHATIF_REFUSED)
+    assert "the whatif failed" in answer.reason
+
+
+async def test_a_conversion_beside_a_working_buy_the_bot_did_not_place_is_refused(
+    rig: Any,
+) -> None:
+    pair_quote(rig)
+    rig.broker.add_order(side="BUY", conid=EUR_ETF)
+    await refused(rig, await conversion(rig), Reason.CASH_UNACCOUNTED)
+
+
+async def test_a_conversion_without_a_readable_nav_is_refused(rig: Any) -> None:
+    pair_quote(rig)
+    rig.broker.nav = None
+    await refused(rig, await conversion(rig), Reason.NAV_UNAVAILABLE)
+
+
+async def test_a_conversion_out_of_the_base_currency_skips_the_cap_on_the_way_home(
+    rig: Any,
+) -> None:
+    pair_quote(rig)
+    rig.broker.nav = Decimal(1000)  # far below any foreign exposure
+    home = await conversion(rig, side=OrderSide.BUY, limit="1.168")
+    await cleared(rig, home)  # dollars into euros: the cap is on foreign currencies
+
+
+async def test_a_conversion_is_not_held_to_the_notional_caps(rig: Any) -> None:
+    pair_quote(rig)
+    rig.broker.cash["EUR"] = (Decimal(40000), None)
+    big = await conversion(rig, cash="30000")  # above the per-order cap of 25,000 euros
+    clearance = await cleared(rig, big)
+    await rig.boundary.place(clearance.intent_id, clearance)
+    stock = await rig.staged()  # its notional still counts alone toward the daily cap
+    await cleared(rig, stock)
+
+
+async def test_an_unreadable_account_refuses_a_conversion(rig: Any) -> None:
+    pair_quote(rig)
+    rig.broker.unavailable.add("ledger")
+    await refused(rig, await conversion(rig), Reason.ACCOUNT_UNREADABLE)
+    rig.broker.unavailable.clear()
+    rig.broker.snapshot = False
+    await refused(rig, await conversion(rig), Reason.ACCOUNT_UNREADABLE)
 
 
 # ── the paper guard, the mode and the kill switch ──
@@ -273,6 +451,24 @@ async def test_reason_profile_mismatch(rig: Any) -> None:
     rig.modes = paper_modes
     rig.make_gate()
     await cleared(rig, stored)
+
+
+async def test_reason_reconciliation_frozen(rig: Any) -> None:
+    await rig.hold(STOCK, "10")
+    stop = await rig.staged(
+        side=OrderSide.SELL, stop="95", limit="94.5", role=IntentRole.PROTECTIVE
+    )
+    buy = await rig.staged()
+    for status in (ReconcileStatus.DRIFT, ReconcileStatus.INCOMPLETE):
+        finding = ReconcileFinding(kind="test", detail="a test finding", freezes=True)
+        run = ReconcileRun(at=rig.clock(), status=status, findings=(finding,))
+        await rig.store(repo.record_reconciliation, run)
+        answer = await refused(rig, buy, Reason.RECONCILIATION_FROZEN)
+        assert status.value in answer.reason
+        await cleared(rig, stop)  # an order that reduces risk is never frozen
+    green = ReconcileRun(at=rig.clock(), status=ReconcileStatus.GREEN, findings=())
+    await rig.store(repo.record_reconciliation, green)
+    await cleared(rig, buy)
 
 
 async def test_reason_kill_switch_on(rig: Any) -> None:
@@ -476,7 +672,7 @@ async def test_reason_protective_spec(rig: Any) -> None:
     for stop, limit, words in (
         ("99.8", "99", "inside the collar's band"),
         ("95", "96", "above the stop"),
-        ("95", "80", "below the stop"),
+        ("95", "80", "below the stop"),  # the spec allows 5 % below 95: 90.25
     ):
         stored = await rig.staged(
             side=OrderSide.SELL, stop=stop, limit=limit, role=IntentRole.PROTECTIVE
@@ -488,6 +684,29 @@ async def test_reason_protective_spec(rig: Any) -> None:
         side=OrderSide.SELL, stop="95", limit="94.5", role=IntentRole.PROTECTIVE
     )
     assert (await cleared(rig, good)).effect is RiskEffect.REDUCES
+
+
+async def test_a_stop_rests_by_its_own_spec_and_never_without_one(rig: Any) -> None:
+    await rig.hold(STOCK, "10")
+    narrow = await rig.intent(
+        terms(side=OrderSide.SELL, stop="95", limit="93"),
+        role=IntentRole.PROTECTIVE,
+        reason="stop",
+        protective=spec("95", Decimal("0.01")),
+    )
+    answer = await refused(rig, narrow, Reason.PROTECTIVE_SPEC)  # 93 is 2 % below 95
+    assert "more than 0.01 below the stop" in answer.reason
+    wide = await rig.intent(
+        terms(side=OrderSide.SELL, stop="95", limit="94"),
+        role=IntentRole.PROTECTIVE,
+        reason="stop",
+        protective=spec("95", Decimal("0.2")),  # wider than execution.protective's 10 %
+    )
+    assert "acts as a market order" in (await refused(rig, wide, Reason.PROTECTIVE_SPEC)).reason
+    bare = await rig.intent(
+        terms(side=OrderSide.SELL, stop="95", limit="94.5"), role=IntentRole.EXIT, reason="stop"
+    )
+    assert "carries none" in (await refused(rig, bare, Reason.PROTECTIVE_SPEC)).reason
 
 
 async def test_a_quote_that_goes_stale_before_the_clearance_is_recorded_refuses(

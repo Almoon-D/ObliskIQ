@@ -14,7 +14,8 @@ from order_rig import EUR_ETF, STOCK, whatif_answer
 
 from obliskiq.domain.orders import ExecutionMode
 from obliskiq.errors import StoreError
-from obliskiq.execution.paper_test import PaperOrderTest, passive_limit, tick_for
+from obliskiq.execution.paper_test import PaperOrderTest, passive_limit
+from obliskiq.execution.pricing import tick_for
 from obliskiq.execution.runtime import OrderPath
 from obliskiq.ibkr.models import ContractRules, IncrementRule
 
@@ -42,6 +43,11 @@ def path_of(rig: Any) -> OrderPath:
         calendars=rig.calendars,
         approvals=rig.approvals,
         flattener=rig.flattener,
+        pricer=rig.pricer,
+        currency=rig.currency,
+        protective=rig.protective,
+        reconciler=rig.reconciler,
+        executor=rig.executor,
     )
 
 

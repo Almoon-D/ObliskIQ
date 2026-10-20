@@ -148,3 +148,16 @@ def test_a_previous_close_is_no_price_and_a_halt_is_flagged() -> None:
     )
     assert (closed.evidence.last, closed.evidence.bid, closed.evidence.ask) == (None, None, None)
     assert quote_read(quote(last_kind=LastKind.HALTED), option=False, read_at=NOW).halted
+
+
+def test_the_execution_test_conid_must_be_allowlisted(config_dir: Any) -> None:
+    from obliskiq.config import ConfigInvalid, load_config
+
+    owner = config_dir / "owner.yaml"
+    owner.write_text(
+        owner.read_text(encoding="utf-8")
+        + "\nibkr:\n  preflight:\n    execution_test:\n      conid: 756733\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigInvalid, match=r"execution_test\.conid: 756733 is not in"):
+        load_config(config_dir)

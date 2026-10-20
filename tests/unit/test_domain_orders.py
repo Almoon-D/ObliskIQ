@@ -295,3 +295,28 @@ def test_a_sell_is_sized_in_units_unless_it_is_a_conversion() -> None:
         terms(side=OrderSide.SELL, cash="1000")
     assert terms(side=OrderSide.SELL, cash="1000", conversion=True).conversion
     assert terms(cash="1000").cash_quantity == Decimal(1000)
+
+
+def test_a_spec_belongs_to_an_entry_or_a_stop_and_a_run_names_what_freezes() -> None:
+    from obliskiq.domain.orders import (
+        ProtectiveSpec,
+        ReconcileFinding,
+        ReconcileRun,
+        ReconcileStatus,
+    )
+
+    stop_spec = ProtectiveSpec(stop=Decimal(95), limit_offset_fraction=Decimal("0.02"), basis="t")
+    assert stop_spec.lowest_limit(Decimal(95)) == Decimal("93.10")
+    with pytest.raises(ValidationError, match="protective spec"):
+        _intent(
+            role=IntentRole.EXIT,
+            terms=terms(side=OrderSide.SELL, quantity="1"),
+            protective=stop_spec,
+        )
+    freezing = ReconcileFinding(kind="drift", detail="d", freezes=True)
+    note = ReconcileFinding(kind="note", detail="n", freezes=False)
+    with pytest.raises(ValidationError, match="not green"):
+        ReconcileRun(at=NOW, status=ReconcileStatus.GREEN, findings=(freezing,))
+    with pytest.raises(ValidationError, match="names the finding"):
+        ReconcileRun(at=NOW, status=ReconcileStatus.DRIFT, findings=(note,))
+    assert ReconcileRun(at=NOW, status=ReconcileStatus.INCOMPLETE, findings=(freezing,))

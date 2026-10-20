@@ -33,6 +33,7 @@ def test_the_shipped_order_path_configuration(shipped_settings: ObliskConfig) ->
         AssetClass.ETC,
         AssetClass.BOND,
         AssetClass.FUND,
+        AssetClass.FX,
     }
 
 
@@ -92,3 +93,28 @@ def test_the_collar_ceiling_is_not_below_its_base(shipped_settings: ObliskConfig
     data["max_fraction"] = data["base_fraction"] / 2
     with pytest.raises(ValidationError, match="max_fraction"):
         CollarConfig.model_validate(data)
+
+
+def test_the_execution_mechanics_refuse_incoherent_values(shipped_settings: ObliskConfig) -> None:
+    from obliskiq.config.schema_execution import (
+        CurrencyConfig,
+        CurrencyPair,
+        LimitOffsetConfig,
+        ProtectiveConfig,
+    )
+
+    execution = shipped_settings.execution
+    with pytest.raises(ValidationError, match="two currencies"):
+        CurrencyPair(symbol="EUR.EUR", conid=1, base="EUR", quote="EUR")
+    currency = execution.currency.model_dump()
+    currency["pairs"] = currency["pairs"] * 2
+    with pytest.raises(ValidationError, match="listed once"):
+        CurrencyConfig.model_validate(currency)
+    offsets = execution.protective.limit_offset.model_dump()
+    offsets["floor_fraction"] = offsets["max_fraction"] * 2
+    with pytest.raises(ValidationError, match="floor_fraction"):
+        LimitOffsetConfig.model_validate(offsets)
+    protective = execution.protective.model_dump()
+    protective["tif"] = "IOC"
+    with pytest.raises(ValidationError, match="IOC never rests"):
+        ProtectiveConfig.model_validate(protective)
