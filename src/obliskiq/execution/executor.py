@@ -17,7 +17,9 @@ Each :meth:`Executor.cycle`:
    after the last reprice, or when its venue's window ends before the next reprice would, it is
    cancelled — still inside the window, so a cancelled exit's stops are restored there (I5) — and
    retried at the next tradable window by a successor intent priced afresh. An entry's reprice is
-   refused while the kill switch is on; a stop is never touched here.
+   refused while the kill switch is on; a stop is never touched here. In shadow mode an unfilled
+   simulated order is repriced on the same clock (its terms change; nothing is sent) and given up
+   the same way (DECISIONS D103).
 6. **Place.** Proposed intents that need no approval are approved and approved ones staged (one
    that adds risk waits while reconciliation freezes new risk). Staged buys in a foreign currency
    are funded first (``CurrencyManager.fund``): a buy whose conversion has not filled is not
@@ -344,6 +346,75 @@ class Executor:
             ):
                 continue
             await self._work_one(stored, report)
+        await self._work_shadow(report)
+
+    async def _work_shadow(self, report: CycleReport) -> None:
+        """A simulated order still unfilled is repriced toward the touch on the same clock as a
+        real one, then given up and retried at the next window: nothing reaches the broker, so
+        each reprice only changes the terms the next simulation fills against."""
+        try:
+            mode = await self._modes.current()
+        except Exception:  # the mode unreadable: nothing is worked
+            return
+        if mode is not ExecutionMode.SHADOW:
+            return
+        submitted = await self._worker.run(repo.intents_in_states, [IntentState.SUBMITTED])
+        for stored in submitted:
+            intent = stored.intent
+            price = intent.terms.price
+            instrument = self._directory.describe(intent.conid)
+            if (
+                intent.mode is not ExecutionMode.SHADOW
+                or intent.role not in (IntentRole.ENTRY, IntentRole.EXIT)
+                or not isinstance(price, LimitPrice)
+                or instrument is None
+            ):
+                continue
+            now = self._now()
+            if self._closing(intent.conid, instrument.listing_exchange, now):
+                await self._give_up_shadow(stored, report, "its venue's window is ending")
+                continue
+            history = await self._book.history(intent.intent_id)
+            # The clock runs from the last reprice or state change; the facts each simulation
+            # records ("shadow: …") do not reset it.
+            moves = [
+                e
+                for e in history
+                if e.detail.startswith(REPRICED)
+                or (e.from_state is not None and e.from_state is not e.to_state)
+            ]
+            done = sum(e.detail.startswith(REPRICED) for e in history)
+            if now - (moves[-1].at if moves else intent.created_at) < self._interval:
+                continue
+            if done >= self._pricer.max_reprices:
+                await self._give_up_shadow(stored, report, f"unfilled after {done} reprices")
+                continue
+            try:
+                quote = await self._reader.quote(intent.conid, option=self._is_option(intent))
+                rules = await self._contracts.rules(
+                    intent.conid, is_buy=intent.side is OrderSide.BUY
+                )
+            except ObliskError as exc:
+                report.add(intent.intent_id, "not repriced", f"cannot read: {exc}")
+                continue
+            if quote is None:
+                report.add(intent.intent_id, "not repriced", "no quote")
+                continue
+            step = self._pricer.reprice(
+                intent.side, price.limit, quote.evidence, sigma=quote.sigma, rules=rules, done=done
+            )
+            if step.price is None:
+                report.add(intent.intent_id, "not repriced", step.detail)
+                continue
+            terms = intent.terms.model_copy(update={"price": step.price})
+            await self._book.fact(intent.intent_id, f"{REPRICED}: {step.detail}", terms=terms)
+            report.add(intent.intent_id, "repriced in shadow", step.detail)
+
+    async def _give_up_shadow(self, stored: StoredIntent, report: CycleReport, why: str) -> None:
+        intent_id = stored.intent.intent_id
+        await self._book.fact(intent_id, f"{RETRY_NEXT_WINDOW}: {why}")
+        await self._book.advance(intent_id, IntentState.CANCELLED, f"shadow: {why}")
+        report.add(intent_id, "cancelled in shadow", why)
 
     async def _work_one(self, stored: StoredIntent, report: CycleReport) -> None:
         intent = stored.intent

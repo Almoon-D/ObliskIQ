@@ -142,7 +142,8 @@ class GatewayTransport:
             if since < interval:
                 raise RecoveryDeferredError(
                     f"the last Gateway login attempt was {since:.0f} s ago; the next is allowed in "
-                    f"{interval - since:.0f} s, so repeated logins cannot lock the username"
+                    f"{interval - since:.0f} s, so repeated logins cannot lock the username",
+                    retry_in=interval - since,
                 )
         details: list[str] = []
         self._last_login_at = self._monotonic()

@@ -1,4 +1,5 @@
-"""Shadow fills: priced with the cost model, filled only inside the limit, never invented.
+"""Shadow fills: at the touch once a limit reaches it (DECISIONS D103), otherwise priced with the
+cost model inside the limit (D52), never invented.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -42,30 +43,54 @@ def _simulate(
     return filler.simulate(order, evidence, **fields)
 
 
-def test_a_buy_fills_at_the_reference_plus_spread_and_slippage(filler: ShadowFiller) -> None:
+def test_a_buy_through_the_touch_fills_at_the_ask(filler: ShadowFiller) -> None:
     outcome = _simulate(filler, terms(limit="100.5"))
     assert outcome.fill is not None, outcome.reason
     fill = outcome.fill
     assert fill.simulated
     assert fill.side is OrderSide.BUY
     assert fill.quantity == Decimal(10)
-    assert fill.price == Decimal("100.2")  # 0.1 % spread + 0.1 % slippage on 1,000
+    assert fill.price == Decimal("100.1")  # the ask, not the limit
     assert fill.commission == outcome.cost.commission.amount
     assert fill.execution_id.startswith("shadow-c1-")
+    at_the_ask = _simulate(filler, terms(limit="100.1"))
+    assert at_the_ask.fill is not None
+    assert at_the_ask.fill.price == Decimal("100.1")
 
 
-def test_a_fill_outside_the_limit_rests(filler: ShadowFiller) -> None:
-    outcome = _simulate(filler, terms(limit="100.1"))
+def test_a_patient_limit_inside_the_spread_rests(filler: ShadowFiller) -> None:
+    outcome = _simulate(filler, terms(limit="100.05"))
     assert outcome.fill is None
     assert outcome.cost is not None
-    assert "outside the limit" in outcome.reason
+    assert "does not reach the touch 100.1" in outcome.reason
 
 
-def test_a_sell_fills_below_the_reference(filler: ShadowFiller) -> None:
+def test_a_sell_fills_at_the_bid_once_its_limit_reaches_it(filler: ShadowFiller) -> None:
     outcome = _simulate(filler, terms(side=OrderSide.SELL, limit="99.5"))
     assert outcome.fill is not None
-    assert outcome.fill.price == Decimal("99.8")
-    assert _simulate(filler, terms(side=OrderSide.SELL, limit="99.9")).fill is None
+    assert outcome.fill.price == Decimal("99.9")
+    assert _simulate(filler, terms(side=OrderSide.SELL, limit="99.95")).fill is None
+
+
+def test_without_the_touch_the_cost_model_prices_the_fill(filler: ShadowFiller) -> None:
+    """D52's rule where the quote has no side to fill against: the last price moved by the cost
+    model's spread and slippage, filled only inside the limit."""
+    last_only = QuoteEvidence(
+        conid=265598,
+        status=MarketDataStatus.REALTIME,
+        delay_seconds=0,
+        observed_at=NOW,
+        last=Decimal(100),
+    )
+    outcome = _simulate(filler, terms(limit="100.5"), last_only)
+    assert outcome.fill is not None
+    assert outcome.fill.price == Decimal("100.2")  # 0.1 % spread + 0.1 % slippage on 1,000
+    rests = _simulate(filler, terms(limit="100.1"), last_only)
+    assert rests.fill is None
+    assert "outside the limit" in rests.reason
+    sell = _simulate(filler, terms(side=OrderSide.SELL, limit="99.5"), last_only)
+    assert sell.fill is not None
+    assert sell.fill.price == Decimal("99.8")
 
 
 def test_a_sell_stop_limit_waits_for_its_stop(filler: ShadowFiller) -> None:
@@ -132,7 +157,7 @@ def test_a_ucits_etf_on_xetra_is_priced_end_to_end_and_filled_in_shadow(
     # An ETF has no market capitalisation, so the illiquid tier is assumed: 0.5 % spread and
     # 0.5 % slippage, 15.00 each, one unit of price per unit traded.
     assert (cost.spread_cost, cost.slippage_cost) == (Decimal("15.000"), Decimal("15.000"))
-    assert outcome.fill.price == Decimal("101.0")
+    assert outcome.fill.price == Decimal("100.1")  # the ask: the quote shows the touch
     assert outcome.fill.commission == Decimal("3.00")
     assert cost.total == Decimal("33.000")
     assert "commission:europe_eur" in cost.unverified

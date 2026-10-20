@@ -166,6 +166,12 @@ def gate_settings(settings: ObliskConfig) -> ObliskConfig:
     )
 
 
+def whole_account(settings: ObliskConfig) -> ObliskConfig:
+    """``settings`` managing the whole account (the shipped default caps the book)."""
+    capital = settings.capital.model_copy(update={"mode": "whole_account"})
+    return settings.model_copy(update={"capital": capital})
+
+
 def with_caps(settings: ObliskConfig, **caps: Any) -> ObliskConfig:
     """``settings`` with other pre-trade caps."""
     pretrade = settings.execution.pretrade

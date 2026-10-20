@@ -45,6 +45,7 @@ def path_of(rig: Any) -> OrderPath:
         protective=rig.protective,
         reconciler=rig.reconciler,
         executor=rig.executor,
+        data_dir=rig.data_dir,
     )
 
 

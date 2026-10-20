@@ -378,7 +378,7 @@ async def test_shadow_mode_simulates_the_fill_on_the_listing_venue(rig: Any) -> 
     assert await state_of(rig, stored) is IntentState.FILLED
     (fill,) = await rig.store(repo.fills_for_intent, stored.intent.intent_id)
     assert fill.simulated
-    assert fill.price == Decimal("101.0")  # Xetra's schedule and the illiquid tier
+    assert fill.price == Decimal("100.1")  # the ask: a limit through the touch fills there
     assert fill.commission == Decimal("3.00")  # europe_eur, the listing venue's row
     assert rig.broker.placements == []  # nothing reached the broker
     assert [s.action for s in report.steps if s.intent_id == stored.intent.intent_id] == [
@@ -400,6 +400,127 @@ async def test_a_shadow_order_outside_its_limit_rests_unfilled(rig: Any) -> None
     (step,) = [s for s in report.steps if s.intent_id == stored.intent.intent_id]
     assert step.action == "shadow, unfilled"
     assert rig.broker.placements == []
+
+
+async def shadow_resting(rig: Any) -> Any:
+    """A shadow entry whose patient limit rests below the ask after its first simulation."""
+    await rig.modes.downgrade(ExecutionMode.SHADOW, actor="test", reason="test")
+    rig.clock.now = datetime(2026, 10, 13, 14, 30, tzinfo=UTC)
+    rig.broker.whatif_answer["amount"]["total"] = "1001 EUR"
+    stored = await rig.intent(
+        terms(quantity="10", limit="99.95", conid=EUR_ETF),
+        role=IntentRole.ENTRY,
+        reason="entry",
+        state=IntentState.PROPOSED,
+        mode=ExecutionMode.SHADOW,
+    )
+    await rig.executor.cycle()
+    assert await state_of(rig, stored) is IntentState.SUBMITTED
+    return stored
+
+
+async def test_a_resting_shadow_order_is_repriced_to_the_touch_and_fills(rig: Any) -> None:
+    """DECISIONS D103: repriced on the real clock, each reprice only changes its terms."""
+    stored = await shadow_resting(rig)
+    report = await rig.executor.cycle()  # too soon: the interval has not passed
+    assert not [s for s in report.steps if s.action == "repriced in shadow"]
+    limits = []
+    for _ in range(3):
+        rig.clock.advance(5 * 60)
+        report = await rig.executor.cycle()
+        limits.append((await rig.book.get(stored.intent.intent_id)).intent.terms.price.limit)
+    assert limits[-1] == Decimal("100.1")  # the last reprice reaches the ask
+    assert await state_of(rig, stored) is IntentState.FILLED
+    (fill,) = await rig.store(repo.fills_for_intent, stored.intent.intent_id)
+    assert fill.price == Decimal("100.1")
+    assert rig.broker.placements == []
+
+
+async def test_an_unfilled_shadow_order_is_given_up_and_retried_at_the_next_window(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from obliskiq.execution.shadow import ShadowOutcome
+
+    stored = await shadow_resting(rig)
+    resting = ShadowOutcome(fill=None, cost=None, reason="the market never came to it")
+    monkeypatch.setattr(rig.executor._shadow, "simulate", lambda *_a, **_k: resting)
+    for _ in range(4):
+        rig.clock.advance(5 * 60)
+        await rig.executor.cycle()
+    history = await rig.book.history(stored.intent.intent_id)
+    assert sum(e.detail.startswith(REPRICED) for e in history) == 3
+    assert await state_of(rig, stored) is IntentState.CANCELLED
+    assert any(e.detail.startswith(RETRY_NEXT_WINDOW) for e in history)
+    rig.clock.now = NEXT_MORNING
+    await rig.executor.cycle()
+    successors = [
+        s
+        for s in await rig.store(repo.intents_for_conid, EUR_ETF)
+        if s.intent.parent_id == stored.intent.intent_id
+    ]
+    assert len(successors) == 1
+    assert successors[0].intent.mode is ExecutionMode.SHADOW
+
+
+async def test_a_shadow_limit_the_collar_stops_waits_for_the_windows_end(rig: Any) -> None:
+    stored = await shadow_resting(rig)
+    rig.broker.quote(EUR_ETF, bid="99.0", ask="101.0", last="100")  # the touch beyond the collar
+    for _ in range(4):
+        rig.clock.advance(5 * 60)
+        await rig.executor.cycle()
+    assert await state_of(rig, stored) is IntentState.SUBMITTED
+    limit = (await rig.book.get(stored.intent.intent_id)).intent.terms.price.limit
+    assert limit == Decimal("100.5")  # the collar: 0.5 % above the reference
+
+
+async def test_a_shadow_order_is_given_up_while_its_window_is_still_open(rig: Any) -> None:
+    stored = await shadow_resting(rig)
+    rig.clock.now = NEAR_CLOSE
+    report = await rig.executor.cycle()
+    assert await state_of(rig, stored) is IntentState.CANCELLED
+    assert [s.detail for s in report.steps if s.action == "cancelled in shadow"] == [
+        "its venue's window is ending"
+    ]
+
+
+async def test_a_shadow_reprice_without_a_quote_or_rules_waits(rig: Any) -> None:
+    stored = await shadow_resting(rig)
+    rig.clock.advance(5 * 60)
+    rig.broker.unavailable.add("rules")
+    report = await rig.executor.cycle()
+    ours = [s for s in report.steps if s.intent_id == stored.intent.intent_id]
+    assert any(s.action == "not repriced" and "cannot read" in s.detail for s in ours)
+    rig.broker.unavailable.clear()
+    del rig.broker.quotes[EUR_ETF]
+    report = await rig.executor.cycle()
+    ours = [s for s in report.steps if s.intent_id == stored.intent.intent_id]
+    assert any(s.action == "not repriced" and s.detail == "no quote" for s in ours)
+
+
+async def test_a_shadow_reprice_that_would_not_move_waits(rig: Any) -> None:
+    stored = await shadow_resting(rig)
+    rig.broker.quote(EUR_ETF, bid="99.0", ask="99.9", last="99.5")  # the ask is under the limit
+    rig.clock.advance(5 * 60)
+    report = await rig.executor.cycle()
+    ours = [s for s in report.steps if s.intent_id == stored.intent.intent_id]
+    assert any(s.action == "not repriced" and "gives no better limit" in s.detail for s in ours)
+
+
+async def test_shadow_orders_are_not_worked_outside_shadow_mode_or_without_a_mode(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stored = await shadow_resting(rig)
+    await rig.modes.upgrade(ExecutionMode.PAPER, actor="test", reason="test")
+    rig.clock.advance(5 * 60)
+    await rig.executor.cycle()
+    history = await rig.book.history(stored.intent.intent_id)
+    assert not any(e.detail.startswith(REPRICED) for e in history)
+
+    async def unreadable() -> Any:
+        raise RuntimeError("the store is locked")
+
+    monkeypatch.setattr(rig.modes, "current", unreadable)
+    await rig.executor._work_shadow(type("R", (), {"add": lambda *_a: None})())
 
 
 # ── failure branches ──

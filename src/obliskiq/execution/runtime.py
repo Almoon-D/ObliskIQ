@@ -13,20 +13,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from ..calendars.service import Calendars
+from ..calendars.status import Disagreement
 from ..config.schema import ObliskConfig
 from ..env import Environment
-from ..errors import ExecutionError
+from ..errors import ExecutionError, ObliskError
 from ..ibkr.client import IbkrClient
 from ..ibkr.guard import AccountGuard
 from ..ibkr.orders import OrderClient
-from ..ibkr.session import BrokerSession
+from ..ibkr.schedule_source import IbkrTradingSchedule
+from ..ibkr.session import AlertHook, BrokerSession
 from ..ibkr.transport import Transport, build_transport, transport_refusal
 from ..ibkr.transport.gateway_login import LoginDriver
 from ..jurisdiction.eligibility import ELIGIBILITY_POLICIES
@@ -80,6 +82,9 @@ class OrderPath:
     protective: ProtectiveManager
     reconciler: Reconciler
     executor: Executor
+    data_dir: Path
+    session: BrokerSession | None = None
+    schedule: IbkrTradingSchedule | None = None
 
 
 def calendar_venues(settings: ObliskConfig, directory: ConfiguredDirectory) -> tuple[str, ...]:
@@ -93,6 +98,21 @@ def calendar_venues(settings: ObliskConfig, directory: ConfiguredDirectory) -> t
     )
 
 
+def schedule_references(
+    calendars: Calendars, directory: ConfiguredDirectory
+) -> dict[str, tuple[int, str | None]]:
+    """One reference contract per venue for IBKR's trading schedule: the first instrument the
+    directory lists on it, with its listing exchange."""
+    references: dict[str, tuple[int, str | None]] = {}
+    for instrument in directory.instruments():
+        try:
+            venue = calendars.venue_for_ibkr(instrument.listing_exchange)
+        except ObliskError:
+            continue
+        references.setdefault(venue, (instrument.conid, instrument.listing_exchange))
+    return references
+
+
 def assemble(
     settings: ObliskConfig,
     *,
@@ -103,8 +123,10 @@ def assemble(
     calendars: Calendars,
     alert: OrderAlertHook | None = None,
     now: Callable[[], datetime] = utc_now,
+    schedule: IbkrTradingSchedule | None = None,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> OrderPath:
-    """The order path over a started client."""
+    """The order path over a started client (``sleep``: how a conversion's fill is waited for)."""
     guard = client.guard
     orders = OrderClient(
         client.session, settings, guard, StoreClearanceLedger(worker, now=now), now=now
@@ -165,6 +187,7 @@ def assemble(
         modes=modes,
         alert=alert,
         now=now,
+        sleep=sleep,
     )
     protective = ProtectiveManager(
         settings,
@@ -229,6 +252,9 @@ def assemble(
         protective=protective,
         reconciler=reconciler,
         executor=executor,
+        data_dir=data_dir,
+        session=client.session,
+        schedule=schedule,
     )
 
 
@@ -242,8 +268,16 @@ async def open_order_path(
     transport: Transport | None = None,
     login_driver: LoginDriver | None = None,
     alert: OrderAlertHook | None = None,
+    session_alert: AlertHook | None = None,
+    calendar_alert: Callable[[Disagreement], None] | None = None,
+    extra_venues: Collection[str] = (),
+    cross_check: bool = False,
 ) -> AsyncIterator[OrderPath]:
-    """A started order path for one command; closed, with the store, when it ends."""
+    """A started order path for one command; closed, with the store, when it ends.
+
+    The service passes its alert hooks, the venues its jobs are anchored to (``extra_venues``)
+    and ``cross_check``: IBKR's trading schedule registered as the calendars' cross-check source,
+    which it then refreshes from one reference contract per venue (``schedule_references``)."""
     if env.ibkr_profile is None:
         raise ExecutionError("OBLISK_IBKR_PROFILE is unset")
     refusal = transport_refusal(env) if transport is None else None
@@ -256,20 +290,35 @@ async def open_order_path(
     if transport is None:
         transport = build_transport(env, settings, data_dir=data_dir, login_driver=login_driver)
     session = BrokerSession(
-        transport, ibkr, RetryPolicy.from_settings(settings.http), known_ids=(account_id,)
+        transport,
+        ibkr,
+        RetryPolicy.from_settings(settings.http),
+        known_ids=(account_id,),
+        alert=session_alert,
     )
     client = IbkrClient(session, settings, guard)
     await client.start()
     worker = StoreWorker(lambda: open_store(settings, data_dir))
     try:
         directory = ConfiguredDirectory.from_settings(settings)
+        built: list[Calendars] = []
+
+        def trading_weekday(venue: str, day: date) -> bool:
+            return built[0].is_business_weekday(venue, day) if built else True
+
+        schedule = (
+            IbkrTradingSchedule(ibkr, is_trading_weekday=trading_weekday) if cross_check else None
+        )
         calendars = await asyncio.to_thread(
             Calendars.from_settings,
             settings,
             reference=utc_now().date(),
-            venues=calendar_venues(settings, directory),
+            venues=sorted({*calendar_venues(settings, directory), *extra_venues}),
             data_dir=data_dir,
+            sources=() if schedule is None else (schedule,),
+            alert=calendar_alert,
         )
+        built.append(calendars)
         yield assemble(
             settings,
             client=client,
@@ -278,6 +327,7 @@ async def open_order_path(
             data_dir=data_dir,
             calendars=calendars,
             alert=alert,
+            schedule=schedule,
         )
     finally:
         await worker.aclose()

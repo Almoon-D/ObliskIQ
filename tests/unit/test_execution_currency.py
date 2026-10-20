@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 from fake_broker import EURUSD
-from order_rig import EUR_ETF, STOCK, whatif_answer
+from order_rig import EUR_ETF, STOCK, whatif_answer, whole_account
 
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.orders import ExecutionMode, IntentRole, IntentState, OrderSide
@@ -43,8 +43,9 @@ def idle(rig: Any) -> Sleep:
 
 
 def manager(rig: Any, *, sleep: Sleep | None = None, settings: ObliskConfig | None = None) -> Any:
+    """The currency manager over ``rig``, managing the whole account unless ``settings`` say."""
     return CurrencyManager(
-        settings if settings is not None else rig.settings,
+        settings if settings is not None else whole_account(rig.settings),
         gate=rig.gate,
         boundary=rig.boundary,
         book=rig.book,
@@ -105,6 +106,15 @@ async def test_a_small_shortfall_is_raised_to_the_minimum_conversion(rig: Any) -
     assert report.ready == {buy.intent.intent_id}
     (body,) = conversions(rig)
     assert body["fxQty"] == 1000  # the minimum conversion, 1,000 euros
+
+
+async def test_a_capped_book_converts_its_shortfall_alone(rig: Any) -> None:
+    """DECISIONS D104: the account's cash beyond the cap is not the book's to convert."""
+    buy = await rig.staged(quantity="2")  # 200 dollars
+    report = await manager(rig, settings=rig.settings).fund([buy.intent])  # capital.mode: cap
+    assert report.ready == {buy.intent.intent_id}
+    (body,) = conversions(rig)
+    assert body["fxQty"] == 187  # the shortfall at the limit, not the 1,000-euro minimum
 
 
 async def test_the_minimum_gives_way_to_the_cash_the_base_currency_has(rig: Any) -> None:

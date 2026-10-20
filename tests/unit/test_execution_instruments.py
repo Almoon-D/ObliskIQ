@@ -18,7 +18,7 @@ def test_the_configured_directory_describes_the_allowlist(shipped_settings: Any)
     assert directory.describe(7089) is not None
     assert directory.describe(7089).symbol == "FCX"
     assert directory.describe(1) is None
-    assert directory.listing_exchanges() == ("IBIS", "NYSE")
+    assert directory.listing_exchanges() == ("AEB", "IBIS", "LSEETF", "NYSE")
 
 
 def test_nothing_ordinary_is_prohibited(shipped_settings: Any) -> None:
