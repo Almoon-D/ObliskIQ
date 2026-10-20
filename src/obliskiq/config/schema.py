@@ -37,6 +37,13 @@ from .schema_instruments import (
 )
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 from .schema_research import ResearchConfig
+from .schema_runtime import (
+    CapitalConfig,
+    CoreConfig,
+    ReportingConfig,
+    RuntimeConfig,
+    TradingConfig,
+)
 
 _IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
 
@@ -82,6 +89,9 @@ class PathsConfig(FrozenModel):
     research_database: DataFileName
     manual_incidents: DataFileName
     ibkr_gateway: DataFileName
+    heartbeat_file: DataFileName
+    alert_state: DataFileName
+    service_lock: DataFileName
 
 
 class StoreConfig(FrozenModel):
@@ -125,6 +135,11 @@ class ObliskConfig(FrozenModel):
     positions: PositionsConfig
     eligibility: EligibilityConfig
     research: ResearchConfig
+    runtime: RuntimeConfig
+    capital: CapitalConfig
+    core: CoreConfig
+    trading: TradingConfig
+    reporting: ReportingConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -154,8 +169,17 @@ class ObliskConfig(FrozenModel):
             f"seasonal_closes.{mic}: a synthetic calendar has no library close to replace"
             for mic in sorted(set(self.seasonal_closes) & set(self.synthetic_calendars))
         ]
+        anchors = [
+            (f"runtime.cycles.{cycle.name}", cycle.venue) for cycle in self.runtime.cycles
+        ] + [("runtime.digest", self.runtime.digest.venue)]
+        problems += [
+            f"{where}.venue: {mic} is not a venue declared in venues"
+            for where, mic in anchors
+            if mic not in known
+        ]
         problems += self._paper_order_problems()
         problems += self._currency_problems()
+        problems += self._skeleton_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
@@ -167,6 +191,34 @@ class ObliskConfig(FrozenModel):
             "conversions are to and from the base currency"
             for pair in self.execution.currency.pairs
             if base not in (pair.base, pair.quote)
+        ]
+
+    @model_validator(mode="after")
+    def _relogin_alerted_within_a_heartbeat(self) -> Self:
+        """A failed re-login must reach the owner within one heartbeat (DECISIONS D68): the
+        keepalive's slowest path to its alert, failed tickles then every re-login attempt and
+        pause, fits inside ``runtime.heartbeat_seconds``."""
+        session = self.ibkr.session
+        slowest = (
+            session.tickle_interval_seconds * session.tickle_failure_grace
+            + session.reauthenticate_attempts * session.reauthenticate_pause_seconds
+        )
+        if slowest > self.runtime.heartbeat_seconds:
+            raise ValueError(
+                f"runtime.heartbeat_seconds ({self.runtime.heartbeat_seconds}) is shorter than "
+                f"the keepalive's slowest path to a failed re-login's alert ({slowest:.0f} s: "
+                "ibkr.session tickle_interval_seconds x tickle_failure_grace plus "
+                "reauthenticate_attempts x reauthenticate_pause_seconds)"
+            )
+        return self
+
+    def _skeleton_problems(self) -> list[str]:
+        allowed = {instrument.conid for instrument in self.eligibility.skeleton_allowlist}
+        return [
+            f"core.skeleton_targets.{target.role}: conid {target.conid} is not in "
+            "eligibility.skeleton_allowlist"
+            for target in self.core.skeleton_targets
+            if target.conid not in allowed
         ]
 
     def _paper_order_problems(self) -> list[str]:

@@ -30,6 +30,7 @@ EXPECTED_NAMES = {
     "SEC_USER_AGENT",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
+    "OBLISK_HEALTH_PING_URL",
     "OBLISK_IBKR_PROFILE",
     "OBLISK_IBKR_ACCOUNT_ID",
     "OBLISK_IBKR_TRANSPORT",
@@ -56,6 +57,7 @@ SECRET_NAMES = {
     "SEC_USER_AGENT",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
+    "OBLISK_HEALTH_PING_URL",
     "OBLISK_IBKR_ACCOUNT_ID",
     "OBLISK_IBKR_GATEWAY_USERNAME",
     "OBLISK_IBKR_GATEWAY_PASSWORD",
@@ -66,7 +68,9 @@ SECRET_NAMES = {
 
 
 def _secret(name: str) -> str:
-    return f"sentinel-{name.lower().replace('_', '-')}-value"
+    sentinel = f"sentinel-{name.lower().replace('_', '-')}-value"
+    # The ping URL must be one: an https address with the sentinel in its path.
+    return f"https://ping.test/{sentinel}" if name == "OBLISK_HEALTH_PING_URL" else sentinel
 
 
 @pytest.fixture
@@ -143,6 +147,7 @@ def test_names_are_case_sensitive(monkeypatch):
         ("OBLISK_IBKR_CP_BASE_URL", "http://api.ibkr.com", "must be an https:// URL"),
         ("OBLISK_IBKR_CP_BASE_URL", "https://api.ibkr.com/v1/api", "without a path"),
         ("OBLISK_IBKR_CP_BASE_URL", "https://", "must be an https:// URL"),
+        ("OBLISK_HEALTH_PING_URL", "http://hc.test/ping", "OBLISK_HEALTH_PING_URL"),
     ],
 )
 def test_a_bad_value_fails_loudly_naming_the_variable(monkeypatch, name, value, fragment):

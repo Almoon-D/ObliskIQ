@@ -1,0 +1,19 @@
+# The core (MASTER_PLAN §5.4).
+core:
+  # SKELETON (Session 6's walking skeleton; removed in Session 13, which builds the variant the
+  # owner chose): a static book the basic rebalancer (decision/rebalance_basic.py) trades toward.
+  # Three roles of variant A, the static risk balance the owner's point selects (DECISIONS D91),
+  # weighted as A weights them (research/preregistrations/core-allocation.md: WORLD 9 %, EM 7 %,
+  # EGB_INT 34 %) scaled to fill the book. Each conid is pinned and described in
+  # eligibility.skeleton_allowlist; the vehicles are candidates, not Session 9's selection. Like the
+  # real core, these positions carry no protective stops. QUOTED weights.
+  skeleton_targets:
+    # Global developed equity: iShares Core MSCI World UCITS ETF (Acc) on the LSE, quoted in USD,
+    # so a cycle exercises the currency conversion.
+    - {role: world_equity, weight: "0.18", conid: 78999785}
+    # Emerging-market equity: iShares Core MSCI EM IMI UCITS ETF (Acc) on Euronext Amsterdam.
+    - {role: em_equity, weight: "0.14", conid: 153454120}
+    # Euro government bonds: iShares € Govt Bond 7-10yr UCITS ETF on Euronext Amsterdam (A's
+    # intermediate role holds 3-7 years; this was the euro government line IBKR's search
+    # confirmed).
+    - {role: euro_govt_bonds, weight: "0.68", conid: 43614383}

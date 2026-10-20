@@ -1,0 +1,18 @@
+# How the basic rebalancer (decision/rebalance_basic.py) trades toward its targets. Amounts and
+# fractions are QUOTED. Session 13's core engine brings the wide inner and outer bands.
+trading:
+  # The smallest trade, in the base currency: `absolute_base`, `fraction_of_managed` (of managed
+  # capital), or both combined by `combine` (max: the larger; min: the smaller); either may be
+  # null, not both. Never below the commission floor: a trade worth less than its own commission
+  # is not made. Judgements.
+  min_trade:
+    absolute_base: "50"
+    fraction_of_managed: "0.02"
+    combine: max
+  # A role trades back to its target only once its weight is further from it than the smaller of
+  # `absolute` (weight points) and `relative` (a share of its target). Judgements.
+  inner_band:
+    absolute: "0.02"
+    relative: "0.10"
+  # How long a rebalancing intent lives before it expires unfilled: a trading day. A judgement.
+  intent_ttl_minutes: 480

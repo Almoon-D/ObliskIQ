@@ -19,7 +19,8 @@ def test_the_shipped_profile_selects_the_skeleton(repo_root: Any, shipped_settin
     assert policy.skeleton
     assert ELIGIBILITY_POLICIES in SHIPPED_POLICY_KINDS
     listed = {i.conid for i in shipped_settings.eligibility.skeleton_allowlist}
-    assert listed == {89005163, 7089}
+    # The paper order test's two and the skeleton core's three (core.skeleton_targets).
+    assert listed == {89005163, 7089, 78999785, 153454120, 43614383}
     for conid in listed:
         described = next(
             i for i in shipped_settings.eligibility.skeleton_allowlist if i.conid == conid

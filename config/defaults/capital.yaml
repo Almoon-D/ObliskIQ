@@ -1,0 +1,10 @@
+# Managed capital (MASTER_PLAN §5.15), Session 6's minimal form; Session 7 adds the cash-flow
+# ledger, reservations and sleeve budgets.
+capital:
+  # whole_account: the bot manages the account's whole net liquidation value. cap: it manages at
+  # most cap_base, so a large paper balance behaves like the real account size and minimum trades,
+  # integer shares and commissions are simulated honestly. cap until the owner sizes the book.
+  mode: cap
+  # The cap, in the base currency. QUOTED. Read in mode cap. A judgement: a small book until the
+  # owner states its size in config/owner.yaml.
+  cap_base: "1000"
