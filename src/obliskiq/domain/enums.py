@@ -22,6 +22,8 @@ class AssetClass(StrEnum):
     OPTION = "option"
     INDEX = "index"
     FUTURE = "future"
+    #: A spot currency pair (IBKR's secType ``CASH``), traded only as a currency conversion.
+    FX = "fx"
 
 
 class InstrumentRole(StrEnum):

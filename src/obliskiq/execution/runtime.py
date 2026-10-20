@@ -1,5 +1,7 @@
 """The order path assembled for a command: the read client, the order client, the store, the
-modes, the kill switch, the write boundary, the pre-trade gate, the exit coordinator and flatten.
+modes, the kill switch, the write boundary, the pre-trade gate, the exit coordinator, flatten, and
+the execution mechanics over them — pricing, the currency manager, protective exits,
+reconciliation and the executor.
 
 :func:`open_order_path` opens a brokerage session the way the read-only preflight does — the
 profile and transport refusal first, so a paper run never reads an OAuth key, then the paper
@@ -29,6 +31,7 @@ from ..ibkr.transport import Transport, build_transport, transport_refusal
 from ..ibkr.transport.gateway_login import LoginDriver
 from ..jurisdiction.eligibility import ELIGIBILITY_POLICIES
 from ..jurisdiction.profile import JurisdictionProfile
+from ..quant.costs import CostBook
 from ..store import open_store
 from ..store.worker import StoreWorker
 from ..util.http import RetryPolicy
@@ -36,6 +39,8 @@ from ..util.timeutil import utc_now
 from .account import IbkrAccountReader
 from .approvals import ApprovalQueue
 from .boundary import OrderAlertHook, WriteBoundary
+from .currency import CurrencyManager
+from .executor import Executor
 from .exits import ExitCoordinator
 from .flatten import Flattener
 from .instruments import ConfiguredDirectory
@@ -43,7 +48,11 @@ from .killswitch import KillSwitch
 from .ledger import StoreClearanceLedger
 from .modes import Modes
 from .pretrade import PretradeGate
+from .pricing import Pricer
+from .protective import ProtectiveManager
+from .reconcile import Reconciler
 from .replies import ReplyPolicy
+from .shadow import ShadowFiller
 from .state import IntentBook
 
 
@@ -66,6 +75,11 @@ class OrderPath:
     calendars: Calendars
     approvals: ApprovalQueue
     flattener: Flattener
+    pricer: Pricer
+    currency: CurrencyManager
+    protective: ProtectiveManager
+    reconciler: Reconciler
+    executor: Executor
 
 
 def calendar_venues(settings: ObliskConfig, directory: ConfiguredDirectory) -> tuple[str, ...]:
@@ -137,6 +151,63 @@ def assemble(
         modes=modes,
         now=now,
     )
+    contracts = client.contracts
+    pricer = Pricer(settings)
+    currency = CurrencyManager(
+        settings,
+        gate=gate,
+        boundary=boundary,
+        book=book,
+        worker=worker,
+        reader=reader,
+        directory=directory,
+        rules=contracts,
+        modes=modes,
+        alert=alert,
+        now=now,
+    )
+    protective = ProtectiveManager(
+        settings,
+        gate=gate,
+        boundary=boundary,
+        book=book,
+        worker=worker,
+        reader=reader,
+        rules=contracts,
+        modes=modes,
+        alert=alert,
+        now=now,
+    )
+    reconciler = Reconciler(
+        settings,
+        boundary=boundary,
+        worker=worker,
+        reader=reader,
+        directory=directory,
+        alert=alert,
+        now=now,
+    )
+    executor = Executor(
+        settings,
+        orders=orders,
+        gate=gate,
+        boundary=boundary,
+        book=book,
+        worker=worker,
+        reader=reader,
+        contracts=contracts,
+        directory=directory,
+        calendars=calendars,
+        modes=modes,
+        coordinator=coordinator,
+        currency=currency,
+        pricer=pricer,
+        protective=protective,
+        reconciler=reconciler,
+        shadow=ShadowFiller(CostBook.from_config(settings)),
+        alert=alert,
+        now=now,
+    )
     return OrderPath(
         settings=settings,
         client=client,
@@ -153,6 +224,11 @@ def assemble(
         calendars=calendars,
         approvals=ApprovalQueue(settings, worker, book, now=now),
         flattener=flattener,
+        pricer=pricer,
+        currency=currency,
+        protective=protective,
+        reconciler=reconciler,
+        executor=executor,
     )
 
 

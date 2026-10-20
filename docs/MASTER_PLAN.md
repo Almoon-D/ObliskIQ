@@ -590,11 +590,11 @@ decision only when its activation condition holds (§2).
 - **Protective exits** rest at the broker as stop-limit orders and are re-placed after
   fills, trailing roll-ups and partial exits, so a dead machine never leaves a position
   unprotected. Where IBKR's Web API supports attached orders (a child stop linked by
-  `parentId`, probed in Session 5), the entry and its stop are cleared and placed as one
-  package, closing the window between a fill and its stop. A stop-limit becomes a limit
-  when it triggers and does not fill through a gap: its limit offset follows the
-  instrument's volatility and gap distribution, and a triggered stop that has not filled
-  is repriced toward the bid in steps, each through the gate. A limit deep enough to act
+  `parentId`, probed before they are adopted, DECISIONS D99), the entry and its stop are
+  cleared and placed as one package, closing the window between a fill and its stop. A
+  stop-limit becomes a limit when it triggers and does not fill through a gap: its limit
+  offset follows the instrument's volatility and gap distribution, and a triggered stop
+  that has not filled is repriced toward the bid in steps, each through the gate. A limit deep enough to act
   as a market order is the owner's decision, off by default (DECISIONS D67).
 - **Kill switch.** Cancels working entry orders and blocks new risk; keeps protective exits.
   `flatten` is a separate, explicit command.

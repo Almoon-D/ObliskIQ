@@ -213,6 +213,29 @@ class OrderTerms(DomainModel):
         return hashlib.sha256(text.encode()).hexdigest()
 
 
+class ProtectiveSpec(DomainModel):
+    """How a position's protective stop rests at the broker (MASTER_PLAN §5.12, DECISIONS D67).
+
+    ``stop`` is the price the stop triggers at when it is first placed (a trailing roll-up raises
+    the working order's stop later). The limit sits at most ``limit_offset_fraction`` below the
+    stop: an offset set from the instrument's volatility and its overnight-gap distribution, with
+    a configured floor (``execution/protective.py``); ``basis`` says how. The pre-trade gate
+    checks every resting stop against its intent's spec.
+    """
+
+    stop: PositiveAmount
+    limit_offset_fraction: Annotated[Decimal, Field(gt=0, lt=1, allow_inf_nan=False)]
+    basis: NonEmptyText
+
+    def lowest_limit(self, stop: Decimal) -> Decimal:
+        """The lowest limit a stop at ``stop`` may carry under this spec."""
+        return stop * (1 - self.limit_offset_fraction)
+
+
+#: The roles that may carry a protective spec: an entry (the stop its fills get) and a stop.
+_SPEC_ROLES = frozenset({IntentRole.ENTRY, IntentRole.PROTECTIVE})
+
+
 class OrderIntent(DomainModel):
     """What the decision layer wants done, and where it stands."""
 
@@ -228,6 +251,8 @@ class OrderIntent(DomainModel):
     expires_at: UtcDatetime
     parent_id: IntentId | None = None
     protective_id: IntentId | None = None
+    #: The protective stop an entry's fills get, or a protective stop's own rule.
+    protective: ProtectiveSpec | None = None
     state: IntentState = IntentState.PROPOSED
 
     @model_validator(mode="after")
@@ -238,6 +263,8 @@ class OrderIntent(DomainModel):
             raise ValueError("the conversion role and conversion terms go together")
         if self.intent_id in (self.parent_id, self.protective_id):
             raise ValueError("an intent cannot link to itself")
+        if self.protective is not None and self.role not in _SPEC_ROLES:
+            raise ValueError("only an entry or a protective stop carries a protective spec")
         return self
 
     @property
@@ -361,13 +388,15 @@ class Fill(DomainModel):
 
 
 class Position(DomainModel):
-    """A position as the broker reported it at ``observed_at``."""
+    """A position as the broker reported it at ``observed_at``; ``market_value`` is IBKR's mark
+    in ``currency`` (a fresh read carries it; the store does not keep it)."""
 
     conid: Conid
     quantity: Amount
     average_cost: Amount | None
     currency: CurrencyCode | None
     observed_at: UtcDatetime
+    market_value: Amount | None = None
 
 
 class CashBalance(DomainModel):
@@ -462,3 +491,36 @@ class KillSwitchRecord(DomainModel):
     on: bool
     actor: NonEmptyText
     reason: NonEmptyText
+
+
+class ReconcileStatus(StrEnum):
+    """How a reconciliation ended. Only ``green`` lets new risk through."""
+
+    GREEN = "green"  # the broker and the store agree
+    DRIFT = "drift"  # a finding that freezes new intents
+    INCOMPLETE = "incomplete"  # the broker's data was partial or missing: never green
+
+
+class ReconcileFinding(DomainModel):
+    """One thing reconciliation found; ``freezes`` when it stops new risk."""
+
+    kind: NonEmptyText
+    detail: NonEmptyText
+    freezes: bool
+
+
+class ReconcileRun(DomainModel):
+    """One reconciliation of the broker's orders, trades, positions and cash against the store."""
+
+    at: UtcDatetime
+    status: ReconcileStatus
+    findings: tuple[ReconcileFinding, ...]
+
+    @model_validator(mode="after")
+    def _status_matches(self) -> Self:
+        freezing = any(finding.freezes for finding in self.findings)
+        if self.status is ReconcileStatus.GREEN and freezing:
+            raise ValueError("a run with a freezing finding is not green")
+        if self.status is ReconcileStatus.DRIFT and not freezing:
+            raise ValueError("a drift names the finding that freezes")
+        return self

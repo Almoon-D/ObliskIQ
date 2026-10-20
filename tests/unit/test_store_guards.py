@@ -144,6 +144,11 @@ STATE_READS = {
     "approval_for",
     "stop_resizes_in_states",
     "stop_resizes_for_exit",
+    # Session 5: an instrument's intents (its protective stops and the entries they follow) and
+    # the reconciliation in force.
+    "intents_for_conid",
+    "latest_reconciliation",
+    "reconciliation_anchor",
 }
 
 #: Names that write in ``store/orders.py``.

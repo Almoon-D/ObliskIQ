@@ -28,11 +28,12 @@ from typing import TextIO
 
 from .. import __version__
 from ..config import LoadedConfig, load_config
-from ..domain.orders import ExecutionMode, KillSwitchRecord
+from ..domain.orders import ExecutionMode, KillSwitchRecord, ReconcileStatus
 from ..env import Environment, default_env_file, load_environment
 from ..errors import ConfigError, EnvVarError, ModeChangeRefusedError, ObliskError, StoreError
 from ..execution.approvals import ApprovalQueue
 from ..execution.killswitch import clear_file_flag, file_flag_on, set_file_flag
+from ..execution.live_test import ExecutionTest
 from ..execution.modes import Modes
 from ..execution.paper_test import PaperOrderTest
 from ..execution.runtime import OrderPath, open_order_path
@@ -141,13 +142,19 @@ def _account(env: Environment) -> str:
 
 def _preflight(loaded: Loaded, out: TextIO) -> int:
     """``preflight --read-only`` walks the IBKR read path; ``--paper-order-test`` places and
-    cancels one paper order per configured instrument."""
+    cancels one paper order per configured instrument; ``--execution-test`` runs Session 5's
+    live steps (``--finish`` for the second phase)."""
     env = loaded.env
+    if loaded.args.finish and not loaded.args.execution_test:
+        print("--finish goes with --execution-test", file=out)
+        return EXIT_INVALID
     refused = _broker_refusal(env, out)
     if refused is not None:
         return refused
     if loaded.args.paper_order_test:
         return _paper_order_test(loaded, out)
+    if loaded.args.execution_test:
+        return _execution_test(loaded, out)
     report = asyncio.run(run_read_only(env, loaded.config.settings, data_dir=env.data_dir))
     print(report.render((_account(env),)), file=out)
     return EXIT_OK if report.ok else EXIT_INVALID
@@ -176,6 +183,48 @@ def _paper_order_test(loaded: Loaded, out: TextIO) -> int:
         return EXIT_INVALID
     print(report.render((_account(loaded.env),)), file=out)
     return EXIT_OK if report.ok else EXIT_INVALID
+
+
+def _execution_test(loaded: Loaded, out: TextIO) -> int:
+    """Session 5's live steps on paper: phase one, or phase two with ``--finish``."""
+    finish = bool(loaded.args.finish)
+    try:
+        report = _with_order_path(
+            loaded,
+            lambda path: ExecutionTest(path).finish() if finish else ExecutionTest(path).run(),
+        )
+    except ObliskError as exc:
+        print(f"execution test stopped: {exc}", file=out)
+        return EXIT_INVALID
+    text = report.render((_account(loaded.env),))
+    print(text.replace("IBKR paper order test:", "IBKR execution test:", 1), file=out)
+    return EXIT_OK if report.ok else EXIT_INVALID
+
+
+def _reconcile(loaded: Loaded, out: TextIO) -> int:
+    """``reconcile run`` (one reconciliation) or ``reconcile accept`` (the owner accepts the
+    broker's state as the new anchor, lifting a drift's freeze)."""
+    refused = _broker_refusal(loaded.env, out)
+    if refused is not None:
+        return refused
+    accept = loaded.args.action == "accept"
+    try:
+        run = _with_order_path(
+            loaded,
+            lambda path: (
+                path.reconciler.accept(actor=OWNER_ACTOR, reason=loaded.args.reason)
+                if accept
+                else path.reconciler.run()
+            ),
+        )
+    except ObliskError as exc:
+        print(f"reconciliation stopped: {exc}", file=out)
+        return EXIT_INVALID
+    print(f"reconciliation {run.status.value} at {run.at.isoformat()}", file=out)
+    for finding in run.findings:
+        mark = "freezes" if finding.freezes else "note"
+        print(f"  [{mark}] {finding.kind}: {finding.detail}", file=out)
+    return EXIT_OK if run.status is ReconcileStatus.GREEN else EXIT_INVALID
 
 
 def _flatten(loaded: Loaded, out: TextIO) -> int:
@@ -414,7 +463,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="paper only: place one order that cannot fill per configured instrument, read its "
         "status and reply messages, and cancel it (needs mode paper)",
     )
+    how.add_argument(
+        "--execution-test",
+        action="store_true",
+        help="paper only: a conversion, a buy that fills, its protective stop and IBKR's "
+        "reporting lag; then, with --finish in a new process, the stop after the restart and "
+        "the sale (needs mode paper)",
+    )
+    preflight.add_argument(
+        "--finish",
+        action="store_true",
+        help="with --execution-test: phase two, after the process was restarted",
+    )
     preflight.set_defaults(handler=_preflight)
+
+    reconcile = commands.add_parser(
+        "reconcile", help="the broker against the store; drift freezes new risk"
+    )
+    reconcile_actions = reconcile.add_subparsers(dest="action", required=True, metavar="ACTION")
+    reconcile_actions.add_parser("run", help="reconcile once and print the findings").set_defaults(
+        handler=_reconcile
+    )
+    accept = reconcile_actions.add_parser(
+        "accept",
+        help="accept the broker's positions and cash as they are now (lifts a drift's freeze)",
+    )
+    accept.add_argument("--reason", required=True, help="why the broker is right (audited)")
+    accept.set_defaults(handler=_reconcile)
 
     flatten = commands.add_parser(
         "flatten", help="place closing orders for every managed position (not the kill switch)"

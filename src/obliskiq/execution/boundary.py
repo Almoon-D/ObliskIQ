@@ -23,7 +23,7 @@ unknown outcome and a refused cOID alert the owner. Refusals carry a reason code
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -73,19 +73,43 @@ class OrderAlertKind(StrEnum):
     OPTION_CLOSE_BLOCKED = "option_close_blocked"
     #: A protective stop cut for an exit could not be restored (I5).
     RESTORE_FAILED = "restore_failed"
+    #: A position's protective stop was missing or short at a heartbeat (re-placed, or not).
+    STOP_MISSING = "stop_missing"
+    #: A triggered stop that a gap left unfilled cannot be repriced further.
+    STOP_GAPPED = "stop_gapped"
+    #: A currency conversion that funds a trade failed; the trade was not placed.
+    CONVERSION_FAILED = "conversion_failed"
+    #: Reconciliation found drift or could not read the broker: new risk is frozen.
+    RECONCILIATION_DRIFT = "reconciliation_drift"
+    #: An intent that may be at the broker could not be resolved after a restart.
+    RESUME_UNRESOLVED = "resume_unresolved"
 
 
 @dataclass(frozen=True, slots=True)
 class OrderAlert:
-    """Something the owner must hear about an order."""
+    """Something the owner must hear about an order (``intent_id`` ``None``: about the account)."""
 
     kind: OrderAlertKind
-    intent_id: UUID
+    intent_id: UUID | None
     detail: str
     at: datetime
 
 
 type OrderAlertHook = Callable[[OrderAlert], None]
+
+
+def raise_alert(hook: OrderAlertHook | None, alert: OrderAlert) -> None:
+    """Log ``alert`` and hand it to ``hook``; a failing hook is logged, never raised."""
+    log.warning(
+        "order alert",
+        extra={"kind": alert.kind.value, "intent": str(alert.intent_id), "detail": alert.detail},
+    )
+    if hook is None:
+        return
+    try:
+        hook(alert)
+    except Exception:
+        log.exception("the order alert hook failed")
 
 
 def state_for(order: BrokerOrder) -> IntentState:
@@ -295,11 +319,16 @@ class WriteBoundary:
     async def sync_order(self, order_id: str) -> BrokerOrder:
         """Read one order's status from the broker and bring its intent up to date."""
         order = await self._client.status(order_id)
-        await self._worker.run(repo.upsert_broker_orders, [order])
-        intent_id = await self._worker.run(repo.intent_for_order, order_id)
-        if intent_id is not None:
-            await self._move(intent_id, state_for(order), f"broker status {order.status}")
+        await self.record_orders([order])
         return order
+
+    async def record_orders(self, orders: Sequence[BrokerOrder]) -> None:
+        """Record what the broker reports of these orders and bring their intents up to date."""
+        await self._worker.run(repo.upsert_broker_orders, list(orders))
+        for order in orders:
+            intent_id = await self._worker.run(repo.intent_for_order, order.order_id)
+            if intent_id is not None:
+                await self._move(intent_id, state_for(order), f"broker status {order.status}")
 
     # ── recording ──
 
@@ -333,13 +362,7 @@ class WriteBoundary:
         if kind is None:
             return
         alert = OrderAlert(kind=kind, intent_id=intent_id, detail=result.detail, at=self._now())
-        log.warning("order alert", extra={"kind": kind.value, "intent": str(intent_id)})
-        if self._alert is None:
-            return
-        try:
-            self._alert(alert)
-        except Exception:
-            log.exception("the order alert hook failed")
+        raise_alert(self._alert, alert)
 
     async def _settle_placement(self, stored: StoredIntent, result: PlacementResult) -> None:
         intent = stored.intent

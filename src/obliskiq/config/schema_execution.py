@@ -11,7 +11,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, NonNegativeInt, PositiveFloat, PositiveInt, model_validator
 
-from ..domain.base import NonEmptyText
+from ..domain.base import Conid, CurrencyCode, NonEmptyText
 from ..domain.enums import AssetClass
 from ..domain.orders import ExecutionMode, Sleeve, TimeInForce
 from .base import FrozenModel
@@ -134,14 +134,9 @@ class CapsConfig(FrozenModel):
         return self
 
 
-class ProtectiveSpecConfig(FrozenModel):
-    max_limit_offset_fraction: Annotated[Decimal, Field(ge=0, lt=1)]
-
-
 class PretradeConfig(FrozenModel):
     caps: CapsConfig
     cash_floor: Annotated[Decimal, Field(ge=0)]
-    protective: ProtectiveSpecConfig
 
 
 class ApprovalConfig(FrozenModel):
@@ -156,9 +151,117 @@ class ApprovalConfig(FrozenModel):
         return self
 
 
+class AlgoParameterConfig(FrozenModel):
+    name: NonEmptyText
+    value: NonEmptyText
+
+
 class FlattenConfig(FrozenModel):
     intent_ttl_minutes: PositiveInt
     tif: TimeInForce
+
+
+type Money = Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
+type Share = Annotated[Decimal, Field(gt=0, lt=1, allow_inf_nan=False)]
+
+
+class CurrencyPair(FrozenModel):
+    """One of IBKR's spot pairs (secType ``CASH``): buying it sells ``quote`` for ``base``."""
+
+    symbol: NonEmptyText
+    conid: Conid
+    base: CurrencyCode
+    quote: CurrencyCode
+
+    @model_validator(mode="after")
+    def _two_currencies(self) -> Self:
+        if self.base == self.quote:
+            raise ValueError("a currency pair names two currencies")
+        return self
+
+
+class CurrencyConfig(FrozenModel):
+    """The currency manager: the pairs it trades, the buffer, batching and repatriation."""
+
+    pairs: list[CurrencyPair]
+    buffer_base: Money
+    min_conversion_base: Money
+    repatriate_above_base: Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
+    limit_fraction: Share
+    intent_ttl_minutes: PositiveInt
+    fill_timeout_seconds: PositiveFloat
+    fill_poll_seconds: PositiveFloat
+
+    @model_validator(mode="after")
+    def _one_pair_each(self) -> Self:
+        conids = [pair.conid for pair in self.pairs]
+        couples = [frozenset((pair.base, pair.quote)) for pair in self.pairs]
+        if len(set(conids)) != len(conids) or len(set(couples)) != len(couples):
+            raise ValueError("each pair, and each pair of currencies, is listed once")
+        return self
+
+
+class AlgoRule(FrozenModel):
+    """An IBKR algo for orders on these listing venues and asset classes, when enabled."""
+
+    venues: list[NonEmptyText] = Field(min_length=1)
+    asset_classes: list[AssetClass] = Field(min_length=1)
+    strategy: NonEmptyText
+    parameters: list[AlgoParameterConfig]
+    enabled: bool
+
+
+class PricingConfig(FrozenModel):
+    algos: list[AlgoRule]
+    start_ticks_inside_mid: NonNegativeInt
+    max_reprices: NonNegativeInt
+    reprice_interval_minutes: PositiveInt
+
+
+class LimitOffsetConfig(FrozenModel):
+    """How far below its stop a protective limit sits (DECISIONS D67)."""
+
+    floor_fraction: Share
+    sigma_multiple: Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
+    max_fraction: Share
+
+    @model_validator(mode="after")
+    def _floor_within_max(self) -> Self:
+        if self.floor_fraction > self.max_fraction:
+            raise ValueError("limit_offset.floor_fraction must not exceed max_fraction")
+        return self
+
+
+class EmergencyLimitConfig(FrozenModel):
+    enabled: bool
+    fraction_below_bid: Share
+
+
+class GapConfig(FrozenModel):
+    """Repricing a triggered stop that did not fill."""
+
+    step_fraction: Share
+    max_steps: PositiveInt
+    step_interval_minutes: PositiveInt
+    emergency: EmergencyLimitConfig
+
+
+class ProtectiveConfig(FrozenModel):
+    tif: TimeInForce
+    intent_ttl_days: PositiveInt
+    limit_offset: LimitOffsetConfig
+    gap: GapConfig
+
+    @model_validator(mode="after")
+    def _rests(self) -> Self:
+        if self.tif is TimeInForce.IOC:
+            raise ValueError("a protective stop rests at the broker: IOC never rests")
+        return self
+
+
+class ReconcileConfig(FrozenModel):
+    grace_seconds: PositiveInt
+    cash_tolerance_base: Money
 
 
 class ExecutionConfig(FrozenModel):
@@ -171,6 +274,10 @@ class ExecutionConfig(FrozenModel):
     pretrade: PretradeConfig
     approval: ApprovalConfig
     flatten: FlattenConfig
+    currency: CurrencyConfig
+    pricing: PricingConfig
+    protective: ProtectiveConfig
+    reconcile: ReconcileConfig
 
     @model_validator(mode="after")
     def _one_rule_per_class(self) -> Self:

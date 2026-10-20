@@ -1,10 +1,11 @@
 # IBKR Client Portal Web API — orders
 
-The order endpoints as IBKR documents them and as ibind implements them. Nothing here has been
-executed through ObliskIQ yet: every line is `[DOC 2026-10-13]` (IBKR's reference) or
+The order endpoints as IBKR documents them and as ibind implements them. No order has been
+placed through ObliskIQ yet: T1's paper order test (2026-10-20) stopped before its first order
+(docs/knowledge/ibkr.md, "T1"). Every line is `[DOC <date>]` (IBKR's reference) or
 `[ibind 0.2.2]` (read in its source), and every shape the code relies on is
-`VERIFY-LIVE(paper order test)` until Session 4a's paper order test runs on a machine where the
-paper Gateway login works (docs/knowledge/ibkr.md, "Session 3"). Tags as in `README.md`.
+`VERIFY-LIVE(paper order test)` until the paper order test and Session 5's execution test run on
+the machine. Tags as in `README.md`.
 
 ## Sources
 
@@ -14,6 +15,10 @@ paper Gateway login works (docs/knowledge/ibkr.md, "Session 3"). Tags as in `REA
   cash-quantity-orders-in-the-web-api, respond-to-a-server-prompt}` and
   `endpoints/order-monitoring/{live-orders, order-status, order-status-value, trades}` under
   <https://www.interactivebrokers.com/docs/web-api/v1/>.
+- Read 2026-10-20 for Session 5: the place-order reference's field list (`cOID`, `parentId`,
+  `isCcyConv`, `fxQty`), the whatif page, IBKR's order-types page for stop-limit orders, and
+  IBKR Campus's tutorial "How to Code a Currency Conversion Order in the Web API" (published
+  2021-10-08, modified 2025-02-12).
 - ibind 0.2.2 (Voyz/ibind, Apache-2.0): `ibind/client/ibkr_client_mixins/order_mixin.py` and
   `ibind/client/ibkr_utils.py` (`QuestionType`, the message-id map, `handle_questions`,
   `OrderRequest` and its field mapping). Read as a reference, never a dependency.
@@ -52,7 +57,9 @@ Fields ObliskIQ sends (`ibkr/orders.py: order_body`), from the reference and ibi
 - `conid`, or `conidex` (`"<conid>@<exchange>"`) to route to one venue. ibind refuses both in
   one order; the reference's example carries both. ObliskIQ sends `conid` for `SMART` and
   `conidex` otherwise. VERIFY-LIVE(routing by conidex).
-- `orderType`: only `LMT` and `STOP_LIMIT` are ever built. A stop-limit carries `price` (the
+- `orderType`: only `LMT` and `STOP_LIMIT` are ever built. IBKR's order-types page gives the
+  Web API's stop-limit as `STP LMT` [DOC 2026-10-20]; ibind and the reference's modify example
+  use `STOP_LIMIT`. VERIFY-LIVE(stop-limit orderType spelling). A stop-limit carries `price` (the
   limit) and `auxPrice` (the stop). An IBKR algo is `LMT` with `strategy` and
   `strategyParameters` (from `/iserver/contract/{conid}/algos`), capped by `price`. The
   reference also lists `MKT`, `STP`, `MIDPRICE`, `TRAIL`, `TRAILLMT`; none can be expressed.
@@ -60,8 +67,7 @@ Fields ObliskIQ sends (`ibkr/orders.py: order_body`), from the reference and ibi
   down to whole shares and is rejected below one share; stocks accept `cashQty` since
   2026-03-27).
 - **Currency conversion:** `isCcyConv: true` with `fxQty` (the reference's prose says `fxQTY`;
-  its JSON example and ibind say `fxQty`). ObliskIQ sends `fxQty`.
-  VERIFY-LIVE(conversion field spelling) — Session 5 converts.
+  its JSON example, the tutorial and ibind say `fxQty`). See "Currency conversion" below.
 - `manualIndicator` and `extOperator` are required for futures and futures options only (CME
   Rule 536-B); ObliskIQ never trades either and sends neither.
 
@@ -70,11 +76,49 @@ Fields ObliskIQ sends (`ibkr/orders.py: order_body`), from the reference and ibi
 - `cOID` is "an arbitrary string" the client chooses; live orders and trades return it as
   `order_ref`; the order-status endpoint does not return it. [DOC 2026-10-13]
 - A cOID already used is refused with `Order couldn't be submitted: Local order ID=… is already
-  registered` — the text ibind matches. [ibind 0.2.2] Over what window IBKR keeps it is not
-  documented. VERIFY-LIVE(duplicate cOID refusal and its window).
+  registered` — the text ibind matches. [ibind 0.2.2] The place-order reference says a cOID
+  must be unique for 24 hours [DOC 2026-10-20]. VERIFY-LIVE(duplicate cOID refusal and its
+  window).
 - No maximum length is documented. ObliskIQ sends the 36-character uuid7 and keeps a
   deterministic short form ready (`execution.orders.coid_max_length`).
   VERIFY-LIVE(cOID length).
+
+## Currency conversion
+
+[DOC 2026-10-20], from IBKR's tutorial and the place-order reference:
+
+- A conversion is an order on the spot pair (`conid` 12087792 is EUR.USD, `secType` `CASH`) with
+  `isCcyConv: true`. `fxQty` is the amount of the currency the conversion transfers **from**;
+  the tutorial's example also sends `quantity`, the amount transferred to, and says both sizes
+  are not guaranteed. It sends `side: BUY` and `orderType: MKT`.
+- Buying the pair sells its quote currency for its base, selling it sells the base for the quote.
+  The tutorial shows only a buy.
+- Its example answer carries `warning_message: "399"`, the odd-lot notice for an order below
+  IDEALPRO's minimum (EUR 20,000 in the example's text).
+- IBKR's spot-currency commissions (fixed, Tier I): 0.20 basis point of the trade value, at
+  least USD 2.00 an order, charged in the base currency; a modified order counts as a
+  cancellation and a replacement for the minimum (docs/knowledge/costs.md).
+
+What ObliskIQ sends (`ibkr/orders.py`, DECISIONS D98): `LMT` with `isCcyConv` and `fxQty`, no
+`quantity`, routed `SMART`, its limit inside the pair's collar; the trades' size is read as the
+pair's base currency and their price as the rate. VERIFY-LIVE(a limit conversion, its sides,
+fxQty without quantity, its trades, the 399 warning as a reply or a notice).
+
+## Attached orders
+
+[DOC 2026-10-20] `parentId` goes on the child of a bracket and must equal the parent's cOID; the
+whatif endpoint "also supports bracket orders". How IBKR lists a child before its parent fills,
+reports it and cancels it is not documented. ObliskIQ does not send attached orders (DECISIONS
+D99). VERIFY-LIVE(a whatif of an entry with a child stop-limit).
+
+## Protective stops (Session 5)
+
+A protective stop is a `STOP_LIMIT` sell, `tif` `GTC` (DECISIONS D99). Live orders list "the
+account's orders of the day"; whether a GTC order placed in an earlier session is listed, and
+whether its status is readable by id (the status endpoint answers 503 for an order with no
+cached information), is not documented. The heartbeat reads an unlisted stop's status after the
+grace period and counts one it cannot read as missing. VERIFY-LIVE(a GTC stop in a later
+session's live orders and status).
 
 ## Warnings and replies
 

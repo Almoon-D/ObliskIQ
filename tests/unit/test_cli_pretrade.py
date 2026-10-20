@@ -26,6 +26,9 @@ from obliskiq.domain.orders import (
     LimitPrice,
     OrderSide,
     OrderTerms,
+    ReconcileFinding,
+    ReconcileRun,
+    ReconcileStatus,
     Sleeve,
     TimeInForce,
 )
@@ -121,16 +124,16 @@ def test_flatten_refuses_a_transport_the_profile_does_not_allow(
 def test_flatten_prints_what_it_did(
     credentials: None, monkeypatch: pytest.MonkeyPatch, data_dir: Path
 ) -> None:
-    closing = FlattenLine(8158, Decimal(10), True, "closing")
+    closing = FlattenLine(7089, Decimal(10), True, "closing")
     opened: list[Any] = []
     monkeypatch.setattr(
         app, "open_order_path", _open_with(FakePath(FlattenReport((closing,))), opened)
     )
     status, out, _ = _run("flatten", "--confirm")
     assert status == EXIT_OK
-    assert "conid 8158 (10): closing" in out
+    assert "conid 7089 (10): closing" in out
     assert opened == [("es", data_dir)]
-    refused = FlattenLine(8158, Decimal(10), False, "refused (collar)")
+    refused = FlattenLine(7089, Decimal(10), False, "refused (collar)")
     monkeypatch.setattr(app, "open_order_path", _open_with(FakePath(FlattenReport((refused,)))))
     status, out, _ = _run("flatten", "--confirm")
     assert status == EXIT_INVALID
@@ -201,7 +204,7 @@ def _held_intent(config_dir: Path, data_dir: Path) -> uuid.UUID:
         sleeve=Sleeve.CORE,
         role=IntentRole.ENTRY,
         terms=OrderTerms(
-            conid=8158,
+            conid=7089,
             side=OrderSide.BUY,
             quantity=Decimal(1),
             price=LimitPrice(limit=Decimal(30)),
@@ -254,3 +257,109 @@ def test_an_approval_names_an_intent_id(data_dir: Path) -> None:
     status, out, _ = _run("approvals", "approve", str(uuid.uuid7()), "--reason", "x")
     assert status == EXIT_INVALID
     assert "no intent" in out
+
+
+# ── the execution test and reconciliation ──
+
+
+def test_finish_goes_with_the_execution_test(credentials: None) -> None:
+    status, out, _ = _run("preflight", "--read-only", "--finish")
+    assert status == EXIT_INVALID
+    assert "--finish goes with --execution-test" in out
+
+
+@pytest.mark.parametrize("finish", [False, True])
+def test_the_execution_test_prints_its_report_with_the_account_masked(
+    credentials: None, monkeypatch: pytest.MonkeyPatch, finish: bool
+) -> None:
+    ran: list[str] = []
+
+    class FakeTest:
+        def __init__(self, path: Any) -> None:
+            self.path = path
+
+        async def run(self) -> PaperOrderReport:
+            ran.append("run")
+            report = PaperOrderReport()
+            report.add("(b) buy", True, "placed for DUTEST1")
+            return report
+
+        async def finish(self) -> PaperOrderReport:
+            ran.append("finish")
+            report = PaperOrderReport()
+            report.add("(b) sale", False, "nothing to sell")
+            return report
+
+    monkeypatch.setattr(app, "open_order_path", _open_with(object()))
+    monkeypatch.setattr(app, "ExecutionTest", FakeTest)
+    argv = ["preflight", "--execution-test", *(["--finish"] if finish else [])]
+    status, out, _ = _run(*argv)
+    assert ran == ["finish" if finish else "run"]
+    assert status == (EXIT_INVALID if finish else EXIT_OK)
+    assert out.startswith("IBKR execution test:")
+    assert "DUTEST1" not in out
+
+
+def test_an_execution_test_that_cannot_start_says_so(
+    credentials: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(app, "open_order_path", _open_with(ExecutionError("no session")))
+    status, out, _ = _run("preflight", "--execution-test")
+    assert status == EXIT_INVALID
+    assert "execution test stopped: no session" in out
+
+
+class FakeReconciler:
+    def __init__(self, status: ReconcileStatus) -> None:
+        self.reconciler = self
+        self.status = status
+        self.accepted: list[tuple[str, str]] = []
+
+    def _run(self, *findings: ReconcileFinding) -> ReconcileRun:
+        return ReconcileRun(at=datetime.now(UTC), status=self.status, findings=findings)
+
+    async def run(self) -> ReconcileRun:
+        finding = ReconcileFinding(kind="position_mismatch", detail="conid 1: 5 vs 4", freezes=True)
+        return self._run(*(() if self.status is ReconcileStatus.GREEN else (finding,)))
+
+    async def accept(self, *, actor: str, reason: str) -> ReconcileRun:
+        self.accepted.append((actor, reason))
+        return self._run(ReconcileFinding(kind="accepted", detail=reason, freezes=False))
+
+
+def test_reconcile_run_prints_the_findings(
+    credentials: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(app, "open_order_path", _open_with(FakeReconciler(ReconcileStatus.DRIFT)))
+    status, out, _ = _run("reconcile", "run")
+    assert status == EXIT_INVALID
+    assert out.startswith("reconciliation drift")
+    assert "[freezes] position_mismatch" in out
+    monkeypatch.setattr(app, "open_order_path", _open_with(FakeReconciler(ReconcileStatus.GREEN)))
+    status, out, _ = _run("reconcile", "run")
+    assert status == EXIT_OK
+
+
+def test_reconcile_accept_records_the_owners_reason(
+    credentials: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeReconciler(ReconcileStatus.GREEN)
+    monkeypatch.setattr(app, "open_order_path", _open_with(fake))
+    status, out, _ = _run("reconcile", "accept", "--reason", "a dividend")
+    assert status == EXIT_OK
+    assert fake.accepted == [(app.OWNER_ACTOR, "a dividend")]
+    assert "[note] accepted: a dividend" in out
+
+
+def test_reconcile_needs_the_broker(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    status, out, _ = _run("reconcile", "run")
+    assert status == EXIT_NO_CREDENTIALS
+    monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
+    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", "DUTEST1")
+    monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "gateway")
+    monkeypatch.setenv("OBLISK_IBKR_GATEWAY_USERNAME", "paper-user")
+    monkeypatch.setenv("OBLISK_IBKR_GATEWAY_PASSWORD", "paper-pass")
+    monkeypatch.setattr(app, "open_order_path", _open_with(ExecutionError("no session")))
+    status, out, _ = _run("reconcile", "run")
+    assert status == EXIT_INVALID
+    assert "reconciliation stopped: no session" in out

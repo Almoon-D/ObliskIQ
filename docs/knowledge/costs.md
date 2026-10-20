@@ -21,18 +21,24 @@ the estimator returns `no_schedule` instead of a number.
 | `eurex_option` | EUR 1.50 per contract, no minimum | lite `config.yaml` @b1ebd49, documentation-derived | `VERIFY-LIVE(Eurex option commission)` |
 | `us_treasury` | 0.002 % of face, minimum USD 5 | `docs/MASTER_PLAN.md` §5.3 | `VERIFY-LIVE(US Treasury commission)` |
 | `eur_bond` | 0.1 % of face up to EUR 8,500, minimum EUR 1 | `docs/MASTER_PLAN.md` §5.3 | `VERIFY-LIVE(EUR bond tier)` |
-| `europe_eur` | 0.10 % of value, minimum EUR 4.00, on Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana and SIX | IBKR's published page "Stocks, ETFs and Warrants – Europe", Fixed – Direct Routing `[IBKR ✓ 2026-10-16]` | `VERIFY-LIVE(European commissions)` |
-| `europe_usd` | 0.10 % of value, minimum USD 6.00, on the LSE, Euronext Amsterdam and SIX | the same page | `VERIFY-LIVE(European commissions)` |
-| `lse_gbp` | 0.10 % of value, minimum GBP 4.00, on the LSE | the same page (United Kingdom) | `VERIFY-LIVE(European commissions)` |
-| `six_gbp`, `six_chf` | 0.10 % of value, minimum GBP 6.00 and CHF 6.00, on SIX | the same page (Switzerland) | `VERIFY-LIVE(European commissions)` |
+| `europe_eur` | 0.05 % of value, minimum EUR 3.00, on Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana and SIX | IBKR's published page "Stocks, ETFs and Warrants – Europe", Fixed – IB SmartRouting `[IBKR ✓ 2026-10-20]` | `VERIFY-LIVE(European commissions)` |
+| `europe_usd` | 0.05 % of value, minimum USD 4.00, on the LSE, Euronext Amsterdam and SIX | the same page | `VERIFY-LIVE(European commissions)` |
+| `lse_gbp` | 0.05 % of value, minimum GBP 3.00, on the LSE | the same page (United Kingdom) | `VERIFY-LIVE(European commissions)` |
+| `six_gbp`, `six_chf` | 0.05 % of value, minimum GBP 3.00 and CHF 5.00, on SIX | the same page (Switzerland) | `VERIFY-LIVE(European commissions)` |
+| `spot_fx` | 0.20 basis point (0.002 %) of the trade value in USD, minimum USD 2.00 an order; charged in the base currency | IBKR's published page "Spot Currencies" (IDEALPRO), Fixed, Tier I up to USD 1 bn a month `[IBKR ✓ 2026-10-20]` | `VERIFY-LIVE(conversion commission)` |
 
-- The European rows price **direct routing** to the listing venue, the higher of IBKR's two fixed
-  columns. The same page lists IB SmartRouting at 0.05 % of value with lower minimums (EUR 3.00,
-  GBP 3.00, USD 4.00, CHF 5.00) and the tiered plan at 0.05 % with a cap (EUR 29.00); fixed
-  pricing includes the exchange, clearing and regulatory fees. A SMART-routed order therefore
-  costs about half what these rows say. Session 5's executor fixes the routing; if it routes
-  SMART, the rows follow it. The page's worked examples agree: 75 shares at EUR 80 cost EUR 3.00
-  smart-routed, 100 shares at EUR 40 cost EUR 4.00 direct-routed `[IBKR ✓ 2026-10-16]`.
+- The European rows price **IB SmartRouting**, the way the order path routes every order
+  (DECISIONS D97). The same page lists direct routing at 0.10 % of value with higher minimums
+  (EUR 4.00, USD 6.00, GBP 4.00 on the LSE and 6.00 on SIX, CHF 6.00) and the tiered plan at
+  0.05 % with a cap (EUR 29.00); fixed pricing includes the exchange, clearing and regulatory
+  fees. The page's worked examples agree: 75 shares at EUR 80 cost EUR 3.00 smart-routed, 100
+  shares at EUR 40 cost EUR 4.00 direct-routed `[IBKR ✓ 2026-10-16]`.
+- A **conversion** is priced by `spot_fx` on its value in US dollars; the spot-currency page
+  says the commission is converted to and charged in the base currency, and that a modified
+  order counts as a cancellation and a replacement for the minimum, so each reprice of a
+  conversion can cost another minimum `[IBKR ✓ 2026-10-20]`. Conversions are batched for that
+  minimum (`execution.currency.min_conversion_base`). The research simulator does not price
+  conversions yet (a follow-up in the ROADMAP).
 - The schedule is chosen by the instrument's **listing venue**, never `SMART` (DECISIONS D67).
 
 - The EUR bond row is defined only up to `up_to_face`; an order above it falls into a tier the

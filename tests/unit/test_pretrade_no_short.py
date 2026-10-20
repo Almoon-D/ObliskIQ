@@ -406,3 +406,12 @@ def test_only_the_latest_spent_modify_of_an_order_counts() -> None:
         used_at=AT - timedelta(minutes=1),
     )
     assert count(request(), live, [newer, older]) == Decimal(7 + 1)
+
+
+def test_modifies_spent_in_the_same_second_count_at_the_larger_size() -> None:
+    live = [order("1", total=Decimal(5))]
+    first = open_clearance("7", action=ClearanceAction.MODIFY, order_id="1", used=True)
+    second = open_clearance("3", action=ClearanceAction.MODIFY, order_id="1", used=True)
+    # Second-resolution stamps cannot order them: either may be the one the broker applied.
+    assert count(request(), live, [first, second]) == Decimal(7 + 1)
+    assert count(request(), live, [second, first]) == Decimal(7 + 1)

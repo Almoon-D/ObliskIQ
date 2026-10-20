@@ -8,28 +8,42 @@ never from the object a caller holds.
 **What it checks.** Three stages, each reporting every failure it finds:
 
 1. *Local*, before the broker is touched: the intent (stored, in a state that may be written,
-   unexpired, the action's terms); no currency conversion yet (Session 5 funds by conversion);
-   the paper guard (profile paper ⇒ a paper-prefix account); the mode (the intent's, permitting
-   writes under this profile); the kill switch; the instrument described; prohibited products;
-   buy-side eligibility through the jurisdiction's :class:`EligibilityPolicy` (the mandatory
-   close for an option on an ineligible ETP); approval; the calendars' act-now view at this
-   instant (``Calendars.tradability``; an option also inside ``common_windows`` with its
-   underlying's venue, and date-critical inside its mandatory-close window).
+   unexpired, the action's terms); the paper guard (profile paper ⇒ a paper-prefix account); the
+   mode (the intent's, permitting writes under this profile); the kill switch and, for an order
+   that adds risk, a reconciliation that is not green (it freezes new risk); the instrument
+   described; prohibited products; buy-side eligibility through the jurisdiction's
+   :class:`EligibilityPolicy` (the mandatory close for an option on an ineligible ETP); approval;
+   the calendars' act-now view at this instant (``Calendars.tradability``; an option also inside
+   ``common_windows`` with its underlying's venue, and date-critical inside its mandatory-close
+   window).
 2. *Broker reads*: positions, live orders (a complete snapshot), trades, the quote policy and the
-   collar (a protective stop: its protective spec instead), and, for an order that adds risk,
-   the ledger and a whatif.
+   collar (a protective stop: its intent's protective spec instead), and, for an order that adds
+   risk, the ledger and a whatif.
 3. *Store*, in one transaction that also records the clearance, so two processes see each
    other: the holdings registry (``unmanaged`` never traded, a held conid without a sleeve
    refused), no short (I2, ``execution/exposure.py``), and, for an order that adds risk, the
-   cash in its currency against every open commitment and the floor, no borrowing by the
-   whatif's own cost, and the caps per order, per 24 hours and in count.
+   cash in its currency against every open commitment (working conversions out of it included)
+   and the floor, no borrowing by the whatif's own cost, and the caps per order, per 24 hours and
+   in count.
+
+**A currency conversion** (``execution/fx.py``) is checked on its own path: a configured pair, the
+paper guard, the mode, the kill switch and the freeze; the reads; the pair's quote under the
+quote policy and the collar; then the cash it converts from against its open commitments and the
+floor, and the single-foreign-currency cap (lite's ``positions.max_single_foreign_currency_pct``)
+on the currency it buys: that currency's cash, the conversion, the conversions still working into
+it and the positions quoted in it, against the NAV. It funds a trade that passes its own checks,
+so it carries no eligibility, approval, calendar or notional cap of its own (DECISIONS D98).
 
 **Class by effect (I3).** A sell of a managed long position, within it, reduces risk; every buy
 and every conversion adds risk. For an order that reduces risk the gate waives exactly the kill
-switch, the notional caps, the order count, buy-side eligibility, the cash and no-margin check,
-and approval; every other check applies, and a sell stop-limit is checked against its
-protective spec instead of the collar. A refused option close for want of a real-time quote
-alerts the owner: an option left to expiry may be exercised.
+switch, the reconciliation freeze, the notional caps, the order count, buy-side eligibility, the
+cash and no-margin check, and approval; every other check applies, and a sell stop-limit is
+checked against its intent's protective spec instead of the collar: its stop rests below the
+collar's band and its limit within the spec's offset below the stop. A modify of a stop the market
+has reached (the reference at or below its stop) reprices a working limit: its limit is held to
+the sell collar, or, when the owner enabled the emergency limit, to that fraction below the bid
+(DECISIONS D67). A refused option close for want of a real-time quote alerts the owner: an
+option left to expiry may be exercised.
 
 **The clearance** carries the effect, the quotes it was checked against and the collar's sigma
 (the reply policy decides IBKR's no-market-data warning from them), the order's notional, and
@@ -37,7 +51,8 @@ expires with the earliest quote it rests on (and never after the intent).
 
 :meth:`PretradeGate.check` runs the same checks without issuing anything, counting named orders
 at an assumed size: an exit that needs its protective stop resized passes its other checks
-before the stop is touched (I5, ``execution/exits.py``).
+before the stop is touched (I5, ``execution/exits.py``). In shadow mode the executor asks it
+with ``simulated``: every check but the mode's refusal to write, for a fill it only simulates.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -58,13 +73,16 @@ from ..domain.instrument import TradedInstrument
 from ..domain.orders import (
     UNMANAGED,
     ClearanceAction,
+    ExecutionMode,
     Fill,
     IntentState,
+    LimitPrice,
     OrderIntent,
     OrderSide,
     OrderTerms,
     PretradeClearance,
     QuoteEvidence,
+    ReconcileStatus,
     RiskEffect,
 )
 from ..errors import CalendarError, ObliskError
@@ -80,8 +98,9 @@ from ..store.orders import OpenClearance
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .account import AccountReader, CashRead, PositionsRead, QuoteRead
-from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind
+from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, raise_alert
 from .exposure import SellRequest, UnreadableOrdersError, count_sells, store_position
+from .fx import ConversionLeg, conversion_leg
 from .instruments import InstrumentDirectory, prohibited_reasons
 from .killswitch import CONVERSION_SEC_TYPE, KillSwitch
 from .modes import Modes, write_refusal
@@ -105,13 +124,14 @@ class Reason(StrEnum):
     TERMS_MISMATCH = "terms_mismatch"
     MODIFY_CHANGES_ORDER = "modify_changes_order"
     ORDER_NOT_INTENTS = "order_not_intents"
-    CONVERSION_UNAVAILABLE = "conversion_unavailable"
+    CONVERSION_PAIR = "conversion_pair"
     PAPER_GUARD = "paper_guard"
     MODE_UNREADABLE = "mode_unreadable"
     MODE_FORBIDS_WRITE = "mode_forbids_write"
     INTENT_MODE = "intent_mode"
     PROFILE_MISMATCH = "profile_mismatch"
     KILL_SWITCH_ON = "kill_switch_on"
+    RECONCILIATION_FROZEN = "reconciliation_frozen"
     INSTRUMENT_UNKNOWN = "instrument_unknown"
     PROHIBITED_PRODUCT = "prohibited_product"
     INELIGIBLE = "ineligible"
@@ -131,6 +151,8 @@ class Reason(StrEnum):
     WRITTEN_OPTION = "written_option"
     FILLS_UNRECONCILED = "fills_unreconciled"
     CURRENCY_NOT_HELD = "currency_not_held"
+    CURRENCY_CAP = "currency_cap"
+    EXPOSURE_UNREADABLE = "exposure_unreadable"
     FX_RATE_UNAVAILABLE = "fx_rate_unavailable"
     WHATIF_REFUSED = "whatif_refused"
     MARGIN_USE = "margin_use"
@@ -181,6 +203,7 @@ class _Request:
     terms: OrderTerms
     effect: RiskEffect
     assume: Mapping[str, Decimal]
+    simulated: bool = False
 
 
 @dataclass
@@ -188,6 +211,7 @@ class _Found:
     """What stage 1 and 2 learnt, for stage 3."""
 
     instrument: TradedInstrument | None = None
+    leg: ConversionLeg | None = None
     underlying: TradedInstrument | None = None
     positions: PositionsRead | None = None
     live: LiveOrders | None = None
@@ -254,7 +278,12 @@ class PretradeGate:
         self._daily_fraction = caps.max_daily_fraction_of_nav
         self._max_orders = caps.max_orders_per_day
         self._floor = pretrade.cash_floor
-        self._max_limit_offset = pretrade.protective.max_limit_offset_fraction
+        protective = settings.execution.protective
+        self._max_spec_offset = protective.limit_offset.max_fraction
+        self._emergency_on = protective.gap.emergency.enabled
+        self._emergency_fraction = protective.gap.emergency.fraction_below_bid
+        self._pairs = tuple(settings.execution.currency.pairs)
+        self._max_currency = settings.positions.max_single_foreign_currency_pct
         self._held = frozenset(settings.execution.approval.sleeves)
         self._base = settings.account.base_currency
         self._close_sessions = settings.tenor.mandatory_close_trading_days
@@ -284,9 +313,12 @@ class PretradeGate:
         intent: OrderIntent,
         *,
         assume: Mapping[str, Decimal],
+        simulated: bool = False,
     ) -> PretradeRefusal | None:
         """Every check of a placement of ``intent``, issuing nothing; the broker orders in
-        ``assume`` are counted at the size given (an exit beside a stop about to be cut)."""
+        ``assume`` are counted at the size given (an exit beside a stop about to be cut).
+        ``simulated``: a shadow intent in shadow mode, whose fill is only simulated, passes the
+        mode's refusal to write and nothing else."""
         answer = await self._evaluate(
             intent.intent_id,
             action=ClearanceAction.PLACE,
@@ -294,6 +326,7 @@ class PretradeGate:
             terms=None,
             assume=assume,
             issue=False,
+            simulated=simulated,
         )
         return answer if isinstance(answer, PretradeRefusal) else None
 
@@ -308,6 +341,7 @@ class PretradeGate:
         terms: OrderTerms | None,
         assume: Mapping[str, Decimal],
         issue: bool,
+        simulated: bool = False,
     ) -> PretradeClearance | PretradeRefusal | None:
         stored = await self._worker.run(repo.get_intent, intent_id)
         if stored is None:
@@ -319,15 +353,23 @@ class PretradeGate:
             if asked.side is OrderSide.SELL and not asked.conversion
             else RiskEffect.ADDS
         )
-        request = _Request(intent, stored.coid, action, order_id, asked, effect, assume)
+        request = _Request(
+            intent, stored.coid, action, order_id, asked, effect, assume, simulated and not issue
+        )
         shape = await self._shape(request)
         if shape:
             return PretradeRefusal(intent_id, tuple(shape))
-        found = await self._local(request)
+        if asked.conversion:
+            found = await self._local_conversion(request)
+        else:
+            found = await self._local(request)
         if found.failures:
             self._alert_option_close(request, found)
             return PretradeRefusal(intent_id, tuple(found.failures))
-        await self._read(request, found)
+        if asked.conversion:
+            await self._read_conversion(request, found)
+        else:
+            await self._read(request, found)
         if found.failures:
             self._alert_option_close(request, found)
             return PretradeRefusal(intent_id, tuple(found.failures))
@@ -386,11 +428,6 @@ class PretradeGate:
                 )
         if self._now() >= intent.expires_at:
             fail(Reason.INTENT_EXPIRED, "the intent has expired")
-        if request.terms.conversion:
-            fail(
-                Reason.CONVERSION_UNAVAILABLE,
-                "currency conversion is Session 5's: no conversion is cleared yet",
-            )
         return failures
 
     async def _local(self, request: _Request) -> _Found:
@@ -399,13 +436,7 @@ class PretradeGate:
         adds = request.effect is RiskEffect.ADDS
         instrument = self._directory.describe(terms.conid)
         found = _Found(instrument=instrument)
-        try:
-            self._guard.check_prefix()
-        except AccountGuardError as exc:
-            found.fail(Reason.PAPER_GUARD, str(exc))
-        await self._mode(intent, found)
-        if adds and await self._kill.is_on():
-            found.fail(Reason.KILL_SWITCH_ON, "the kill switch blocks orders that add risk")
+        await self._guards(request, found)
         if instrument is None:
             found.fail(Reason.INSTRUMENT_UNKNOWN, f"conid {terms.conid} is not described")
             return found
@@ -430,14 +461,36 @@ class PretradeGate:
         self._calendar_checks(instrument, found, mandatory_close=mandatory_close and adds)
         return found
 
-    async def _mode(self, intent: OrderIntent, found: _Found) -> None:
+    async def _guards(self, request: _Request, found: _Found) -> None:
+        """The paper guard, the mode and, for an order that adds risk, the kill switch and the
+        reconciliation freeze."""
+        try:
+            self._guard.check_prefix()
+        except AccountGuardError as exc:
+            found.fail(Reason.PAPER_GUARD, str(exc))
+        await self._mode(request, found)
+        if request.effect is not RiskEffect.ADDS:
+            return
+        if await self._kill.is_on():
+            found.fail(Reason.KILL_SWITCH_ON, "the kill switch blocks orders that add risk")
+        latest = await self._worker.run(repo.latest_reconciliation)
+        if latest is not None and latest.status is not ReconcileStatus.GREEN:
+            found.fail(
+                Reason.RECONCILIATION_FROZEN,
+                f"the latest reconciliation ({latest.at.isoformat()}) is {latest.status.value}: "
+                "new risk waits for a green one",
+            )
+
+    async def _mode(self, request: _Request, found: _Found) -> None:
+        intent = request.intent
         try:
             mode = await self._modes.current()
         except Exception as exc:  # any failure to read the mode refuses
             found.fail(Reason.MODE_UNREADABLE, f"the mode cannot be read ({type(exc).__name__})")
             return
         refusal = write_refusal(mode, self._modes.profile)
-        if refusal is not None:
+        simulated = request.simulated and mode is ExecutionMode.SHADOW
+        if refusal is not None and not simulated:
             found.fail(Reason.MODE_FORBIDS_WRITE, refusal)
         if mode is not intent.mode:
             found.fail(
@@ -556,6 +609,47 @@ class PretradeGate:
             )
         return day >= close_by
 
+    async def _local_conversion(self, request: _Request) -> _Found:
+        """Stage 1 of a conversion: a configured pair, the paper guard, the mode, the kill switch
+        and the freeze."""
+        found = _Found(leg=conversion_leg(self._pairs, request.terms))
+        await self._guards(request, found)
+        if found.leg is None:
+            found.fail(
+                Reason.CONVERSION_PAIR,
+                f"conid {request.terms.conid} is not a currency pair in execution.currency.pairs",
+            )
+        return found
+
+    async def _read_conversion(self, request: _Request, found: _Found) -> None:
+        """Stage 2 of a conversion: the account, the pair's quote under the quote policy and the
+        collar, and a whatif."""
+        reader = self._reader
+        try:
+            found.positions = await reader.positions()
+            found.live = await reader.live_orders()
+            found.trades = await reader.trades()
+            found.cash = await reader.cash()
+            found.quote = await reader.quote(request.terms.conid, option=False)
+        except (IbkrError, ObliskError) as exc:
+            found.fail(Reason.ACCOUNT_UNREADABLE, f"the account or the pair cannot be read: {exc}")
+            return
+        if not found.live.complete:
+            found.fail(Reason.ACCOUNT_UNREADABLE, "the live orders are not a complete snapshot")
+        evidence = None if found.quote is None else found.quote.evidence
+        check = self._quotes.check(AssetClass.FX, evidence, now=self._now())
+        if not check.ok or found.quote is None or evidence is None:
+            found.fail(Reason.QUOTE_POLICY, check.reason)
+            return
+        collar = self._quotes.within_collar(request.terms, evidence, sigma=found.quote.sigma)
+        if not collar.ok:
+            found.fail(Reason.COLLAR, collar.reason)
+        if not found.failures:
+            try:
+                found.whatif = await reader.whatif(request.terms)
+            except (IbkrError, ObliskError) as exc:
+                found.fail(Reason.WHATIF_REFUSED, f"the whatif failed: {exc}")
+
     async def _read(self, request: _Request, found: _Found) -> None:
         """Stage 2: the broker reads, the quote policy and the collar."""
         reader = self._reader
@@ -603,32 +697,90 @@ class PretradeGate:
             return
         sigma = None if quote is None else quote.sigma
         terms = request.terms
-        protective = request.effect is RiskEffect.REDUCES and terms.price.kind == "stop_limit"
+        if request.effect is RiskEffect.REDUCES and terms.price.kind == "stop_limit":
+            self._protective_spec(request, evidence, sigma, found)
+            return
         collar = self._quotes.within_collar(terms, evidence, sigma=sigma)
-        if protective:
-            self._protective_spec(terms, collar.ok, collar.reason, found)
-        elif not collar.ok:
+        if not collar.ok:
             found.fail(Reason.COLLAR, collar.reason)
 
-    def _protective_spec(self, terms: OrderTerms, rests: bool, why: str, found: _Found) -> None:
+    def _protective_spec(
+        self, request: _Request, quote: QuoteEvidence, sigma: float | None, found: _Found
+    ) -> None:
+        """A sell stop-limit that reduces risk, against its intent's protective spec."""
+        terms = request.terms
         price = terms.price
         if price.kind != "stop_limit":  # pragma: no cover - the caller checks
             return
-        if not rests:
-            found.fail(Reason.PROTECTIVE_SPEC, why)
+        spec = request.intent.protective
+        if spec is None:
+            found.fail(
+                Reason.PROTECTIVE_SPEC,
+                "a sell stop-limit that reduces risk rests by its intent's protective spec, and "
+                "this intent carries none",
+            )
+            return
+        if spec.limit_offset_fraction > self._max_spec_offset:
+            found.fail(
+                Reason.PROTECTIVE_SPEC,
+                f"the spec's limit offset {spec.limit_offset_fraction} is beyond "
+                f"{self._max_spec_offset}: a limit that deep acts as a market order",
+            )
         if price.limit > price.stop:
             found.fail(
                 Reason.PROTECTIVE_SPEC,
                 f"the limit {price.limit} sits above the stop {price.stop}: a sell stop-limit's "
                 "limit is at or below its stop",
             )
-        floor = price.stop * (1 - self._max_limit_offset)
+        reference = quote.reference()
+        if (
+            request.action is ClearanceAction.MODIFY
+            and reference is not None
+            and reference <= price.stop
+        ):
+            self._triggered(terms, price.limit, quote, sigma, found)
+            return
+        collar = self._quotes.within_collar(terms, quote, sigma=sigma)
+        if not collar.ok:
+            found.fail(Reason.PROTECTIVE_SPEC, collar.reason)
+        floor = spec.lowest_limit(price.stop)
         if price.limit < floor:
             found.fail(
                 Reason.PROTECTIVE_SPEC,
-                f"the limit {price.limit} is more than {self._max_limit_offset} below the stop "
-                f"{price.stop} (at least {floor})",
+                f"the limit {price.limit} is more than {spec.limit_offset_fraction} below the "
+                f"stop {price.stop} (at least {floor})",
             )
+
+    def _triggered(
+        self,
+        terms: OrderTerms,
+        limit: Decimal,
+        quote: QuoteEvidence,
+        sigma: float | None,
+        found: _Found,
+    ) -> None:
+        """A modify of a stop the market has reached reprices a working sell limit: inside the
+        collar, or within the emergency limit the owner enabled, never lower."""
+        as_limit = terms.model_copy(update={"price": LimitPrice(limit=limit)})
+        collar = self._quotes.within_collar(as_limit, quote, sigma=sigma)
+        if collar.ok:
+            return
+        if self._emergency_on:
+            if quote.bid is None:
+                found.fail(Reason.PROTECTIVE_SPEC, "no bid to set the emergency limit from")
+                return
+            deepest = quote.bid * (1 - self._emergency_fraction)
+            if limit < deepest:
+                found.fail(
+                    Reason.PROTECTIVE_SPEC,
+                    f"the triggered stop's limit {limit} is below the emergency limit {deepest}",
+                )
+            return
+        found.fail(
+            Reason.PROTECTIVE_SPEC,
+            f"a triggered stop is repriced inside the collar ({collar.reason}); a limit beyond "
+            "it is the emergency limit, which is off",
+        )
 
     def _alert_option_close(self, request: _Request, found: _Found) -> None:
         """An option close refused for want of a real-time quote reaches the owner."""
@@ -651,13 +803,7 @@ class PretradeGate:
             detail=detail,
             at=self._now(),
         )
-        log.warning("order alert", extra={"kind": alert.kind.value, "intent": str(alert.intent_id)})
-        if self._alert is None:
-            return
-        try:
-            self._alert(alert)
-        except Exception:
-            log.exception("the order alert hook failed")
+        raise_alert(self._alert, alert)
 
     # ── stage 3: the store, in one transaction ──
 
@@ -671,8 +817,17 @@ class PretradeGate:
             repo.upsert_fills(store, found.trades)
             repo.record_positions(store, positions.positions, observed_at=positions.observed_at)
             now = self._now()
-            failures = self._holdings(store, request, positions)
             clearances = repo.open_clearances(store)
+            if found.leg is not None:
+                failures, amount, amount_base = self._conversion_cash(
+                    store, request, found, clearances, now
+                )
+                if failures:
+                    return failures
+                if not issue:
+                    return None
+                return self._issue(store, request, found, amount, amount_base, now)
+            failures = self._holdings(store, request, positions)
             if request.effect is RiskEffect.REDUCES:
                 failures += self._no_short(store, request, found, clearances, now)
             notional = _notional(request.terms, found.traded.multiplier)
@@ -875,6 +1030,141 @@ class PretradeGate:
         failures += self._caps_check(store, request, cash, notional_base, now)
         return failures, notional_base
 
+    def _conversion_cash(
+        self,
+        store: Store,
+        request: _Request,
+        found: _Found,
+        clearances: Sequence[OpenClearance],
+        now: datetime,
+    ) -> tuple[list[PretradeFailure], Decimal, Decimal | None]:
+        """A conversion: the cash it converts from, against every open commitment in that
+        currency and the floor, and the single-foreign-currency cap on what it buys."""
+        failures: list[PretradeFailure] = []
+
+        def fail(code: Reason, reason: str) -> None:
+            failures.append(PretradeFailure(code, reason))
+
+        leg, cash, whatif, live = found.leg, found.cash, found.whatif, found.live
+        amount = request.terms.cash_quantity
+        if leg is None or cash is None or whatif is None or live is None or amount is None:
+            raise ObliskError("the conversion was not read")  # pragma: no cover - stage 2 refused
+        source = cash.line(leg.source)
+        rate = None if source is None else source.rate_to_base
+        if source is None:
+            fail(Reason.CURRENCY_NOT_HELD, f"the account holds no {leg.source} to convert from")
+        elif rate is None:
+            fail(Reason.FX_RATE_UNAVAILABLE, f"the ledger gives no rate from {leg.source} to base")
+        if whatif.error is not None:
+            fail(Reason.WHATIF_REFUSED, f"the whatif refused the conversion: {whatif.error}")
+        amount_base = None if rate is None else amount * rate
+        if source is None or rate is None or failures:
+            return failures, amount, amount_base
+        foreign = self._foreign_buys(store, live)
+        if foreign:
+            fail(
+                Reason.CASH_UNACCOUNTED,
+                f"working buys the bot did not place commit unknown cash: {', '.join(foreign)}",
+            )
+        if source.cash - amount < 0:
+            fail(
+                Reason.MARGIN_USE,
+                f"converting {amount} {leg.source} out of the {source.cash} held would borrow",
+            )
+        committed = self._committed(store, request, clearances, leg.source, now)
+        floor = self._floor / rate
+        free = source.cash - committed - amount - floor
+        if free < 0:
+            fail(
+                Reason.INSUFFICIENT_CASH,
+                f"{source.cash} {leg.source} held, {committed:.2f} committed to open orders, the "
+                f"conversion takes {amount} and {floor:.2f} must remain: short by {-free:.2f}",
+            )
+        incoming = self._incoming(store, request, clearances, leg.target, now)
+        failures += self._currency_cap(leg, amount, incoming, found)
+        return failures, amount, amount_base
+
+    def _incoming(
+        self,
+        store: Store,
+        request: _Request,
+        clearances: Sequence[OpenClearance],
+        currency: str,
+        now: datetime,
+    ) -> Decimal:
+        """What the other conversions into ``currency`` that may still be or have been sent will
+        bring in at their limits, less what they filled."""
+        per_intent: dict[UUID, tuple[str, ConversionLeg, OrderTerms]] = {}
+        for entry in clearances:
+            terms = entry.clearance.terms
+            leg = conversion_leg(self._pairs, terms) if terms.conversion else None
+            if (
+                entry.clearance.intent_id == request.intent.intent_id
+                or leg is None
+                or leg.target != currency
+                or (entry.used_at is None and entry.clearance.expires_at <= now)
+            ):
+                continue
+            # A conversion is never modified: every clearance of its intent has its terms.
+            per_intent[entry.clearance.intent_id] = (entry.coid, leg, terms)
+        fills = repo.fills_by_coid(store, [coid for coid, _, _ in per_intent.values()])
+        total = ZERO
+        for coid, leg, terms in per_intent.values():
+            left = max(ZERO, (terms.cash_quantity or ZERO) - leg.spent(fills.get(coid, [])))
+            total += leg.received(left, terms.price.limit)
+        return total
+
+    def _currency_cap(
+        self, leg: ConversionLeg, amount: Decimal, incoming: Decimal, found: _Found
+    ) -> list[PretradeFailure]:
+        """lite's single-foreign-currency cap on the currency a conversion buys: its cash, what
+        the conversion and the other conversions working into it bring in and the positions
+        quoted in it, valued at the pair's reference rate, against the NAV."""
+        target = leg.target
+        cash, positions, quote = found.cash, found.positions, found.quote
+        if target == self._base or cash is None or positions is None or quote is None:
+            return []
+        reference = quote.evidence.reference()
+        if cash.nav is None or cash.nav <= 0:
+            return [
+                PretradeFailure(
+                    Reason.NAV_UNAVAILABLE,
+                    f"the NAV is not readable in the base currency ({cash.nav_refusal})",
+                )
+            ]
+        if reference is None:  # pragma: no cover - the collar refused a quote without one
+            return [PretradeFailure(Reason.QUOTE_POLICY, "the pair's quote has no reference")]
+        # One side of every pair is the base currency (the schema checks it), so the pair's own
+        # rate values the other.
+        to_base = reference if target == leg.pair.base else 1 / reference
+        unreadable = [
+            str(p.conid)
+            for p in positions.positions
+            if p.currency == target and p.quantity != 0 and p.market_value is None
+        ]
+        if unreadable:
+            return [
+                PretradeFailure(
+                    Reason.EXPOSURE_UNREADABLE,
+                    f"positions in {target} without a market value ({', '.join(unreadable)}): "
+                    "the currency's exposure cannot be measured",
+                )
+            ]
+        held = (line.cash if (line := cash.line(target)) is not None else ZERO) + sum(
+            (p.market_value or ZERO for p in positions.positions if p.currency == target), ZERO
+        )
+        exposure = (held + incoming + leg.received(amount, reference)) * to_base
+        cap = cash.nav * self._max_currency
+        if exposure > cap:
+            return [
+                PretradeFailure(
+                    Reason.CURRENCY_CAP,
+                    f"{target} would be {exposure:.2f} {self._base} of exposure, above the "
+                    f"single-foreign-currency cap of {cap:.2f} ({self._max_currency} of NAV)",
+                )
+            ]
+        return []
+
     def _foreign_buys(self, store: Store, live: LiveOrders) -> list[str]:
         foreign = []
         for order in live.orders:
@@ -904,7 +1194,9 @@ class PretradeGate:
             if (
                 clearance.intent_id == request.intent.intent_id
                 or clearance.effect is not RiskEffect.ADDS
-                or clearance.terms.side is not OrderSide.BUY
+                # A buy spends the cash of its currency; a conversion that of the currency it
+                # converts from, which its clearance names.
+                or not (clearance.terms.side is OrderSide.BUY or clearance.terms.conversion)
                 # A clearance that names no currency is counted against every one.
                 or clearance.currency not in (None, currency)
             ):
@@ -921,9 +1213,12 @@ class PretradeGate:
         total = ZERO
         for coid, amount, terms in per_intent.values():
             done = fills.get(coid, [])
+            leg = conversion_leg(self._pairs, terms) if terms.conversion else None
             if terms.quantity is not None:
                 filled = sum((fill.quantity for fill in done), ZERO)
                 total += amount * max(ZERO, 1 - filled / terms.quantity)
+            elif leg is not None:
+                total += max(ZERO, amount - leg.spent(done))
             else:
                 spent = sum((fill.quantity * fill.price for fill in done), ZERO)
                 total += max(ZERO, amount - spent)
@@ -962,8 +1257,8 @@ class PretradeGate:
         placed: set[UUID] = set()
         for entry in window:
             clearance = entry.clearance
-            if clearance.effect is not RiskEffect.ADDS:
-                continue
+            if clearance.effect is not RiskEffect.ADDS or clearance.terms.conversion:
+                continue  # a conversion funds a trade the caps already count
             if entry.used_at is None and clearance.expires_at <= now:
                 continue
             amount = clearance.notional_base
@@ -1017,8 +1312,11 @@ class PretradeGate:
         evidence: list[QuoteEvidence] = [quote.evidence]
         if found.underlying_quote is not None:
             evidence.append(found.underlying_quote.evidence)
-        instrument = found.traded
-        rule = self._quotes.rule_for(instrument.asset_class)
+        if found.leg is not None:
+            asset_class, currency = AssetClass.FX, found.leg.source
+        else:
+            asset_class, currency = found.traded.asset_class, found.traded.currency
+        rule = self._quotes.rule_for(asset_class)
         if rule is None or isinstance(rule, NavPriced):  # pragma: no cover - refused in stage 2
             return [PretradeFailure(Reason.QUOTE_POLICY, "no quote policy")]
         age = timedelta(seconds=rule.max_quote_age_seconds)
@@ -1032,7 +1330,7 @@ class PretradeGate:
             order_id=request.order_id,
             terms=request.terms,
             effect=request.effect,
-            asset_class=instrument.asset_class,
+            asset_class=asset_class,
             quote=quote.evidence,
             underlying_quote=None
             if found.underlying_quote is None
@@ -1040,7 +1338,7 @@ class PretradeGate:
             sigma=quote.sigma,
             issued_at=now,
             expires_at=expires,
-            currency=instrument.currency,
+            currency=currency,
             notional=notional,
             notional_base=notional_base,
         )

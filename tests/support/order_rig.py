@@ -33,6 +33,7 @@ from obliskiq.domain.orders import (
     OrderSide,
     OrderTerms,
     PretradeClearance,
+    ProtectiveSpec,
     QuoteEvidence,
     RiskEffect,
     Sleeve,
@@ -42,6 +43,8 @@ from obliskiq.domain.orders import (
 from obliskiq.execution.account import IbkrAccountReader
 from obliskiq.execution.approvals import ApprovalQueue
 from obliskiq.execution.boundary import OrderAlert, WriteBoundary
+from obliskiq.execution.currency import CurrencyManager
+from obliskiq.execution.executor import Executor
 from obliskiq.execution.exits import ExitCoordinator
 from obliskiq.execution.flatten import Flattener
 from obliskiq.execution.intents import new_intent
@@ -49,13 +52,18 @@ from obliskiq.execution.killswitch import KillSwitch
 from obliskiq.execution.ledger import StoreClearanceLedger
 from obliskiq.execution.modes import Modes
 from obliskiq.execution.pretrade import PretradeGate
+from obliskiq.execution.pricing import Pricer
+from obliskiq.execution.protective import ProtectiveManager
+from obliskiq.execution.reconcile import Reconciler
 from obliskiq.execution.replies import ReplyPolicy
+from obliskiq.execution.shadow import ShadowFiller
 from obliskiq.execution.state import IntentBook
 from obliskiq.ibkr.client import IbkrClient
 from obliskiq.ibkr.guard import AccountGuard
 from obliskiq.ibkr.orders import OrderClient
 from obliskiq.ibkr.session import BrokerSession
 from obliskiq.jurisdiction.eligibility import SkeletonEligibility
+from obliskiq.quant.costs import CostBook
 from obliskiq.store import open_database
 from obliskiq.store import orders as repo
 from obliskiq.store.orders import StoredIntent
@@ -178,6 +186,15 @@ class Directory:
         return self.instruments.get(conid)
 
 
+#: The limit offset the test stops rest by: 5 % below the stop.
+TEST_OFFSET = Decimal("0.05")
+
+
+def spec(stop: str, offset: Decimal = TEST_OFFSET) -> ProtectiveSpec:
+    """A protective spec for a stop at ``stop``."""
+    return ProtectiveSpec(stop=Decimal(stop), limit_offset_fraction=offset, basis="test spec")
+
+
 def whatif_answer(total: str, currency: str, **extra: Any) -> dict[str, Any]:
     """A whatif the broker answers: the cost ``total`` in ``currency``, no margin change."""
     zero = {"current": "0", "change": "0", "after": "0"}
@@ -284,6 +301,67 @@ class Rig:
     approvals: ApprovalQueue
     flattener: Flattener
     alerts: list[OrderAlert] = field(default_factory=list)
+    pricer: Pricer = None  # type: ignore[assignment]
+    currency: CurrencyManager = None  # type: ignore[assignment]
+    protective: ProtectiveManager = None  # type: ignore[assignment]
+    reconciler: Reconciler = None  # type: ignore[assignment]
+    executor: Executor = None  # type: ignore[assignment]
+
+    def make_execution(
+        self, *, sleep: Any = None, settings: ObliskConfig | None = None
+    ) -> Executor:
+        """The execution mechanics over this rig's gate (call ``make_gate`` first to change it);
+        ``sleep`` is the wait a conversion's fill takes (by default the clock moves on)."""
+        chosen = settings if settings is not None else self.settings
+        contracts = self.ibkr.contracts
+
+        async def moves_on(seconds: float) -> None:
+            self.clock.advance(seconds)
+
+        common: dict[str, Any] = {
+            "gate": self.gate,
+            "boundary": self.boundary,
+            "book": self.book,
+            "worker": self.worker,
+            "reader": self.reader,
+            "alert": self.alerts.append,
+            "now": self.clock,
+        }
+        self.pricer = Pricer(chosen)
+        self.currency = CurrencyManager(
+            chosen,
+            **common,
+            directory=self.directory,
+            rules=contracts,
+            modes=self.modes,
+            sleep=sleep if sleep is not None else moves_on,
+        )
+        self.protective = ProtectiveManager(chosen, **common, rules=contracts, modes=self.modes)
+        self.reconciler = Reconciler(
+            chosen,
+            boundary=self.boundary,
+            worker=self.worker,
+            reader=self.reader,
+            directory=self.directory,
+            alert=self.alerts.append,
+            now=self.clock,
+        )
+        self.executor = Executor(
+            chosen,
+            **common,
+            orders=self.client,
+            contracts=contracts,
+            directory=self.directory,
+            calendars=self.calendars,
+            modes=self.modes,
+            coordinator=self.coordinator,
+            currency=self.currency,
+            pricer=self.pricer,
+            protective=self.protective,
+            reconciler=self.reconciler,
+            shadow=ShadowFiller(CostBook.from_config(chosen)),
+        )
+        return self.executor
 
     def make_gate(
         self, *, calendars: Calendars | None = None, settings: ObliskConfig | None = None
@@ -360,6 +438,9 @@ class Rig:
         default_reason = {IntentRole.ENTRY: "entry", IntentRole.PROTECTIVE: "stop"}.get(
             chosen_role, "target"
         )
+        protective = (
+            spec(stop) if stop is not None and chosen_role is IntentRole.PROTECTIVE else None
+        )
         return await self.intent(
             terms(side=side, quantity=quantity, limit=limit, stop=stop, conid=conid),
             role=chosen_role,
@@ -367,6 +448,7 @@ class Rig:
             sleeve=sleeve,
             approval_required=approval_required,
             state=state,
+            protective=protective,
         )
 
     async def hold(self, conid: int, quantity: str, *, owner: Any = Sleeve.CORE) -> None:
@@ -407,6 +489,9 @@ class Rig:
         state: IntentState = IntentState.STAGED,
         sleeve: Sleeve = Sleeve.CORE,
         approval_required: bool = False,
+        protective: ProtectiveSpec | None = None,
+        mode: ExecutionMode = ExecutionMode.PAPER,
+        ttl: timedelta = timedelta(hours=6),
     ) -> StoredIntent:
         """A stored intent, moved along the legal path to ``state``."""
         chosen = order_terms if order_terms is not None else terms()
@@ -416,10 +501,11 @@ class Rig:
             role=role,
             terms=chosen,
             reason=reason,
-            mode=ExecutionMode.PAPER,
+            mode=mode,
             approval_required=approval_required,
             created_at=self.clock(),
-            expires_at=self.clock() + timedelta(hours=6),
+            expires_at=self.clock() + ttl,
+            protective=protective,
         )
         stored = await self.book.add(intent)
         path = [IntentState.APPROVED, IntentState.STAGED, IntentState.SUBMITTED]

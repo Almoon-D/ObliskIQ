@@ -56,7 +56,7 @@ async def test_the_order_path_opens_over_the_broker_and_closes(
             env, shipped_settings, profile, data_dir=tmp_path, transport=fake_transport
         ) as path:
             assert await path.modes.current() is ExecutionMode.SHADOW
-            assert path.directory.describe(8158) is not None
+            assert path.directory.describe(7089) is not None
             report = await path.flattener.flatten(actor="test")
             assert report.ok
             assert report.lines == ()

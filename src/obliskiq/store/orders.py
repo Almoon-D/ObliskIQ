@@ -13,6 +13,7 @@ history land together or not at all.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import json
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -38,6 +39,10 @@ from ..domain.orders import (
     OrderTerms,
     Position,
     PretradeClearance,
+    ProtectiveSpec,
+    ReconcileFinding,
+    ReconcileRun,
+    ReconcileStatus,
     RiskEffect,
     Sleeve,
     StopResize,
@@ -49,7 +54,7 @@ from .mappers import read_stamp, stamp_text
 
 _INTENT_COLUMNS = (
     "intent_id, coid, sleeve, thesis_id, role, terms, reason, mode, approval_required, "
-    "created_at, expires_at, parent_id, protective_id, state"
+    "created_at, expires_at, parent_id, protective_id, protective_spec, state"
 )
 
 
@@ -133,6 +138,9 @@ def _intent_from_row(row: sqlite3.Row) -> StoredIntent:
             expires_at=read_stamp(row["expires_at"], "intents", "expires_at"),
             parent_id=None if row["parent_id"] is None else UUID(row["parent_id"]),
             protective_id=None if row["protective_id"] is None else UUID(row["protective_id"]),
+            protective=None
+            if row["protective_spec"] is None
+            else ProtectiveSpec.model_validate_json(row["protective_spec"]),
             state=IntentState(row["state"]),
         )
 
@@ -179,7 +187,7 @@ def insert_intent(store: Store, intent: OrderIntent, *, coid: str, at: datetime)
     with store.transaction():
         store.execute(
             f"INSERT INTO intents ({_INTENT_COLUMNS}, conid, side, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(intent.intent_id),
                 coid,
@@ -194,6 +202,7 @@ def insert_intent(store: Store, intent: OrderIntent, *, coid: str, at: datetime)
                 stamp_text(intent.expires_at),
                 None if intent.parent_id is None else str(intent.parent_id),
                 None if intent.protective_id is None else str(intent.protective_id),
+                None if intent.protective is None else intent.protective.model_dump_json(),
                 intent.state.value,
                 intent.terms.conid,
                 intent.terms.side.value,
@@ -220,6 +229,14 @@ def get_intent(store: Store, intent_id: UUID) -> StoredIntent | None:
 def intent_by_coid(store: Store, coid: str) -> StoredIntent | None:
     row = store.execute(f"SELECT {_INTENT_COLUMNS} FROM intents WHERE coid = ?", (coid,)).fetchone()
     return None if row is None else _intent_from_row(row)
+
+
+def intents_for_conid(store: Store, conid: int) -> list[StoredIntent]:
+    """Every intent on ``conid``, oldest first (uuid7 ids sort by creation)."""
+    rows = store.execute(
+        f"SELECT {_INTENT_COLUMNS} FROM intents WHERE conid = ? ORDER BY intent_id", (conid,)
+    ).fetchall()
+    return [_intent_from_row(row) for row in rows]
 
 
 def intents_in_states(store: Store, states: Iterable[IntentState]) -> list[StoredIntent]:
@@ -634,6 +651,16 @@ def fills_for_conid(store: Store, conid: int, *, since: datetime, as_of: datetim
     return [_fill_from_row(row) for row in rows]
 
 
+def fills_between(store: Store, *, since: datetime, as_of: datetime) -> list[Fill]:
+    """Every fill executed at or after ``since`` and at or before ``as_of``."""
+    rows = store.execute(
+        "SELECT * FROM fills WHERE executed_at >= ? AND executed_at <= ? "
+        "ORDER BY executed_at, execution_id",
+        (stamp_text(since), stamp_text(as_of)),
+    ).fetchall()
+    return [_fill_from_row(row) for row in rows]
+
+
 def _new_read(store: Store, kind: str, observed_at: datetime) -> int:
     cursor = store.execute(
         "INSERT INTO account_reads (kind, observed_at) VALUES (?, ?)",
@@ -992,3 +1019,82 @@ def stop_resizes_for_exit(store: Store, exit_intent_id: UUID) -> list[StopResize
         (str(exit_intent_id),),
     ).fetchall()
     return [_resize_from_row(row) for row in rows]
+
+
+# ── reconciliations ──
+
+
+def record_reconciliation(
+    store: Store,
+    run: ReconcileRun,
+    *,
+    positions_read: int | None = None,
+    cash_read: int | None = None,
+    anchor: bool = False,
+) -> None:
+    """Record a run; ``anchor``: its reads are what later runs compare the broker against."""
+    findings = [finding.model_dump(mode="json") for finding in run.findings]
+    with store.transaction():
+        store.execute(
+            "INSERT INTO reconciliations (at, status, findings, positions_read, cash_read, anchor) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                stamp_text(run.at),
+                run.status.value,
+                json.dumps(findings, sort_keys=True),
+                positions_read,
+                cash_read,
+                int(anchor),
+            ),
+        )
+
+
+def latest_reconciliation(store: Store) -> ReconcileRun | None:
+    """The run in force: the latest by insertion, not by stamp; ``None`` before the first."""
+    row = store.execute(
+        "SELECT at, status, findings FROM reconciliations ORDER BY run_id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    return _build(
+        "reconciliations",
+        lambda: ReconcileRun(
+            at=read_stamp(row["at"], "reconciliations", "at"),
+            status=ReconcileStatus(row["status"]),
+            findings=tuple(
+                ReconcileFinding.model_validate(item) for item in json.loads(row["findings"])
+            ),
+        ),
+    )
+
+
+def _read_by_id[T](
+    store: Store, read_id: int, kind: str, make: Callable[[sqlite3.Row, datetime], T]
+) -> AccountRead[T]:
+    head = store.execute(
+        "SELECT observed_at FROM account_reads WHERE read_id = ? AND kind = ?", (read_id, kind)
+    ).fetchone()
+    if head is None:
+        raise StoreError(f"no {kind} read {read_id}")
+    observed = read_stamp(head["observed_at"], "account_reads", "observed_at")
+    table = "positions_snap" if kind == "positions" else "cash_snap"
+    rows = store.execute(f"SELECT * FROM {table} WHERE read_id = ?", (read_id,)).fetchall()
+    return AccountRead(observed_at=observed, rows=tuple(make(row, observed) for row in rows))
+
+
+def reconciliation_anchor(
+    store: Store,
+) -> tuple[AccountRead[Position], AccountRead[CashBalance]] | None:
+    """The positions and cash reads of the latest anchoring run (green and settled), which
+    later runs compare the broker against; ``None`` before the first."""
+    with store.read():
+        row = store.execute(
+            "SELECT positions_read, cash_read FROM reconciliations WHERE anchor = 1 "
+            "ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        return (
+            _read_by_id(store, row["positions_read"], "positions", _position_from_row),
+            _read_by_id(store, row["cash_read"], "cash", _cash_from_row),
+        )

@@ -29,7 +29,12 @@ from .schema_calendars import (
 from .schema_costs import CostsConfig
 from .schema_execution import DisciplineConfig, ExecutionConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
-from .schema_instruments import EligibilityConfig, InstrumentsConfig, TenorConfig
+from .schema_instruments import (
+    EligibilityConfig,
+    InstrumentsConfig,
+    PositionsConfig,
+    TenorConfig,
+)
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 from .schema_research import ResearchConfig
 
@@ -117,6 +122,7 @@ class ObliskConfig(FrozenModel):
     execution: ExecutionConfig
     instruments: InstrumentsConfig
     tenor: TenorConfig
+    positions: PositionsConfig
     eligibility: EligibilityConfig
     research: ResearchConfig
 
@@ -149,14 +155,31 @@ class ObliskConfig(FrozenModel):
             for mic in sorted(set(self.seasonal_closes) & set(self.synthetic_calendars))
         ]
         problems += self._paper_order_problems()
+        problems += self._currency_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
 
+    def _currency_problems(self) -> list[str]:
+        base = self.account.base_currency
+        return [
+            f"execution.currency.pairs: {pair.symbol} does not name the base currency {base}; "
+            "conversions are to and from the base currency"
+            for pair in self.execution.currency.pairs
+            if base not in (pair.base, pair.quote)
+        ]
+
     def _paper_order_problems(self) -> list[str]:
         allowed = {instrument.conid for instrument in self.eligibility.skeleton_allowlist}
-        return [
+        preflight = self.ibkr.preflight
+        problems = [
             f"ibkr.preflight.paper_order.conids: {conid} is not in eligibility.skeleton_allowlist"
-            for conid in self.ibkr.preflight.paper_order.conids
+            for conid in preflight.paper_order.conids
             if conid not in allowed
         ]
+        if preflight.execution_test.conid not in allowed:
+            problems.append(
+                f"ibkr.preflight.execution_test.conid: {preflight.execution_test.conid} is not in "
+                "eligibility.skeleton_allowlist"
+            )
+        return problems

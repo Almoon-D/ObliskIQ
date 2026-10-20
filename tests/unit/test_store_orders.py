@@ -435,3 +435,25 @@ def test_the_holdings_registry(store: Store) -> None:
     )
     repo.assign_holding(store, second)
     assert repo.holding_assignment(store, 1) == second
+
+
+def test_a_reconciliation_anchor_reads_back_its_reads_by_kind(store: Store) -> None:
+    from obliskiq.domain.orders import CashBalance, ReconcileRun, ReconcileStatus
+
+    at = datetime(2026, 10, 13, 14, 0, tzinfo=UTC)
+    assert repo.reconciliation_anchor(store) is None
+    cash = repo.record_cash(
+        store,
+        [CashBalance(currency="EUR", cash=Decimal(10), settled_cash=None, observed_at=at)],
+        observed_at=at,
+    )
+    positions = repo.record_positions(store, [], observed_at=at)
+    green = ReconcileRun(at=at, status=ReconcileStatus.GREEN, findings=())
+    repo.record_reconciliation(store, green, positions_read=positions, cash_read=cash, anchor=True)
+    read_positions, read_cash = repo.reconciliation_anchor(store) or ((), ())
+    assert read_positions.rows == ()
+    assert [row.currency for row in read_cash.rows] == ["EUR"]
+    # Reads of the wrong kind cannot anchor a run.
+    repo.record_reconciliation(store, green, positions_read=cash, cash_read=cash, anchor=True)
+    with pytest.raises(StoreError, match="no positions read"):
+        repo.reconciliation_anchor(store)

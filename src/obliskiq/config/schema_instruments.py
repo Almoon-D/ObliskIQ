@@ -4,7 +4,8 @@ reads, and the skeleton eligibility allowlist.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from typing import Final, Literal, Self, get_args
+from decimal import Decimal
+from typing import Annotated, Final, Literal, Self, get_args
 
 from pydantic import Field, PositiveInt, model_validator
 
@@ -59,3 +60,9 @@ class EligibilityConfig(FrozenModel):
         if len(conids) != len(set(conids)):
             raise ValueError("each conid is listed once")
         return self
+
+
+class PositionsConfig(FrozenModel):
+    """lite's ``positions`` key the currency manager reads (Session 17 restates the rest)."""
+
+    max_single_foreign_currency_pct: Annotated[Decimal, Field(gt=0, le=1, allow_inf_nan=False)]

@@ -86,23 +86,23 @@ def cli(repo_root: Path, *argv: str) -> tuple[int, str, str]:
 
 # ── the hand calculation ──
 
-# Costs on Xetra (the shipped schedules): 0.10 % commission, at least EUR 4.00, plus the liquid
-# tier's 0.10 % spread and 0.10 % slippage; c(N) = 0.002 N + max(0.001 N, 4).
+# Costs on Xetra (the shipped schedules): 0.05 % commission (SmartRouted), at least EUR 3.00, plus
+# the liquid tier's 0.10 % spread and 0.10 % slippage; c(N) = 0.002 N + max(0.0005 N, 3).
 #
-# Rebalanced 50/50. 31 Jan 2024: 49 A and 49 B at 100 cost 4,914.70 each; cash 170.60.
-# 31 Jul 2024 (A 150): worth 12,420.60, half 6,210.30. Sell 8 A: 1,200 - 6.40 = 1,193.60 against
-# 802.40 of cost, a gain of 391.20. Buy 13 B: 1,306.60. Cash 57.60.
-# 31 Jul 2025: 2024's tax, 391.20 x 19 % = 74.328, is due. One B is sold (95.80 against 100.30, a
-# loss of 4.50) and the tax paid: cash 79.072.
-# 31 Dec 2025: 41 A raise 6,131.55 (a gain of 2,019.25); 61 B raise 6,081.70 (losses of 28.80 and
-# 10.50). 2025's gains are 1,975.45 and its tax 375.3355. Liquidation value: 79.072 + 6,131.55 +
-# 6,081.70 - 375.3355 = 11,916.9865.
-REBALANCED = Decimal("11916.9865")
+# Rebalanced 50/50. 31 Jan 2024: 49 A and 49 B at 100 cost 4,912.80 each; cash 174.40.
+# 31 Jul 2024 (A 150): worth 12,424.40, half 6,212.20. Sell 8 A: 1,200 - 5.40 = 1,194.60 against
+# 8/49 of 4,912.80 = 802.0898 of cost, a gain of 392.5102. Buy 13 B: 1,305.60. Cash 63.40.
+# 31 Jul 2025: 2024's tax, 392.5102 x 19 % = 74.5769, is due. One B is sold (96.80 against
+# 100.2612, a loss of 3.4612) and the tax paid: cash 85.6231.
+# 31 Dec 2025: 41 A raise 6,134.625 (a gain of 2,023.9148); 61 B raise 6,084.75 (a loss of
+# 33.3888 on both lots). 2025's gains are 1,987.0648 and its tax 377.5423. Liquidation value:
+# 85.6231 + 6,134.625 + 6,084.75 - 377.5423 = 11,927.45575.
+REBALANCED = Decimal("11927.45575")
 #
-# Held 50/50: the same purchase; at the horizon 49 A raise 7,327.95 (a gain of 2,413.25) and 49 B
-# 4,885.30 (a loss of 29.40). Tax: 2,383.85 x 19 % = 452.9315. Liquidation value: 170.60 +
-# 7,327.95 + 4,885.30 - 452.9315 = 11,930.9185.
-HELD = Decimal("11930.9185")
+# Held 50/50: the same purchase; at the horizon 49 A raise 7,331.625 (a gain of 2,418.825) and 49
+# B 4,887.20 (a loss of 25.60). Tax: 2,393.225 x 19 % = 454.71275. Liquidation value: 174.40 +
+# 7,331.625 + 4,887.20 - 454.71275 = 11,938.51225.
+HELD = Decimal("11938.51225")
 YEARS = 700 / 365.25
 EFFECT = math.log(float(REBALANCED) / float(HELD)) / YEARS
 
@@ -129,11 +129,11 @@ def test_the_toy_study_matches_the_hand_calculation(
     assert candidate is not None and reference is not None  # noqa: PT018
     assert candidate.liquidation_value == REBALANCED
     assert reference.liquidation_value == HELD
-    assert [(t.tax_year, t.amount, t.paid_on) for t in candidate.taxes] == [
-        (2024, Decimal("74.328"), date(2025, 7, 31)),
-        (2025, Decimal("375.3355"), date(2025, 12, 31)),
+    assert [(t.tax_year, round(t.amount, 4), t.paid_on) for t in candidate.taxes] == [
+        (2024, Decimal("74.5769"), date(2025, 7, 31)),
+        (2025, Decimal("377.5423"), date(2025, 12, 31)),
     ]
-    assert [(t.tax_year, t.amount) for t in reference.taxes] == [(2025, Decimal("452.9315"))]
+    assert [(t.tax_year, t.amount) for t in reference.taxes] == [(2025, Decimal("454.71275"))]
     assert test.estimate == pytest.approx(EFFECT)
     assert result.coverage == 1.0
     assert all(check.passed for check in result.checks)

@@ -52,74 +52,74 @@ costs:
       source:
         origin: legacy/lite config.yaml, IBKR published fixed rate, documentation-derived and unverified @b1ebd49
         verify_live: true
-    # European shares, ETFs and ETCs on IBKR's fixed schedule, priced as DIRECT-ROUTED to the
-    # listing venue (0.10 % of value; IB SmartRouting is 0.05 % with a lower minimum, so a SMART
-    # order costs less than these rows say). Third-party exchange, clearing and regulatory fees are
-    # included in fixed pricing. One row per currency and minimum (docs/knowledge/costs.md).
+    # European shares, ETFs and ETCs on IBKR's fixed schedule, priced as IB SMARTROUTING, the way
+    # the order path routes them (DECISIONS D97): 0.05 % of value with a minimum per currency,
+    # third-party exchange, clearing and regulatory fees included. The same page's direct-routing
+    # column is twice the rate with higher minimums (docs/knowledge/costs.md).
     - id: europe_eur
       venues: [XETR, XLON, XAMS, XPAR, XMIL, XSWX]
       asset_classes: [stock, etf, etc]
       currency: EUR
       kind: fraction_of_value
-      rate: "0.001"
-      minimum: "4.00"
+      rate: "0.0005"
+      minimum: "3.00"
       maximum_fraction_of_value: null
       up_to_face: null
-      scope_note: EUR-denominated shares, ETFs and ETCs on Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana and SIX, fixed pricing, direct-routed (0.10 % of value, minimum EUR 4.00)
+      scope_note: EUR-denominated shares, ETFs and ETCs on Xetra, the LSE, Euronext Amsterdam and Paris, Borsa Italiana and SIX, fixed pricing, SmartRouted (0.05 % of value, minimum EUR 3.00)
       source:
-        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.com/en/pricing/commissions-stocks.php), Fixed - Direct Routing column, read 2026-10-16
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.ie/en/pricing/commissions-stocks-europe.php), Fixed - IB SmartRouting column, read 2026-10-20
         verify_live: true
     - id: europe_usd
       venues: [XLON, XAMS, XSWX]
       asset_classes: [stock, etf, etc]
       currency: USD
       kind: fraction_of_value
-      rate: "0.001"
-      minimum: "6.00"
+      rate: "0.0005"
+      minimum: "4.00"
       maximum_fraction_of_value: null
       up_to_face: null
-      scope_note: USD-denominated shares, ETFs and ETCs on the LSE, Euronext Amsterdam and SIX, fixed pricing, direct-routed (0.10 % of value, minimum USD 6.00)
+      scope_note: USD-denominated shares, ETFs and ETCs on the LSE, Euronext Amsterdam and SIX, fixed pricing, SmartRouted (0.05 % of value, minimum USD 4.00)
       source:
-        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe", Fixed - Direct Routing column, read 2026-10-16
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.ie/en/pricing/commissions-stocks-europe.php), Fixed - IB SmartRouting column, read 2026-10-20
         verify_live: true
     - id: lse_gbp
       venues: [XLON]
       asset_classes: [stock, etf, etc]
       currency: GBP
       kind: fraction_of_value
-      rate: "0.001"
-      minimum: "4.00"
+      rate: "0.0005"
+      minimum: "3.00"
       maximum_fraction_of_value: null
       up_to_face: null
-      scope_note: GBP-denominated shares, ETFs and ETCs on the LSE, fixed pricing, direct-routed (0.10 % of value, minimum GBP 4.00)
+      scope_note: GBP-denominated shares, ETFs and ETCs on the LSE, fixed pricing, SmartRouted (0.05 % of value, minimum GBP 3.00)
       source:
-        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (United Kingdom), Fixed - Direct Routing column, read 2026-10-16
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.ie/en/pricing/commissions-stocks-europe.php), Fixed - IB SmartRouting column, read 2026-10-20
         verify_live: true
     - id: six_gbp
       venues: [XSWX]
       asset_classes: [stock, etf, etc]
       currency: GBP
       kind: fraction_of_value
-      rate: "0.001"
-      minimum: "6.00"
+      rate: "0.0005"
+      minimum: "3.00"
       maximum_fraction_of_value: null
       up_to_face: null
-      scope_note: GBP-denominated shares, ETFs and ETCs on SIX, fixed pricing, direct-routed (0.10 % of value, minimum GBP 6.00)
+      scope_note: GBP-denominated shares, ETFs and ETCs on SIX, fixed pricing, SmartRouted (0.05 % of value, minimum GBP 3.00)
       source:
-        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (Switzerland), Fixed - Direct Routing column, read 2026-10-16
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.ie/en/pricing/commissions-stocks-europe.php), Fixed - IB SmartRouting column, read 2026-10-20
         verify_live: true
     - id: six_chf
       venues: [XSWX]
       asset_classes: [stock, etf, etc]
       currency: CHF
       kind: fraction_of_value
-      rate: "0.001"
-      minimum: "6.00"
+      rate: "0.0005"
+      minimum: "5.00"
       maximum_fraction_of_value: null
       up_to_face: null
-      scope_note: CHF-denominated shares, ETFs and ETCs on SIX, fixed pricing, direct-routed (0.10 % of value, minimum CHF 6.00)
+      scope_note: CHF-denominated shares, ETFs and ETCs on SIX, fixed pricing, SmartRouted (0.05 % of value, minimum CHF 5.00)
       source:
-        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (Switzerland), Fixed - Direct Routing column, read 2026-10-16
+        origin: IBKR published commission page "Stocks, ETFs and Warrants - Europe" (interactivebrokers.ie/en/pricing/commissions-stocks-europe.php), Fixed - IB SmartRouting column, read 2026-10-20
         verify_live: true
     - id: us_treasury
       venues: null
@@ -146,6 +146,24 @@ costs:
       scope_note: EUR bonds up to EUR 8,500 of face; the schedule for a larger order is not held here
       source:
         origin: docs/MASTER_PLAN.md section 5.3 (IBKR EUR bonds 0.1 % up to EUR 8,500, minimum EUR 1)
+        verify_live: true
+
+    # Spot currency conversions (IDEALPRO): 0.20 basis point of the trade value, minimum USD 2.00 an
+    # order (Tier I, up to USD 1 bn a month), converted and charged in the account's base
+    # currency. Priced on the value in US dollars: a conversion whose value cannot be put in
+    # dollars has no schedule.
+    - id: spot_fx
+      venues: null
+      asset_classes: [fx]
+      currency: USD
+      kind: fraction_of_value
+      rate: "0.00002"
+      minimum: "2.00"
+      maximum_fraction_of_value: null
+      up_to_face: null
+      scope_note: spot currency conversions, fixed tier I (0.20 bp of value, minimum USD 2.00), charged in the base currency
+      source:
+        origin: IBKR published commission page "Spot Currencies" (interactivebrokers.ie/en/pricing/commissions-spot-currencies.php), read 2026-10-20
         verify_live: true
 
   # Transaction taxes, by the country of the ISSUER (they follow the company, not the venue).

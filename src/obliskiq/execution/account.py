@@ -149,6 +149,7 @@ class IbkrAccountReader:
                     average_cost=row.average_cost,
                     currency=row.currency,
                     observed_at=observed,
+                    market_value=row.market_value,
                 )
                 for row in rows
             ),

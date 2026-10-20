@@ -84,7 +84,7 @@ SHAPE = {
         "intent_id:TEXT*, coid:TEXT!, sleeve:TEXT!, thesis_id:TEXT, role:TEXT!, conid:INTEGER!, "
         "side:TEXT!, terms:TEXT!, reason:TEXT!, mode:TEXT!, approval_required:INTEGER!, "
         "created_at:TEXT!, expires_at:TEXT!, parent_id:TEXT, protective_id:TEXT, state:TEXT!, "
-        "updated_at:TEXT!"
+        "updated_at:TEXT!, protective_spec:TEXT"
     ),
     "killswitch": "change_id:INTEGER*, at:TEXT!, state:TEXT!, actor:TEXT!, reason:TEXT!",
     "mode_audit": (
@@ -102,6 +102,11 @@ SHAPE = {
         "resize_id:INTEGER*, exit_intent_id:TEXT!, stop_intent_id:TEXT!, stop_order_id:TEXT!, "
         "original_terms:TEXT!, resized_quantity:TEXT!, state:TEXT!, created_at:TEXT!, "
         "updated_at:TEXT!, detail:TEXT!"
+    ),
+    # 006_execution
+    "reconciliations": (
+        "run_id:INTEGER*, at:TEXT!, status:TEXT!, findings:TEXT!, positions_read:INTEGER, "
+        "cash_read:INTEGER, anchor:INTEGER!"
     ),
     # 004_research_tax
     "research_series": (
@@ -155,6 +160,8 @@ INDEXES = {
     "ix_approvals_intent",
     "ix_clearances_issued",
     "ix_stop_resizes_state",
+    # 006_execution
+    "ix_reconciliations_anchor",
     # 004_research_tax
     "ix_research_series_dataset",
     "ix_research_history_available",

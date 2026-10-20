@@ -1,0 +1,8 @@
+# lite's `positions` block (legacy/lite/config.yaml:118-133): the key the currency manager reads.
+# Session 17 restates the others per sleeve, on look-through exposure (DECISIONS D69).
+
+positions:
+  # The most of the NAV one foreign currency may be: its cash balance plus the positions quoted
+  # in it, valued in the base currency. The base currency is not a currency risk to this account.
+  # A conversion that would carry a currency past it is refused. QUOTED: compared exactly. lite.
+  max_single_foreign_currency_pct: "0.80"
