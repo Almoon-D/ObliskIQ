@@ -18,7 +18,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
 | 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | done (every candidate inconclusive and outside the owner's point; A stays, D95) | v0.8.6, v0.9.0, v0.9.1, v0.9.2 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | done (live steps a command list for the owner; attached orders not adopted, D99) | v0.10.0 |
-| 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
+| 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | done (the live paper cycle a command list for the owner, docs/RUNBOOK.md) | v0.11.0 |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | planned | |
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | planned | |
@@ -38,6 +38,65 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 6 — Walking skeleton (2026-10-20, v0.11.0)
+
+**Landed.**
+- `obliskiq serve` (`orchestration/`): a heartbeat every 5 minutes that runs the executor's cycle
+  (reprices, fills, stops, reconciliation), four decision cycles a trading day anchored to Tokyo's,
+  Xetra's and New York's sessions through the calendars, and a daily digest; run records in
+  001_core's `runs` and `run_steps` (lite's sequence and run log); recovery from the run log under a
+  single-process lock (dead runs `interrupted`, intents resumed by cOID, recent missed cycles
+  caught up, older ones recorded missed); SIGTERM; an injectable clock; the keepalive and the kill
+  switch's sweep; IBKR's trading schedule as the calendars' cross-check, refreshed from one
+  contract per venue; a downgrade to shadow after three failed cycles (D102).
+- `capital/` (`whole_account | cap`, default cap 1,000 euros) and `decision/rebalance_basic.py` over
+  `core.skeleton_targets`: three of variant A's roles in UCITS funds (IWDA on the LSE in USD, EMIM
+  and IBGM on Amsterdam), weights A's scaled, conids read from IBKR's contract search and confirmed
+  at every start; inner band, whole units, the minimum trade never below the commission floor, the
+  cash floor (D104).
+- The NAV writer (lite's `store/nav.py` and `collect/nav.py`; migration `007_service.sql`).
+- `reporting/`: Telegram or the log, alerts once while their condition holds (a durable state
+  file), the run summary, the daily digest with venue badges (D105). Health: the heartbeat file and
+  `OBLISK_HEALTH_PING_URL`.
+- CLI: `serve`, `run-cycle --mode shadow|paper [--dry-run]`, `status`, `intents list [--all]`,
+  `holdings list|assign`; every command that opens a brokerage session takes the lock.
+- `docs/RUNBOOK.md`; DECISIONS D102–D105.
+- Changes the skeleton needed: a shadow limit order fills at the touch once its limit reaches it and
+  is repriced on the real clock (D103: under D52 no skeleton ETF could fill in shadow); a capped book
+  converts its shortfall alone; IBKR's warning text is kept with each reply (D101's open question);
+  a deferred Gateway repair leaves the session lost until its deadline without repeated alerts
+  (Session 3's follow-up); the exit reason `rebalance`.
+- Closed follow-ups: Session 5's alert hook to Telegram, the suppressed-warning reset, the sweep
+  loop and the downgrade in the service; alerts repeated once until their condition changes;
+  `Pricer.initial` where intents are made; the trading schedule registered; the shadow fill that
+  could not reach its limit; one process places a given intent (the lock).
+
+**Tests.** The prompt's cases over the stateful fake broker on a simulated clock
+(`tests/integration/test_service_e2e.py`): cycle 1 creates and fills intents in shadow and on fake
+paper (the conversion first) and cycle 2 does nothing; a crash between place and fill orders
+nothing twice; the kill switch stops cycle 3; a three-day run across the EU's daylight-saving change
+fires every cycle at its venue's local time; Thanksgiving skips New York's cycles only; a session
+lost at the daily reset is logged in again and a failed re-login reaches the owner within one
+heartbeat (`tests/unit/test_service_keepalive.py`). Also the digest, stuck intents, blocked venues,
+unconfirmed targets, the downgrade, catch-up and missed jobs, the lock, the health file and ping,
+the rebalancer's every reason to hold back, alerts once per condition and the CLI, `run-cycle
+--mode shadow --dry-run` on fixtures included. `make check` green; TESTS_AND_COVERAGE.
+
+**Live steps: a command list for the owner** (docs/RUNBOOK.md, "Session 6's live paper cycle"):
+one supervised paper cycle with `capital.mode: cap` and a cap of 800 euros, dry run first, then the
+cycle; fills, the conversion (expect `o10164` declined, its text now recorded), reconciliation and
+the digest; Telegram once if its variables are set. Paste the masked outputs into a short session.
+
+**Dependabot.** Only cryptography 50 is open (Almoon-D/ObliskIQ#5, Almoon-D/ObliskIQ#9), a major in
+the follow-ups (D96); nothing to merge.
+
+**Deferred.** The live paper cycle (no IBKR call from the cloud). Protective-intent renewal is
+Session 17's (the skeleton carries no stops). Conversions in shadow (a foreign buy waits there).
+
+**Live findings.** No IBKR order or account call from this session. The skeleton's conids and
+listings were read through the owner's IBKR connector (contract search and four snapshots,
+read-only) [MCP ✓ 2026-10-20]; VERIFY-LIVE rows added below.
 
 ### Session 5 execution test, first live run (owner, 2026-10-20, v0.10.1)
 
@@ -1180,7 +1239,7 @@ settles it.
 | `/iserver/secdef/search` without `secType` still returns sections | 3 | T1 or the first command list after it |
 | `/contract/trading-schedule` shape, holidays omitted, and agreement with the calendars (closes the Session 2 phase-window, SGX, B3 and XEUR rows) | 3 | T1 or the first command list after it |
 | `/iserver/auth/ssodh/init` with `publish`/`compete` as query parameters through the Gateway (lite used them over OAuth) | 3 | T1 or the first command list after it |
-| `ssoExpires` and the daily reset as seen by the keepalive | 3 | 6 |
+| `ssoExpires` and the daily reset as seen by the keepalive, re-logged in unattended (D105) | 3 | the first week of `serve` on the machine |
 | The daily bar's `t` stamp per venue (the history window is filtered on the UTC date of the bar start; a venue stamping before UTC midnight would shift by a day) | 3 | 8 |
 | Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | T1 or the first command list after it |
 | Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | T1 (the paper order test) |
@@ -1205,6 +1264,11 @@ settles it.
 | The spot-FX commission (0.20 bp, at least USD 2.00, charged in the base currency) against a conversion's trade | 5 | the execution test |
 | The cOID kept unique for 24 hours (the place-order reference) | 5 | T1 (the paper order test) |
 | The Adaptive algo's parameters and its limit cap, before `execution.pricing.algos` enables it | 5 | a paper order with the algo (Session 6 on) |
+| The skeleton's conids through `/iserver/secdef/search` and `/iserver/contract/{conid}/info` (IWDA 78999785 LSEETF USD, EMIM 153454120 AEB EUR, IBGM 43614383 AEB EUR; read on MCP) | 6 | Session 6's live paper cycle (`run-cycle --dry-run`) |
+| A whole cycle on paper: the conversion (and IBKR's text of `o10164` on it), three buys, their fills, the holdings registered to the core, reconciliation green, the digest | 6 | Session 6's live paper cycle |
+| Telegram's `sendMessage` in HTML mode from the machine, and a digest split under the cap | 6 | Session 6's live paper cycle (with `TELEGRAM_*` set) |
+| The shadow fill at the touch (D103) against paper fills of the same orders | 6 | 18 (TCA) |
+| The health ping (`OBLISK_HEALTH_PING_URL`) from the machine | 6 | the first week of `serve` |
 | The Gateway login on Java 21 and on Java 25 (the side test; Session 3's readings do not separate Java 11 from 21) | D96 | T1 |
 | Playwright 1.64 (Chrome for Testing's headless shell) logs in on Ubuntu 26.04 with the pinned-key flag | D96 | T1 |
 | A manual Gateway login on the machine through an SSH-forwarded browser, only if the unattended one is accepted without a session (whether IBKR treats it as local is unverified) | D96 | T1 |
@@ -1260,40 +1324,41 @@ settles it.
   the annual export of realised results and deferred losses.
 - Session 7: apply the personal and family minimum to the savings base if the owner's general
   base leaves part of it unused (the engine errs high without it).
-- Session 6: the gate reads the live orders and the trades fresh for every clearance, and IBKR paces
-  each at one request per 6 s here, so an exit beside a stop (check, cut, clear) takes about 18 s
-  and a cycle of N orders at least 6·N s. If that binds, share one read per cycle under the store
-  lock, keeping I2's rule that a sell cleared after the read still counts.
-- Session 6: one process places a given intent (D47); if the executor ever retries from more
-  than one process, add a per-intent placement lease in the store. The kill switch classes a
-  sell by the most cautious of its intent's spent clearances (D48); once reconciliation knows
-  the terms the broker accepted, it can class by those instead.
+- Session 7: managed capital follows flows and returns; under `capital.mode: cap` today the cap is
+  the book's size, so gains above it are trimmed back beyond the band (D104). The rebalancer reads
+  `execution.pretrade.cash_floor` as its floor until `capital.budgets` names one.
+- Session 13: the core engine replaces `core.skeleton_targets` and `decision/rebalance_basic.py`
+  (and, with Session 8's universe, the skeleton's allowlist entries).
+- The session that records Session 6's live cycle: decide `o10164` on a conversion from IBKR's
+  text, now kept in the intent's history and the declined warning's alert (D101, D105).
+- Session 19: the deployment's unit or container replaces docs/RUNBOOK.md's example systemd unit.
+- When IBKR's pacing binds (the first weeks of `serve` show it): the gate reads the live orders and
+  the trades fresh for every clearance, and IBKR paces each at one request per 6 s here, so an
+  exit beside a stop (check, cut, clear) takes about 18 s and a cycle of N orders at least 6·N s;
+  the heartbeat now runs the executor's cycle, reconciliation included, every 5 minutes (D102).
+  Share one read per cycle under the store lock, keeping I2's rule that a sell cleared after the
+  read still counts.
+- The kill switch classes a sell by the most cautious of its intent's spent clearances (D48); once
+  reconciliation knows the terms the broker accepted, it can class by those instead.
 - Session 18 (I5): the boundary writes an intent only in the mode it was made for, so an
   automatic `live → live-small` downgrade would freeze every modify of an intent made under
   `live`, stop resizes and restores included. When the live levels can write, let a downgrade
   between two writing modes keep protective modifies of existing intents working.
-- First session with captured paper rows (6): the sweep cancels a live-order row it cannot read
-  (D48), which could strip a protective stop whose row fails validation for another field; read
-  the raw `side` and `secType` of an unreadable row and keep a readable non-`CASH` sell.
-- Session 6: an intent gets its first price from `Pricer.initial` (a patient limit inside the
-  mid, or an enabled algo with a limit cap) where it is made; the executor reprices it and prices
-  its successor at the next window, but places a new intent at the terms it carries.
-- Session 6: the heartbeat alerts a stop it cannot place on every cycle (outside the venue's
-  window, say, `stop_missing`) and a failed conversion on every funding attempt; the notifier
-  sends a repeated alert once until its condition changes.
-- Session 6 or 17: a protective intent lives 365 days (`execution.protective.intent_ttl_days`);
+- First session with captured paper rows (Session 6's live cycle): the sweep cancels a live-order
+  row it cannot read (D48), which could strip a protective stop whose row fails validation for
+  another field; read the raw `side` and `secType` of an unreadable row and keep a readable
+  non-`CASH` sell.
+- Session 17: a protective intent lives 365 days (`execution.protective.intent_ttl_days`);
   its GTC stop outlives it, but the boundary refuses the stop's modifies after it expires. Renew
   the intent (a new one adopting the order) before its end (D99).
-- Session 6: in shadow mode an illiquid listing's simulated fill (the friction tier's spread and
-  slippage) can sit beyond what the collar lets a limit reach, so its shadow order rests
-  unfilled; the first shadow cycles show whether that binds (Session 18 calibrates both).
+- Session 18: calibrate the shadow fill at the touch (D103) against paper and live fills; it
+  simulates no queue position, size beyond the displayed quote or impact. Shadow converts nothing,
+  so a buy in a currency the account holds no cash in waits in shadow; simulate the conversion if
+  L1's shadow days need it.
 - Session 7: reconciliation notes cash that arrived unexplained (`cash_arrived`: dividends,
   interest, deposits); the cash-flow ledger takes them from there.
 - A later session: IBKR's attached orders (D99). A whatif of an entry with a child stop-limit
   first (read-only), then the package's clearance (I1, I5), then the paper probe.
-- Session 6: the order path's alert hook (`OrderAlert`: `restore_failed`, `option_close_blocked`
-  and Session 4's kinds) reaches Telegram; `execution/runtime.py` assembles the order path the
-  service runs.
 - Session 8: the universe replaces `ConfiguredDirectory` (the skeleton allowlist's instrument
   facts) with a directory that describes every instrument, ineligible ones included, so an option
   on an ineligible ETP and its underlying can both be described; then `eligibility.yaml` goes.
@@ -1303,22 +1368,12 @@ settles it.
 - Session 18: calibrate the gate's caps (`execution.pretrade.caps`), the cash floor, the protective
   spec's limit offset and gap steps, the pricing's start and reprices, and the currency manager's
   buffer, minimum and limit fraction from the transaction-cost analysis.
-- Session 6: the service calls `OrderClient.reset_suppressed()` once before its first placement,
-  runs `KillSwitch.run` (its reports and `OrderAlert`s to Telegram) and downgrades the mode on the
-  failures the plan names.
 - **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
   the live account's, D42). Its login did not complete from a cloud container (most likely the
-  outbound address changing per connection), so the first live run is T1 on the deployment
-  machine (SESSION_PROMPTS §A.5), due before Session 6 (D68); until then sessions build
+  outbound address changing per connection), so live runs happen on the deployment machine
+  (SESSION_PROMPTS §A.5, T1 and Session 6's live paper cycle in docs/RUNBOOK.md); sessions build
   against fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
   and a daily manual login (D68).
-- Session 6: a repair deferred by the Gateway's re-login interval is retried only by a later
-  failing read, which repeats the alert. Keep a lost flag and the deferral deadline; let the
-  keepalive repair once it passes and fail reads fast, without a new alert, before then.
-- Session 6: register `IbkrTradingSchedule` with `Calendars.from_settings(..., sources=[...])`,
-  passing each venue's `is_business_weekday` as `is_trading_weekday` (the calendars expose it per
-  venue), and refresh it from one reference conid per venue; pass the session's alert hook to
-  Telegram.
 - Session 8: the route tag for `source` columns (lite refused unknown routes) belongs to the
   collectors that write rows; the history walk gains its store watermark there.
 - Session 19: the deployment image's base is the OS D96 chose (Ubuntu 26.04), with the Java

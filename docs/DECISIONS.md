@@ -2266,3 +2266,142 @@ Found by the owner's `--execution-test` on the paper account, 2026-10-20.
 
 Rejected: skipping the whatif for a conversion (the gate would lose IBKR's error for a
 permission or size refusal), and confirming `o10164` for conversions unread.
+
+## Session 6 — Walking skeleton (2026-10-20)
+
+### D102 · The service: one process, jobs anchored to venue sessions, recovery from the run log (§5.14, D47)
+
+- **One process talks to the broker.** `obliskiq serve`, `run-cycle` and every command that opens a
+  brokerage session (`preflight`, `reconcile`, `flatten`) take an exclusive `flock` on
+  `paths.service_lock`; a second one refuses and says who holds it. The kernel drops the lock when
+  its process ends, however it ends. This is D47's "one process places a given intent" made a
+  rule, and it keeps a command from taking the username's single brokerage session from a running
+  service (`compete`). Commands that read only the store (`status`, `intents list`, `holdings`,
+  `mode`, `kill`) need no lock; `kill on` never needs anything (D48).
+- **The schedule.** A heartbeat every `runtime.heartbeat_seconds` (300) and four decision cycles a
+  trading day, each an offset from one venue's regular session through the calendars: Asia an
+  hour after Tokyo's open, Europe an hour after Xetra's, US an hour after the NYSE's, US-late an
+  hour before its close; the digest half an hour after it. A venue with no session has no cycle
+  that day; the others run. Daylight saving follows each venue (Europe moves an hour in UTC on
+  25 October, New York on 1 November).
+- **A cycle** is one run record of three guarded steps, `nav`, `rebalance`, `execute` (lite's
+  sequence and run rows, legacy/lite collect/sequence.py and runlog.py, in 001_core's `runs` and
+  `run_steps`): each step's row is written before it works, any exception is that step's `error`
+  and the next step runs, and the run's verdict is the worst step's. **The heartbeat runs the
+  executor's cycle every time**: reprices keep their pace, a staged intent goes out when its venue
+  opens, a fill a restart's cOID lookup found is followed and its holding registered, the stops are
+  checked and the broker reconciled every few minutes. With IBKR's pacing a heartbeat takes about
+  half a minute of reads.
+- **Recovery.** At start, under the lock, every run row still `running` belongs to a dead process
+  and is closed `interrupted` at once (lite reaped by age, because nothing else proved the process
+  dead; the lock does). Then `Executor.resume` looks every intent that may be at the broker up by
+  its cOID, the skeleton's conids are confirmed, and the run log decides catch-up: a cycle or
+  digest of the last day whose moment passed with no finished run runs now if it is at most
+  `runtime.catch_up_minutes` (120) late, and is recorded `skipped` ("missed") otherwise.
+- **Downgrade.** The plan makes downgrades automatic without naming a trigger this build can
+  observe (breakers are Session 17's, monitoring Session 18's). The service downgrades a writing
+  mode to shadow after `runtime.downgrade_after_failed_cycles` (3) consecutive cycles that end
+  `error` or `partial`, audited in `mode_audit` and alerted; upgrading back stays an owner command.
+- **Stop.** SIGTERM or SIGINT ends the loop after the job in hand; the keepalive and the kill
+  switch's sweep stop, the health file says `stopped`, queued alerts go out.
+- **lite's `runtime` keys** (legacy/lite/config.yaml:741-751): the SQLite ones are Session 2's
+  `store.busy_timeout_ms` and `store.synchronous`, with WAL and foreign keys fixed in code; UTC
+  timestamps are a rule (AGENTS.md), not a setting. No new key is consumed.
+
+Rejected: reaping by age under the lock (a cycle legitimately running long would be mislabelled),
+a PID file (reused, and meaningless after the reboot that most likely killed the process), and
+running the executor only on the four cycles (a reprice every five minutes would happen four times
+a day, and a restart's fills would wait for the next cycle).
+
+### D103 · A shadow limit order fills at the touch (§5.12, D52)
+
+D52 priced a shadow fill at the quote's reference moved by the cost model's spread and slippage,
+filled only inside the limit. For the skeleton's vehicles that fills nothing: an ETF has no
+market capitalisation, so the illiquid tier is assumed (0.5 % spread plus 0.5 % slippage), beyond
+the 0.5 % collar a limit may reach; even the liquid tier (0.2 %) is beyond the quoted half-spread
+of a liquid UCITS line, where every reprice ends. Shadow mode would never fill, and the follow-up
+Session 5 left (does the friction tier bind?) is answered by construction.
+
+- With the touch on the order's side (the ask for a buy, the bid for a sell), a shadow order fills
+  there once its limit reaches it, and rests while it does not: a patient limit inside the spread
+  fills in the market only if the market comes to it, which a snapshot cannot tell. Without that
+  side of the quote, D52's rule applies. The commission is always the cost model's.
+- An unfilled shadow order is repriced toward the touch on the real clock (its terms change;
+  nothing is sent), then given up and retried at the next window, as a real one is. The last
+  reprice reaches the touch, so a quote that holds fills in shadow within
+  `max_reprices × reprice_interval_minutes`.
+- Not simulated: queue position, size beyond the displayed quote, market impact. Session 18's
+  transaction-cost analysis compares paper and live fills with this rule.
+- Shadow converts nothing (D52): a buy in a currency the account holds no cash in waits.
+
+Rejected: starting shadow orders at the touch (shadow would stop testing the pricing that paper
+and live use) and keeping D52 alone (no skeleton order would ever fill in shadow).
+
+### D104 · Managed capital and the skeleton book (§5.4, §5.15)
+
+- **Managed capital** (`capital/`, Session 7 extends it). `capital.mode: whole_account` manages
+  the ledger's NAV; `cap` manages `min(cap_base, NAV)`. The default is `cap` at 1,000 euros: the
+  bot manages a small book until the owner sizes it in config/owner.yaml. An unreadable NAV
+  manages nothing. The cap is the book's size, not its starting value: gains above it are not
+  reinvested, and beyond the band a role is trimmed back. Session 7's managed capital follows
+  flows and returns.
+- **A capped book converts its shortfall alone.** The currency manager raises a conversion to
+  `min_conversion_base` (1,000 euros) where the account's cash allows (D98); under a cap of a few
+  hundred euros that would convert more than the whole book. In mode `cap` the conversion is the
+  shortfall at the limit, as a small account with that much cash would convert.
+- **The skeleton** (`core.skeleton_targets`, removed in Session 13): three of variant A's roles
+  (D91), weighted as A weights them in Session 4c's pre-registration (WORLD 9 %, EM 7 %,
+  EGB_INT 34 %) scaled to fill the book (0.18, 0.14, 0.68). The vehicles are UCITS funds:
+  iShares Core MSCI World on the LSE in US dollars (so a cycle exercises the conversion),
+  iShares Core MSCI EM IMI and iShares € Govt Bond 7-10yr on Euronext Amsterdam in euros. Their
+  conids were read from IBKR's contract search on the MCP route, with a snapshot that priced each
+  in its currency [MCP ✓ 2026-10-20]; the euro government line IBKR's search found for 3-7 years
+  trades on SIX, so the 7-10 year line keeps both euro roles on one venue. Every start (`serve`,
+  `run-cycle`) confirms each through `/iserver/secdef/search` and `/iserver/contract/{conid}/info`;
+  a role IBKR does not confirm is not traded and is alerted. Like the core, no stops.
+- **The basic rebalancer** (`decision/rebalance_basic.py`). A role trades back to its target when
+  its weight leaves the inner band, the smaller of `trading.inner_band.absolute` (2 points) and
+  `relative` (10 % of its target); in whole units, toward zero, a sale never beyond the holding;
+  above `trading.min_trade` (the larger of 50 euros and 2 % of managed capital) and never below the
+  order's own commission (an order the cost model cannot price is not made, since the floor cannot
+  be checked); buys within the smaller of the account's and the book's cash, less every open buy
+  and `execution.pretrade.cash_floor`, the largest shortfall first. A rebalancing sale is an exit
+  with the reason `rebalance`, added to lite's `discipline.exit_reasons_allowed`: lite had no core
+  to rebalance. Every value is a judgement; Session 13's engine brings the core's bands.
+
+Rejected: A's eight roles at their weights (a few hundred euros buys none of most of them), equal
+weights (nothing ties them to the chosen variant), and the whole account by default (a paper
+balance of a million would make the skeleton trade a million).
+
+### D105 · The owner's channel: alerts once per condition, the digest, health (§5.14, D68)
+
+- **Alerts** come from the order path's `OrderAlert`, the session's `SessionAlert`, calendar
+  disagreements, the kill switch's sweep and the service's own findings (a failed cycle or
+  heartbeat, a stuck intent, a venue blocked when it should trade, an unconfirmed target, a
+  downgrade). A **condition** is sent once and held under its key (its intent, or its words with the
+  numbers masked) while it holds: it clears when a round of the job that raised it ends without it,
+  or when an event resolves it (a re-login clears the session's alerts). An **event** is sent each
+  time. The book is a JSON file written atomically (market-pulse-bot's state file); one that cannot
+  be read is set aside. This answers Session 5's follow-ups: a stop the heartbeat cannot place, or
+  a conversion that fails at each funding attempt, reaches the owner once.
+- **A stuck intent** is one submitted with no answer, or open past its expiry, for
+  `runtime.stuck_after_minutes` (30): L1's "no stuck intent" (§5.19). A protective intent is never
+  stuck: it governs a resting stop.
+- **A failed re-login reaches the owner within one heartbeat.** Session alerts are sent the moment
+  the keepalive raises them, and configuration refuses a heartbeat shorter than the keepalive's
+  slowest path to its alert (failed tickles, then every re-login attempt and pause: 150 s against
+  300). A repair the Gateway defers (its re-login interval) marks the session lost until the
+  deadline: reads fail at once with no repair and no repeated alert, and the keepalive logs in
+  again when it passes (Session 3's follow-up).
+- **Telegram** through the Bot API in HTML mode, split under the message cap (the legacy notifier
+  and run summary); a send never raises and the token, part of the URL, is never logged. Without
+  `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` every message goes to the log. lite rejected an
+  outbound notifier for its collectors; the plan's service needs one, and the exit code, the run
+  log and `obliskiq status` stay the channel that works when Telegram does not.
+- **Health**: the heartbeat rewrites `paths.heartbeat_file`; when `OBLISK_HEALTH_PING_URL` is set it
+  is fetched after each heartbeat. The prompt put the URL in configuration; it is an environment
+  secret instead, because whoever holds it can report the bot alive, and config/owner.yaml is
+  committed.
+- **IBKR's warning text** is kept with each reply (masked, at most 500 characters) in the intent's
+  history and in a declined warning's alert, so the next live conversion answers D101's open
+  question about `o10164`.
