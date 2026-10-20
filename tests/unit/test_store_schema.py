@@ -103,6 +103,8 @@ SHAPE = {
         "original_terms:TEXT!, resized_quantity:TEXT!, state:TEXT!, created_at:TEXT!, "
         "updated_at:TEXT!, detail:TEXT!"
     ),
+    # 007_service
+    "nav_history": "as_of:TEXT!*, nav_base:TEXT!, currency:TEXT!, source:TEXT!, recorded_at:TEXT!",
     # 006_execution
     "reconciliations": (
         "run_id:INTEGER*, at:TEXT!, status:TEXT!, findings:TEXT!, positions_read:INTEGER, "

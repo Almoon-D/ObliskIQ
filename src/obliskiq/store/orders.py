@@ -879,15 +879,7 @@ def assign_holding(store: Store, assignment: HoldingAssignment) -> None:
         )
 
 
-def holding_assignment(store: Store, conid: int) -> HoldingAssignment | None:
-    """The holding's current assignment; ``None`` when it was never registered."""
-    row = store.execute(
-        "SELECT conid, owner, assigned_by, assigned_at, reason FROM holding_assignments "
-        "WHERE conid = ? ORDER BY assignment_id DESC LIMIT 1",
-        (conid,),
-    ).fetchone()
-    if row is None:
-        return None
+def _assignment_from_row(row: sqlite3.Row) -> HoldingAssignment:
     return _build(
         "holding_assignments",
         lambda: HoldingAssignment(
@@ -898,6 +890,26 @@ def holding_assignment(store: Store, conid: int) -> HoldingAssignment | None:
             reason=row["reason"],
         ),
     )
+
+
+def holding_assignment(store: Store, conid: int) -> HoldingAssignment | None:
+    """The holding's current assignment; ``None`` when it was never registered."""
+    row = store.execute(
+        "SELECT conid, owner, assigned_by, assigned_at, reason FROM holding_assignments "
+        "WHERE conid = ? ORDER BY assignment_id DESC LIMIT 1",
+        (conid,),
+    ).fetchone()
+    return None if row is None else _assignment_from_row(row)
+
+
+def holding_assignments(store: Store) -> list[HoldingAssignment]:
+    """Every registered holding's current assignment (its latest row), by conid."""
+    rows = store.execute(
+        "SELECT conid, owner, assigned_by, assigned_at, reason FROM holding_assignments "
+        "WHERE assignment_id IN (SELECT MAX(assignment_id) FROM holding_assignments "
+        "GROUP BY conid) ORDER BY conid"
+    ).fetchall()
+    return [_assignment_from_row(row) for row in rows]
 
 
 # ── approvals and stop resizes ──
