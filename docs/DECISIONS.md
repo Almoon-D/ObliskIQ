@@ -2243,3 +2243,26 @@ conversion per trade (each pays the USD 2.00 minimum).
 
 Rejected: a reconciliation that compares each run with the previous one (a lag would read as
 drift and heal by itself), and placing again any order not listed without the grace period.
+
+### D101 · A conversion is previewed as the plain order on its pair (§5.12, D98)
+
+Found by the owner's `--execution-test` on the paper account, 2026-10-20.
+
+- **The whatif refuses the conversion flags.** `POST …/orders/whatif` answers HTTP 503
+  `Service Unavailable` for an order carrying `isCcyConv` and `fxQty`, with or without a prior
+  snapshot of the pair, as `conid` or `conidex …@IDEALPRO`, and with or without `outsideRTH`. The
+  same pair as an ordinary limit order in units previews with its amount, commission and
+  equity effect (EUR.USD, 100 units sold at 1.12126: 112.35 USD, commission 1.78 EUR).
+- **Decision.** The gate and the execution test preview a conversion with
+  `fx.preview_terms`: the pair, the side and the limit unchanged, sized in units of the pair's
+  base currency (the amount sold, or the amount spent divided by the limit, rounded to whole
+  units; below one unit the conversion is refused `whatif_refused`). The preview is never sent as
+  an order and registers no cOID. The gate reads only the whatif's error from it; the conversion
+  is still placed with `isCcyConv` and `fxQty`, and every other rail is unchanged.
+- **Not decided.** IBKR raised `o10164` on the placed conversion; `execution.reply_policy`
+  confirms it for cash-quantity orders that are not conversions, so the order was declined, as
+  designed. Whether to confirm it for conversions needs the warning's text, which no log
+  records; the next run must capture it (ROADMAP, Follow-ups).
+
+Rejected: skipping the whatif for a conversion (the gate would lose IBKR's error for a
+permission or size refusal), and confirming `o10164` for conversions unread.

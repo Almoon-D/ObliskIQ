@@ -421,3 +421,24 @@ async def test_a_conversion_the_boundary_refuses_fails(
         "EUR", "USD", Decimal(1000), mode=ExecutionMode.PAPER, reason="test"
     )
     assert (outcome.status, outcome.detail) == ("failed", "not placed: the boundary refused")
+
+
+def test_a_conversions_preview_is_the_plain_order_on_its_pair(
+    shipped_settings: ObliskConfig,
+) -> None:
+    from order_rig import terms
+
+    from obliskiq.execution.fx import ConversionLeg, preview_terms
+
+    (pair,) = shipped_settings.execution.currency.pairs
+    sell = terms(conid=pair.conid, side=OrderSide.SELL, cash="1000", limit="1.25", conversion=True)
+    plain = preview_terms(ConversionLeg(pair, OrderSide.SELL), sell)
+    assert (plain.conversion, plain.cash_quantity, plain.quantity) == (False, None, Decimal(1000))
+    assert (plain.side, plain.conid, plain.price) == (sell.side, sell.conid, sell.price)
+    buy = terms(conid=pair.conid, side=OrderSide.BUY, cash="1250", limit="1.25", conversion=True)
+    assert preview_terms(ConversionLeg(pair, OrderSide.BUY), buy).quantity == Decimal(1000)
+    tiny = terms(conid=pair.conid, side=OrderSide.BUY, cash="0.5", limit="1.25", conversion=True)
+    with pytest.raises(ValueError, match="less than one"):
+        preview_terms(ConversionLeg(pair, OrderSide.BUY), tiny)
+    with pytest.raises(ValueError, match="only a conversion"):
+        preview_terms(ConversionLeg(pair, OrderSide.SELL), terms(quantity="1"))

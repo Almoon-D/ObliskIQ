@@ -67,3 +67,22 @@ def conversion_leg(pairs: Iterable[CurrencyPair], terms: OrderTerms) -> Conversi
         if pair.conid == terms.conid:
             return ConversionLeg(pair, terms.side)
     return None
+
+
+def preview_terms(leg: ConversionLeg, terms: OrderTerms) -> OrderTerms:
+    """The plain order on the pair that a whatif of ``terms`` may use.
+
+    IBKR's whatif answers HTTP 503 for an order carrying ``isCcyConv``/``fxQty`` (T1, 2026-10-20),
+    while the same pair as an ordinary limit order in units previews with its cost and commission.
+    The preview is never sent as an order. A buy of the pair is sized in the base currency it
+    brings in at the limit, a sell in the base currency it sells. Placement is unchanged: the
+    conversion itself is still sent with ``isCcyConv``.
+    """
+    amount = terms.cash_quantity
+    if not terms.conversion or amount is None:
+        raise ValueError("only a conversion has a preview order")
+    units = amount / terms.price.limit if leg.side is OrderSide.BUY else amount
+    units = units.to_integral_value()
+    if units <= 0:
+        raise ValueError(f"{amount} {leg.source} is less than one {leg.pair.base} at the limit")
+    return terms.model_copy(update={"conversion": False, "cash_quantity": None, "quantity": units})

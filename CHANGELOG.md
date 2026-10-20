@@ -5,6 +5,23 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.10.1] - 2026-10-20
+
+The execution test's first live findings (owner run on the paper account, Gateway transport).
+
+### Fixed
+
+- The pre-trade gate and `--execution-test` previewed a conversion with a whatif carrying
+  `isCcyConv`/`fxQty`, which IBKR answers with HTTP 503: every conversion was refused
+  (`whatif_refused`). The preview is now the equivalent plain limit order on the pair, in units
+  of its base currency (`execution/fx.py: preview_terms`); the conversion itself is placed as
+  before (DECISIONS D101).
+
+### Changed
+
+- `docs/knowledge/ibkr-orders.md`, `docs/ROADMAP.md`: the live findings (whatif of a conversion,
+  `o10164` on a conversion, an `Inactive` order that could not be cancelled) and their follow-ups.
+
 ## [0.10.0] - 2026-10-20
 
 Session 5, execution mechanics: an intent becomes a funded, patiently priced, protected and

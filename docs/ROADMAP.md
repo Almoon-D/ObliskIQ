@@ -39,6 +39,34 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 
 ## Session log
 
+### Session 5 execution test, first live run (owner, 2026-10-20, v0.10.1)
+
+Run on the paper account over the Gateway (Ubuntu on WSL2: the Gateway's launcher is `bash`, so it
+does not start on Windows), commit 1a5f680 then this version, NYSE window open, account masked
+`DU*******`. Two attempts at 19:31 and 19:34 Madrid on v0.10.0; one at 20:00 on v0.10.1.
+
+- **v0.10.0: stopped at "(a) conversion whatif".** HTTP 503 from `…/orders/whatif`, three
+  backoffs, both attempts. The FCX identity step passed (conid 7089, the allowlist's corrected
+  value). A read-only probe showed the 503 is the conversion flags, not a precondition (D101).
+  `reconcile run`: incomplete once ("the live orders are not a complete snapshot", new risk
+  frozen), green on the second run.
+- **v0.10.1: the whatif passes** (SELL conid 12087792 at most 1.12126; amount 112.35 USD,
+  commission 1.78 EUR, no warning). The gate cleared the conversion and it was sent. IBKR
+  answered `o10164`; the policy confirms it only for cash-quantity orders that are not
+  conversions, so it was declined, the order cancelled by the bot failed (`RequestRejectedError`)
+  and the order stayed at IBKR: id 857299469, `Inactive`, total quantity 111.26, remaining 111.26,
+  no fill, TIF `CLOSE`. No trade, no USD cash, no position. `reconcile run` green. Phases (b)
+  and (c) (the FCX buy, the stop, the restart check) were not reached; `--finish` was not run.
+- **Mode** set to paper for each run and back to shadow after it.
+- **Minimum forex commission:** about 1.78 EUR on 100 EUR (1.8 %): size the test with it.
+- **T1.** `--paper-order-test` was run on 2026-10-19 after Xetra closed (EXV1 refused
+  `venue_not_tradable`, FCX conid corrected); the day-2 login check, the Java 21/25 test and a run
+  with Xetra and the NYSE both open are not done.
+- **Windows.** The Gateway cannot start there; one test module imports `fcntl`; 49 tests failed
+  and 8 errored on Windows (not investigated). The repository is Linux-only in practice.
+- **Venues open during the run (19:55 Madrid):** XNYS, BVMF, XMEX, XSGO, XEUR; every Asian venue
+  was closed.
+
 ### Session 5 — Execution mechanics (2026-10-20, v0.10.0)
 
 **Landed.**
