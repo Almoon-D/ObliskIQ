@@ -100,7 +100,7 @@ from ..util.timeutil import utc_now
 from .account import AccountReader, CashRead, PositionsRead, QuoteRead
 from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, raise_alert
 from .exposure import SellRequest, UnreadableOrdersError, count_sells, store_position
-from .fx import ConversionLeg, conversion_leg
+from .fx import ConversionLeg, conversion_leg, preview_terms
 from .instruments import InstrumentDirectory, prohibited_reasons
 from .killswitch import CONVERSION_SEC_TYPE, KillSwitch
 from .modes import Modes, write_refusal
@@ -644,10 +644,10 @@ class PretradeGate:
         collar = self._quotes.within_collar(request.terms, evidence, sigma=found.quote.sigma)
         if not collar.ok:
             found.fail(Reason.COLLAR, collar.reason)
-        if not found.failures:
+        if not found.failures and found.leg is not None:
             try:
-                found.whatif = await reader.whatif(request.terms)
-            except (IbkrError, ObliskError) as exc:
+                found.whatif = await reader.whatif(preview_terms(found.leg, request.terms))
+            except (IbkrError, ObliskError, ValueError) as exc:
                 found.fail(Reason.WHATIF_REFUSED, f"the whatif failed: {exc}")
 
     async def _read(self, request: _Request, found: _Found) -> None:

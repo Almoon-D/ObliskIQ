@@ -244,3 +244,11 @@ cloud container (docs/knowledge/ibkr.md), so the paper order test (`obliskiq pre
   or a cancel at once).
 - **Zero positions.** A position closed during the day may be listed at zero; flatten skips it.
   VERIFY-LIVE(zero rows in the positions read).
+
+## A conversion on the live paper account (T1, 2026-10-20)
+
+- **Whatif.** `isCcyConv`/`fxQty` makes `…/orders/whatif` answer HTTP 503; the pair as a plain
+  limit order in units previews (112.35 USD, commission 1.78 EUR for 100 EUR). [CP ✓ 2026-10-20]
+- **Placement.** The conversion drew the warning `o10164`; the order stayed listed as `Inactive`
+  (total and remaining quantity 111.26 for `fxQty` 100, TIF `CLOSE`, no fill) and a cancel by id
+  was rejected. The warning's text is not recorded. VERIFY-LIVE(o10164 on a conversion).

@@ -159,7 +159,7 @@ async def test_phase_two_without_a_working_stop_stops(rig: Any) -> None:
 
 async def test_a_buy_the_gate_refuses_is_reported(rig: Any) -> None:
     rig.broker.whatif_for = lambda order: (
-        {"error": "no trading permission", "amount": {}} if not order.get("isCcyConv") else {}
+        {"error": "no trading permission", "amount": {}} if order.get("conid") != EURUSD else {}
     )
     report = await make_tester(rig).run()
     found = steps(report)

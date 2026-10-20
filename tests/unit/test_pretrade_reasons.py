@@ -327,6 +327,36 @@ async def test_a_conversion_the_whatif_refuses_is_refused(rig: Any) -> None:
     assert "no trading permission" in answer.reason
 
 
+async def test_a_conversion_is_previewed_as_the_plain_order_on_its_pair(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """IBKR's whatif answers 503 to isCcyConv/fxQty (T1, 2026-10-20): the gate previews the
+    equivalent limit order in units and still clears the conversion itself."""
+    pair_quote(rig)
+    seen: list[Any] = []
+    whatif = rig.reader.whatif
+
+    async def spy(order_terms: Any) -> Any:
+        seen.append(order_terms)
+        return await whatif(order_terms)
+
+    monkeypatch.setattr(rig.reader, "whatif", spy)
+    stored = await conversion(rig, cash="1000")
+    clearance = await cleared(rig, stored)
+    assert [(t.conversion, t.cash_quantity, t.quantity) for t in seen] == [
+        (False, None, Decimal(1000))
+    ]
+    assert clearance.terms.conversion is True
+    assert clearance.terms.cash_quantity == Decimal(1000)
+
+
+async def test_a_conversion_too_small_to_preview_is_refused(rig: Any) -> None:
+    pair_quote(rig)
+    stored = await conversion(rig, side=OrderSide.BUY, cash="0.4", limit="1.168")
+    answer = await refused(rig, stored, Reason.WHATIF_REFUSED)
+    assert "less than one" in answer.reason
+
+
 async def test_a_conversion_whose_whatif_fails_is_refused_and_a_check_clears_it(
     rig: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

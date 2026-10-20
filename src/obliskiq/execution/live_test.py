@@ -48,6 +48,7 @@ from ..store import orders as repo
 from ..store.orders import StoredIntent
 from ..util.timeutil import utc_now
 from .account import QuoteRead
+from .fx import conversion_leg, preview_terms
 from .intents import new_intent
 from .paper_test import TEST_SLEEVE, PaperOrderReport, _probe_id
 from .pretrade import PretradeRefusal
@@ -144,7 +145,12 @@ class ExecutionTest:
         terms = await path.currency.conversion_terms(self._base, target, self._conversion)
         if isinstance(terms, str):
             return report.add("(a) conversion", False, terms)
-        whatif = await path.orders.whatif(terms, coid=path.orders.coid_for(_probe_id()))
+        leg = conversion_leg(path.settings.execution.currency.pairs, terms)
+        if leg is None:  # pragma: no cover - the terms came from a configured pair
+            return report.add("(a) conversion", False, f"conid {terms.conid} is no configured pair")
+        whatif = await path.orders.whatif(
+            preview_terms(leg, terms), coid=path.orders.coid_for(_probe_id())
+        )
         report.add(
             "(a) conversion whatif",
             whatif.error is None,
