@@ -231,8 +231,24 @@ ibkr:
     # `obliskiq preflight --paper-order-test`: one buy of the minimum quantity per instrument, at a
     # limit that cannot fill, then a cancel. Each conid must be in eligibility.skeleton_allowlist.
     paper_order:
-      conids: [89005163, 8158]
+      conids: [89005163, 7089]
       # The buy limit sits this fraction below the bid, rounded down to the contract's tick.
       limit_offset_fraction: "0.05"
       # How long the test's intents live before they expire unsent.
       intent_ttl_minutes: 10
+    # `obliskiq preflight --execution-test` (then `--finish`): Session 5's live steps on the paper
+    # account, run by the owner on the machine (SESSION_PROMPTS §A.5). It converts a little of the
+    # base currency into the instrument's, buys the contract's size increment at the touch,
+    # protects it with a stop-limit, and on --finish (a new process) sells it and cancels the
+    # stop. The conid must be in eligibility.skeleton_allowlist: a liquid US stock.
+    execution_test:
+      conid: 7089
+      # The conversion, in the base currency. QUOTED.
+      conversion_base: "100"
+      # The test position's stop rests this fraction below its buy limit. QUOTED.
+      stop_fraction: "0.10"
+      # How long the test waits for a fill, and how often it reads the broker meanwhile (IBKR
+      # paces the live orders and the trades at one read per 5 s).
+      fill_timeout_seconds: 180
+      poll_seconds: 6
+      intent_ttl_minutes: 30

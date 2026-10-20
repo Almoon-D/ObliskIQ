@@ -8,13 +8,13 @@
 # underlying is an ETF or ETC this list does not hold is an option on an ineligible ETP, allowed
 # only under the mandatory close (tenor.mandatory_close_trading_days).
 #
-# The conids are lite's, none pinned through ObliskIQ yet: VERIFY-LIVE(skeleton conids). The paper
-# order test resolves each one through IBKR's contract search before it orders, and stops at a
-# mismatch. An owner override replaces the whole list.
+# Each conid is confirmed through IBKR's contract search by the paper order test before it orders,
+# which stops at a mismatch. An owner override replaces the whole list.
 eligibility:
   skeleton_allowlist:
     # A UCITS ETF in the base currency: iShares STOXX Europe 600 Banks on Xetra. Lite resolved it
-    # and read its daily bars on Xetra [MCP ✓ 2026-08-29] (legacy/lite/universe.yaml).
+    # and read its daily bars on Xetra [MCP ✓ 2026-08-29] (legacy/lite/universe.yaml); T1's paper
+    # order test confirmed the conid [CP ✓ 2026-10-20, the owner's T1 report].
     - conid: 89005163
       symbol: EXV1
       listing_exchange: IBIS
@@ -24,9 +24,10 @@ eligibility:
       multiplier: "1"
       underlying_conid: null
       expiry: null
-    # A liquid US stock: Freeport-McMoRan on the NYSE (lite's conid fixture,
-    # legacy/lite/tests/fixtures/ibkr/conids.json).
-    - conid: 8158
+    # A liquid US stock: Freeport-McMoRan on the NYSE. T1's paper order test resolved it through
+    # IBKR's contract search to 7089 [CP ✓ 2026-10-20, the owner's T1 report]; lite's conid
+    # fixture said 8158.
+    - conid: 7089
       symbol: FCX
       listing_exchange: NYSE
       currency: USD

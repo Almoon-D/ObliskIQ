@@ -54,7 +54,7 @@ execution:
   quote_policy:
     - {policy: realtime_required, asset_classes: [option], max_quote_age_seconds: 60}
     - policy: realtime_preferred
-      asset_classes: [stock, etf, etc, bond]
+      asset_classes: [stock, etf, etc, bond, fx]
       max_quote_age_seconds: 60
       max_delay_seconds: 1200
     - {policy: nav_priced, asset_classes: [fund]}
@@ -98,11 +98,6 @@ execution:
     # every other commitment in that currency: room for fees the whatif does not show. A
     # judgement.
     cash_floor: "25"
-    # A sell stop-limit that reduces risk (a protective stop) is checked against this instead of
-    # the collar: its stop rests below the collar's band and its limit sits at or below the stop,
-    # at most this fraction below it. A judgement; Session 5's protective exits set the spec.
-    protective:
-      max_limit_offset_fraction: "0.05"
 
   # The approval queue (MASTER_PLAN §2: it exists, off by default). Every intent of a sleeve
   # listed here that adds risk waits for the owner's approval (`obliskiq approvals`); for
@@ -116,3 +111,94 @@ execution:
     intent_ttl_minutes: 30
     # Time in force of the closing orders: they end with the session.
     tif: DAY
+
+  # The currency manager (execution/currency.py, MASTER_PLAN §5.12). A trade in a currency other
+  # than the base is funded in that currency by a limit-capped spot conversion shortly before it;
+  # foreign cash above what the pending orders need and a buffer is brought home. Amounts are in
+  # the base currency and QUOTED.
+  currency:
+    # IBKR's spot pairs a conversion trades (secType CASH, sent with isCcyConv and routed SMART,
+    # as IBKR's example sends it). Buying a pair sells its quote currency for its base; selling
+    # it sells the base. docs/knowledge/ibkr-orders.md, "Currency conversion".
+    # VERIFY-LIVE(conversion conid, sides and fxQty).
+    pairs:
+      - {symbol: EUR.USD, conid: 12087792, base: EUR, quote: USD}
+    # The working balance kept in each foreign currency the account trades, beyond what its
+    # pending orders need: room for fees, withholding and income paid in it. A judgement.
+    buffer_base: "100"
+    # The smallest conversion: a shortfall below it is converted at this size where the cash and
+    # the single-foreign-currency cap allow, so IBKR's minimum commission (USD 2.00 a
+    # conversion, docs/knowledge/costs.md) weighs at most about 0.2 % of it. A judgement.
+    min_conversion_base: "1000"
+    # Foreign cash beyond the buffer and the pending orders' needs is brought home once the
+    # excess reaches this. A judgement.
+    repatriate_above_base: "1000"
+    # How far through the pair's reference rate a conversion's limit sits, as a fraction of it;
+    # the collar bounds it too. A judgement.
+    limit_fraction: "0.002"
+    # How long a conversion intent lives before it expires unsent.
+    intent_ttl_minutes: 30
+    # How long a cycle waits for a conversion to fill before the trades it funds wait for the next
+    # cycle, and how often it reads the order meanwhile (IBKR paces the live orders at one read
+    # per 5 s).
+    fill_timeout_seconds: 60
+    fill_poll_seconds: 6
+
+  # Pricing (execution/pricing.py): an IBKR algo with a limit cap where it is enabled for the
+  # listing venue and asset class and the contract offers it; otherwise a patient limit inside
+  # the reference mid, repriced toward the touch, then cancelled and retried at the next window.
+  # Orders route SMART (DECISIONS D97); the cost model is given the listing venue.
+  pricing:
+    # Each algo is off until a paper order verifies it: VERIFY-LIVE(algo parameters).
+    algos:
+      - venues: [XNYS, XNAS]
+        asset_classes: [stock, etf]
+        strategy: Adaptive
+        parameters: [{name: adaptivePriority, value: Patient}]
+        enabled: false
+    # The patient limit starts this many ticks inside the mid (below it for a buy). A judgement.
+    start_ticks_inside_mid: 1
+    # Reprices toward the touch (the ask for a buy, the bid for a sell), each a modify with a
+    # fresh clearance, this many minutes apart; after the last one the order is cancelled and
+    # retried at the next tradable window. Judgements: Session 18's transaction-cost analysis
+    # calibrates them.
+    max_reprices: 3
+    reprice_interval_minutes: 5
+
+  # Protective exits (execution/protective.py, DECISIONS D67): stop-limits resting at the broker.
+  protective:
+    # How long a stop rests at the broker: until it fills or the bot cancels it.
+    tif: GTC
+    # How long a protective intent lives: it governs the stop's modifies (resizes, roll-ups,
+    # reprices), not the order, which is GTC.
+    intent_ttl_days: 365
+    # The limit sits below the stop by the larger of sigma_multiple times the instrument's daily
+    # volatility and its overnight-gap quantile, never less than floor_fraction; a spec wider than
+    # max_fraction is refused (a limit that deep acts as a market order). QUOTED. Judgements:
+    # Session 18 calibrates them.
+    limit_offset:
+      floor_fraction: "0.01"
+      sigma_multiple: "1"
+      max_fraction: "0.10"
+    # A stop that triggered and did not fill (a gap through its limit) is repriced toward the bid
+    # in steps, each a modify the gate clears as reducing risk, never past the collar.
+    gap:
+      step_fraction: "0.005"
+      max_steps: 6
+      step_interval_minutes: 2
+      # A limit beyond the collar, deep enough to act as a market order: the owner's decision,
+      # off by default (DECISIONS D67). When on, the last step may reach this far below the bid.
+      emergency:
+        enabled: false
+        fraction_below_bid: "0.05"
+
+  # Reconciliation (execution/reconcile.py): the broker's orders, trades, positions and cash
+  # against the store. A run that is not green freezes new risk until the next green one.
+  reconcile:
+    # How long IBKR may take to list a just-placed order or show a fill in the positions before
+    # it counts as missing; the executor also waits this long before it places again an intent
+    # whose order is not listed. A judgement until Session 5's command list measures the lag.
+    grace_seconds: 120
+    # Cash movement in one currency that the bot's own fills do not explain and that is tolerated,
+    # in the base currency (fees, rounding). A judgement.
+    cash_tolerance_base: "5"

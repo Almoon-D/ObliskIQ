@@ -44,6 +44,16 @@ class QuoteCheck:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class CollarBand:
+    """The collar around a quote: a buy's limit at most ``upper``, a sell's at least ``lower``."""
+
+    reference: Decimal
+    fraction: Decimal
+    lower: Decimal
+    upper: Decimal
+
+
 def _refuse(reason: str) -> QuoteCheck:
     return QuoteCheck(ok=False, reason=reason)
 
@@ -136,10 +146,9 @@ class QuotePolicy:
         widening = self._multiplier * sigma * math.sqrt(delay_seconds / self._seconds_per_year)
         return Decimal(repr(self._base + widening))
 
-    def within_collar(
-        self, terms: OrderTerms, quote: QuoteEvidence, *, sigma: float | None
-    ) -> QuoteCheck:
-        """Whether the order's limit (or a sell stop) sits inside the collar around ``quote``."""
+    def band(self, quote: QuoteEvidence, *, sigma: float | None) -> CollarBand | QuoteCheck:
+        """The collar around ``quote``: its reference and how far a limit may reach through it
+        either way; a :class:`QuoteCheck` refusal when the quote cannot carry one."""
         reference = quote.reference()
         if reference is None:
             return _refuse("the quote has no reference price")
@@ -156,8 +165,21 @@ class QuotePolicy:
                 f"the collar {fraction} would exceed its ceiling {self._max_fraction}: the "
                 "volatility is not plausible"
             )
-        upper = reference * (1 + fraction)
-        lower = reference * (1 - fraction)
+        return CollarBand(
+            reference=reference,
+            fraction=fraction,
+            lower=reference * (1 - fraction),
+            upper=reference * (1 + fraction),
+        )
+
+    def within_collar(
+        self, terms: OrderTerms, quote: QuoteEvidence, *, sigma: float | None
+    ) -> QuoteCheck:
+        """Whether the order's limit (or a sell stop) sits inside the collar around ``quote``."""
+        band = self.band(quote, sigma=sigma)
+        if isinstance(band, QuoteCheck):
+            return band
+        fraction, lower, upper = band.fraction, band.lower, band.upper
         price = terms.price
         if price.kind == "stop_limit":
             if terms.side is not OrderSide.SELL:

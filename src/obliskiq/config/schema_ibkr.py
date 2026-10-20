@@ -341,6 +341,17 @@ class PaperOrderConfig(FrozenModel):
         return self
 
 
+class ExecutionTestConfig(FrozenModel):
+    """``obliskiq preflight --execution-test``: Session 5's live steps on the paper account."""
+
+    conid: Conid
+    conversion_base: Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
+    stop_fraction: Annotated[Decimal, Field(gt=0, lt=1)]
+    fill_timeout_seconds: PositiveFloat
+    poll_seconds: PositiveFloat
+    intent_ttl_minutes: PositiveInt
+
+
 class PreflightConfig(FrozenModel):
     symbol: NonEmptyText
     listing_exchange: Annotated[str, StringConstraints(pattern=r"^[A-Z0-9.]{2,12}$")]
@@ -348,6 +359,7 @@ class PreflightConfig(FrozenModel):
     history_period: IbkrPeriod
     history_bar: IbkrPeriod
     paper_order: PaperOrderConfig
+    execution_test: ExecutionTestConfig
 
 
 class IbkrConfig(FrozenModel):

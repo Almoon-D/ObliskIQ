@@ -104,9 +104,11 @@ def _modify_sizes(
     order_id: str, clearances: Sequence[OpenClearance], now: datetime
 ) -> list[Decimal]:
     """The sizes the order's modify clearances could still leave it at: each unspent one before
-    it expires, and the latest spent one."""
+    it expires, and the latest spent one — every one spent in the latest second, since
+    second-resolution stamps cannot order them."""
     sizes: list[Decimal] = []
-    latest: tuple[datetime, Decimal | None] | None = None
+    latest: datetime | None = None
+    spent: list[Decimal] = []
     for entry in clearances:
         clearance = entry.clearance
         if clearance.action is not ClearanceAction.MODIFY or clearance.order_id != order_id:
@@ -115,11 +117,12 @@ def _modify_sizes(
         if entry.used_at is None:
             if clearance.expires_at > now and quantity is not None:
                 sizes.append(quantity)
-        elif latest is None or entry.used_at >= latest[0]:
-            latest = (entry.used_at, quantity)
-    if latest is not None and latest[1] is not None:
-        sizes.append(latest[1])
-    return sizes
+            continue
+        if latest is None or entry.used_at > latest:
+            latest, spent = entry.used_at, []
+        if entry.used_at == latest and quantity is not None:
+            spent.append(quantity)
+    return sizes + spent
 
 
 def count_sells(

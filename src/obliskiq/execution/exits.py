@@ -51,7 +51,7 @@ from ..store import orders as repo
 from ..store.orders import StoredIntent
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
-from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, WriteBoundary
+from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, WriteBoundary, raise_alert
 from .intents import new_intent
 from .pretrade import PretradeGate, PretradeRefusal
 from .state import BROKER_STATES, IntentBook
@@ -354,6 +354,7 @@ class ExitCoordinator:
             expires_at=old.expires_at,
             thesis_id=old.thesis_id,
             parent_id=old.parent_id,
+            protective=old.protective,
         )
         await self._book.add(replacement)
         for step in (IntentState.APPROVED, IntentState.STAGED):
@@ -381,10 +382,4 @@ class ExitCoordinator:
             detail=detail,
             at=self._now(),
         )
-        log.warning("order alert", extra={"kind": alert.kind.value, "intent": str(alert.intent_id)})
-        if self._alert is None:
-            return
-        try:
-            self._alert(alert)
-        except Exception:
-            log.exception("the order alert hook failed")
+        raise_alert(self._alert, alert)

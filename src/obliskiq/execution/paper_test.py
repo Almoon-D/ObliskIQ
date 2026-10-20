@@ -22,7 +22,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from decimal import ROUND_FLOOR, Decimal
+from decimal import Decimal
 
 from ..domain.enums import AssetClass
 from ..domain.instrument import TradedInstrument
@@ -38,12 +38,12 @@ from ..domain.orders import (
 )
 from ..errors import ObliskError
 from ..ibkr.identity import resolve_identity
-from ..ibkr.models import ContractRules
 from ..ibkr.orders import SMART_ROUTER, PlacementStatus
 from ..ibkr.redact import redact
 from ..util.timeutil import utc_now
 from .intents import new_intent
 from .pretrade import PretradeRefusal, Reason
+from .pricing import tick_for, to_tick
 from .runtime import OrderPath
 
 #: The cash-check refusal expected for an instrument in a currency the account does not hold.
@@ -84,19 +84,9 @@ class PaperOrderReport:
         return "\n".join(lines)
 
 
-def tick_for(rules: ContractRules, price: Decimal) -> Decimal | None:
-    """The price increment that applies at ``price``: the rule with the highest lower edge at
-    or below it."""
-    applicable = [rule for rule in rules.increment_rules if Decimal(repr(rule.lower_edge)) <= price]
-    if not applicable:
-        return None
-    return Decimal(repr(max(applicable, key=lambda rule: rule.lower_edge).increment))
-
-
 def passive_limit(bid: Decimal, offset: Decimal, tick: Decimal) -> Decimal | None:
     """``offset`` below the bid, rounded down to a whole tick; ``None`` when that is not a price."""
-    steps = (bid * (1 - offset) / tick).to_integral_value(rounding=ROUND_FLOOR)
-    limit = steps * tick
+    limit = to_tick(bid * (1 - offset), tick, up=False)
     return limit if limit > 0 else None
 
 

@@ -18,6 +18,7 @@ from ..domain.orders import (
     OrderIntent,
     OrderSide,
     OrderTerms,
+    ProtectiveSpec,
     Sleeve,
 )
 from ..errors import ExecutionError
@@ -44,6 +45,7 @@ def new_intent(
     thesis_id: str | None = None,
     parent_id: uuid.UUID | None = None,
     protective_id: uuid.UUID | None = None,
+    protective: ProtectiveSpec | None = None,
 ) -> OrderIntent:
     """A proposed intent with a fresh uuid7, refused when it breaks lite's discipline."""
     discipline = settings.discipline
@@ -73,4 +75,5 @@ def new_intent(
         expires_at=expires_at,
         parent_id=parent_id,
         protective_id=protective_id,
+        protective=protective,
     )
