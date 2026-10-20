@@ -9,6 +9,9 @@ shows or changes the execution mode (upgrades by this explicit command, audited)
 ``obliskiq flatten --confirm`` places closing orders for every managed position (separate from
 the kill switch). ``obliskiq preflight --paper-order-test`` places and cancels one paper order per
 configured instrument. ``obliskiq approvals list|approve|reject`` works the approval queue.
+``obliskiq serve``, ``run-cycle``, ``status``, ``intents list`` and ``holdings list|assign`` run
+and inspect the service (``cli/service.py``). Every command that opens a brokerage session takes
+the service lock, so it refuses while the service runs.
 ``obliskiq research data load|coverage``, ``research power``, ``research run`` and
 ``research lock`` drive the research harness (``cli/research.py``).
 Any problem is printed for the owner, in plain words, with exit status 1 and no traceback.
@@ -48,11 +51,13 @@ from ..jurisdiction import (
     load_profile,
 )
 from ..logging_setup import configure_logging
+from ..orchestration.lock import ServiceLock
 from ..store import open_store
 from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .research import add_research_commands
+from .service import add_service_commands
 
 EXIT_OK = 0
 EXIT_INVALID = 1
@@ -161,18 +166,23 @@ def _preflight(loaded: Loaded, out: TextIO) -> int:
 
 
 def _with_order_path[T](loaded: Loaded, run: Callable[[OrderPath], Awaitable[T]]) -> T:
-    """Run ``run`` over an order path opened for this command, and close it."""
+    """Run ``run`` over an order path opened for this command, and close it, under the service
+    lock: one process talks to the broker and runs the executor at a time (a running service
+    must be stopped first; ``ServiceLockedError`` says so)."""
+    data_dir = loaded.env.require_data_dir()
 
     async def go() -> T:
         async with open_order_path(
             loaded.env,
             loaded.config.settings,
             loaded.profile,
-            data_dir=loaded.env.require_data_dir(),
+            data_dir=data_dir,
         ) as path:
             return await run(path)
 
-    return asyncio.run(go())
+    lock_path = data_dir / loaded.config.settings.paths.service_lock
+    with ServiceLock(lock_path, command=str(loaded.args.command)):
+        return asyncio.run(go())
 
 
 def _paper_order_test(loaded: Loaded, out: TextIO) -> int:
@@ -534,6 +544,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode_set.add_argument("--reason", required=True, help="why (audited)")
     mode_set.set_defaults(handler=_mode_set)
 
+    add_service_commands(commands)
     add_research_commands(commands)
     return parser
 
