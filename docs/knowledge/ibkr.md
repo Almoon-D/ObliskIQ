@@ -314,3 +314,32 @@ VERIFY-LIVE(secdef search without secType).
   container's changing outbound address, applied to every attempt whatever the Java. So the
   readings do not separate Java 11 from Java 21.
   VERIFY-LIVE(Gateway login on Java 21 and 25 on the deployment machine).
+
+## T1, first day (the owner's report, 2026-10-20)
+
+The owner ran T1's first steps (SESSION_PROMPTS §A.5) on a home machine. Masked report, read as
+written; nothing below was observed by a session.
+
+- **Windows is not a deployment target.** Native Windows could not start the Gateway: the
+  installer looks for `bin/java` (Windows has `java.exe`), and IBKR's `run.sh` runs through
+  `bash`, which on Windows is the WSL stub. The test suite on Windows: 3,428 passed, 49 failed
+  and 8 errors, from `fcntl` (Linux only). The owner's two local patches for `java.exe` are not
+  committed. The deployment OS stays Ubuntu (D96).
+- **Ubuntu under WSL2** (user-level install; the release was not recorded as 26.04), Java 11,
+  Chromium with its libraries: `obliskiq preflight --read-only` **passed every step**: the
+  unattended Gateway login, the account guard, positions (none), cash in EUR, SPY prices
+  (delayed), history, contract rules, algos and the trading schedule. [CP ✓ 2026-10-20, the
+  owner's T1 report] So the login that failed from a cloud container completes from this
+  machine, which supports Session 3's reading that the container's changing address was the
+  cause.
+- **`--paper-order-test` placed no order.** EXV1 (conid 89005163) passed its identity, quote and
+  whatif, then was refused `venue_not_tradable` (XETR outside its window, at about 22:58 local
+  time): the test ran after Xetra's close. FCX resolved through IBKR's contract search to conid
+  **7089** on the NYSE, where the allowlist said 8158 (lite's fixture), and the test stopped
+  there. The allowlist now says 7089. [CP ✓ 2026-10-20, the owner's T1 report]
+- Not yet run: the second day's login after IBKR's reset, the Java 21 and 25 side test, and the
+  paper order test inside both venues' order windows, which overlap from about 16:00 to 17:15
+  Madrid time (the NYSE's window opens 30 minutes after its open, Xetra's closes 15 minutes
+  before its close; from 15:00 in the week of 26–30 October, when Europe has left summer time
+  and the US has not).
+

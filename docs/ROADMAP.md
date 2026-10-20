@@ -12,12 +12,12 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
-| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | open (owner): not yet run, due before Session 6 (D68); not held for any pin (D96) | |
+| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | partly run (owner, 2026-10-20): day 1's login and read-only preflight passed under WSL2 Ubuntu with Java 11; the paper order test placed no order; day 2, the side test and the orders open, due before Session 6 (D68) | |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
 | 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | done (every candidate inconclusive and outside the owner's point; A stays, D95) | v0.8.6, v0.9.0, v0.9.1, v0.9.2 |
-| 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | planned | |
+| 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | done (live steps a command list for the owner; attached orders not adopted, D99) | v0.10.0 |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | planned | |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | planned | |
@@ -38,6 +38,91 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 5 — Execution mechanics (2026-10-20, v0.10.0)
+
+**Landed.**
+- `execution/currency.py` and `execution/fx.py`: the currency manager (D98). Buys in a foreign
+  currency are funded by one limit-capped conversion per currency and batch, sized by what they
+  commit at their limits plus a buffer against the cash left after open commitments, raised to a
+  minimum where the base cash and the cap allow; the trades wait for its fill; a failed
+  conversion leaves them unplaced and alerts; foreign cash beyond the buffer comes home. Rates
+  from IBKR's ledger, else the pair's quote.
+- The gate (`execution/pretrade.py`): `conversion_unavailable` is gone. A conversion is cleared on
+  its own path: a configured pair (`conversion_pair`), the kill switch and the freeze, the pair's
+  quote and collar, the cash it converts from against every commitment and the floor, lite's
+  single-foreign-currency cap on what it buys (`currency_cap`, `exposure_unreadable`). New risk
+  is refused while the latest reconciliation is not green (`reconciliation_frozen`). A reducing
+  stop-limit is checked against its own intent's protective spec (replacing
+  `max_limit_offset_fraction`); a modify of a triggered stop is held to the sell collar or the
+  owner's emergency limit. `check(simulated=True)` checks a shadow intent as if it were sent.
+- `execution/pricing.py`: an IBKR algo with a limit cap where enabled per venue and asset class
+  and offered (Adaptive, off), else a patient limit a tick inside the mid, repriced toward the
+  touch; the cost model gets the listing venue (`cost_venue`). Every order routes SMART and the
+  European commission rows price SmartRouting; `spot_fx` prices a conversion (D97).
+- `execution/protective.py`: stop-limits resting GTC (D99), placed after fills and resized with
+  them, verified each heartbeat (missing or short → re-placed and alerted, kill switch on or
+  off), cut to the position, raised by roll-ups, repriced through a gap toward the bid in steps;
+  the limit offset from volatility and gaps with a floor and a ceiling.
+- `execution/executor.py`: one cycle syncs, settles exits (I5), expires, follows fills (holdings
+  registered, stops placed), reprices or gives up inside the window, retries at the next window,
+  stages, funds, places (exits through the coordinator), verifies stops, reprices gaps,
+  repatriates and reconciles; `resume` looks every intent up by its cOID after a restart (D100).
+- `execution/reconcile.py`: orders, trades, positions and cash per currency against the store and
+  the last green settled run; drift and partial data freeze new risk; a grace period for IBKR's
+  lag; `obliskiq reconcile run|accept --reason`.
+- `obliskiq preflight --execution-test [--finish]` (`execution/live_test.py`): Session 5's live
+  steps for the owner (below).
+- Store: migration `006_execution.sql` (the intent's protective spec; append-only
+  `reconciliations` with their anchoring reads). Config: `execution.currency`, `pricing`,
+  `protective`, `reconcile`, `positions.max_single_foreign_currency_pct` (lite),
+  `ibkr.preflight.execution_test`; FX joins the real-time-preferred quote policy.
+- T1's findings: FCX is conid 7089 on the NYSE (the allowlist and the paper order test now say
+  so), EXV1's conid is confirmed, and the read-only preflight passed on the machine
+  (docs/knowledge/ibkr.md, "T1").
+
+**Tests.** The prompt's cases: a conversion that fails before the trade
+(`test_execution_currency.py`, `test_execution_executor.py`), a projected negative foreign
+balance, batching across two intents, repatriation above the buffer, an algo not offered
+(`test_execution_pricing.py`), reprices then a cancel at the window's end with the exit's stop
+restored, a partial fill resizing the stop, a partial exit beside the stop, a missing stop
+re-placed with the kill switch on, a stop re-placed while flatten's exit works unlisted, a crash
+after place, a restart with staged and submitted intents, drift freezing, partial data never
+green, the kill switch during a reprice, a gap repriced through the gate never to a market order,
+the grace period, the offset widening with volatility and gaps (`test_execution_protective.py`,
+`test_execution_reconcile.py`). No module spells an uncapped order type
+(`test_order_path_guards.py`). Every new module has its failure branches tested (the boundary
+refusing, reads failing, the mode unreadable, the rules or the quote missing). `make check`
+green; 3,731 tests, coverage 99.87 %.
+
+**Live steps: a command list for the owner** (SESSION_PROMPTS §A.5), on the machine, with no bot
+running, inside the NYSE's order window (16:00 to 21:45 Madrid time; 15:00 to 20:45 in the week
+of 26–30 October):
+
+1. `uv run obliskiq mode set paper --reason "Session 5 execution test"`
+2. `uv run obliskiq preflight --execution-test`: converts EUR 100 into dollars (whatif first),
+   buys one FCX share at the touch, places and lists its GTC stop-limit, measures IBKR's lag.
+3. The process has exited. Ideally the next day, after IBKR's reset, inside the window:
+   `uv run obliskiq preflight --execution-test --finish`: the stop still listed, the share sold
+   at the touch, the stop cancelled, nothing left working.
+4. `uv run obliskiq reconcile run`
+5. `uv run obliskiq mode set shadow --reason "Session 5 execution test done"`
+6. T1's open steps: day 2's read-only preflight, the Java side test, and `--paper-order-test`
+   inside both venues' windows (16:00 to 17:15 Madrid time).
+
+Paste the masked reports into a short session: *"Record Session 5's execution test and T1 per
+SESSION_PROMPTS §A.5."* It records the shapes in docs/knowledge/ibkr-orders.md, sets
+`reconcile.grace_seconds` from the measured lag and closes the rows below.
+
+**Dependabot.** Only cryptography 50 is open (Almoon-D/ObliskIQ#5, Almoon-D/ObliskIQ#9), a major
+already in the follow-ups (D96); nothing to merge.
+
+**Deferred.** Attached orders (D99): not adopted, not probed; a later session probes a whatif of
+the package before designing its clearance. The research simulator does not price conversions.
+
+**Live findings.** No IBKR call from this session. The owner's T1 report: the login and the
+read-only preflight pass on the machine; the paper order test placed nothing (EXV1 after Xetra's
+close, FCX's conid). VERIFY-LIVE items added below.
 
 ### Dependency currency, amended (owner request, 2026-10-19, v0.9.4)
 
@@ -1061,8 +1146,6 @@ settles it.
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
 | Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
-| Client Portal Gateway headless paper login on the deployment machine (failed in the cloud container, docs/knowledge/ibkr.md) | 3 | T1 |
-| `obliskiq preflight --read-only` end to end on paper (every step after the transport) | 3 | T1 or the first command list after it |
 | Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | T1 or the first command list after it |
 | One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | T1 or the first command list after it |
 | Snapshot field ids from IBKR's table: 7633 strike IV, 7638 open interest, 7087 historical vol, 7310 theta, 7311 vega | 3 | T1 or the first command list after it |
@@ -1074,27 +1157,30 @@ settles it.
 | Fixture shapes in `tests/fixtures/ibkr/` (from IBKR's reference and lite's readings, none captured through ObliskIQ) | 3 | T1 or the first command list after it |
 | Order shapes: place, reply, modify, cancel, live orders (the `snapshot` flag on a session's first call), status, trades, whatif (docs/knowledge/ibkr-orders.md) | 4 | T1 (the paper order test) |
 | The cOID: maximum length, `order_ref` in live orders and trades, the duplicate-cOID refusal and its window | 4 | T1 (the paper order test) |
-| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | T1 (the paper order test), 5 |
+| Warning ids on a stop-limit placement and modify (`o10331`; the reference's modify example shows `o0`) | 4 | the execution test (Session 5's command list) |
 | Routing by `conidex` for a non-SMART venue | 4 | T1 (the paper order test) |
-| Currency conversion fields `isCcyConv` and `fxQty` (the reference's prose says `fxQTY`) | 4 | 5 |
+| A conversion as ObliskIQ sends it: `LMT` with `isCcyConv` and `fxQty` (the amount from) and no `quantity`; both sides; its trades' size and price; the `399` odd-lot notice as a reply or a notice (D98) | 4, 5 | the execution test |
 | What a cancel of an order that has just filled answers | 4 | T1 (the paper order test) |
-| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | T1 (the paper order test), 5 |
+| `Inactive` after acknowledgement (an order the destination rejected); read as working | 4 | T1 (the paper order test), the execution test |
 | Whether a `/tickle` between a warning and its answer invalidates the warning | 4 | T1 (the paper order test) |
 | `obliskiq preflight --paper-order-test` end to end: identity, rules, algos, quote, whatif, place, replies, the cOID listed, status, cancel; record the shapes in docs/knowledge/ibkr-orders.md | 4a | T1 |
-| The skeleton allowlist's conids: EXV1 89005163 on IBIS, FCX 8158 on NYSE (the paper order test resolves them) | 4a | T1 (the paper order test); 8 |
 | Whether a whatif registers its cOID (the gate previews with its own) | 4a | T1 (the paper order test) |
 | Whatif margin fields on a paper margin account, and the currency in its amount strings | 4a | T1 (the paper order test) |
-| How long the positions read lags a fill; whether the trades lag the live orders' `filledQuantity` | 4a | 5 (stop-limit tests) |
-| The live orders show a modify or a cancel at once (the exit coordinator clears the exit on the next read) | 4a | 5 (stop-limit tests) |
-| Positions closed during the day listed at zero | 4a | 5 |
-| IBKR's attached orders: an entry with a child stop-limit linked by `parentId`, accepted and linked | review | 5 |
-| The lag between a fill and the positions and trades reads, for the reconciliation grace period | review | 5 |
-| A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | 5 |
-| A fresh unattended Gateway login after IBKR's daily reset on the machine | review | T1 |
+| How long the positions read lags a fill; whether the trades lag the live orders' `filledQuantity`; then `reconcile.grace_seconds` from it (a judgement of 120 s until then) | 4a | the execution test (item d) |
+| The live orders show a modify or a cancel at once (the exit coordinator clears the exit on the next read) | 4a | the execution test (`--finish`) |
+| Positions closed during the day listed at zero | 4a | the execution test (`--finish`) |
+| IBKR's attached orders: a whatif of an entry with a child stop-limit linked by `parentId`, then whether IBKR lists, reports and cancels the child (not adopted, D99) | review | a later session, before attached orders are designed |
+| A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | the first gap on paper (Session 6 on) |
+| A fresh unattended Gateway login after IBKR's daily reset on the machine (day 1 passed under WSL2 Ubuntu with Java 11, 2026-10-20) | review | T1 |
+| The stop-limit's `orderType`: ObliskIQ sends `STOP_LIMIT`, IBKR's order-types page writes `STP LMT` | 5 | the execution test |
+| A GTC stop listed in a later session's live orders, and its status readable by id (D99) | 5 | the execution test (`--finish` the next day) |
+| The spot-FX commission (0.20 bp, at least USD 2.00, charged in the base currency) against a conversion's trade | 5 | the execution test |
+| The cOID kept unique for 24 hours (the place-order reference) | 5 | T1 (the paper order test) |
+| The Adaptive algo's parameters and its limit cap, before `execution.pricing.algos` enables it | 5 | a paper order with the algo (Session 6 on) |
 | The Gateway login on Java 21 and on Java 25 (the side test; Session 3's readings do not separate Java 11 from 21) | D96 | T1 |
 | Playwright 1.64 (Chrome for Testing's headless shell) logs in on Ubuntu 26.04 with the pinned-key flag | D96 | T1 |
 | A manual Gateway login on the machine through an SSH-forwarded browser, only if the unattended one is accepted without a session (whether IBKR treats it as local is unverified) | D96 | T1 |
-| European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`) against an executed UCITS order, and whether the executor routes direct or SMART (the SMART column is half) | 4b | T1 (the paper order test), 5, 18 (TCA) |
+| European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`, SmartRouting since D97) against an executed UCITS order | 4b | T1 (the paper order test), 6, 18 (TCA) |
 | The US treaty withholding rate of 15 % against the BOE text of the Spain–US convention and its 2013 protocol | 4b | 7 |
 | Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 7 |
 | The savings scale for tax year 2027 (the table is verified through 2026) | 4b | the monthly tax-source check (§5.16), 2027 |
@@ -1140,32 +1226,17 @@ settles it.
   (0.0 % of paths) was measured on the core alone, but the tolerance applies to everything the
   bot manages (D88). The satellite (Session 15) and the option sleeve add to it. Sessions 15 and
   17 are the natural places, and adding the check is a scope decision.
-- Session 5: route direct or SMART and make the European commission rows follow the routing
-  (D77); price currency conversions (IBKR's FX commission) so the simulator can stop treating
-  them as free (D75).
+- Research harness: the simulator treats conversions as free (D75); `costs.yaml`'s `spot_fx` row
+  prices them now (D97). A change applies only to pre-registrations written after it.
 - Session 7: persist the lot engine's open loss windows and its ledger beside `tax_lots` (D74);
   the annual export of realised results and deferred losses.
 - Session 7: apply the personal and family minimum to the savings base if the owner's general
   base leaves part of it unused (the engine errs high without it).
-- Session 5: the executor gives the cost model the listing venue, never `SMART` (D67).
-- Session 5: `holding_assignments` holds the registry and the gate refuses a conid held without a
-  sleeve; reconciliation registers what the bot did not open as `unmanaged`, and the executor
-  assigns a new holding to its sleeve on its first fill (until then the next order on it is
-  refused, `holding_unassigned`).
-- Session 5: replace the gate's `conversion_unavailable` with funding by conversion and its cash
-  check (the currency sold covers the conversion and its own floor), and count working
-  conversions in the cash commitments; `currency_not_held` then becomes a conversion to plan.
-- Session 5: the executor calls `ExitCoordinator.settle()` each cycle (a `restore_failed` stop is
-  retried there), places partial exits through `ExitCoordinator.place_exit`, and moves a protective
-  stop's spec (stop price, limit offset) onto the intent, replacing
-  `execution.pretrade.protective.max_limit_offset_fraction` as the one rule for every stop.
-- Session 5: `fills_unreconciled` refuses sells of an instrument whose working sell reports fills the
-  store never recorded (older than the trades IBKR serves, say); reconciliation records them.
-- Session 5: the gate reads the live orders and the trades fresh for every clearance, and IBKR paces
+- Session 6: the gate reads the live orders and the trades fresh for every clearance, and IBKR paces
   each at one request per 6 s here, so an exit beside a stop (check, cut, clear) takes about 18 s
   and a cycle of N orders at least 6·N s. If that binds, share one read per cycle under the store
   lock, keeping I2's rule that a sell cleared after the read still counts.
-- Session 5: one process places a given intent (D47); if the executor ever retries from more
+- Session 6: one process places a given intent (D47); if the executor ever retries from more
   than one process, add a per-intent placement lease in the store. The kill switch classes a
   sell by the most cautious of its intent's spent clearances (D48); once reconciliation knows
   the terms the broker accepted, it can class by those instead.
@@ -1176,9 +1247,19 @@ settles it.
 - First session with captured paper rows (6): the sweep cancels a live-order row it cannot read
   (D48), which could strip a protective stop whose row fails validation for another field; read
   the raw `side` and `secType` of an unreadable row and keep a readable non-`CASH` sell.
-- Session 5: the executor moves intents to `expired` at `expires_at` (and cancels a working
-  order first), writes `positions_snap`, `cash_snap` and fills from reconciliation, assigns a new
-  holding to its sleeve on its first fill, and runs `ShadowFiller` in shadow mode.
+- Session 6: the heartbeat alerts a stop it cannot place on every cycle (outside the venue's
+  window, say, `stop_missing`) and a failed conversion on every funding attempt; the notifier
+  sends a repeated alert once until its condition changes.
+- Session 6 or 17: a protective intent lives 365 days (`execution.protective.intent_ttl_days`);
+  its GTC stop outlives it, but the boundary refuses the stop's modifies after it expires. Renew
+  the intent (a new one adopting the order) before its end (D99).
+- Session 6: in shadow mode an illiquid listing's simulated fill (the friction tier's spread and
+  slippage) can sit beyond what the collar lets a limit reach, so its shadow order rests
+  unfilled; the first shadow cycles show whether that binds (Session 18 calibrates both).
+- Session 7: reconciliation notes cash that arrived unexplained (`cash_arrived`: dividends,
+  interest, deposits); the cash-flow ledger takes them from there.
+- A later session: IBKR's attached orders (D99). A whatif of an entry with a child stop-limit
+  first (read-only), then the package's clearance (I1, I5), then the paper probe.
 - Session 6: the order path's alert hook (`OrderAlert`: `restore_failed`, `option_close_blocked`
   and Session 4's kinds) reaches Telegram; `execution/runtime.py` assembles the order path the
   service runs.
@@ -1188,8 +1269,9 @@ settles it.
 - Session 12: `tenor.mandatory_close_trading_days` lives in `config/defaults/instruments.yaml`;
   the rest of lite's `tenor` block joins it. `allow_futures_options` stays false until the
   never-exercise rule exists.
-- Session 18: calibrate the gate's caps (`execution.pretrade.caps`), the cash floor and the
-  protective spec's limit offset from the transaction-cost analysis.
+- Session 18: calibrate the gate's caps (`execution.pretrade.caps`), the cash floor, the protective
+  spec's limit offset and gap steps, the pricing's start and reprices, and the currency manager's
+  buffer, minimum and limit fraction from the transaction-cost analysis.
 - Session 6: the service calls `OrderClient.reset_suppressed()` once before its first placement,
   runs `KillSwitch.run` (its reports and `OrderAlert`s to Telegram) and downgrades the mode on the
   failures the plan names.

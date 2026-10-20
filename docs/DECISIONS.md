@@ -2104,3 +2104,142 @@ Rejected:
   change.
 - Moving Java to 25 before T1. No version is known to work; T1 would no longer tell the machine
   from the runtime.
+
+## Session 5 — Execution mechanics (2026-10-20)
+
+### D97 · Every order routes SMART; the European rows follow it (D67, D77)
+
+Every order is sent with `conid` and routed `SMART`, conversions included; `conidex` routing to
+one venue stays expressible but nothing builds it. IB SmartRouting is IBKR's default, searches
+every venue for the best price, and on IBKR's European fixed schedule costs half of direct
+routing: 0.05 % of value with minimums of EUR 3.00, USD 4.00, GBP 3.00 (the LSE and SIX) and
+CHF 5.00, against 0.10 % and EUR 4.00, USD 6.00, GBP 4.00 or 6.00 and CHF 6.00 direct
+(`interactivebrokers.ie`, read 2026-10-20). Direct routing also rests on an unverified shape
+(`VERIFY-LIVE(routing by conidex)`). So the European rows of `costs.yaml` price SmartRouting.
+The cost model still chooses the schedule by the instrument's **listing venue** (D67,
+`pricing.cost_venue`): fixed pricing is all-inclusive whichever venue SMART reaches, and the
+listing venue is what the schedule is keyed on. A row `spot_fx` prices a conversion: 0.20 basis
+point of its value in US dollars, at least USD 2.00, charged in the base currency (Tier I of
+IBKR's spot-currency page, read the same day).
+
+The verdicts of Sessions 4c to 4e were computed at the direct-routing rows, the dearer side. They
+are not re-run: a verdict belongs to its locked pre-registration (D64), and a pre-registration
+written after this one prices at these rows. The research simulator does not price conversions
+yet (a follow-up). Rejected: direct routing for European listings so that the venue is known in
+advance, which pays twice the commission for a venue choice nothing in the plan needs.
+
+### D98 · Currency conversions: limit-capped, one per currency, cleared as risk (§5.12)
+
+- **The order.** A conversion is an order on one of `execution.currency.pairs` (EUR.USD, conid
+  12087792) with `isCcyConv` and `fxQty`, the amount of the currency it converts **from**:
+  buying the pair sells the quote currency for the base, selling it sells the base for the quote
+  (IBKR's tutorial on currency conversion orders, read 2026-10-20). IBKR's example sends `MKT`
+  and both `fxQty` and `quantity` (the amount to); ObliskIQ sends `LMT` and `fxQty` alone,
+  because no order is a plain market order. The limit sits `limit_fraction` (0.2 %) through the
+  pair's reference against the conversion, on the pair's tick away from the reference, inside
+  the collar; FX follows the `realtime_preferred` quote policy.
+  VERIFY-LIVE(a limit conversion, its sides, fxQty without quantity, its trades).
+- **The gate's path.** A conversion adds risk (Session 4's item 4): the paper guard, the mode,
+  the kill switch and the reconciliation freeze apply. It is cleared against the currency it
+  converts from (its cash less every open commitment and the floor, working conversions out of it
+  included) and held to lite's single-foreign-currency cap (`positions.
+  max_single_foreign_currency_pct`, 80 % of the NAV) on the currency it buys: that currency's
+  cash, the conversion, conversions still working into it and the positions quoted in it at
+  IBKR's marks. A position with no mark refuses it (`exposure_unreadable`); converting into the
+  base currency skips the cap. A conversion funds a trade that passes its own checks, so it
+  carries no eligibility, approval, calendar or notional cap of its own and no order count.
+- **Funding.** For the buys about to be placed in one foreign currency: what they commit at
+  their limits plus `buffer_base`, against the currency's cash less its open commitments. A
+  shortfall is one conversion for the whole batch (IBKR's minimum commission), raised to
+  `min_conversion_base` where the base cash and the cap leave room. The trades wait for its fill,
+  at most `fill_timeout_seconds`; while a conversion into the currency works no second one is
+  made; a refused, rejected or cancelled conversion leaves them unplaced and alerts
+  (`conversion_failed`). Shadow mode converts nothing (D52).
+- **Repatriation.** Cash in a currency no pending buy or conversion uses, beyond its buffer and
+  open commitments, is converted home once the excess reaches `repatriate_above_base`. It is not
+  waited on.
+- **Rates.** The ledger's rate to the base currency, else the pair's quote. ECB reference rates
+  serve reporting only.
+
+The buffer, the minimum, the threshold and the limit fraction are judgements in
+`execution.yaml`. Rejected: a market conversion as in IBKR's example (AGENTS.md), and one
+conversion per trade (each pays the USD 2.00 minimum).
+
+### D99 · Protective stops rest GTC; their spec is on the intent; attached orders wait (D67)
+
+- **How long a stop rests.** `GTC`: until it fills or the bot cancels it. A `DAY` stop would
+  leave every position unprotected from each close until the bot re-placed it after the next
+  open, the moment gaps happen, and through any day the machine is down. The protective intent
+  lives `intent_ttl_days` (365) and governs the stop's modifies; the executor never expires it,
+  and renewing one before its end is a follow-up. VERIFY-LIVE(a GTC stop listed and its status
+  readable in a later session).
+- **The spec.** Each entry that wants protection carries a `ProtectiveSpec` (stop, limit offset,
+  basis), stored on the intent (migration 006, fixed once written) and copied to its stops. The
+  offset is the larger of `sigma_multiple` times the daily volatility and the overnight-gap
+  quantile, never below `floor_fraction` (1 %), and a spec beyond `max_fraction` (10 %) is
+  refused: a limit that deep acts as a market order. A missing input carries no weight and the
+  basis says so (gap quantiles arrive with Session 11). This replaces
+  `execution.pretrade.protective.max_limit_offset_fraction` (D58): the gate checks a reducing
+  stop-limit against its own intent's spec, and a protective intent without one is refused.
+- **Coverage.** After each fill and at every heartbeat, a position's working stops cover what it
+  holds less the exits working beside it: a stop is placed, resized, cut (largest first; a stop
+  beyond the position would sell short) or cancelled, each through the gate as an order that
+  reduces risk, so with the kill switch on as well. A stop the broker does not list yet counts
+  while it is new (`reconcile.grace_seconds`); past that its status is read, and one that cannot
+  be read covers nothing: a new stop is tried, which the gate refuses while the old one may still
+  work, and the owner hears of it. A stop the heartbeat re-places is alerted (`stop_missing`); one
+  placed after a fill is not.
+- **Gaps.** A triggered stop the bid no longer reaches moves toward the bid by `step_fraction`
+  (0.5 %) of the reference every `step_interval_minutes` (2), at most `max_steps` (6) times, each a
+  modify the gate holds to the sell collar. The emergency limit (`fraction_below_bid`, 5 %) is off
+  by default; when the owner enables it, the last step may reach it. A gap past the collar with it
+  off is alerted (`stop_gapped`) and the stop rests where the collar allows.
+- **Attached orders are not adopted.** IBKR documents `parentId` (equal to the parent's cOID,
+  on the child) and a whatif of a bracket (read 2026-10-20), not how a child stop-limit of a
+  limit entry is listed, reported or cancelled. Adopting it needs one clearance for two orders
+  (I1) whose child is protective (I5): a money-path design on unknown broker behaviour, and
+  placing it even once on paper would be a write the gate does not clear. So the stop is placed
+  on the first fill, the same cycle that sees it; the gap between a fill and its stop is one cycle
+  plus IBKR's reporting lag. `--execution-test` reports item (c) as not probed. A later session
+  can probe it read-only with a whatif of the package before designing its clearance.
+- **Exits at the window's end.** An exit the executor gives up is cancelled while its venue's
+  window is still open, so its cut stop is restored inside the window (I5); a restore outside
+  it would be refused as not tradable.
+
+### D100 · The executor and reconciliation (§5.12, D47)
+
+- **Refusals.** A refusal no later moment lifts (an unknown or ineligible instrument, a prohibited
+  product, the paper guard, an expired intent, a protective spec, a notional cap, and the others in
+  `executor.PERMANENT_REFUSALS`) rejects the intent; any other leaves it staged to try again next
+  cycle until it expires.
+- **Pricing.** A buy or sell starts at a patient limit `start_ticks_inside_mid` (1) tick inside the
+  mid, or as an IBKR algo with a limit cap at the collar's far edge where an `execution.pricing.
+  algos` rule is enabled for the venue and asset class and the contract offers the algo (Adaptive,
+  off until verified). It is repriced toward the touch at most `max_reprices` (3) times every
+  `reprice_interval_minutes` (5), each a modify cleared for its new terms, refused for a buy with
+  the kill switch on; then cancelled, also when the venue's window ends before the next reprice,
+  and a successor priced afresh follows at the next tradable window, carrying the owner's
+  approval. A protective stop is never repriced here.
+- **After a restart** every intent that may be at the broker is looked up by its cOID: found, it is
+  followed; a submitted one not found is placed again only after the grace period, its cOID looked
+  up first (IBKR also refuses a cOID used in the last 24 hours, read 2026-10-20); a working one not
+  found is alerted (`resume_unresolved`). One process runs the executor (D47).
+- **Reconciliation** compares the broker with the store: every intent IBKR should list (after the
+  grace period, its status read by id), orders and fills the bot did not place, fills the store
+  lacks, and positions and cash per currency against the **anchor**, the latest green run that
+  was settled, moved by the bot's fills since. A fill stamped in the anchor's own second counts
+  either way (IBKR's stamps have whole seconds). Drift freezes new risk until a green run; a gap
+  within the grace period of a fill or an order is reported as settling, not drift; more cash than
+  expected (a dividend, interest) is noted and anchors the next run; less cash beyond
+  `cash_tolerance_base`, a negative balance, a foreign order or fill freeze until
+  `obliskiq reconcile accept --reason` records the owner's acceptance. Partial or missing data is
+  `incomplete`, never green, and freezes too. A held conid no sleeve owns is assigned to the sleeve
+  whose entry filled it, else `unmanaged`.
+- **The grace period** (`reconcile.grace_seconds`, 120 s) is a labelled judgement: no fill has been
+  observed through ObliskIQ. `--execution-test` measures the lag (item d) on the machine.
+- **Shadow.** Intents of mode shadow are checked by the gate as if they were sent (`check` with
+  `simulated`) and filled by `ShadowFiller` on the listing venue's schedule; nothing reaches the
+  broker and nothing is converted.
+
+Rejected: a reconciliation that compares each run with the previous one (a lag would read as
+drift and heal by itself), and placing again any order not listed without the grace period.

@@ -5,6 +5,52 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.10.0] - 2026-10-20
+
+Session 5, execution mechanics: an intent becomes a funded, patiently priced, protected and
+reconciled position, resumable after a crash. No IBKR call from the session: its live steps are
+`obliskiq preflight --execution-test` for the owner to run on the machine.
+
+### Added
+
+- `execution/currency.py`, `execution/fx.py`: the currency manager. Buys in a foreign currency
+  are funded by one limit-capped conversion per currency and batch (`isCcyConv`, `fxQty`), with a
+  buffer, a minimum size and repatriation of the excess (DECISIONS D98).
+- `execution/pricing.py`: an IBKR algo with a limit cap where enabled and offered, else a patient
+  limit inside the mid repriced toward the touch; the cost model is given the listing venue.
+- `execution/protective.py`: protective stop-limits resting GTC, placed after fills, resized,
+  verified each heartbeat, cut to the position, raised by roll-ups and repriced through a gap;
+  the limit offset from volatility and gaps (D99).
+- `execution/executor.py`: the cycle (sync, settle exits, expire, follow fills, reprice or give
+  up inside the window, retry at the next window, stage, fund, place, protect, repatriate,
+  reconcile) and `resume` by cOID after a restart; shadow intents checked and simulated (D100).
+- `execution/reconcile.py` and `obliskiq reconcile run|accept --reason`: orders, trades,
+  positions and cash per currency against the store and the last green settled run; drift and
+  partial data freeze new risk.
+- `obliskiq preflight --execution-test [--finish]` (`execution/live_test.py`): a conversion, a buy
+  at the touch with its stop, IBKR's reporting lag, and after a restart the sale.
+- Gate reasons `conversion_pair`, `reconciliation_frozen`, `currency_cap`, `exposure_unreadable`;
+  alert kinds `stop_missing`, `stop_gapped`, `conversion_failed`, `reconciliation_drift`,
+  `resume_unresolved`.
+- Migration `006_execution.sql`: the intent's protective spec and the append-only
+  `reconciliations` table. Config: `execution.currency`, `pricing`, `protective`, `reconcile`,
+  `positions.max_single_foreign_currency_pct` (lite), `ibkr.preflight.execution_test`;
+  `costs.yaml`'s `spot_fx` row.
+- `docs/DECISIONS.md` D97–D100; `docs/knowledge/`: conversions, attached orders and stops at IBKR,
+  the European SmartRouting rows and the spot-FX commission, T1's first day.
+
+### Changed
+
+- The gate clears a conversion on its own path (cash it converts from, the
+  single-foreign-currency cap) instead of refusing it (`conversion_unavailable` is gone), checks
+  a reducing stop-limit against its intent's protective spec (replacing
+  `execution.pretrade.protective.max_limit_offset_fraction`) and holds a triggered stop's
+  reprice to the collar or the owner's emergency limit (off).
+- Every order routes SMART, and the European commission rows price IB SmartRouting (0.05 %,
+  lower minimums) instead of direct routing (D97).
+- The skeleton allowlist's FCX is conid 7089, as IBKR's contract search resolved it in T1.
+- `docs/MASTER_PLAN.md` §5.12: attached orders are probed before they are adopted (D99).
+
 ## [0.9.4] - 2026-10-19
 
 D96 amended after its proposer's review. Documents only; no IBKR call.
