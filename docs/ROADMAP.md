@@ -1247,6 +1247,9 @@ settles it.
 - First session with captured paper rows (6): the sweep cancels a live-order row it cannot read
   (D48), which could strip a protective stop whose row fails validation for another field; read
   the raw `side` and `secType` of an unreadable row and keep a readable non-`CASH` sell.
+- Session 6: an intent gets its first price from `Pricer.initial` (a patient limit inside the
+  mid, or an enabled algo with a limit cap) where it is made; the executor reprices it and prices
+  its successor at the next window, but places a new intent at the terms it carries.
 - Session 6: the heartbeat alerts a stop it cannot place on every cycle (outside the venue's
   window, say, `stop_missing`) and a failed conversion on every funding attempt; the notifier
   sends a repeated alert once until its condition changes.
