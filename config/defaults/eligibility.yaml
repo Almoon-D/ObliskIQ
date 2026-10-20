@@ -36,3 +36,40 @@ eligibility:
       multiplier: "1"
       underlying_conid: null
       expiry: null
+    # The skeleton core's vehicles (core.skeleton_targets), UCITS funds all, so they also pass the
+    # eu_priips policy that replaces this list in Session 8. Each conid and listing was read from
+    # IBKR's contract search on the MCP route, with its description, and a snapshot priced it in the
+    # listing's currency [MCP ✓ 2026-10-20]; the run-cycle and serve commands confirm each through
+    # /iserver/secdef/search and /iserver/contract/{conid}/info before trading it
+    # (VERIFY-LIVE(skeleton conids on CP)).
+    # iShares Core MSCI World UCITS ETF (Acc), IE00B4L5Y983 (the vehicle Session 4c's
+    # pre-registration names), on the LSE in USD.
+    - conid: 78999785
+      symbol: IWDA
+      listing_exchange: LSEETF
+      currency: USD
+      asset_class: etf
+      description: ISHARES CORE MSCI WORLD
+      multiplier: "1"
+      underlying_conid: null
+      expiry: null
+    # iShares Core MSCI EM IMI UCITS ETF (Acc) on Euronext Amsterdam in EUR.
+    - conid: 153454120
+      symbol: EMIM
+      listing_exchange: AEB
+      currency: EUR
+      asset_class: etf
+      description: ISHARES CORE EM IMI ACC
+      multiplier: "1"
+      underlying_conid: null
+      expiry: null
+    # iShares € Govt Bond 7-10yr UCITS ETF on Euronext Amsterdam in EUR.
+    - conid: 43614383
+      symbol: IBGM
+      listing_exchange: AEB
+      currency: EUR
+      asset_class: etf
+      description: ISHARES EURO GOVT 7-10YR
+      multiplier: "1"
+      underlying_conid: null
+      expiry: null

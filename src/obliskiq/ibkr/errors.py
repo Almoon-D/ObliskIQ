@@ -134,7 +134,11 @@ class GatewayError(IbkrError):
 
 class RecoveryDeferredError(GatewayError):
     """A login is not attempted yet (the re-login interval has not passed); retrying sooner is
-    pointless, so a repair stops its attempts at once."""
+    pointless, so a repair stops its attempts at once. ``retry_in`` says when, in seconds."""
+
+    def __init__(self, message: str, *, retry_in: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_in = retry_in
 
 
 class AccountGuardError(ObliskError):

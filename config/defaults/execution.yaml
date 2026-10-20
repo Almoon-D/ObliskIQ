@@ -12,7 +12,8 @@ discipline:
   entry_order_type: limit_only
   # The only reasons an exit or a protective stop may give. lite.
   exit_reasons_allowed:
-    [invalidation, target, time_window, zombie, mandatory_close, stop, trailing_stop, override]
+    [invalidation, target, time_window, zombie, mandatory_close, stop, trailing_stop, override,
+     rebalance]
 
 execution:
   modes:

@@ -5,6 +5,49 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.11.0] - 2026-10-20
+
+Session 6, the walking skeleton: the system runs end to end, schedule → targets → intents →
+execution → reconciliation → digest, with a deliberately trivial static book. No IBKR call from
+the session; the live paper cycle is a command list for the owner (`docs/RUNBOOK.md`).
+
+### Added
+
+- `obliskiq serve` (`orchestration/`): one asyncio service with a heartbeat, four decision cycles
+  a trading day anchored to venue sessions through the calendars (Asia, Europe, US, US-late) and a
+  daily digest; run records in `runs` and `run_steps` (lite's sequence and run log); recovery from
+  the run log under a single-process lock (dead runs closed as `interrupted`, intents looked up by
+  cOID, recent missed cycles caught up); graceful SIGTERM; an injectable clock; the keepalive and
+  the kill switch's sweep; IBKR's trading schedule as the calendars' cross-check; an automatic
+  downgrade to shadow after repeated failed cycles (DECISIONS D102).
+- `obliskiq run-cycle --mode shadow|paper [--dry-run]`, `status`, `intents list [--all]`,
+  `holdings list|assign <conid> <owner> --reason`.
+- `capital/`: `capital.mode: whole_account | cap` with `cap_base` (D104).
+- `core.skeleton_targets` and `decision/rebalance_basic.py`: three of variant A's roles in UCITS
+  funds (IWDA on the LSE in USD, EMIM and IBGM on Amsterdam), traded toward their targets with an
+  inner band, whole units, a minimum trade never below the commission floor and the cash floor;
+  each conid confirmed through IBKR's contract search at every start (D104).
+- The NAV writer: lite's `store/nav.py` and `collect/nav.py`, the only code that writes
+  `nav_history` (migration `007_service.sql`).
+- `reporting/`: the Telegram notifier (log otherwise), alerts sent once while their condition
+  holds with a durable state file, the run summary and the daily digest with venue badges (D105).
+- Health: the heartbeat file and the optional `OBLISK_HEALTH_PING_URL`.
+- `docs/RUNBOOK.md`: shadow, paper, stop, recover, the digest, and stopping the bot before a
+  Claude session with live IBKR checks; Session 6's live paper cycle for the owner.
+- Config: `runtime`, `capital`, `core`, `trading`, `reporting`, `paths.heartbeat_file`,
+  `paths.alert_state`, `paths.service_lock`; the exit reason `rebalance`.
+
+### Changed
+
+- A shadow limit order fills at the touch once its limit reaches it, and is repriced and given up
+  on the real clock; the cost model's friction prices a fill only without the touch (D103).
+- A book under `capital.mode: cap` converts its shortfall alone (D104).
+- IBKR's warning text is kept with each reply in the intent's history and a declined warning's
+  alert (D101's open question).
+- A Gateway repair deferred by the re-login interval leaves the session lost until its deadline:
+  reads fail at once without repeating the alert, and the keepalive logs in again after it (D105).
+- Every command that opens a brokerage session takes the service lock (D102).
+
 ## [0.10.1] - 2026-10-20
 
 The execution test's first live findings (owner run on the paper account, Gateway transport).

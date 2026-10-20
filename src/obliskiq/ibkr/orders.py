@@ -167,14 +167,19 @@ class ReplyVerdict:
     reason: str
 
 
+#: The most of a warning's text a reply record keeps (IBKR's warnings are a few sentences).
+WARNING_TEXT_CHARS = 500
+
+
 @dataclass(frozen=True, slots=True)
 class ReplyRecord:
-    """One warning and how it was answered."""
+    """One warning, IBKR's own words for it (account ids masked) and how it was answered."""
 
     reply_id: str
     message_ids: tuple[str, ...]
     confirmed: bool
     reason: str
+    text: str = ""
 
 
 type ReplyDecider = Callable[[Question], ReplyVerdict]
@@ -521,23 +526,26 @@ class OrderClient:
                             await last_check()
                         except WriteRefusedError as exc:
                             verdict = ReplyVerdict(False, f"refused before confirming: {exc}")
+                    text = self._session.redact(" ".join(answer.messages))
                     replies.append(
                         ReplyRecord(
                             reply_id=answer.reply_id,
                             message_ids=answer.message_ids,
                             confirmed=verdict.confirm,
                             reason=verdict.reason,
+                            text=text[:WARNING_TEXT_CHARS],
                         )
                     )
                     if not verdict.confirm:
                         detail, verified = await self._decline(
                             answer.reply_id, coid, cancel_listed=cancel_on_decline
                         )
+                        said = f" (IBKR: {replies[-1].text!r})" if replies[-1].text else ""
                         return PlacementResult(
                             status=PlacementStatus.DECLINED,
                             coid=coid,
                             replies=tuple(replies),
-                            detail=f"{verdict.reason}; {detail}",
+                            detail=f"{verdict.reason}{said}; {detail}",
                             cleanup_verified=verified,
                         )
                     answer = await self._submit(

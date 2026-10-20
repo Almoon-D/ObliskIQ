@@ -1,10 +1,13 @@
 """Shadow mode's fills: simulated with the cost model, never sent (MASTER_PLAN §5.12, §5.19).
 
-A shadow fill is priced where a real one would land: the quote's reference price moved against
-the order by the cost model's spread and slippage per unit, with the model's commission. The
-order fills only when that price is inside its limit; a sell stop-limit first needs the
-reference at or below its stop. Shadow, paper and live therefore charge the same costs, because
-they call the same functions.
+A shadow fill is priced where a real limit order would land. When the quote shows the touch on
+the order's side (the ask for a buy, the bid for a sell), the order fills there once its limit
+reaches it, and not before: a patient limit inside the spread rests unfilled, as it would unless
+the market came to it (DECISIONS D103). Without that side of the quote, the price is the quote's
+reference moved against the order by the cost model's spread and slippage per unit, and the
+order fills only when that price is inside its limit (D52). Either way the commission is the cost
+model's, and a sell stop-limit first needs the reference at or below its stop. Shadow, paper and
+live therefore charge the same commissions, because they call the same functions.
 
 Nothing is invented: a quote without a reference price, a leg the cost model cannot price (an
 unknown schedule, tax or friction tier), a buy stop-limit or a currency conversion is not filled,
@@ -97,12 +100,18 @@ class ShadowFiller:
         if cost.total is None or cost.spread_cost is None or cost.slippage_cost is None:
             gaps = ", ".join(gap.value for gap in cost.gaps) or "a component without a price"
             return _none(f"the cost model cannot price this leg ({gaps})", cost)
-        friction = (cost.spread_cost + cost.slippage_cost) / (quantity * unit)
         buying = terms.side is OrderSide.BUY
-        price = reference + friction if buying else reference - friction
         limit = price_policy.limit
-        if price <= 0 or (buying and price > limit) or (not buying and price < limit):
-            return _none(f"the simulated price {price} is outside the limit {limit}", cost)
+        touch = quote.ask if buying else quote.bid
+        if touch is not None:
+            if (buying and limit < touch) or (not buying and limit > touch):
+                return _none(f"the limit {limit} does not reach the touch {touch}", cost)
+            price = touch
+        else:
+            friction = (cost.spread_cost + cost.slippage_cost) / (quantity * unit)
+            price = reference + friction if buying else reference - friction
+            if price <= 0 or (buying and price > limit) or (not buying and price < limit):
+                return _none(f"the simulated price {price} is outside the limit {limit}", cost)
         fill = Fill(
             execution_id=f"shadow-{coid}-{utc_stamp(at)}",
             coid=coid,

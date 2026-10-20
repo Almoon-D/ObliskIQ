@@ -375,6 +375,10 @@ class Calendars:
     def session_day(self, mic: str, at: datetime) -> date:
         return self._runtime(mic).schedule.session_day(at)
 
+    def is_business_weekday(self, mic: str, day: date) -> bool:
+        """Whether the venue normally trades on ``day``'s weekday (a holiday is still one)."""
+        return self._runtime(mic).schedule.is_business_weekday(day)
+
     def session_bounds(self, mic: str, day: date) -> SessionBounds | None:
         """The session on ``day`` in local time and UTC; ``None`` on a closed day."""
         runtime = self._runtime(mic)

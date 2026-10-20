@@ -45,6 +45,10 @@ class ConfiguredDirectory:
     def listing_exchanges(self) -> tuple[str, ...]:
         return tuple(sorted({i.listing_exchange for i in self._instruments.values()}))
 
+    def instruments(self) -> tuple[TradedInstrument, ...]:
+        """Every described instrument, by conid."""
+        return tuple(self._instruments[conid] for conid in sorted(self._instruments))
+
 
 def _marker(description: str, markers: Iterable[str]) -> str | None:
     folded = description.casefold()

@@ -149,6 +149,8 @@ STATE_READS = {
     "intents_for_conid",
     "latest_reconciliation",
     "reconciliation_anchor",
+    # Session 6: the holdings registry listed whole (`obliskiq holdings list`, the rebalancer).
+    "holding_assignments",
 }
 
 #: Names that write in ``store/orders.py``.
@@ -191,3 +193,27 @@ def test_every_research_read_is_bounded_or_a_listed_state_read() -> None:
     assert set(reads) == {"research_observations"}, "a research read must bound itself by as_of"
     assert unbounded_reads(reads) == []
     assert set(functions) >= RESEARCH_STATE_READS, "a listed state read no longer exists"
+
+
+# ── the service's run log and NAV series (Session 6) ──
+
+#: The run log is the service's own record (DECISIONS D46): read whole or by a window of session
+#: dates, never as of a moment.
+RUN_LOG_STATE_READS = {"runs_for", "runs_since", "steps_of"}
+RUN_LOG_WRITE_PREFIXES = ("begin_", "finish_", "reap_")
+
+
+def test_the_run_log_reads_are_listed_and_the_nav_series_is_bounded() -> None:
+    from obliskiq.store import nav, runs
+
+    functions = public_functions(runs)
+    reads = {
+        name
+        for name in functions
+        if not name.startswith(RUN_LOG_WRITE_PREFIXES) and name not in RUN_LOG_STATE_READS
+    }
+    assert reads == set(), "a run-log read must be listed as a state read"
+    assert set(functions) >= RUN_LOG_STATE_READS
+    nav_reads = {name: f for name, f in public_functions(nav).items() if name != "record_nav"}
+    assert set(nav_reads) == {"nav_series"}
+    assert unbounded_reads(nav_reads) == []

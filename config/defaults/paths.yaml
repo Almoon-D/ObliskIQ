@@ -14,3 +14,10 @@ paths:
   # The Client Portal Gateway's install: the verified archive unpacked, its per-install keystore
   # and pinned certificate, and the Gateway's own logs (transport `gateway` only).
   ibkr_gateway: ibkr-gateway
+  # The heartbeat's health file: the service rewrites it each heartbeat, so a supervisor can tell a
+  # live service from a hung one by its age.
+  heartbeat_file: heartbeat.json
+  # Which alerts the owner has already heard while their condition holds (reporting/alerts.py).
+  alert_state: alert-state.json
+  # The lock one service or order command holds while it runs (one process runs the executor).
+  service_lock: service.lock

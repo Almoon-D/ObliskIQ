@@ -350,7 +350,8 @@ class WriteBoundary:
         for reply in result.replies:
             verdict = "confirmed" if reply.confirmed else "declined"
             ids = ", ".join(reply.message_ids) or "no message id"
-            await self._book.fact(intent_id, f"warning ({ids}) {verdict}: {reply.reason}")
+            said = f"; IBKR: {reply.text!r}" if reply.text else ""
+            await self._book.fact(intent_id, f"warning ({ids}) {verdict}: {reply.reason}{said}")
 
     def _alert_for(self, intent_id: UUID, result: PlacementResult) -> None:
         kinds = {

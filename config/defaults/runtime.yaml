@@ -1,0 +1,40 @@
+# The service, `obliskiq serve` (MASTER_PLAN §5.14): a heartbeat every few minutes, four decision
+# cycles each trading day anchored to venue sessions, and a daily digest. Every time is a moment of
+# a venue's regular session read through the calendars (its open or close, moved by
+# `offset_minutes`, negative before it), so daylight saving and holidays follow each venue; never
+# a UTC constant. docs/RUNBOOK.md says how to run it; docs/DECISIONS.md why the values are these.
+runtime:
+  # The heartbeat: health file and ping, the broker session, the kill switch, protective stops,
+  # stuck intents, blocked venues, and the work on intents already made (reprices, fills,
+  # reconciliation). At most `execution.pricing.reprice_interval_minutes`, so reprices keep their
+  # pace. A judgement ("every few minutes").
+  heartbeat_seconds: 300
+  # The four decision cycles: targets → intents → execution → reconciliation. A venue with no
+  # session that day has no cycle that day; the other cycles still run. Each fires an hour after
+  # its venue's open (inside the order window, 30 min after the open), the last an hour before
+  # New York's close. Judgements.
+  cycles:
+    - {name: asia, venue: XTKS, anchor: open, offset_minutes: 60}
+    - {name: europe, venue: XETR, anchor: open, offset_minutes: 60}
+    - {name: us, venue: XNYS, anchor: open, offset_minutes: 60}
+    - {name: us_late, venue: XNYS, anchor: close, offset_minutes: -60}
+  # The daily digest, after the day's last cycle. A judgement.
+  digest: {venue: XNYS, anchor: close, offset_minutes: 30}
+  # A cycle or digest whose moment passed while the service was down, with no finished run in the
+  # run log, runs when the service starts if it is at most this late; an older one is recorded as
+  # missed. A judgement: inside the same session's order window for the cycles above.
+  catch_up_minutes: 120
+  # Consecutive cycles that end in error before a writing mode is downgraded to shadow and the
+  # owner alerted (MASTER_PLAN §5.12: downgrades are automatic, upgrades an owner command). A
+  # judgement.
+  downgrade_after_failed_cycles: 3
+  # An intent submitted with no answer, or still open past its expiry, this long is stuck: the
+  # digest lists it and the owner is alerted. Above reconcile.grace_seconds. A judgement.
+  stuck_after_minutes: 30
+  # How far back `obliskiq status` reads the run log: long enough that a weekend away is inside
+  # it. lite (collectors.status_report_days).
+  status_report_days: 7
+  health:
+    # The optional ping after each heartbeat (a dead man's switch); its URL is a secret, so it
+    # comes from OBLISK_HEALTH_PING_URL. How long one ping may take. A judgement.
+    ping_timeout_seconds: 10

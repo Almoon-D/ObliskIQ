@@ -1,0 +1,12 @@
+# What the owner hears (reporting/): alerts, the run summary after a cycle that did something, and
+# the daily digest, over Telegram when TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set and in the
+# log always.
+reporting:
+  telegram:
+    # Telegram refuses a message over 4096 characters; longer reports are split below this, with
+    # room for the markup. legacy/old run_summary.py (TELEGRAM_CHUNK).
+    chunk_characters: 3800
+    # How long one send may take. legacy/old telegram_notifier.py.
+    timeout_seconds: 10
+  # Rows of each list (intents, fills, errors) the digest prints before "and N more". A judgement.
+  digest_rows: 10

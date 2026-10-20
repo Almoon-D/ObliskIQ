@@ -6,7 +6,9 @@ limit-capped spot conversion shortly before it; foreign cash above what is neede
   less what the open orders in it already commit, plus what conversions into it still working
   will bring. A shortfall is converted from the base currency in **one** conversion per currency
   for every buy of the batch (batching amortises IBKR's minimum commission), raised to
-  ``min_conversion_base`` where the base cash and the single-foreign-currency cap leave room.
+  ``min_conversion_base`` where the base cash and the single-foreign-currency cap leave room. A
+  book under ``capital.mode: cap`` converts its shortfall alone: the account's cash beyond the cap
+  is not the book's to convert (DECISIONS D104).
 * **Repatriation.** A foreign currency no pending buy needs, whose cash beyond its buffer and its
   open commitments reaches ``repatriate_above_base``, is converted home.
 * **Every conversion** is an intent (role ``conversion``) the pre-trade gate clears on its own
@@ -143,6 +145,7 @@ class CurrencyManager:
         self._poll = config.fill_poll_seconds
         self._floor = settings.execution.pretrade.cash_floor
         self._cap = settings.positions.max_single_foreign_currency_pct
+        self._capped_book = settings.capital.mode == "cap"
 
     # ── what is needed ──
 
@@ -286,7 +289,7 @@ class CurrencyManager:
             self._wait(report, group, f"no limit for {pair.symbol}: the rules give no tick")
             return
         least = leg.needed(shortfall, limit).to_integral_value(rounding=ROUND_CEILING)
-        amount = max(least, await self._room(currency, cash, rate))
+        amount = least if self._capped_book else max(least, await self._room(currency, cash, rate))
         outcome = await self._convert(
             leg,
             amount=amount,

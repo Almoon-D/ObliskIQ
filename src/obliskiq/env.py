@@ -7,9 +7,9 @@ unchanged in a cloud session, on the bot's machine and in CI; values that are de
 configuration for one process.
 
 Anything that grants access or identifies the owner is a :class:`~pydantic.SecretStr` —
-keys, tokens, the password, the account id, the Gateway username, the Telegram chat id and
-the SEC contact string (it carries an email address) — so it never appears in a repr, a
-log line or an error message. Validation errors name the variable, never its value.
+keys, tokens, the password, the account id, the Gateway username, the Telegram chat id, the
+health ping URL and the SEC contact string (it carries an email address) — so it never appears
+in a repr, a log line or an error message. Validation errors name the variable, never its value.
 
 LLM keys are not declared here: the LLM layer reads them by the names ``config/llm.yaml``
 declares. The OAuth realm and the Gateway's local address are configuration.
@@ -69,6 +69,12 @@ class Environment(BaseSettings):
         default=None, validation_alias="TELEGRAM_BOT_TOKEN"
     )
     telegram_chat_id: SecretStr | None = Field(default=None, validation_alias="TELEGRAM_CHAT_ID")
+
+    # Health: the dead man's switch the service pings after each heartbeat. Its URL lets anyone
+    # report the bot alive, so it is a secret.
+    health_ping_url: SecretStr | None = Field(
+        default=None, validation_alias="OBLISK_HEALTH_PING_URL"
+    )
 
     # IBKR: profile, account and transport.
     ibkr_profile: Literal["paper", "live"] | None = Field(
@@ -159,6 +165,16 @@ class Environment(BaseSettings):
     @classmethod
     def _expand(cls, value: Path | None) -> Path | None:
         return value.expanduser() if value is not None else None
+
+    @field_validator("health_ping_url")
+    @classmethod
+    def _ping_is_https(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        parts = urlsplit(value.get_secret_value())
+        if parts.scheme != "https" or not parts.netloc:
+            raise ValueError("must be an https:// URL")
+        return value
 
     @field_validator("ibkr_cp_base_url")
     @classmethod

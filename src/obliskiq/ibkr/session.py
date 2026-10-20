@@ -22,6 +22,11 @@ and each failure is handled by the advice its class carries:
 that stopped being authenticated (IBKR's daily reset, a logout, a timeout) are re-established
 automatically, and each is reported through the ``alert`` hook.
 
+A repair the transport defers (the Gateway's re-login interval has not passed) leaves the session
+**lost until a deadline**: requests fail at once, with no repair and no new alert, until it passes;
+then the keepalive logs in again (one attempt, alerted either way). A lost session never repeats
+its alert on every failing read.
+
 Account ids never appear in a log line or message: paths are redacted before they are named.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -151,6 +156,8 @@ class BrokerSession:
         self._repair_lock = asyncio.Lock()
         self._repairs = 0
         self._authenticated = False
+        # When the transport deferred a repair: the monotonic instant the next login is allowed.
+        self._deferred_until: float | None = None
         self._tickle_task: asyncio.Task[None] | None = None
 
     # ── lifecycle ──
@@ -170,6 +177,13 @@ class BrokerSession:
     @property
     def authenticated(self) -> bool:
         return self._authenticated
+
+    @property
+    def lost_for(self) -> float | None:
+        """Seconds until a deferred repair may run (the session is lost meanwhile), or ``None``."""
+        if self._deferred_until is None:
+            return None
+        return max(0.0, self._deferred_until - self._clock.monotonic())
 
     def add_known_ids(self, ids: Iterable[str]) -> None:
         """Account ids learnt from IBKR, masked in every message from now on."""
@@ -278,6 +292,12 @@ class BrokerSession:
         repeated behind the caller's back (the order path looks its cOID up instead).
         """
         name = label if label is not None else path
+        wait = self.lost_for
+        if wait is not None and wait > 0 and not _REPAIRING.get():
+            raise SessionExpiredError(
+                f"{self.redact(name)}: the brokerage session is lost; the next login is allowed "
+                f"in {wait:.0f} s"
+            )
         query = {key: value for key, value in (params or {}).items() if value is not None}
         attempt = 0
         rearmed = False
@@ -450,6 +470,7 @@ class BrokerSession:
                     break  # the transport said when it will try; sooner attempts are wasted
             else:
                 if status.authenticated:
+                    self._deferred_until = None
                     self._emit(SessionAlertKind.REAUTHENTICATED, reason)
                     return status
                 last = SessionExpiredError("ssodh/init did not report an authenticated session")
@@ -460,6 +481,8 @@ class BrokerSession:
             if attempt < session.reauthenticate_attempts:
                 await self._clock.sleep(session.reauthenticate_pause_seconds)
         self._authenticated = False
+        if isinstance(last, RecoveryDeferredError) and last.retry_in is not None:
+            self._deferred_until = self._clock.monotonic() + last.retry_in
         detail = f"{reason}; re-authentication failed: {self.redact(str(last))}"
         self._emit(SessionAlertKind.REAUTHENTICATION_FAILED, detail)
         raise SessionExpiredError(detail) from last
@@ -487,7 +510,14 @@ class BrokerSession:
     # ── keepalive ──
 
     async def check_session(self) -> None:
-        """One keepalive step: tickle, then repair a competing or lost session."""
+        """One keepalive step: tickle, then repair a competing or lost session. While a repair is
+        deferred nothing is sent; once its deadline passes the session is logged in again."""
+        wait = self.lost_for
+        if wait is not None:
+            if wait > 0:
+                return
+            await self.reauthenticate("the deferred re-login is due")
+            return
         status = tickle_status(await self.tickle())
         if status is None:
             return

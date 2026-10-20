@@ -38,7 +38,7 @@ def environment(monkeypatch: pytest.MonkeyPatch, **values: str) -> Environment:
 
 def test_the_calendars_cover_the_directorys_venues(shipped_settings: Any) -> None:
     directory = ConfiguredDirectory.from_settings(shipped_settings)
-    assert calendar_venues(shipped_settings, directory) == ("XETR", "XNYS")
+    assert calendar_venues(shipped_settings, directory) == ("XAMS", "XETR", "XLON", "XNYS")
 
 
 async def test_the_order_path_opens_over_the_broker_and_closes(
