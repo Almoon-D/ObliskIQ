@@ -167,14 +167,16 @@ async def test_the_cash_line_meets_a_reservation_at_once_and_investable_drops(ri
     plan = await survey(parts)
     (line,) = plan.lines
     assert line.from_cash == D(300)
-    assert line.sales == [] and line.status.startswith("funded")
+    assert line.sales == []
+    assert line.status.startswith("funded")
     assert plan.capital is not None
     assert (plan.capital.reserved, plan.capital.investable) == (D(300), D(700))
     # The rebalancer spends nothing that is reserved, and recomputes its targets on 700.
     rebalance = await make_rebalancer(rig).survey(PAPER)
     assert rebalance.spendable == D(1000) - D(300) - D(25)
     assert rebalance.core_capital == D(665)  # 95 % of 700
-    assert "R1" in plan.render() and "from the cash line" in plan.render()
+    assert "R1" in plan.render()
+    assert "from the cash line" in plan.render()
 
 
 async def test_the_planner_sells_a_core_line_and_spares_a_fresh_thesis(rig: Any) -> None:
@@ -190,16 +192,23 @@ async def test_the_planner_sells_a_core_line_and_spares_a_fresh_thesis(rig: Any)
         ("IBGM", D(2), Category.ORDINARY)
     ]
     sale = line.sales[0]
-    assert sale.tax is not None and sale.trading is not None
-    assert sale.pace is Pace.TRANCHES and sale.today_units == D(2)
+    assert sale.tax is not None
+    assert sale.trading is not None
+    assert sale.pace is Pace.TRANCHES
+    assert sale.today_units == D(2)
     assert line.status == "planned"
     actions = await parts.planner.apply(plan)
     (intent,) = actions.intents
     assert (intent.conid, intent.side, intent.terms.quantity) == (IBGM, OrderSide.SELL, D(2))
-    assert (intent.role, intent.reason, intent.sleeve) == (IntentRole.EXIT, "withdrawal", Sleeve.CORE)
+    assert (intent.role, intent.reason, intent.sleeve) == (
+        IntentRole.EXIT,
+        "withdrawal",
+        Sleeve.CORE,
+    )
     # The working sale's proceeds count toward the reservation: nothing more is planned.
     again = await survey(parts)
-    assert again.lines[0].sales == [] and again.lines[0].status.startswith("funded")
+    assert again.lines[0].sales == []
+    assert again.lines[0].status.startswith("funded")
 
 
 async def test_losses_are_sold_before_gains(rig: Any) -> None:
@@ -211,8 +220,11 @@ async def test_losses_are_sold_before_gains(rig: Any) -> None:
     plan = await survey(parts)
     loss, gain = plan.lines[0].sales
     assert (loss.symbol, loss.units) == ("EMIM", D(2))  # the loss goes first
-    assert loss.tax is not None and loss.tax <= 0
-    assert gain.symbol == "IBGM" and gain.tax is not None and gain.tax > 0
+    assert loss.tax is not None
+    assert loss.tax <= 0
+    assert gain.symbol == "IBGM"
+    assert gain.tax is not None
+    assert gain.tax > 0
 
 
 # ── asking before cutting ──
@@ -234,9 +246,11 @@ async def test_a_question_when_only_a_protected_thesis_is_left_and_postpone_move
     assert question.default == "proceed"
     assert "EXV1 (entry window until" in question.context
     reduce = question.option("reduce")
-    assert reduce is not None and reduce.amount == D(200)  # what the cash line covers
+    assert reduce is not None
+    assert reduce.amount == D(200)
     postpone = question.option("postpone")
-    assert postpone is not None and postpone.due_date is not None
+    assert postpone is not None
+    assert postpone.due_date is not None
     # The entry window ends 18 days from now; settled two sessions later, plus the buffer.
     assert postpone.due_date > NOW.date() + timedelta(days=18)
     actions = await parts.planner.apply(plan)
@@ -254,7 +268,8 @@ async def test_a_question_when_only_a_protected_thesis_is_left_and_postpone_move
     later = await survey(parts)
     assert later.to_ask == []
     (sale,) = later.lines[0].sales
-    assert sale.symbol == "EXV1" and sale.start > NOW.date() + timedelta(days=17)
+    assert sale.symbol == "EXV1"
+    assert sale.start > NOW.date() + timedelta(days=17)
 
 
 async def test_without_an_answer_by_the_deadline_the_withdrawal_wins(rig: Any) -> None:
@@ -272,7 +287,8 @@ async def test_without_an_answer_by_the_deadline_the_withdrawal_wins(rig: Any) -
     assert (sale.symbol, sale.category, sale.pace) == ("EXV1", Category.PROTECTED, Pace.HOLD)
     assert sale.today_units > 0  # the deadline is the start of its last safe sessions
     (intent,) = (await parts.planner.apply(plan)).intents
-    assert intent.sleeve is Sleeve.SATELLITE and intent.reason == "withdrawal"
+    assert intent.sleeve is Sleeve.SATELLITE
+    assert intent.reason == "withdrawal"
 
 
 async def test_reduce_lowers_the_reservation(rig: Any) -> None:
@@ -296,7 +312,9 @@ def long_window(settings: ObliskConfig) -> ObliskConfig:
 
 async def test_the_year_end_option_is_offered_only_when_the_date_allows(rig: Any) -> None:
     rig.clock.now = datetime(2026, 12, 15, 9, 0, tzinfo=UTC)
-    await bought(rig, EXV1, "40", "15", sleeve=Sleeve.SATELLITE, at=rig.clock.now - timedelta(days=3))
+    await bought(
+        rig, EXV1, "40", "15", sleeve=Sleeve.SATELLITE, at=rig.clock.now - timedelta(days=3)
+    )
     parts = capital_parts(rig, long_window(rig.settings))
     await parts.tax.catch_up()  # bought at 15, worth 20: a gain the sale would tax this year
     january = await reserve(rig, "500", date(2027, 1, 20))
@@ -304,7 +322,8 @@ async def test_the_year_end_option_is_offered_only_when_the_date_allows(rig: Any
     year_end = question.option("after_year_end")
     assert year_end is not None
     assert year_end.not_before == date(2027, 1, 4)  # Xetra's first session of 2027
-    assert year_end.tax_cost is not None and year_end.tax_cost > 0
+    assert year_end.tax_cost is not None
+    assert year_end.tax_cost > 0
     await rig.store(
         capital_repo.change_reservation,
         january.reservation_id,
@@ -327,12 +346,15 @@ async def test_the_year_end_option_is_offered_only_when_the_date_allows(rig: Any
     (asked,) = (await parts.planner.apply(await survey(parts))).asked
     await parts.questions.answer(asked.question_id, "after_year_end", actor="owner")
     (sale,) = (await survey(parts)).lines[0].sales
-    assert sale.start >= date(2027, 1, 4) and sale.today_units == 0
+    assert sale.start >= date(2027, 1, 4)
+    assert sale.today_units == 0
 
 
 async def test_no_year_end_option_without_a_tax_this_year(rig: Any) -> None:
     rig.clock.now = datetime(2026, 12, 15, 9, 0, tzinfo=UTC)
-    await bought(rig, EXV1, "40", "25", sleeve=Sleeve.SATELLITE, at=rig.clock.now - timedelta(days=3))
+    await bought(
+        rig, EXV1, "40", "25", sleeve=Sleeve.SATELLITE, at=rig.clock.now - timedelta(days=3)
+    )
     parts = capital_parts(rig, long_window(rig.settings))
     await parts.tax.catch_up()  # bought at 25, worth 20: a loss
     await reserve(rig, "500", date(2027, 1, 20))
@@ -361,9 +383,12 @@ async def test_a_weak_position_goes_at_once_and_a_strong_one_waits_for_the_last_
     assert strong.start == date(2026, 11, 6)  # the last two safe sessions
     assert strong.today_units == 0
     (later,) = plan.to_ask
-    assert later.kind is QuestionKind.LATER_DATE and later.default == "proceed"
+    assert later.kind is QuestionKind.LATER_DATE
+    assert later.default == "proceed"
     postpone = later.option("postpone")
-    assert postpone is not None and postpone.due_date is not None and postpone.due_date > due
+    assert postpone is not None
+    assert postpone.due_date is not None
+    assert postpone.due_date > due
     # Its first held session sells half (rounded up); the last safe one all that is left.
     rig.clock.now = datetime(2026, 11, 6, 9, 0, tzinfo=UTC)
     assert (await survey(parts)).lines[0].sales[1].today_units == D(1)
@@ -421,7 +446,8 @@ async def test_a_held_sale_follows_its_venues_clock_across_the_daylight_saving_c
     # Monday at 07:40 UTC is 08:40 in Amsterdam after the clocks went back: not yet open.
     rig.clock.now = datetime(2026, 10, 26, 7, 40, tzinfo=UTC)
     early = await parts.planner.apply(await survey(parts))
-    assert early.intents == [] and "not tradable now" in early.waiting[0]
+    assert early.intents == []
+    assert "not tradable now" in early.waiting[0]
     rig.clock.now = datetime(2026, 10, 26, 8, 40, tzinfo=UTC)
     (monday,) = (await parts.planner.apply(await survey(parts))).intents
     assert monday.terms.quantity == D(2)  # nothing sold on Friday: all of it on the last day
@@ -466,7 +492,8 @@ async def test_a_reservation_in_a_currency_without_a_rate_stops_the_plan(rig: An
     parts = capital_parts(rig)
     await reserve(rig, "300", NOW.date() + timedelta(days=10), currency="GBP")
     plan = await survey(parts)
-    assert plan.blocked is not None and "GBP" in plan.blocked
+    assert plan.blocked is not None
+    assert "GBP" in plan.blocked
 
 
 async def test_a_reservation_nothing_can_meet_in_time_is_a_problem(rig: Any) -> None:
@@ -476,7 +503,8 @@ async def test_a_reservation_nothing_can_meet_in_time_is_a_problem(rig: Any) -> 
     plan = await survey(parts)
     (line,) = plan.lines
     assert line.status.startswith("short by")
-    assert plan.problems and plan.problems[0].startswith("R1")
+    assert plan.problems
+    assert plan.problems[0].startswith("R1")
     assert any("settles by" in note for note in line.notes)
 
 
@@ -487,7 +515,8 @@ async def test_a_sale_that_cannot_be_priced_waits(rig: Any) -> None:
     plan = await survey(parts)
     rig.broker.unavailable.add("rules")
     actions = await parts.planner.apply(plan)
-    assert actions.intents == [] and "cannot be priced" in actions.waiting[0]
+    assert actions.intents == []
+    assert "cannot be priced" in actions.waiting[0]
 
 
 # ── the rebalancer leaves the reservation's sales to the planner ──

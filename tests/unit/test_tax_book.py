@@ -14,7 +14,6 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -61,7 +60,8 @@ def clock() -> Clock:
 
 
 def book_of(
-    settings: ObliskConfig, worker: StoreWorker, clock: Callable[[], datetime], jurisdiction: str = "es",
+    settings: ObliskConfig, worker: StoreWorker, clock: Callable[[], datetime],
+    jurisdiction: str = "es",
     config_dir: Path | None = None,
 ) -> TaxBook:  # fmt: skip
     root = config_dir or Path(__file__).resolve().parents[2] / "config"
@@ -113,9 +113,10 @@ async def test_fills_open_and_close_lots_with_fees_as_the_engine_does(
     await record(worker, first, second, sale)
     outcome = await book.catch_up()
     assert outcome.applied == [first.execution_id, second.execution_id, sale.execution_id]
-    assert outcome.incomplete == [] and outcome.waiting is None
+    assert outcome.incomplete == []
+    assert outcome.waiting is None
     # The same events on Session 4b's engine directly.
-    engine = LotEngine(book.policy, [identity_of(IBGM, book._directory, book._facts)])  # noqa: SLF001
+    engine = LotEngine(book.policy, [identity_of(IBGM, book._directory, book._facts)])
     key = security_key(IBGM)
     engine.acquire(key, on=date(2026, 3, 2), quantity=D(10), cost=D(1002))
     engine.acquire(key, on=date(2026, 4, 1), quantity=D(5), cost=D(551))
@@ -131,7 +132,8 @@ async def test_fills_open_and_close_lots_with_fees_as_the_engine_does(
     assert sum(r.counted for r in realised) == D(1437) - D(1002) - D("220.4")
     # Nothing is taken twice.
     again = await book.catch_up()
-    assert again.applied == [] and again.incomplete == []
+    assert again.applied == []
+    assert again.incomplete == []
 
 
 async def test_a_live_buy_after_a_loss_sale_defers_the_loss_until_those_units_are_sold(
@@ -281,7 +283,8 @@ async def test_what_the_book_cannot_account_for_is_recorded_incomplete(
     today = fill(IWDA, BUY, "1", "100", clock.now.date())
     await record(worker, today)
     waiting = await book.catch_up()
-    assert waiting.waiting is not None and "no USD rate recorded yet today" in waiting.waiting
+    assert waiting.waiting is not None
+    assert "no USD rate recorded yet today" in waiting.waiting
     read = CashRead(
         lines=(CashLine("EUR", D(1), D(1)), CashLine("USD", D(1), D("0.9")),
                CashLine("GBP", D(1), None)),
@@ -325,7 +328,8 @@ def test_an_instrument_without_tax_facts_has_no_identity(shipped_settings: Oblis
     directory = ConfiguredDirectory.from_settings(shipped_settings)
     facts = {f.conid: f for f in shipped_settings.eligibility.skeleton_tax_facts}
     identity = identity_of(IWDA, directory, facts)
-    assert identity is not None and identity.kind is SecurityKind.ETF
+    assert identity is not None
+    assert identity.kind is SecurityKind.ETF
     assert identity_of(424242, directory, facts) is None
     wrong = {IWDA: facts[IWDA].model_copy(update={"issuer": None})}
     assert identity_of(IWDA, directory, wrong) is None  # an ETF names its issuer
@@ -361,10 +365,12 @@ async def test_the_annual_report_lists_realised_results_and_deferred_losses(
     rows = list(csv.DictReader(io.StringIO(text)))
     sections = [row["section"] for row in rows]
     assert sections.count("realised") == 2
-    assert "deferred_on_lot" in sections and "deferred_pending" in sections
+    assert "deferred_on_lot" in sections
+    assert "deferred_pending" in sections
     assert f"IE00B1FZS806 ({IBGM})" in [row["security"] for row in rows]
     assert rows[-1]["section"] == "summary"
-    assert "provisional" in rows[-1]["note"] and "not tax advice" in rows[-1]["note"]
+    assert "provisional" in rows[-1]["note"]
+    assert "not tax advice" in rows[-1]["note"]
 
 
 # ── a jurisdiction switch swaps the policy, with no code change ──
@@ -380,7 +386,9 @@ async def test_switching_the_jurisdiction_swaps_the_policy_without_code(
     elsewhere = elsewhere.replace("  tax: es_irpf", "  tax: generic")
     (config_dir / "jurisdictions" / "xx.yaml").write_text(elsewhere, encoding="utf-8")
     owner = config_dir / "owner.yaml"
-    owner.write_text(owner.read_text(encoding="utf-8").replace("jurisdiction: es", "jurisdiction: xx"))
+    owner.write_text(
+        owner.read_text(encoding="utf-8").replace("jurisdiction: es", "jurisdiction: xx")
+    )
     settings = load_config(config_dir).settings
     assert settings.jurisdiction == "xx"
     book = book_of(settings, worker, clock, settings.jurisdiction, config_dir)
@@ -395,7 +403,6 @@ async def test_switching_the_jurisdiction_swaps_the_policy_without_code(
     # Without the two-month rule the loss stays in the year; under es_irpf it would leave it.
     assert (await book.engine()).ledger.provisional(2026).gains == D(-200)
     assert (await book.hooks()).purchase_defers_loss(IBGM, date(2026, 3, 21)) is False
-
 
 
 async def test_a_year_with_a_loss_window_still_open_waits_to_settle(

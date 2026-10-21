@@ -32,9 +32,8 @@ from obliskiq.domain.capital import (
     WithdrawalReservation,
 )
 from obliskiq.errors import StoreError
-from obliskiq.store import Store
+from obliskiq.store import Store, open_store
 from obliskiq.store import capital as repo
-from obliskiq.store import open_store
 from obliskiq.store.worker import StoreWorker
 
 D = Decimal
@@ -163,7 +162,10 @@ async def test_a_reservation_and_its_withdrawal_close_together(
     closed = await worker.run(repo.get_reservation, 1)
     assert closed.state is ReservationState.WITHDRAWN
     history = await worker.run(repo.reservation_history, 1)
-    assert [e.detail.split(":")[0] for e in history] == ["reserved 1000 EUR by 2026-11-05", "withdrawn"]
+    assert [e.detail.split(":")[0] for e in history] == [
+        "reserved 1000 EUR by 2026-11-05",
+        "withdrawn",
+    ]
     with pytest.raises(LedgerRefusal, match="is withdrawn"):
         await ledger.open_reservation(1)
     with pytest.raises(LedgerRefusal, match="no reservation R9"):
@@ -211,17 +213,20 @@ async def test_an_unexplained_change_is_one_pending_event_per_currency_until_cla
     first = await worker.run(repo.note_unexplained, "USD", D(50), at=AT)
     again = await worker.run(repo.note_unexplained, "USD", D(55), at=AT + timedelta(minutes=5))
     assert first.event_id == again.event_id == 1
-    assert again.amount == D(55) and again.detected_at == AT
+    assert again.amount == D(55)
+    assert again.detected_at == AT
     pending = await ledger.pending_event(1)
     dividend = ledger.classification(
         pending, AdjustmentKind.DIVIDEND, actor="owner", in_book=False, note="ASML"
     )
-    assert isinstance(dividend, Adjustment) and dividend.matched_at == AT
+    assert isinstance(dividend, Adjustment)
+    assert dividend.matched_at == AT
     assert (dividend.amount, dividend.in_book, dividend.event_id) == (D(55), False, 1)
     made = await ledger.classify(pending, dividend, actor="owner")
     assert made.flow_id == 1
     (closed,) = await worker.run(repo.cash_events)
-    assert closed.state is CashEventState.CLASSIFIED and closed.classified_by == "owner"
+    assert closed.state is CashEventState.CLASSIFIED
+    assert closed.classified_by == "owner"
     assert await worker.run(repo.cash_events, pending_only=True) == []
     with pytest.raises(LedgerRefusal, match="already classified"):
         await ledger.pending_event(1)
@@ -239,9 +244,11 @@ async def test_an_event_classified_as_a_deposit_or_a_withdrawal_takes_its_sign(
     incoming = await worker.run(repo.note_unexplained, "EUR", D(300), at=AT)
     outgoing = await worker.run(repo.note_unexplained, "USD", D(-40), at=AT)
     deposit = ledger.classification(incoming, "deposit", actor="o", in_book=True, note=None)
-    assert isinstance(deposit, Deposit) and deposit.amount == D(300)
+    assert isinstance(deposit, Deposit)
+    assert deposit.amount == D(300)
     withdrawal = ledger.classification(outgoing, "withdrawal", actor="o", in_book=True, note=None)
-    assert isinstance(withdrawal, Withdrawal) and withdrawal.signed == D(-40)
+    assert isinstance(withdrawal, Withdrawal)
+    assert withdrawal.signed == D(-40)
     with pytest.raises(LedgerRefusal, match="money out"):
         ledger.classification(outgoing, "deposit", actor="o", in_book=True, note=None)
     with pytest.raises(LedgerRefusal, match="money in"):
@@ -274,12 +281,14 @@ async def test_postpone_and_reduce_change_the_reservation_with_an_audit(
     reservation = await _reserved(worker)
     questions = OwnerQuestions(worker, now=clock)
     asked = await questions.ask(question(1), actor="planner")
-    assert asked is not None and asked.question_id == 1
+    assert asked is not None
+    assert asked.question_id == 1
     assert await questions.ask(question(1), actor="planner") is None  # one open at a time
     answered = await questions.answer(1, "postpone", actor="owner")
     assert answered.effect == f"R1 is now due {(TODAY + timedelta(days=40)).isoformat()}"
     assert answered.question.state is QuestionState.ANSWERED
-    assert answered.question.chosen is not None and answered.question.chosen.key == "postpone"
+    assert answered.question.chosen is not None
+    assert answered.question.chosen.key == "postpone"
     with pytest.raises(QuestionRefusal, match="already answered"):
         await questions.answer(1, "reduce", actor="owner")
     second = await questions.ask(question(1), actor="planner")
@@ -292,9 +301,10 @@ async def test_postpone_and_reduce_change_the_reservation_with_an_audit(
     assert third is not None
     later = await questions.answer(third.question_id or 0, "after_year_end", actor="owner")
     assert "wait until 2027-01-04" in later.effect
+    fourth = await questions.ask(question(1), actor="planner")
+    assert fourth is not None
     with pytest.raises(QuestionRefusal, match="no option 'later'"):
-        fourth = await questions.ask(question(1), actor="planner")
-        await questions.answer(fourth.question_id if fourth else 0, "later", actor="owner")
+        await questions.answer(fourth.question_id or 0, "later", actor="owner")
     with pytest.raises(QuestionRefusal, match="no question Q99"):
         await questions.answer(99, "proceed", actor="owner")
     assert len(await questions.listed()) == 4
@@ -323,7 +333,12 @@ async def test_a_question_on_a_closed_reservation_changes_nothing(
     questions = OwnerQuestions(worker, now=clock)
     await questions.ask(question(1), actor="planner")
     await worker.run(
-        repo.change_reservation, 1, at=AT, actor="o", detail="gone", state=ReservationState.CANCELLED
+        repo.change_reservation,
+        1,
+        at=AT,
+        actor="o",
+        detail="gone",
+        state=ReservationState.CANCELLED,
     )
     answered = await questions.answer(1, "postpone", actor="owner")
     assert answered.effect == "R1 is no longer open: nothing to change"
@@ -347,9 +362,7 @@ def test_a_question_is_coherent() -> None:
     with pytest.raises(ValueError, match="open question has no answer"):
         OwnerQuestion.model_validate(good.model_dump() | {"answer": "proceed"})
     with pytest.raises(ValueError, match="answer is stamped"):
-        OwnerQuestion.model_validate(
-            good.model_dump() | {"state": "answered", "answer": "proceed"}
-        )
+        OwnerQuestion.model_validate(good.model_dump() | {"state": "answered", "answer": "proceed"})
 
 
 def test_the_store_keeps_questions_and_flows_whole(store: Store) -> None:
@@ -432,5 +445,5 @@ def test_external_holdings_are_unique_per_broker_and_instrument(store: Store) ->
 
 def test_an_external_holding_refuses_a_value_that_is_not_finite() -> None:
     for field in ("quantity", "market_value_base"):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="finite"):
             _holding(**{field: D("Infinity")})

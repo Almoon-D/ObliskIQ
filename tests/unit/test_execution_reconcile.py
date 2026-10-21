@@ -340,7 +340,8 @@ async def test_a_recorded_withdrawal_explains_the_cash_that_left(rig: Any) -> No
     rig.broker.cash["USD"] = (usd - Decimal(300), rate)
     rig.clock.advance(1)
     run = await rig.reconciler.run()
-    assert run.status is ReconcileStatus.GREEN and "cash_flow_arrived" in kinds(run)
+    assert run.status is ReconcileStatus.GREEN
+    assert "cash_flow_arrived" in kinds(run)
 
 
 async def test_a_deposit_of_another_amount_does_not_explain_the_cash(rig: Any) -> None:

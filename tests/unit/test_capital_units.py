@@ -192,9 +192,7 @@ def test_a_deposit_is_released_in_equal_daily_tranches(shipped_settings: ObliskC
     # A cancelled deposit, one outside the book and a withdrawal hold nothing back.
     cancelled = _deposit("100", day, cancelled_at=AT)
     outside = _deposit("100", day, in_book=False)
-    out = Withdrawal(
-        amount=D(5), currency="EUR", on=day, recorded_at=AT, recorded_by="owner"
-    )
+    out = Withdrawal(amount=D(5), currency="EUR", on=day, recorded_at=AT, recorded_by="owner")
     assert held_back([cancelled, outside, out], three, today=day) == {}
 
 
@@ -268,10 +266,10 @@ def test_only_the_owners_flows_that_reached_the_account_are_external() -> None:
         matched_at=AT,
     )
     flows = account_flows(
-        [shown, unseen, out, dividend], base="EUR", rate=lambda currency, on: D("0.9")
+        [shown, unseen, out, dividend], base="EUR", rate=lambda _currency, _on: D("0.9")
     )
     assert flows == [ExternalFlow(day, D(100)), ExternalFlow(day, D(-18))]
-    missing = account_flows([out], base="EUR", rate=lambda currency, on: None)
+    missing = account_flows([out], base="EUR", rate=lambda _currency, _on: None)
     assert missing == "no USD rate was recorded on 2026-10-02"
 
 
@@ -301,7 +299,8 @@ def test_a_stale_external_holding_makes_the_book_unreliable(shipped_settings: Ob
     assert str(stale_days) in str(book.reason())
     assert book.label(fresh) == "DEGIRO:ASML"
     clean = external_book([fresh], shipped_settings.positions, as_of=today)
-    assert clean.reliable and clean.reason() is None
+    assert clean.reliable
+    assert clean.reason() is None
 
 
 # ── the default strategy value ──
@@ -345,9 +344,9 @@ def test_settlement_counts_the_venues_sessions_across_a_holiday(
     assert calendars.last_safe_session(
         "XNYS", date(2026, 11, 27), from_day=date(2026, 11, 20)
     ) == date(2026, 11, 25)
-    assert calendars.last_safe_session(
-        "XNYS", date(2026, 11, 27), from_day=date(2026, 11, 26)
-    ) is None
+    assert (
+        calendars.last_safe_session("XNYS", date(2026, 11, 27), from_day=date(2026, 11, 26)) is None
+    )
 
 
 def test_a_settlement_beyond_the_calendar_is_never_assumed(

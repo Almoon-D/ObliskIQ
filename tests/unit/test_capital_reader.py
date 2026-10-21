@@ -139,7 +139,8 @@ async def test_shadow_reads_the_books_simulated_fills_only(rig: Any) -> None:
     assert [(h.conid, h.units) for h in shadow.holdings] == [(EMIM, D(2))]
     assert shadow.book_cash == D(907)  # 1,000 less 92 and the commission
     paper = await read(rig, PAPER)
-    assert isinstance(paper, CapitalView) and paper.holdings == ()
+    assert isinstance(paper, CapitalView)
+    assert paper.holdings == ()
 
 
 async def test_a_deposit_is_deployed_in_tranches(rig: Any) -> None:
@@ -147,7 +148,8 @@ async def test_a_deposit_is_deployed_in_tranches(rig: Any) -> None:
     settings = settings_with(rig.settings, deployment=deployment)
     await rig.store(capital_repo.record_flow, deposit("800"))
     plan = await make_rebalancer(rig, settings).survey(PAPER)
-    assert plan.capital is not None and plan.capital.managed == D(1800)
+    assert plan.capital is not None
+    assert plan.capital.managed == D(1800)
     # A quarter of the 800 released today: 1,800 less 600 held back and the floor of 25.
     assert plan.spendable == D(1800) - D(600) - D(25)
     rig.clock.now = NOW + timedelta(days=3)

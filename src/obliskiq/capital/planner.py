@@ -505,7 +505,7 @@ class ReservationPlanner:
         chosen_all += picked
         for choice in picked:
             line.sales.append(self._schedule(line, choice, today, not_before))
-        later = self._later_date_question(line, picked, mine, today)
+        later = self._later_date_question(line, picked, mine)
         if later is not None:
             plan.to_ask.append(later)
         line.shortfall = max(ZERO, need)
@@ -871,7 +871,6 @@ class ReservationPlanner:
         line: ReservationLine,
         picked: Sequence[_Chosen],
         asked: Sequence[OwnerQuestion],
-        today: date,
     ) -> OwnerQuestion | None:
         """A later date offered when a sale is held to the last safe days because its layer
         expects a strong move; asked once per reservation, the default being the date as it is."""
