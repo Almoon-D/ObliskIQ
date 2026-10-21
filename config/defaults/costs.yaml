@@ -207,11 +207,11 @@ costs:
       rate: "0.002"
       effective_from: 2021-01-16
       needs_issuer_list: true
-      provision: Ley 5/2020, de 15 de octubre, del Impuesto sobre las Transacciones Financieras (0.2 % of acquisitions of Spanish listed shares with market capitalisation above EUR 1,000 million on 1 December of the previous year)
-      confirmation: secondary
+      provision: Ley 5/2020, de 15 de octubre, del Impuesto sobre las Transacciones Financieras, arts. 2.1 and 7 (0.2 % of acquisitions of Spanish listed shares with market capitalisation above EUR 1,000 million on 1 December of the previous year)
+      confirmation: official
       note: The AEAT publishes the list of taxable issuers each year.
       source:
-        origin: Ley 5/2020 as summarised by AEAT-citing secondary sources, read 2026-10-09
+        origin: Ley 5/2020 (BOE-A-2020-12356), consolidated text last updated 2022-07-01, arts. 2.1 and 7 read on the BOE's site 2026-10-21
         verify_live: true
     - id: fr_financial_transaction_tax
       issuer_country: FR

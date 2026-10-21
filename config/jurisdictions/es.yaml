@@ -62,8 +62,8 @@ tax:
   withholding_at_source:
     - country: US
       rate: "0.15"
-      confirmation: secondary
-      source: Spain–United States tax convention of 22 February 1990, art. 10.2.b, as amended by the 2013 protocol in force 27 November 2019; secondary sources read 2026-10-16
+      confirmation: official
+      source: Spain–United States tax convention of 22 February 1990 (BOE-A-1990-30940), art. 10.2.b as replaced by art. IV of the protocol of 14 January 2013 (BOE-A-2019-15166), in force 27 November 2019; official texts read on the BOE's site 2026-10-21
   # Tax-free switches between funds (art. 94.1.a) are not assumed available at IBKR until
   # verified; ETF switches are always sales.
   fund_switch_deferral_at_broker: false

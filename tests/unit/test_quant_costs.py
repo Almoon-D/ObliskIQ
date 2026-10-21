@@ -486,7 +486,7 @@ def test_every_unverified_label_has_an_origin(book):
     assert set(origins) == labels
     assert "assumptions, not measurements" in origins["friction_assumption"]
     assert "IBKR fixed schedule" in origins["commission:us_stock"]
-    assert "secondary" in origins["tax:es_financial_transaction_tax"]
+    assert "official" in origins["tax:es_financial_transaction_tax"]
     assert "no market capitalisation" in origins["market_cap_unknown"]
     no_tax = leg(book, shares("100", "100"), issuer_country="US")
     assert "no transaction tax is configured" in book.origins(no_tax)["tax_not_modelled"]

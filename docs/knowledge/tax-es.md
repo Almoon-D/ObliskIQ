@@ -6,17 +6,27 @@ each comes from and the official text it was read in. The values are in
 with them. **Not tax advice.** The engine estimates the tax of a simulated or proposed trade so
 that research and decisions treat it as a cost; it never states what an account owes.
 
-Tag: `[BOE ✓ 2026-10-16]` = read in the consolidated text on the BOE's site on that date.
+Tag: `[BOE ✓ 2026-10-16]` = read in the consolidated text on the BOE's site on that date;
+`[secondary]` = known only through a secondary source, the official text not read.
 
 ## Sources
 
 - LIRPF: Ley 35/2006, de 28 de noviembre, del Impuesto sobre la Renta de las Personas Físicas,
   consolidated text `https://www.boe.es/buscar/act.php?id=BOE-A-2006-20764` `[BOE ✓ 2026-10-16]`
-  (last amendment shown: 21 December 2024).
+  (last amendment shown: 21 December 2024); arts. 14.2.e, 33.1, 33.5.e and 46.b read again for
+  currency gains `[BOE ✓ 2026-10-21]`.
 - RIRPF: Real Decreto 439/2007, de 30 de marzo, the regulation,
   `https://www.boe.es/buscar/act.php?id=BOE-A-2007-6820` `[BOE ✓ 2026-10-16]`.
 - Orden HAC/277/2026, de 25 de marzo, the models and deadlines of the 2025 return,
   `https://www.boe.es/buscar/act.php?id=BOE-A-2026-7041` `[BOE ✓ 2026-10-16]`.
+- The Spain–United States convention of 22 February 1990,
+  `https://www.boe.es/buscar/act.php?id=BOE-A-1990-30940`, and its protocol of 14 January 2013,
+  `https://www.boe.es/diario_boe/txt.php?id=BOE-A-2019-15166` `[BOE ✓ 2026-10-21]`.
+- Consultas vinculantes of the Dirección General de Tributos on foreign-currency balances:
+  V2422-20, V0463-21, V1613-25 (15 September 2025) and V0152-26 (27 January 2026) `[secondary]`:
+  the DGT's search (`petete.tributos.hacienda.gob.es`) did not answer from the session's network
+  on 2026-10-21 (timeouts and 502). The engine rests on the articles of the law below; the
+  rulings' official texts are queued as VERIFY-LIVE in `docs/ROADMAP.md`.
 
 ## The rules
 
@@ -32,16 +42,40 @@ Tag: `[BOE ✓ 2026-10-16]` = read in the consolidated text on the BOE's site on
 | Foreign-tax credit | LIRPF art. 80 | the lesser of the tax paid abroad and the average effective rate (two decimals) on the income taxed abroad | applied to the year's foreign income |
 | Payment | LIRPF art. 97; Orden HAC/277/2026 art. 7.1 | the 2025 return is filed and its tax paid from 8 April to 30 June 2026; a 60 / 40 split defers 40 % to 5 November | a year's tax is paid in full on 30 June of the following year (the split is not used, so the payment is never later than the law allows) |
 | Fund switches | LIRPF art. 94.1.a | a switch between investment funds defers the gain, except for listed funds (ETFs) and when the proceeds are made available to the taxpayer | ETF switches are sales; a switch between unlisted funds is deferred only when `fund_switch_deferral_at_broker` is true, false until verified at IBKR |
-| Withholding at source | Spain–United States convention of 22 February 1990, art. 10.2.b, as amended by the 2013 protocol (in force 27 November 2019) | 15 % on portfolio dividends | `withholding_at_source` row US 0.15, confirmation `secondary`: the official text was not read. A country without a row cannot be simulated |
+| Withholding at source | Spain–United States convention of 22 February 1990 (BOE-A-1990-30940), art. 10.2.b as replaced by art. IV of the protocol of 14 January 2013 (BOE-A-2019-15166, in force 27 November 2019) | "15 por ciento del importe bruto de los dividendos en los demás casos" (5 % for a company holding at least 10 % of the votes) | `withholding_at_source` row US 0.15, confirmation `official` `[BOE ✓ 2026-10-21]`. A country without a row cannot be simulated |
+
+## Currency gains
+
+Foreign currency held in the account is a patrimonial element of its own: each time it leaves the
+account's balance (converted back to euros, or paid for a security) a gain or loss arises against
+what it cost in euros. **Not tax advice.**
+
+| Rule | Article | What it says | What the engine does |
+|---|---|---|---|
+| A currency balance's change is a gain or loss | LIRPF art. 33.1 | "Son ganancias y pérdidas patrimoniales las variaciones en el valor del patrimonio del contribuyente que se pongan de manifiesto con ocasión de cualquier alteración en la composición de aquél" | each currency is a security of its own (`CCY:USD`); buying it opens a lot at the euros paid, spending it closes lots at the euros it is worth that day `[BOE ✓ 2026-10-21]` |
+| When it is imputed | LIRPF art. 14.2.e | "Las diferencias positivas o negativas que se produzcan en las cuentas representativas de saldos en divisas o en moneda extranjera, como consecuencia de la modificación experimentada en sus cotizaciones, se imputarán en el momento del cobro o del pago respectivo." | a gain or loss arises only when the currency is paid out (a conversion back, or a purchase paid in it), never on a revaluation `[BOE ✓ 2026-10-21]` |
+| Savings base | LIRPF art. 46.b | "Las ganancias y pérdidas patrimoniales que se pongan de manifiesto con ocasión de transmisiones de elementos patrimoniales" | currency results join the gains component with the securities' `[BOE ✓ 2026-10-21]` |
+| Repurchase of what was sold at a loss | LIRPF art. 33.5.e | not computed are losses "derivadas de las transmisiones de elementos patrimoniales, cuando el transmitente vuelva a adquirirlos dentro del año siguiente a la fecha de dicha transmisión. Esta pérdida patrimonial se integrará cuando se produzca la posterior transmisión del elemento patrimonial." | a currency loss is deferred onto the same currency bought within the following twelve months (none before the sale; art. 33.5.f's two months apply to listed securities, not to currency) and released when those units are spent: the conservative reading, since currency is bought again almost always `[BOE ✓ 2026-10-21]` |
+| Which units leave first | LIRPF art. 37.2 by analogy; the DGT's rulings above `[secondary]` | the rulings value each conversion at the rate the currency was acquired at, first in first out | currency lots are consumed oldest first (`currency_gains.lot_method: fifo`) |
+| A sale in dollars, then a conversion | V0152-26 `[secondary]` | the sale of the security and the later conversion of its dollars are two results | a security sold in dollars realises its result in euros at the trade date's rate and opens a dollar lot at that value; converting the dollars later realises the currency's own result |
+
+The values are `tax.currency_gains` in `config/jurisdictions/es.yaml` (`kept_as_lots`,
+`lot_method`, `loss_reacquisition_months`, `source`). The rate of a fill's day is the ledger's,
+recorded by the cycle's NAV step and the heartbeat (`fx_rates`); a fill whose day has no
+recorded rate is taken once the day's rate is recorded, or marked incomplete when its day passed
+without one. Currency the account held before the bot's first fill has no lots: spending it
+is noted and its result not computed.
 
 ## What is not modelled
 
-- Currency gains on foreign-currency balances (Session 7, DECISIONS D69): the simulator holds no
-  currency balance.
+- Dividends, interest and withholding on the live path: the live lots take fills; income enters
+  the ledger once Session 7's cash classification feeds it (a follow-up).
+- Currency held before the bot's first fill and positions bought before it (no opening lots yet).
 - The personal and family minimum, regional deductions, and the part of the savings base that a
   negative general base could change.
 - Spanish withholding on account (19 %) on Spanish-paid income: IBKR is not a Spanish payer.
 - Foreign-asset reporting (Modelo 720) and the wealth tax.
 
-VERIFY-LIVE(US treaty rate against the BOE text) and VERIFY-LIVE(tax-free fund switches at IBKR)
-are queued in `docs/ROADMAP.md`. The rate table is re-checked every year (MASTER_PLAN §5.16).
+VERIFY-LIVE(tax-free fund switches at IBKR) and VERIFY-LIVE(the DGT's currency rulings in their
+official text) are queued in `docs/ROADMAP.md`. The rate table is re-checked every year
+(MASTER_PLAN §5.16).

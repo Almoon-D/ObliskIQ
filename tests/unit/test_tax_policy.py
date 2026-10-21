@@ -346,7 +346,7 @@ def test_a_policy_describes_its_rules_with_their_sources(es, tax_profile):
     assert lines[0] == "policy es_irpf; lots fifo; homogeneity same_isin_or_issuer_and_index"
     joined = "\n".join(lines)
     for fragment in ("LIRPF art. 49", "Ley 7/2024", "Orden HAC/277/2026", "LIRPF art. 80",
-                     "withholding at source US 0.15 (secondary", "2 months (listed)",
+                     "withholding at source US 0.15 (official", "2 months (listed)",
                      "supported: False", "in tracked index: True"):  # fmt: skip
         assert fragment in joined
     generic = GenericTaxPolicy("generic", tax_profile).describe()
