@@ -2460,6 +2460,9 @@ inactive sleeve's budget kept as cash (a quarter of the book idle until Session 
   lasts, a freezing finding: new buys stop, the owner is alerted, and the freeze lifts at the
   next reconciliation after
   `obliskiq cash classify E<n> <kind> --confirm`. Classifying records the flow that explains it.
+  While unexplained cash is the only freeze, the positions reconcile, so the reservation
+  planner still sells for a withdrawal (a sale adds no risk, so the gate lets it through); any
+  other drift stops the planner too. A fill whose cash cannot be computed is `cash_unpriced`.
   How IBKR words dividends, interest and fees in its activity was not observed (no paper
   credentials in a cloud session): VERIFY-LIVE, and until then the owner classifies.
 

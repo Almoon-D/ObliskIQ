@@ -198,7 +198,7 @@ async def test_a_fill_of_an_instrument_nobody_describes_cannot_be_explained(rig:
     rig.broker.fill(stray.order_id)
     rig.clock.advance(rig.settings.execution.reconcile.grace_seconds + 1)
     run = await rig.reconciler.run()
-    assert {"cash_unexplained", "foreign_fill"} <= set(
+    assert {"cash_unpriced", "foreign_fill"} <= set(
         kinds(run)
     )  # its own fill explains the position
     accepted = await rig.reconciler.accept(actor="owner", reason="my own trade")

@@ -44,6 +44,7 @@ from obliskiq.domain.orders import (
     Sleeve,
 )
 from obliskiq.errors import CalendarError, TaxError
+from obliskiq.execution.reconcile import CASH_UNEXPLAINED
 from obliskiq.orchestration.parts import CapitalParts
 from obliskiq.store import capital as capital_repo
 from obliskiq.store import orders as repo
@@ -748,3 +749,29 @@ async def test_a_position_with_a_working_sale_is_left_to_it(rig: Any) -> None:
     assert [s.symbol for s in line.sales] == ["EXV1"]
     (sale,) = line.sales
     assert sale.category is Category.OVERWEIGHT  # not a skeleton role: all of it above target
+
+
+async def test_unexplained_cash_alone_never_stops_a_withdrawal(rig: Any) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig)
+    await reserve(rig, "600", NOW.date() + timedelta(days=14))
+    unexplained = ReconcileFinding(kind=CASH_UNEXPLAINED, detail="E1", freezes=True)
+    await rig.store(
+        repo.record_reconciliation,
+        ReconcileRun(at=NOW, status=ReconcileStatus.DRIFT, findings=(unexplained,)),
+        anchor=False,
+    )
+    plan = await survey(parts)
+    assert plan.blocked is None  # the positions reconcile: the withdrawal's sales go ahead
+    assert plan.lines[0].sales
+    (intent,) = (await parts.planner.apply(plan)).intents
+    assert intent.side is OrderSide.SELL
+    # New buys wait for the classification.
+    assert "reconciliation is drift" in str((await make_rebalancer(rig).survey(PAPER)).blocked)
+    positions = ReconcileFinding(kind="position_mismatch", detail="d", freezes=True)
+    await rig.store(
+        repo.record_reconciliation,
+        ReconcileRun(at=NOW, status=ReconcileStatus.DRIFT, findings=(unexplained, positions)),
+        anchor=False,
+    )
+    assert "reconciliation is drift" in str((await survey(parts)).blocked)

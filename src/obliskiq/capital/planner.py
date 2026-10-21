@@ -61,12 +61,14 @@ from ..domain.orders import (
     IntentState,
     OrderIntent,
     OrderSide,
+    ReconcileRun,
     ReconcileStatus,
     Sleeve,
 )
 from ..errors import CalendarError, ObliskError, TaxError
 from ..execution.intent_maker import IntentMaker
 from ..execution.killswitch import KillSwitch
+from ..execution.reconcile import CASH_UNEXPLAINED
 from ..logging_setup import get_logger
 from ..quant.costs import CostBook
 from ..quant.costs import OrderTerms as CostTerms
@@ -259,6 +261,13 @@ class _Chosen:
         return self.units * self.candidate.unit
 
 
+def _cash_only(run: ReconcileRun) -> bool:
+    """Whether the run froze only on cash the owner has not classified yet: the positions
+    reconcile, so a withdrawal's sales go ahead (new buys wait, at the gate)."""
+    freezing = [finding for finding in run.findings if finding.freezes]
+    return bool(freezing) and all(finding.kind == CASH_UNEXPLAINED for finding in freezing)
+
+
 def _whole(value: Decimal, rounding: str) -> Decimal:
     return value.to_integral_value(rounding=rounding)
 
@@ -313,7 +322,11 @@ class ReservationPlanner:
             plan.blocked = "the kill switch is on: no new decision"
             return plan
         latest = await self._worker.run(repo.latest_reconciliation)
-        if latest is not None and latest.status is not ReconcileStatus.GREEN:
+        if (
+            latest is not None
+            and latest.status is not ReconcileStatus.GREEN
+            and not _cash_only(latest)
+        ):
             plan.blocked = f"reconciliation is {latest.status.value}: the plan waits"
             return plan
         try:

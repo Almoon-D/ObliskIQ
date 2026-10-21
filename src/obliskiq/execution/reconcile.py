@@ -81,6 +81,10 @@ RECONCILE_ACTOR = "reconciliation"
 
 #: Findings that keep a green run from becoming the anchor: the broker may not show it all yet.
 SETTLING = frozenset({"position_settling", "cash_settling"})
+#: A cash change nothing explains, waiting for the owner's classification (``cash_events``).
+CASH_UNEXPLAINED = "cash_unexplained"
+#: A fill since the anchor whose cash cannot be computed (an instrument nobody describes).
+CASH_UNPRICED = "cash_unpriced"
 
 type Reads = tuple[LiveOrders, tuple[Fill, ...], PositionsRead, CashRead]
 
@@ -444,7 +448,7 @@ class Reconciler:
         flows = [self._flows(fills, since, same_second=same) for same in (False, True)]
         known = [flow for flow in flows if flow is not None]
         if len(known) != len(flows):
-            return [_freeze("cash_unexplained", "a fill since the anchor cannot be priced in cash")]
+            return [_freeze(CASH_UNPRICED, "a fill since the anchor cannot be priced in cash")]
         ledger = await self._worker.run(capital_repo.cash_flows)
         # A flow stamped in the anchor's own second may or may not be in it: both are accepted.
         recorded = [_recorded(ledger, since, same_second=same) for same in (False, True)]
@@ -483,7 +487,7 @@ class Reconciler:
             )
             findings.append(
                 _freeze(
-                    "cash_unexplained",
+                    CASH_UNEXPLAINED,
                     f"{detail}: E{event.event_id}, {gap:+.2f} {currency} nothing explains; new "
                     f"buys wait until it is classified (`obliskiq cash classify "
                     f"E{event.event_id} <kind> --confirm`)",
