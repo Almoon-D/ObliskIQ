@@ -2453,11 +2453,12 @@ inactive sleeve's budget kept as cash (a quarter of the book idle until Session 
   classify|list`; ids carry their kind (`R`, `F`, `E`) because the kinds share numbers. A deposit
   dated in the future and a reservation already past due are refused.
 - **Reconciliation explains cash** by the last reading plus the bot's fills plus the flows
-  recorded since (`execution/fill_cash.py`). A gap beyond `reconcile.cash_tolerance_base` that a
-  recorded, unmatched deposit or withdrawal of that amount explains is matched to it (stamped
-  with the reading's time, so it is never counted twice); any other gap is a **cash event**, one
-  pending per currency and refreshed while it lasts, a freezing finding: new buys stop, the
-  owner is alerted, and the freeze lifts at the next reconciliation after
+  recorded since (`execution/fill_cash.py`). A gap beyond
+  `execution.reconcile.cash_tolerance_base` that a recorded, unmatched deposit or withdrawal of
+  that amount explains is matched to it (stamped with the reading's time, so it is never counted
+  twice); any other gap is a **cash event**, one pending per currency and refreshed while it
+  lasts, a freezing finding: new buys stop, the owner is alerted, and the freeze lifts at the
+  next reconciliation after
   `obliskiq cash classify E<n> <kind> --confirm`. Classifying records the flow that explains it.
   How IBKR words dividends, interest and fees in its activity was not observed (no paper
   credentials in a cloud session): VERIFY-LIVE, and until then the owner classifies.

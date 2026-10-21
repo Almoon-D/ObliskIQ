@@ -201,6 +201,6 @@ execution:
     # it counts as missing; the executor also waits this long before it places again an intent
     # whose order is not listed. A judgement until Session 5's command list measures the lag.
     grace_seconds: 120
-    # Cash movement in one currency that the bot's own fills do not explain and that is tolerated,
-    # in the base currency (fees, rounding). A judgement.
+    # Cash movement in one currency that neither the bot's fills nor the owner's recorded flows
+    # explain and that is tolerated, in the base currency (fees, rounding). A judgement.
     cash_tolerance_base: "5"

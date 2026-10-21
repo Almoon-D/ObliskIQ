@@ -5,6 +5,52 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.12.0] - 2026-10-21
+
+Session 7, capital, cash flows and tax: the bot knows how much it manages, plans for deposits and
+dated withdrawals the moment they are announced, asks the owner before cutting a protected
+position, and keeps tax lots on the live path. No IBKR account call from the session.
+
+### Added
+
+- `capital/`: managed and investable capital behind one reader (`CapitalReader`): a capped book
+  kept as its own account that follows its returns and the owner's flows, the whole account as
+  the NAV, investable capital net of unmanaged holdings and open reservations (DECISIONS D106);
+  `capital.budgets` and `capital.satellite_ceiling` (`SleeveBudgets`); external holdings with
+  `obliskiq holdings external add|list|remove`, stale after `positions.external_data_stale_days`.
+- The cash-flow ledger (migration `008_capital.sql`): deposits, withdrawal reservations,
+  withdrawals and adjustments; `obliskiq cash deposit|reserve|withdrawn|cancel|classify|list`,
+  each echoing what it would do and recording nothing without `--confirm` (D107); deposits
+  deployed in tranches (`capital.deployment.tranche_days`).
+- The reservation planner, the cycle's `reserve` step: the cash line first, then sales by tax,
+  trading and strategy cost, settled per venue before the due date (`settlement_sessions` with
+  sources in `venues.yaml`), paced by expected return through `StrategyValue` (D108); the plan in
+  the digest.
+- Owner questions (`obliskiq questions list|answer`): proceed, postpone, reduce, after year-end
+  and a later date, the default applied at the deadline, alerted when asked and when expired
+  (D109).
+- Tax on the live path (`tax/book.py`): the heartbeat applies each paper or live fill to the lot
+  engine at its trade date's rate (`fx_rates`), persisting lots, open loss windows and the ledger
+  with the fill; currency lots under `tax.currency_gains`; incomplete fills alerted;
+  `obliskiq tax report --year` (CSV, not tax advice) (D110).
+- The time-weighted return over the NAV rows with flows neutralised (`capital.twr`), in the
+  digest (D111).
+- Config: `capital.budgets`, `satellite_ceiling`, `deployment`, `reservations`, `planner`,
+  `pacing`, `questions`, `twr`; `positions.external_data_stale_days`; each venue's
+  `settlement_sessions` and its source; `eligibility.skeleton_tax_facts`; `tax.currency_gains` in
+  `es.yaml`; the exit reason `withdrawal`.
+
+### Changed
+
+- Reconciliation explains cash by fills and the owner's recorded flows; a change neither
+  explains is a pending cash event that freezes new buys until the owner classifies it (D107).
+- A capped book's cap is where it starts, no longer its ceiling; an inactive sleeve's budget stays
+  in the core, so the skeleton's core targets 95 % of the book (D106).
+- The rebalancer spends nothing reserved or not yet released, sells nothing while a reservation is
+  short, and never buys back a loss inside its two-month window (D108, D110).
+- `config/jurisdictions/es.yaml`: the US treaty's 15 % withholding confirmed in the BOE's text;
+  `costs.yaml`: Spain's 0.2 % transaction tax confirmed in Ley 5/2020's BOE text.
+
 ## [0.11.0] - 2026-10-20
 
 Session 6, the walking skeleton: the system runs end to end, schedule → targets → intents →
