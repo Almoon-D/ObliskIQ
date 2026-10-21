@@ -9,8 +9,9 @@ from typing import Annotated, Final, Literal, Self, get_args
 
 from pydantic import Field, PositiveInt, model_validator
 
-from ..domain.base import NonEmptyText
+from ..domain.base import Conid, NonEmptyText
 from ..domain.instrument import TradedInstrument
+from ..domain.tax import Isin
 from .base import FrozenModel
 
 type ProhibitedCategory = Literal[
@@ -49,20 +50,40 @@ class TenorConfig(FrozenModel):
     mandatory_close_trading_days: PositiveInt
 
 
+class TaxFacts(FrozenModel):
+    """What the tax rules need to know of one listed instrument: its ISIN and, for a fund, its
+    issuer and the index it tracks (homogeneity and swap partners)."""
+
+    conid: Conid
+    isin: Isin
+    issuer: NonEmptyText | None
+    tracked_index: NonEmptyText | None
+
+
 class EligibilityConfig(FrozenModel):
-    """The skeleton eligibility policy's allowlist (removed with it in Session 8)."""
+    """The skeleton eligibility policy's allowlist and its instruments' tax facts (removed with
+    them in Session 8)."""
 
     skeleton_allowlist: list[TradedInstrument]
+    skeleton_tax_facts: list[TaxFacts]
 
     @model_validator(mode="after")
     def _distinct(self) -> Self:
         conids = [instrument.conid for instrument in self.skeleton_allowlist]
         if len(conids) != len(set(conids)):
             raise ValueError("each conid is listed once")
+        facts = [entry.conid for entry in self.skeleton_tax_facts]
+        if len(facts) != len(set(facts)):
+            raise ValueError("each conid's tax facts are listed once")
+        unknown = sorted(set(facts) - set(conids))
+        if unknown:
+            raise ValueError(f"skeleton_tax_facts name conids the allowlist does not: {unknown}")
         return self
 
 
 class PositionsConfig(FrozenModel):
-    """lite's ``positions`` key the currency manager reads (Session 17 restates the rest)."""
+    """lite's ``positions`` keys the currency manager and the external holdings read (Session 17
+    restates the rest)."""
 
     max_single_foreign_currency_pct: Annotated[Decimal, Field(gt=0, le=1, allow_inf_nan=False)]
+    external_data_stale_days: PositiveInt

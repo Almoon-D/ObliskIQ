@@ -1,5 +1,5 @@
-"""The shape of the migrations (``001_core.sql``, ``002_orders.sql``, ``003_pretrade.sql``) and the
-constraints that keep a bad row out.
+"""The shape of the migrations (``001_core.sql`` through ``008_capital.sql``) and the constraints
+that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
 saying so. Each CHECK has a row it must refuse.
@@ -134,6 +134,53 @@ SHAPE = {
         "collected_at:TEXT!, market_data_status:TEXT, market_data_raw:TEXT, "
         "quote_delay_seconds:INTEGER"
     ),
+    # 008_capital
+    "withdrawal_reservations": (
+        "reservation_id:INTEGER*, amount:TEXT!, currency:TEXT!, due_date:TEXT!, reason:TEXT!, "
+        "state:TEXT!, created_at:TEXT!, created_by:TEXT!, updated_at:TEXT!"
+    ),
+    "reservation_events": (
+        "reservation_id:INTEGER!*, seq:INTEGER!*, at:TEXT!, actor:TEXT!, detail:TEXT!"
+    ),
+    "cash_events": (
+        "event_id:INTEGER*, currency:TEXT!, amount:TEXT!, detected_at:TEXT!, updated_at:TEXT!, "
+        "state:TEXT!, classified_at:TEXT, classified_by:TEXT"
+    ),
+    "cash_flows": (
+        "flow_id:INTEGER*, kind:TEXT!, category:TEXT, currency:TEXT!, amount:TEXT!, "
+        "on_date:TEXT!, recorded_at:TEXT!, recorded_by:TEXT!, matched_at:TEXT, "
+        "cancelled_at:TEXT, in_book:INTEGER!, reservation_id:INTEGER, event_id:INTEGER, note:TEXT"
+    ),
+    "owner_questions": (
+        "question_id:INTEGER*, kind:TEXT!, reservation_id:INTEGER!, context:TEXT!, "
+        "options:TEXT!, default_option:TEXT!, deadline:TEXT!, state:TEXT!, answer:TEXT, "
+        "answered_at:TEXT, answered_by:TEXT, created_at:TEXT!"
+    ),
+    "question_events": "question_id:INTEGER!*, seq:INTEGER!*, at:TEXT!, actor:TEXT!, detail:TEXT!",
+    "external_positions": (
+        "holding_id:INTEGER*, broker:TEXT!, symbol:TEXT!, isin:TEXT, quantity:TEXT!, "
+        "currency:TEXT!, market_value_base:TEXT!, last_updated:TEXT!, notes:TEXT, sector:TEXT, "
+        "country:TEXT, recorded_at:TEXT!"
+    ),
+    "tax_loss_windows": (
+        "position:INTEGER*, security:TEXT!, sold_on:TEXT!, closes_on:TEXT!, "
+        "loss_per_unit:TEXT!, units:TEXT!"
+    ),
+    "tax_ledger_years": (
+        "tax_year:INTEGER*, income:TEXT!, gains:TEXT!, withheld:TEXT!, foreign_income:TEXT!"
+    ),
+    "tax_carry": "position:INTEGER*, component:TEXT!, arising_year:INTEGER!, amount:TEXT!",
+    "tax_settled": "tax_year:INTEGER*, summary:TEXT!",
+    "tax_engine": "singleton:INTEGER*, lot_sequence:INTEGER!, saved_at:TEXT!",
+    "tax_fills": "execution_id:TEXT!*, outcome:TEXT!, detail:TEXT!, taken_at:TEXT!",
+    "tax_realisations": (
+        "realisation_id:INTEGER*, execution_id:TEXT!, security:TEXT!, lot_id:TEXT!, "
+        "acquired_on:TEXT!, disposed_on:TEXT!, quantity:TEXT!, proceeds:TEXT!, cost:TEXT!, "
+        "released:TEXT!, deferred:TEXT!"
+    ),
+    "fx_rates": (
+        "currency:TEXT!*, on_date:TEXT!*, rate_to_base:TEXT!, source:TEXT!, observed_at:TEXT!"
+    ),
 }
 
 INDEXES = {
@@ -169,6 +216,14 @@ INDEXES = {
     "ix_research_history_available",
     "ix_research_trials_study",
     "ix_tax_lots_security",
+    # 008_capital
+    "ix_withdrawal_reservations_state",
+    "ux_cash_events_pending",
+    "ix_cash_flows_on",
+    "ux_owner_questions_open",
+    "ux_external_positions_key",
+    "ix_external_positions_updated",
+    "ix_tax_realisations_disposed",
 }
 
 STAMP = "2026-10-09T22:30:00Z"

@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -18,9 +18,19 @@ from pydantic import SecretStr
 from service_rig import RecordingNotifier
 
 from obliskiq.calendars.status import Disagreement, DisagreementKind
-from obliskiq.capital.managed import ManagedCapital
+from obliskiq.capital.managed import CapitalView
+from obliskiq.capital.planner import ReservationLine, ReservationPlan
+from obliskiq.capital.twr import Period, TwrResult
 from obliskiq.config import ObliskConfig
 from obliskiq.decision.rebalance_basic import RebalancePlan, RoleDecision
+from obliskiq.domain.capital import (
+    CashEvent,
+    OptionEffect,
+    OwnerQuestion,
+    QuestionKind,
+    QuestionOption,
+    WithdrawalReservation,
+)
 from obliskiq.domain.orders import (
     ExecutionMode,
     Fill,
@@ -269,11 +279,26 @@ def _decision(action: str, **kw: Any) -> RoleDecision:
     return RoleDecision(**fields)
 
 
+def _capital() -> CapitalView:
+    return CapitalView(
+        mode="cap",
+        nav=Decimal(100000),
+        managed=Decimal(1000),
+        unmanaged=Decimal(0),
+        reserved=Decimal(0),
+        investable=Decimal(1000),
+        book_value=Decimal(0),
+        book_cash=Decimal(1000),
+        holdings=(),
+        detail="a book of 1000.00 (started at 1000)",
+    )
+
+
 def test_a_cycle_summary_counts_and_lists_what_it_did() -> None:
     plan = RebalancePlan(
         mode=ExecutionMode.PAPER,
         at=AT,
-        capital=ManagedCapital("cap", Decimal(100000), Decimal(1000), "capped at 1000"),
+        capital=_capital(),
         spendable=Decimal(975),
         decisions=[
             _decision("buy"),
@@ -321,7 +346,7 @@ def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
     plan = RebalancePlan(
         mode=ExecutionMode.SHADOW,
         at=AT,
-        capital=ManagedCapital("cap", Decimal(100000), Decimal(1000), "capped at 1000"),
+        capital=_capital(),
         decisions=[
             _decision("hold", held=Decimal(3), value=Decimal("532.5")),
             _decision("skip", value=None, symbol="IWDA"),
@@ -372,7 +397,7 @@ def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
     subject, body = render_digest(digest, rows=10, base_currency="EUR")
     assert subject == "ObliskIQ daily digest 2026-10-26 (shadow): 4 need attention"
     assert "NAV: 100,000.00 EUR" in body
-    assert "managed 1,000.00 EUR (capped at 1000)" in body
+    assert "managed 1,000.00 EUR (a book of 1000.00 (started at 1000))" in body
     assert "no rebalance now: reconciliation is drift" in body
     assert "held 3 = 532.50 (53.2%)" in body
     assert "IWDA: held 0 = unvalued" in body
@@ -407,3 +432,69 @@ def test_the_notifier_is_telegram_only_with_its_token_and_chat(
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "2")
     notifier = build_notifier(shipped_settings, Environment(_env_file=None))
     assert isinstance(notifier, TelegramNotifier)
+
+
+def test_the_digest_shows_the_return_the_withdrawals_the_questions_and_unexplained_cash() -> None:
+    day = AT.date()
+    reservation = WithdrawalReservation(
+        reservation_id=1, amount=Decimal(800), currency="EUR", due_date=day + timedelta(days=9),
+        reason="car", created_at=AT, created_by="owner", updated_at=AT,
+    )  # fmt: skip
+    plan = ReservationPlan(
+        mode=ExecutionMode.PAPER,
+        at=AT,
+        capital=_capital(),
+        lines=[
+            ReservationLine(reservation, Decimal(800), from_cash=Decimal(300), status="planned")
+        ],
+    )
+    question = OwnerQuestion(
+        question_id=4, kind=QuestionKind.PROTECTED_CUT, reservation_id=1,
+        context="R1 needs 500 EUR from EXV1", default="proceed", deadline=AT + timedelta(days=5),
+        created_at=AT,
+        options=(
+            QuestionOption(key="proceed", effect=OptionEffect.PROCEED, label="sell",
+                           tax_cost=None, strategy_cost=None),
+            QuestionOption(key="reduce", effect=OptionEffect.REDUCE, label="less",
+                           tax_cost=None, strategy_cost=None, amount=Decimal(300)),
+        ),
+    )  # fmt: skip
+    event = CashEvent(
+        event_id=2, currency="USD", amount=Decimal("4.10"), detected_at=AT, updated_at=AT
+    )
+    period = Period(
+        day - timedelta(days=1), day, Decimal(100), Decimal(101), Decimal(0), Decimal("0.01")
+    )
+    digest = Digest(
+        day=day,
+        at=AT,
+        mode=ExecutionMode.PAPER,
+        twr=TwrResult((period,), Decimal("0.0123"), None),
+        reservations=plan,
+        questions=[question, question],
+        cash_events=[event],
+    )
+    subject, body = render_digest(digest, rows=1, base_currency="EUR")
+    assert subject.endswith("3 need attention")  # two questions and one cash event
+    assert f"Time-weighted return: 1.23% from {period.start} to {day}" in body
+    assert "Withdrawals (reservation plan):" in body
+    assert f"R1 800 EUR due {reservation.due_date.isoformat()} (car): planned; 300.00" in body
+    assert "Questions waiting for you (2):" in body
+    assert (
+        "Q4 by 2026-10-31T09:00:00+00:00 (default proceed): R1 needs 500 EUR from EXV1; "
+        "options proceed, reduce" in body
+    )
+    assert "… and 1 more" in body
+    assert "Unexplained cash, new buys frozen (1):" in body
+    assert "`obliskiq cash classify E2 <kind> --confirm`" in body
+    unmeasured = Digest(
+        day=day, at=AT, twr=TwrResult((), None, "fewer than two NAV readings"),
+        reservations=ReservationPlan(
+            mode=ExecutionMode.PAPER, at=AT, blocked="the kill switch is on"
+        ),
+    )  # fmt: skip
+    body = render_digest(unmeasured, rows=1, base_currency="EUR")[1]
+    assert "Time-weighted return: not measured (fewer than two NAV readings)" in body
+    assert "nothing planned: the kill switch is on" in body
+    quiet = Digest(day=day, at=AT, reservations=ReservationPlan(mode=ExecutionMode.PAPER, at=AT))
+    assert "Withdrawals" not in render_digest(quiet, rows=1, base_currency="EUR")[1]

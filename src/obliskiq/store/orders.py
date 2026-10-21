@@ -32,6 +32,7 @@ from ..domain.orders import (
     Fill,
     HoldingAssignment,
     IntentEvent,
+    IntentRole,
     IntentState,
     KillSwitchRecord,
     ModeChange,
@@ -659,6 +660,40 @@ def fills_between(store: Store, *, since: datetime, as_of: datetime) -> list[Fil
         (stamp_text(since), stamp_text(as_of)),
     ).fetchall()
     return [_fill_from_row(row) for row in rows]
+
+
+@dataclass(frozen=True, slots=True)
+class IntentFill:
+    """A fill of one of the bot's intents, with what the intent was."""
+
+    fill: Fill
+    sleeve: Sleeve
+    mode: ExecutionMode
+    role: IntentRole
+    reason: str
+
+
+def intent_fills(store: Store) -> list[IntentFill]:
+    """Every fill of an intent the bot made (foreign fills left out), oldest first."""
+    rows = store.execute(
+        "SELECT f.*, i.sleeve AS i_sleeve, i.mode AS i_mode, i.role AS i_role, "
+        "i.reason AS i_reason FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
+        "ORDER BY f.executed_at, f.execution_id"
+    ).fetchall()
+    return [_intent_fill_from_row(row) for row in rows]
+
+
+def _intent_fill_from_row(row: sqlite3.Row) -> IntentFill:
+    def make() -> IntentFill:
+        return IntentFill(
+            fill=_fill_from_row(row),
+            sleeve=Sleeve(row["i_sleeve"]),
+            mode=ExecutionMode(row["i_mode"]),
+            role=IntentRole(row["i_role"]),
+            reason=row["i_reason"],
+        )
+
+    return _build("fills", make)
 
 
 def _new_read(store: Store, kind: str, observed_at: datetime) -> int:

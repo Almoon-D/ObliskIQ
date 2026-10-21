@@ -127,8 +127,8 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 ## Read the digest
 
 - **Mode, kill switch, reconciliation**: what may trade, and whether new risk is frozen.
-- **NAV**: the account's net liquidation value, read once a day (the series Session 7 builds
-  returns on).
+- **NAV**: the account's net liquidation value, read once a day, and the time-weighted return
+  over the last `runtime.status_report_days` with your deposits and withdrawals neutralised.
 - **Book**: managed capital, then each role: what is held, its share, its target and what the plan
   does now (`hold`, `buy`, `sell`, `skip` with why).
 - **Intents, fills**: today's orders and executions (`simulated` in shadow).
@@ -139,9 +139,34 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
   disagrees, ❔ not covered.
 - **Health and open alerts**: the last heartbeat, the broker session, the last cycle, and the
   conditions still holding (each was sent once when it began).
+- **Withdrawals, questions, unexplained cash**: each open reservation and how it is met, the
+  questions waiting for your answer, and any cash change the bot could not explain (new buys are
+  frozen until you classify it).
 
 The subject line counts what needs attention; "nothing needs attention" is a full digest with no
 failure in it, never an empty one.
+
+## Money in and out, questions, tax
+
+None of these opens a brokerage session, so all are safe beside the running service. Each one
+that records something first says what it would do; add `--confirm` to record it.
+
+```
+uv run obliskiq cash deposit 1237.57                    # money you added
+uv run obliskiq cash reserve 1000 --by 2026-11-15 --reason "car"   # money you will take out
+uv run obliskiq cash list                               # R<n> reservations, F<n> flows, E<n> events
+uv run obliskiq cash withdrawn R1                       # you took the reserved money out
+uv run obliskiq cash cancel R1                          # no longer needed
+uv run obliskiq cash classify E1 dividend               # explain a cash change the bot froze on
+uv run obliskiq questions list                          # what the bot needs you to decide
+uv run obliskiq questions answer 3 postpone             # by its deadline, or the default applies
+uv run obliskiq holdings external add --broker DEGIRO --symbol VWCE --quantity 10 \
+    --currency EUR --value 1100                         # a holding at a broker with no API
+uv run obliskiq tax report --year 2026 --out tax-2026.csv   # not tax advice
+```
+
+A reservation lowers investable capital at once; the bot raises the cash before the date and asks
+before selling a protected position. Without an answer by the deadline, the withdrawal wins.
 
 ## Before a Claude session with live IBKR checks
 

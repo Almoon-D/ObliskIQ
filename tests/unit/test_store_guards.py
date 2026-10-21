@@ -151,6 +151,9 @@ STATE_READS = {
     "reconciliation_anchor",
     # Session 6: the holdings registry listed whole (`obliskiq holdings list`, the rebalancer).
     "holding_assignments",
+    # Session 7: the bot's own fills with their intents, read whole by the managed book (its
+    # cash in mode cap) and the reservation planner (when a position was opened).
+    "intent_fills",
 }
 
 #: Names that write in ``store/orders.py``.
@@ -175,7 +178,16 @@ def test_every_order_path_read_is_bounded_or_a_listed_state_read() -> None:
 
 #: The harness's own records and the lot engine's state, read whole: series metadata describes a
 #: download, trials count whatever their date, lots are the engine's current state.
-RESEARCH_STATE_READS = {"research_series_info", "research_series_in", "trials_for", "tax_lots"}
+RESEARCH_STATE_READS = {
+    "research_series_info",
+    "research_series_in",
+    "trials_for",
+    "tax_lots",
+    # Session 7: the live lot engine's whole state, the fills it took and a year's realisations.
+    "load_tax_state",
+    "taken_fills",
+    "realisations_between",
+}
 
 #: Names that write in ``store/research.py`` and ``store/lots.py``.
 RESEARCH_WRITE_PREFIXES = ("replace_", "record_", "save_")

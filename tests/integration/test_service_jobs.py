@@ -252,9 +252,11 @@ async def test_the_health_file_and_the_digest_say_what_they_cannot_read(
 
     monkeypatch.undo()
     monkeypatch.setattr(s.service._rebalancer, "survey", no_survey)
+    monkeypatch.setattr(jobs._capital.planner, "survey", no_survey)
     await jobs.digest(MONDAY)
     (_, body) = [x for x in s.notifier.sent if "daily digest" in x[0]][-1]
     assert "cannot read: the book cannot be surveyed: the ledger is gone" in body
+    assert "the reservations cannot be planned: the ledger is gone" in body
 
 
 def test_a_venue_line_names_what_the_calendars_cannot_answer(

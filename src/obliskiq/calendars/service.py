@@ -103,6 +103,7 @@ class VenueRuntime:
     before_close: timedelta
     incident_policy: IncidentPolicy
     provenance: VenueProvenance
+    settlement_sessions: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +149,9 @@ def _build_venue(settings: ObliskConfig, mic: str, start: date, end: date) -> Ve
             "calendar", config.sources.calendar.origin, config.sources.calendar.verify_live
         ),
         ProvenanceNote("phases", config.sources.phases.origin, config.sources.phases.verify_live),
+        ProvenanceNote(
+            "settlement", config.sources.settlement.origin, config.sources.settlement.verify_live
+        ),
     ]
     if lunch is not None:
         notes.append(ProvenanceNote("lunch_break", lunch.source.origin, lunch.source.verify_live))
@@ -170,6 +174,7 @@ def _build_venue(settings: ObliskConfig, mic: str, start: date, end: date) -> Ve
             accepts_feed=config.incident_source.type == "structured_feed", feed_scope=feed_scope
         ),
         provenance=VenueProvenance(mic, tuple(notes)),
+        settlement_sessions=config.settlement_sessions,
     )
 
 
@@ -428,6 +433,34 @@ class Calendars:
     def last_completed_session(self, mic: str, at: datetime) -> date | None:
         """The session a cycle at ``at`` may read as its ``as_of`` (never today's open one)."""
         return self._runtime(mic).schedule.last_completed_session(at)
+
+    # ── settlement ──
+
+    def settlement_date(self, mic: str, trade_day: date) -> date:
+        """The day a trade made on ``trade_day`` settles: the venue's ``settlement_sessions``-th
+        session after it (T+n on the venue's calendar, so a holiday pushes it later). A date the
+        calendar does not cover raises: a settlement it cannot date is never assumed."""
+        runtime = self._runtime(mic)
+        day = trade_day
+        for _ in range(runtime.settlement_sessions):
+            following = runtime.schedule.next_session(day)
+            if following is None:
+                raise CalendarCoverageError(
+                    f"{mic}: no session after {day.isoformat()} lies in the calendar's coverage"
+                )
+            day = following
+        return day
+
+    def last_safe_session(self, mic: str, settle_by: date, *, from_day: date) -> date | None:
+        """The last session of ``mic`` on or after ``from_day`` whose trades settle by
+        ``settle_by``; ``None`` when no such session remains."""
+        runtime = self._runtime(mic)
+        day = settle_by
+        while day >= from_day:
+            if runtime.schedule.is_session(day) and self.settlement_date(mic, day) <= settle_by:
+                return day
+            day -= timedelta(days=1)
+        return None
 
     # ── status, windows, tradability ──
 

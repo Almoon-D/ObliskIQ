@@ -19,7 +19,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 4e | Total-risk scaling | data checks, covariance estimators, a total-risk strategy, a bootstrap that respects lookbacks and a long-history check, pre-registration, one confirmation run against static A on the objective (D89, D90, D92) | done (every candidate inconclusive and outside the owner's point; A stays, D95) | v0.8.6, v0.9.0, v0.9.1, v0.9.2 |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | done (live steps a command list for the owner; attached orders not adopted, D99) | v0.10.0 |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | done (the live paper cycle a command list for the owner, docs/RUNBOOK.md) | v0.11.0 |
-| 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | planned | |
+| 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | done (IBKR's cash-activity shapes not observed: no paper login from the cloud) | v0.12.0 |
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | planned | |
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | planned | |
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
@@ -38,6 +38,66 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### Session 7 — Capital, cash flows and tax (2026-10-21, v0.12.0)
+
+**Landed.**
+- `capital/`: managed and investable capital (`CapitalReader`): a capped book kept as its own
+  account (its start, the owner's flows, its fills' cash, its holdings), the whole account as the
+  NAV; investable = `min(managed, NAV − unmanaged) − reserved`; anything unreadable manages
+  nothing, with why (D106). `capital.budgets` (70/20/5/5) and `capital.satellite_ceiling` behind
+  one reader; an inactive sleeve's budget stays in the core. External holdings (lite's
+  `external_positions`, `obliskiq holdings external add|list|remove`), stale after
+  `positions.external_data_stale_days`.
+- The cash-flow ledger (migration `008_capital.sql`): deposits, withdrawal reservations and their
+  events, withdrawals, adjustments; `obliskiq cash deposit|reserve|withdrawn|cancel|classify|list`,
+  each echoing and recording nothing without `--confirm` (D107). Deposits are deployed in tranches
+  (`capital.deployment.tranche_days`).
+- Reconciliation explains cash by fills and recorded flows; a gap a recorded deposit or withdrawal
+  explains is matched to it; any other is a pending cash event that freezes new buys until
+  `cash classify` (D107; closes Session 6's `cash_arrived` follow-up).
+- The reservation planner (`capital/planner.py`, the cycle's new `reserve` step): the cash line,
+  then sales by tax + trading + strategy cost, losses before gains, the two-month rule respected,
+  settlement per venue (`settlement_sessions` with sources in `venues.yaml`) less a buffer,
+  pacing by expected return, `StrategyValue` with a default that protects a thesis in its entry
+  window; while a reservation is short the rebalancer sells nothing; the plan in the digest (D108).
+- Owner questions (`obliskiq questions list|answer <id> <option> --confirm`): proceed, postpone,
+  reduce, after year-end where the date allows, a later date for a strong position held; the
+  default (proceed) applies at the deadline; alerts when asked and when expired (D109).
+- Tax on the live path (`tax/book.py`): the heartbeat applies every paper or live fill to Session
+  4b's lot engine at its trade date's rate (`fx_rates`, from the ledger), and saves lots, open
+  loss windows, ledger and lot numbering with the fill in one transaction (D74); currency lots
+  under `tax.currency_gains` (LIRPF arts. 14.2.e, 33.1, 33.5.e, 46.b; docs/knowledge/tax-es.md);
+  incomplete fills alerted and the hooks silent for that security; the decision hooks from the
+  live lots; `obliskiq tax report --year` (CSV, not tax advice) (D110).
+- The time-weighted return over the NAV rows, flows neutralised (`capital.twr.flow_timing`), in
+  the digest (D111).
+- Also: `eligibility.skeleton_tax_facts` (ISIN, issuer, tracked index of the skeleton's funds and
+  the paper test's two stocks, from IBKR's contract search [MCP ✓ 2026-10-21]); the exit reason
+  `withdrawal`; the US treaty's 15 % and Spain's 0.2 % transaction tax read in the BOE's text.
+
+**Tests.** The prompt's cases: fills opening and closing lots with fees against the engine; a live
+buy after a loss sale deferring the loss and releasing it; currency lots on a conversion and its
+repatriation; carry-forward expiry; a reservation met on time across a holiday and across the
+daylight-saving change; the cash line used at once and a fresh thesis spared; a question when only
+a protected thesis is left, postpone moving the reservation, no answer → proceed; the year-end
+option only when the date allows; a weak position sold at once and a strong one held to the last
+safe days and never past them; deposit tranches; the unexplained-cash freeze and its
+classification; TWR equal to a hand calculation; switching the jurisdiction swaps the policy. Also
+every reason the reader and the planner stop, a withdrawal's sales going ahead while only
+unexplained cash freezes new buys, the CLI's refusals, the service's reserve step and alerts, and
+the heartbeat's tax book. `make check` green: 3,969 tests, coverage 99.79 %.
+
+**Dependabot.** certifi 2026.10.19 (Almoon-D/ObliskIQ#37) merged; cryptography 50
+(Almoon-D/ObliskIQ#5, Almoon-D/ObliskIQ#9) stays in the follow-ups (D96).
+
+**Deferred.** Item 10's live reading of the ledger and the account's activity (no paper
+credentials in a cloud session, and the Gateway login does not complete from one): VERIFY-LIVE
+below. Dividends and interest into the tax ledger, and opening lots for holdings bought before the
+bot: follow-ups.
+
+**Live findings.** No IBKR account or order call from this session. The skeleton's ISINs were read
+through the owner's IBKR connector (contract search, read-only) [MCP ✓ 2026-10-21].
 
 ### Session 6 — Walking skeleton (2026-10-20, v0.11.0)
 
@@ -1231,7 +1291,7 @@ settles it.
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | T1 or the first command list after it |
 | US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
-| Transaction taxes: ES, FR, IT rates against official texts; GB, HK against a trade confirmation | 2 | 7 (`es` tax policy), 8 |
+| Transaction taxes: FR, IT rates against official texts; GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21) | 2 | 8 |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
 | Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | T1 or the first command list after it |
 | One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | T1 or the first command list after it |
@@ -1273,10 +1333,14 @@ settles it.
 | Playwright 1.64 (Chrome for Testing's headless shell) logs in on Ubuntu 26.04 with the pinned-key flag | D96 | T1 |
 | A manual Gateway login on the machine through an SSH-forwarded browser, only if the unattended one is accepted without a session (whether IBKR treats it as local is unverified) | D96 | T1 |
 | European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`, SmartRouting since D97) against an executed UCITS order | 4b | T1 (the paper order test), 6, 18 (TCA) |
-| The US treaty withholding rate of 15 % against the BOE text of the Spain–US convention and its 2013 protocol | 4b | 7 |
-| Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 7 |
+| Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 19a (mutual funds) |
 | The savings scale for tax year 2027 (the table is verified through 2026) | 4b | the monthly tax-source check (§5.16), 2027 |
 | `yfinance_history` against Yahoo from the deployment machine (the call is network code outside the coverage floor; its frame is pinned by a fixture). From the cloud container it worked on 2026-10-17 (4c loaded TIP, IEF, GLD and CRSOX) | 4b | T1 |
+| How IBKR reports dividends, interest, fees, withholding and conversions in the ledger and the account's activity; the classifier's fixtures from them (Session 7's item 10) | 7 | the first session with a working paper login |
+| Settlement lags read in secondary sources only (`verify_live` in `venues.yaml`: BVMF, XSGO, XSWX, XSHG, XSHE, XKRX, XTAI, XSPX, XEUR) | 7 | 8 (the venues the universe admits) |
+| The DGT's rulings on currency balances (V2422-20, V0463-21, V1613-25, V0152-26) in their official text | 7 | the monthly tax-source check (§5.16) |
+| The ledger's per-currency `exchangerate` as the trade date's rate for tax (recorded by the NAV step and the heartbeat) against the rate IBKR reports on a foreign fill | 7 | Session 6's live paper cycle |
+| The skeleton's tax facts (ISIN, issuer, tracked index) against `/iserver/contract/{conid}/info` | 7 | Session 6's live paper cycle |
 
 ## Follow-ups
 
@@ -1320,13 +1384,15 @@ settles it.
   17 are the natural places, and adding the check is a scope decision.
 - Research harness: the simulator treats conversions as free (D75); `costs.yaml`'s `spot_fx` row
   prices them now (D97). A change applies only to pre-registrations written after it.
-- Session 7: persist the lot engine's open loss windows and its ledger beside `tax_lots` (D74);
-  the annual export of realised results and deferred losses.
-- Session 7: apply the personal and family minimum to the savings base if the owner's general
-  base leaves part of it unused (the engine errs high without it).
-- Session 7: managed capital follows flows and returns; under `capital.mode: cap` today the cap is
-  the book's size, so gains above it are trimmed back beyond the band (D104). The rebalancer reads
-  `execution.pretrade.cash_floor` as its floor until `capital.budgets` names one.
+- Tax: apply the personal and family minimum to the savings base if the owner's general base
+  leaves part of it unused (the engine errs high without it). No session holds it yet.
+- Tax on the live path (D110): dividends, interest and withholding enter the tax ledger from the
+  cash-flow ledger's classified adjustments; opening lots for holdings and currency the account
+  held before the bot's first fill (entered by hand with their cost and date), so the hooks
+  answer for them; a session before the live account (Session 18 at the latest).
+- Session 15: `StrategyValue` for the satellite (probes, pending catalysts, exits it makes
+  anyway); Session 13 for the core, Session 17 for the decision layer (D108).
+- Session 19: Telegram and MCP answers to owner questions and the cash commands (D109).
 - Session 13: the core engine replaces `core.skeleton_targets` and `decision/rebalance_basic.py`
   (and, with Session 8's universe, the skeleton's allowlist entries).
 - The session that records Session 6's live cycle: decide `o10164` on a conversion from IBKR's
@@ -1355,8 +1421,6 @@ settles it.
   simulates no queue position, size beyond the displayed quote or impact. Shadow converts nothing,
   so a buy in a currency the account holds no cash in waits in shadow; simulate the conversion if
   L1's shadow days need it.
-- Session 7: reconciliation notes cash that arrived unexplained (`cash_arrived`: dividends,
-  interest, deposits); the cash-flow ledger takes them from there.
 - A later session: IBKR's attached orders (D99). A whatif of an entry with a child stop-limit
   first (read-only), then the package's clearance (I1, I5), then the paper probe.
 - Session 8: the universe replaces `ConfiguredDirectory` (the skeleton allowlist's instrument

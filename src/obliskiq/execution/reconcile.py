@@ -19,9 +19,12 @@ a positions and a cash snapshot) and compares:
   (:meth:`Reconciler.accept`). A holding no sleeve owns is registered: to the sleeve whose entry
   filled it, else ``unmanaged``.
 * **Cash.** Each currency against the anchor plus the cash the bot's fills moved (a conversion's
-  in both currencies). Less cash than that, beyond ``cash_tolerance_base``, is drift; more is
-  noted (income, an owner's deposit) and becomes the next anchor; a negative balance is always
-  drift: no leverage. Session 7's cash-flow ledger will explain flows by name.
+  in both currencies) and the owner's recorded flows the broker has shown since. A difference
+  beyond ``cash_tolerance_base`` either way is matched to a recorded flow of that amount (a
+  deposit that arrived, a withdrawal that left), which is stamped and explains it; anything else
+  is an unexplained cash event (``cash_events``) that freezes new buys until the owner classifies
+  it (a dividend, interest, a fee, an unannounced deposit; ``obliskiq cash classify``). A negative
+  balance is always drift: no leverage.
 
 A fill in the same second as the anchor's read may or may not be in it: both readings are
 accepted. Any drift freezes new risk: the pre-trade gate refuses orders that add risk until a run
@@ -37,6 +40,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from ..config.schema import ObliskConfig
+from ..domain.capital import CashFlow, Deposit, Withdrawal
 from ..domain.orders import (
     UNMANAGED,
     CashBalance,
@@ -56,12 +60,14 @@ from ..ibkr.errors import IbkrError
 from ..ibkr.order_decode import LiveOrders
 from ..ibkr.orders import is_live
 from ..logging_setup import get_logger
+from ..store import capital as capital_repo
 from ..store import orders as repo
 from ..store.orders import AccountRead
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .account import AccountReader, CashRead, PositionsRead
 from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, WriteBoundary, raise_alert
+from .fill_cash import fill_cash
 from .instruments import InstrumentDirectory
 from .killswitch import CONVERSION_SEC_TYPE
 from .state import BROKER_STATES
@@ -75,6 +81,10 @@ RECONCILE_ACTOR = "reconciliation"
 
 #: Findings that keep a green run from becoming the anchor: the broker may not show it all yet.
 SETTLING = frozenset({"position_settling", "cash_settling"})
+#: A cash change nothing explains, waiting for the owner's classification (``cash_events``).
+CASH_UNEXPLAINED = "cash_unexplained"
+#: A fill since the anchor whose cash cannot be computed (an instrument nobody describes).
+CASH_UNPRICED = "cash_unpriced"
 
 type Reads = tuple[LiveOrders, tuple[Fill, ...], PositionsRead, CashRead]
 
@@ -85,6 +95,22 @@ def _freeze(kind: str, detail: str) -> ReconcileFinding:
 
 def _note(kind: str, detail: str) -> ReconcileFinding:
     return ReconcileFinding(kind=kind, detail=detail, freezes=False)
+
+
+def _recorded(
+    ledger: Sequence[CashFlow], since: datetime, *, same_second: bool
+) -> dict[str, Decimal]:
+    """The owner's flows the broker's cash showed after a read at ``since``, by currency: a
+    deposit, a withdrawal, a classified adjustment. ``same_second``: one stamped in the read's
+    own second counts as after it."""
+    moved: dict[str, Decimal] = {}
+    for flow in ledger:
+        stamp = flow.matched_at
+        if not flow.live or stamp is None:
+            continue
+        if stamp > since or (same_second and stamp == since):
+            moved[flow.currency] = moved.get(flow.currency, ZERO) + flow.signed
+    return moved
 
 
 def _after(fill: Fill, since: datetime, *, same_second: bool) -> bool:
@@ -422,31 +448,76 @@ class Reconciler:
         flows = [self._flows(fills, since, same_second=same) for same in (False, True)]
         known = [flow for flow in flows if flow is not None]
         if len(known) != len(flows):
-            return [_freeze("cash_unexplained", "a fill since the anchor cannot be priced in cash")]
+            return [_freeze(CASH_UNPRICED, "a fill since the anchor cannot be priced in cash")]
+        ledger = await self._worker.run(capital_repo.cash_flows)
+        # A flow stamped in the anchor's own second may or may not be in it: both are accepted.
+        recorded = [_recorded(ledger, since, same_second=same) for same in (False, True)]
         before = {row.currency: row.cash for row in anchor.rows}
         currencies = set(before) | {line.currency for line in cash.lines}
         currencies |= {currency for flow in known for currency in flow}
+        currencies |= {currency for moved in recorded for currency in moved}
         recent = any(now - fill.executed_at <= self._grace for fill in fills)
         findings: list[ReconcileFinding] = []
         for currency in sorted(currencies):
             line = cash.line(currency)
             held = ZERO if line is None else line.cash
-            expected = [before.get(currency, ZERO) + flow.get(currency, ZERO) for flow in known]
+            expected = [
+                before.get(currency, ZERO) + moved.get(currency, ZERO) + flow.get(currency, ZERO)
+                for moved in recorded
+                for flow in known
+            ]
             rate = None if line is None else line.rate_to_base
             tolerance = ZERO if rate is None or rate <= 0 else self._tolerance / rate
             if any(abs(held - value) <= tolerance for value in expected):
                 continue
             detail = (
                 f"{currency}: {held} held, {min(expected):.2f} to {max(expected):.2f} expected "
-                "from the anchor and the bot's fills"
+                "from the anchor, the bot's fills and the recorded flows"
             )
             if recent:
                 findings.append(_note("cash_settling", detail))
-            elif held > max(expected):
-                findings.append(_note("cash_arrived", detail))
-            else:
-                findings.append(_freeze("cash_unexplained", detail))
+                continue
+            gap = held - (max(expected) if held > max(expected) else min(expected))
+            matched = await self._match(ledger, currency, gap, tolerance, cash.observed_at)
+            if matched is not None:
+                findings.append(_note("cash_flow_arrived", f"{detail}: {matched}"))
+                continue
+            event = await self._worker.run(
+                capital_repo.note_unexplained, currency, gap, at=cash.observed_at
+            )
+            findings.append(
+                _freeze(
+                    CASH_UNEXPLAINED,
+                    f"{detail}: E{event.event_id}, {gap:+.2f} {currency} nothing explains; new "
+                    f"buys wait until it is classified (`obliskiq cash classify "
+                    f"E{event.event_id} <kind> --confirm`)",
+                )
+            )
         return findings
+
+    async def _match(
+        self,
+        ledger: Sequence[CashFlow],
+        currency: str,
+        gap: Decimal,
+        tolerance: Decimal,
+        at: datetime,
+    ) -> str | None:
+        """Match an unexplained difference to the owner's recorded flow of that amount (a
+        deposit that arrived, a withdrawal that left), stamping it; what was matched."""
+        kind = Deposit if gap > ZERO else Withdrawal
+        for flow in ledger:
+            if (
+                isinstance(flow, kind)
+                and flow.live
+                and flow.matched_at is None
+                and flow.currency == currency
+                and flow.flow_id is not None
+                and abs(flow.signed - gap) <= tolerance
+            ):
+                await self._worker.run(capital_repo.match_flow, flow.flow_id, at=at)
+                return f"{flow.kind.value} F{flow.flow_id} of {flow.amount} {currency} matched"
+        return None
 
     def _flows(
         self, fills: Sequence[Fill], since: datetime, *, same_second: bool
@@ -454,22 +525,12 @@ class Reconciler:
         """The cash the fills after ``since`` moved, per currency; ``None`` when a fill cannot be
         priced (an instrument nobody describes)."""
         flows: dict[str, Decimal] = {}
-
-        def add(currency: str, amount: Decimal) -> None:
-            flows[currency] = flows.get(currency, ZERO) + amount
-
         for fill in fills:
             if not _after(fill, since, same_second=same_second):
                 continue
-            sign = Decimal(1) if fill.side is OrderSide.BUY else Decimal(-1)
-            pair = next((p for p in self._pairs if p.conid == fill.conid), None)
-            if pair is not None:
-                add(pair.base, sign * fill.quantity)
-                add(pair.quote, -sign * fill.quantity * fill.price)
-                continue
-            instrument = self._directory.describe(fill.conid)
-            if instrument is None:
+            moved = fill_cash(fill, directory=self._directory, pairs=self._pairs)
+            if moved is None:
                 return None
-            value = fill.quantity * fill.price * instrument.multiplier
-            add(instrument.currency, -sign * value - (fill.commission or ZERO))
+            for currency, amount in moved.items():
+                flows[currency] = flows.get(currency, ZERO) + amount
         return flows

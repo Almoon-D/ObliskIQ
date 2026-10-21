@@ -95,7 +95,7 @@ def test_a_dry_run_on_fixtures_prints_a_sensible_plan_and_writes_nothing(
     status, out, err = _run("run-cycle", "--mode", "shadow", "--dry-run")
     assert status == EXIT_OK, out + err
     assert "rebalance plan (shadow)" in out
-    assert "managed capital 1000.00 (cap: capped at 1000)" in out
+    assert "managed capital 1000.00 (cap: a book of 1000.00 (started at 1000))" in out
     for role in ("world_equity", "em_equity", "euro_govt_bonds"):
         assert role in out
     assert "NAV: 100000" in out
@@ -123,7 +123,7 @@ def test_a_cycle_runs_and_records_itself(
     with open_store(_settings(config_dir), data_dir) as store:
         (record,) = run_repo.runs_since(store, since=date(2000, 1, 1))
     assert record.command == "cycle:manual"
-    assert [s["step"] for s in record.detail["steps"]] == ["nav", "rebalance", "execute"]
+    assert [s["step"] for s in record.detail["steps"]] == ["nav", "reserve", "rebalance", "execute"]
 
 
 def test_a_command_that_opens_the_broker_refuses_while_another_holds_the_lock(

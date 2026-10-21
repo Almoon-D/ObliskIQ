@@ -39,8 +39,9 @@ def _venue(**overrides: Any) -> dict[str, Any]:
         "region": "Europe",
         "timezone": "Europe/Madrid",
         "phase_windows": [],
+        "settlement_sessions": 2,
         "incident_source": {"type": "manual", "scope": "market_wide"},
-        "sources": {"calendar": NOTE, "phases": NOTE},
+        "sources": {"calendar": NOTE, "phases": NOTE, "settlement": NOTE},
     }
     fields.update(overrides)
     return fields

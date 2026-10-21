@@ -162,7 +162,9 @@ def gate_settings(settings: ObliskConfig) -> ObliskConfig:
     """The shipped settings with the test instruments in the skeleton allowlist."""
     allowlist = [INSTRUMENTS[conid] for conid in ALLOWED]
     return settings.model_copy(
-        update={"eligibility": EligibilityConfig(skeleton_allowlist=allowlist)}
+        update={
+            "eligibility": EligibilityConfig(skeleton_allowlist=allowlist, skeleton_tax_facts=[])
+        }
     )
 
 

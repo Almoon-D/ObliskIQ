@@ -45,7 +45,7 @@ def test_the_caps_and_lists_refuse_what_does_not_fit() -> None:
     with pytest.raises(ValueError, match="each conid is listed once"):
         PaperOrderConfig(conids=[1, 1], limit_offset_fraction=Decimal("0.05"), intent_ttl_minutes=1)
     with pytest.raises(ValueError, match="each conid is listed once"):
-        EligibilityConfig(skeleton_allowlist=[STOCK, STOCK])
+        EligibilityConfig(skeleton_allowlist=[STOCK, STOCK], skeleton_tax_facts=[])
 
 
 def test_the_paper_order_conids_must_be_allowlisted(config_dir: Any) -> None:

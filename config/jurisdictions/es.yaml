@@ -62,8 +62,8 @@ tax:
   withholding_at_source:
     - country: US
       rate: "0.15"
-      confirmation: secondary
-      source: Spain–United States tax convention of 22 February 1990, art. 10.2.b, as amended by the 2013 protocol in force 27 November 2019; secondary sources read 2026-10-16
+      confirmation: official
+      source: Spain–United States tax convention of 22 February 1990 (BOE-A-1990-30940), art. 10.2.b as replaced by art. IV of the protocol of 14 January 2013 (BOE-A-2019-15166), in force 27 November 2019; official texts read on the BOE's site 2026-10-21
   # Tax-free switches between funds (art. 94.1.a) are not assumed available at IBKR until
   # verified; ETF switches are always sales.
   fund_switch_deferral_at_broker: false
@@ -71,3 +71,16 @@ tax:
   swap_partner:
     differ_in_issuer: true
     differ_in_index: true
+  # Gains and losses on foreign-currency balances (DECISIONS D69, D110). A difference on a balance
+  # in a foreign currency is a gain or loss of the savings base (arts. 33.1 and 46.b), imputed when
+  # the currency is collected or paid out (art. 14.2.e): each currency is kept as lots, acquired at
+  # their euro value on the day they come in and disposed of, oldest first, at their value on the
+  # day they go out (a conversion, or a payment in that currency). A loss is deferred while the
+  # same currency is bought back within a year after the disposal (art. 33.5.e, read
+  # conservatively: the currency is fungible); the two-month rule of art. 33.5.f covers listed
+  # securities only.
+  currency_gains:
+    kept_as_lots: true
+    lot_method: fifo
+    loss_reacquisition_months: 12
+    source: LIRPF arts. 14.2.e, 33.1, 33.5.e and 46.b (BOE-A-2006-20764, consolidated text read 2026-10-21); DGT rulings V0463-21, V2422-20 and V0152-26 read in secondary sources only

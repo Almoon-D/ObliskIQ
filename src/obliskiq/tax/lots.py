@@ -18,7 +18,8 @@ The hooks a decision asks before it trades — :meth:`LotEngine.tax_cost`,
 :meth:`LotEngine.wash_sale_conflict` and :meth:`LotEngine.harvestable_losses` — run the trade on
 a copy of the engine, so they answer with the same arithmetic the trade itself would meet.
 
-The simulator uses this engine; Session 7 feeds it the account's fills.
+The simulator uses this engine, and so does the live path (``tax/book.py``), which feeds it the
+account's fills and keeps its foreign-currency balances as lots.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -30,9 +31,16 @@ from datetime import date
 from decimal import Decimal
 from typing import Final, Literal
 
-from ..domain.tax import IncomeEvent, ProposedTrade, Realisation, SecurityIdentity, TaxLot
+from ..domain.tax import (
+    IncomeEvent,
+    OpenLossWindow,
+    ProposedTrade,
+    Realisation,
+    SecurityIdentity,
+    TaxLot,
+)
 from ..errors import TaxError
-from ..jurisdiction.tax import TaxPolicy
+from ..jurisdiction.tax import TaxPolicy, WashSaleWindow
 from .ledger import TaxLedger
 
 ZERO = Decimal(0)
@@ -206,10 +214,48 @@ class LotEngine:
         """Loss units still waiting for a homogeneous purchase on ``on``."""
         return sum((w.units for w in self._windows if w.closes_on >= on), ZERO)
 
-    def restore(self, lots: Iterable[TaxLot]) -> None:
-        """Load saved lots into an engine that holds none (a restart from the store)."""
-        if self._lots:
+    def loss_windows(self) -> tuple[OpenLossWindow, ...]:
+        """The loss units still waiting for a homogeneous purchase, oldest sale first."""
+        return tuple(
+            OpenLossWindow(
+                security=w.security,
+                sold_on=w.sold_on,
+                closes_on=w.closes_on,
+                loss_per_unit=w.loss_per_unit,
+                units=w.units,
+            )
+            for w in sorted(self._windows, key=lambda w: (w.sold_on, w.security))
+            if w.units > ZERO
+        )
+
+    @property
+    def sequence(self) -> int:
+        """The running number the last lot id carries."""
+        return self._sequence
+
+    def restore(
+        self,
+        lots: Iterable[TaxLot],
+        *,
+        windows: Iterable[OpenLossWindow] = (),
+        sequence: int = 0,
+    ) -> None:
+        """Load saved lots, open loss windows and the lot numbering into an engine that holds
+        none (a restart from the store)."""
+        if self._lots or self._windows:
             raise TaxError("lots can be restored only into an empty engine")
+        self._sequence = max(self._sequence, sequence)
+        for window in windows:
+            self.identity(window.security)
+            self._windows.append(
+                _LossWindow(
+                    window.security,
+                    window.sold_on,
+                    window.closes_on,
+                    window.loss_per_unit,
+                    window.units,
+                )
+            )
         for saved in sorted(lots, key=lambda lot: (lot.acquired_on, lot.lot_id)):
             self.identity(saved.security)
             self._lots.setdefault(saved.security, []).append(
@@ -280,9 +326,9 @@ class LotEngine:
             raise TaxError(f"a sale of {quantity} {security} exceeds the {held} held")
         self._ledger.ensure_open(on.year)
         slices = self._consume(security, quantity, proceeds)
-        months = self._policy.wash_sale_months(identity)
-        if months is not None and any(s.result < ZERO for s in slices):
-            self._defer_losses(identity, slices, on, months)
+        window = self._policy.wash_sale_window(identity)
+        if window is not None and any(s.result < ZERO for s in slices):
+            self._defer_losses(identity, slices, on, window)
         realisations = tuple(
             Realisation(
                 security=security,
@@ -357,18 +403,24 @@ class LotEngine:
         return slices
 
     def _defer_losses(
-        self, identity: SecurityIdentity, slices: list[_Slice], on: date, months: int
+        self, identity: SecurityIdentity, slices: list[_Slice], on: date, window: WashSaleWindow
     ) -> None:
-        opens = add_months(on, -months)
-        candidates = sorted(
-            (
-                lot
-                for key, lots in self._lots.items()
-                if self._policy.homogeneous(identity, self.identity(key))
-                for lot in lots
-                if opens <= lot.acquired_on <= on and lot.free_units > ZERO
-            ),
-            key=lambda lot: (lot.acquired_on, lot.lot_id),
+        # A window that opens at the sale (before_months zero) looks only forward: units already
+        # held never take the loss.
+        opens = add_months(on, -window.before_months)
+        candidates = (
+            sorted(
+                (
+                    lot
+                    for key, lots in self._lots.items()
+                    if self._policy.homogeneous(identity, self.identity(key))
+                    for lot in lots
+                    if opens <= lot.acquired_on <= on and lot.free_units > ZERO
+                ),
+                key=lambda lot: (lot.acquired_on, lot.lot_id),
+            )
+            if window.before_months > 0
+            else []
         )
         for piece in slices:
             if piece.result >= ZERO:
@@ -388,10 +440,16 @@ class LotEngine:
                     break
             if unmatched > ZERO:
                 self._windows.append(
-                    _LossWindow(identity.key, on, add_months(on, months), per_unit, unmatched)
+                    _LossWindow(
+                        identity.key, on, add_months(on, window.after_months), per_unit, unmatched
+                    )
                 )
 
     # ── hooks ──
+
+    def copy(self) -> LotEngine:
+        """An independent engine in the same state: a trial that leaves this one untouched."""
+        return self._copy()
 
     def _copy(self) -> LotEngine:
         """An independent engine in the same state: its own lots, windows and ledger."""

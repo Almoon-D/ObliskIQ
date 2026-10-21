@@ -51,6 +51,10 @@ async def intents(service_rig: ServiceRig, *states: IntentState) -> list[Any]:
     return await service_rig.rig.store(repo.intents_in_states, chosen)
 
 
+def step_of(run: Any, name: str) -> dict[str, Any]:
+    return next(step for step in run.detail["steps"] if step["step"] == name)
+
+
 async def runs_of(service_rig: ServiceRig, command: str, day: date = MONDAY) -> list[Any]:
     return await service_rig.rig.store(run_repo.runs_for, command=command, session_date=day)
 
@@ -69,21 +73,27 @@ async def test_cycle_one_fills_in_shadow_and_cycle_two_does_nothing(make: Any) -
     filled = await intents(s, IntentState.FILLED)
     assert len(filled) == 3, [(i.intent.conid, i.intent.state) for i in made]
     quantities = {i.intent.conid: i.intent.terms.quantity for i in made}
-    assert quantities == {IBGM: Decimal(3), IWDA: Decimal(1), EMIM: Decimal(3)}
+    # The core's budget is 95 % of the book (the cash floor stays cash): 171, 133 and 646 euros.
+    assert quantities == {IBGM: Decimal(3), IWDA: Decimal(1), EMIM: Decimal(2)}
     assert s.broker.placements == []  # nothing reached the broker
     # The NAV row of the day was written by the cycle's first step.
     readings = await s.rig.store(nav_repo.nav_series, since=MONDAY, as_of=MONDAY)
     assert [r.nav_base for r in readings] == [Decimal(100000)]
     (europe,) = await runs_of(s, "cycle:europe")
     assert europe.status == "ok"
-    assert [step["step"] for step in europe.detail["steps"]] == ["nav", "rebalance", "execute"]
+    assert [step["step"] for step in europe.detail["steps"]] == [
+        "nav",
+        "reserve",
+        "rebalance",
+        "execute",
+    ]
 
     # Cycle two, at New York's open: the book is inside its bands; nothing new.
     s2 = await make()
     await run_until(s2, US_CYCLE - timedelta(minutes=5), US_CYCLE + timedelta(minutes=10))
     assert len(await intents(s2)) == 3
     (us,) = await runs_of(s2, "cycle:us")
-    rebalance = us.detail["steps"][1]
+    rebalance = step_of(us, "rebalance")
     assert rebalance["status"] == "ok"
     assert rebalance["trades"] == 0
 
@@ -128,7 +138,7 @@ async def test_cycle_one_places_converts_and_fills_on_paper_and_cycle_two_does_n
     await run_until(s, US_CYCLE - timedelta(minutes=1), US_CYCLE + timedelta(minutes=10))
     assert len(s.broker.placements) == before  # inertia: cycle two does nothing
     (us,) = await runs_of(s, "cycle:us")
-    assert us.detail["steps"][1]["trades"] == 0
+    assert step_of(us, "rebalance")["trades"] == 0
 
 
 async def test_a_crash_between_place_and_fill_does_not_order_twice(make: Any) -> None:
@@ -191,8 +201,8 @@ async def test_the_kill_switch_stops_cycle_three(make: Any) -> None:
     await run_until(s, late - timedelta(minutes=1), late + timedelta(minutes=5))
     assert len(s.broker.placements) == placed
     (us_late,) = await runs_of(s, "cycle:us_late")
-    assert us_late.detail["steps"][1]["status"] == "skipped"
-    assert "kill switch" in us_late.detail["steps"][1]["reason"]
+    assert step_of(us_late, "rebalance")["status"] == "skipped"
+    assert "kill switch" in step_of(us_late, "rebalance")["reason"]
 
 
 # ── the schedule ──

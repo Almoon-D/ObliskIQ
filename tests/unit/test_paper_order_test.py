@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections import deque
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,6 +19,9 @@ from obliskiq.execution.paper_test import PaperOrderTest, passive_limit
 from obliskiq.execution.pricing import tick_for
 from obliskiq.execution.runtime import OrderPath
 from obliskiq.ibkr.models import ContractRules, IncrementRule
+from obliskiq.jurisdiction import load_profile
+
+REPO = Path(__file__).resolve().parents[2]
 
 
 def path_of(rig: Any) -> OrderPath:
@@ -49,6 +53,7 @@ def path_of(rig: Any) -> OrderPath:
         reconciler=rig.reconciler,
         executor=rig.executor,
         data_dir=rig.data_dir,
+        profile=load_profile(REPO / "config", "es"),
     )
 
 

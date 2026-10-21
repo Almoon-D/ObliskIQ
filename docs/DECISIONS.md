@@ -2405,3 +2405,161 @@ balance of a million would make the skeleton trade a million).
 - **IBKR's warning text** is kept with each reply (masked, at most 500 characters) in the intent's
   history and in a declined warning's alert, so the next live conversion answers D101's open
   question about `o10164`.
+
+## Session 7 — Capital, cash flows and tax (2026-10-21)
+
+### D106 · Managed capital follows flows and returns; one budget reader (§5.15, §11, D104)
+
+- **A capped book is its own account.** In mode `cap` the book's cash is `capital.cap_base` (the
+  start, 1,000 euros), plus the owner's recorded flows that count toward the book, plus the cash
+  each of the book's fills moved, per currency and valued at today's rate; its value is that cash
+  plus its holdings at IBKR's marks. Managed capital is that value, never more than the account's
+  NAV less its unmanaged holdings. So the book follows its returns and the owner's flows, as D104
+  said Session 7 would: the cap is where the book starts, not a ceiling. A paper account's
+  balance never moves with an owner's money, so on paper a flow adjusts this virtual book only;
+  in shadow the book is its simulated fills.
+- **The whole account** manages the NAV; its cash is the NAV less the book's holdings and the
+  unmanaged ones.
+- **Investable capital** = `max(0, min(managed, NAV − unmanaged) − reserved)`: unmanaged
+  holdings are counted and never traded, and an open withdrawal reservation comes off at once. A
+  NAV, a holding, a currency or a reservation that cannot be read or valued manages nothing, with
+  the reason (honest degradation).
+- **Budgets** (`capital.budgets`): core 0.70, equity satellite 0.20, option premium 0.05, cash
+  floor 0.05 (MASTER_PLAN §11 row 2). A sleeve with no active layer leaves its budget in the core
+  (Session 17's rule), so the skeleton's core takes 0.95 and nothing sits idle for want of a
+  satellite; the cash floor stays cash. `capital.satellite_ceiling` (0.20) bounds Session 18's
+  move of the satellite's share; configuration refuses budgets above 1, and a ceiling below the
+  satellite's budget or above what the other budgets leave. One reader (`CapitalReader`,
+  `SleeveBudgets`) serves the planner, the rebalancer and later the options sleeve and the
+  decision layer.
+- **External holdings** (lite's `external_positions`): entered by hand with the day they were
+  last confirmed, updated in place on (broker, symbol, ISIN), stale after
+  `positions.external_data_stale_days` (30, lite's value); anything computed over a stale one is
+  reported unreliable. They are kept beside managed capital, not in it: IBKR's NAV does not hold
+  them, and Session 17's whole-book risk reads them.
+
+Rejected: the paper account's cash as the book's (it never moves with a recorded deposit); an
+inactive sleeve's budget kept as cash (a quarter of the book idle until Session 15).
+
+### D107 · The cash-flow ledger and unexplained cash (§5.15, D100)
+
+- **Records** (migration `008_capital.sql`): a `Deposit`, a `WithdrawalReservation` (amount,
+  currency, due date, reason, state open → withdrawn | cancelled, with its events), a
+  `Withdrawal` that closes a reservation in the same transaction, and an `Adjustment` (dividend,
+  interest, fee, withholding tax, correction, other). Nothing is deleted: an open reservation or a
+  flow the broker has not shown may be cancelled, audited. A flow states whether it counts toward
+  the book (`in_book`), so an unmanaged holding's dividend never moves a capped book.
+- **The CLI echoes and needs `--confirm`.** `obliskiq cash deposit|reserve|withdrawn|cancel|
+  classify|list`; ids carry their kind (`R`, `F`, `E`) because the kinds share numbers. A deposit
+  dated in the future and a reservation already past due are refused.
+- **Reconciliation explains cash** by the last reading plus the bot's fills plus the flows
+  recorded since (`execution/fill_cash.py`). A gap beyond
+  `execution.reconcile.cash_tolerance_base` that a recorded, unmatched deposit or withdrawal of
+  that amount explains is matched to it (stamped with the reading's time, so it is never counted
+  twice); any other gap is a **cash event**, one pending per currency and refreshed while it
+  lasts, a freezing finding: new buys stop, the owner is alerted, and the freeze lifts at the
+  next reconciliation after
+  `obliskiq cash classify E<n> <kind> --confirm`. Classifying records the flow that explains it.
+  While unexplained cash is the only freeze, the positions reconcile, so the reservation
+  planner still sells for a withdrawal (a sale adds no risk, so the gate lets it through); any
+  other drift stops the planner too. A fill whose cash cannot be computed is `cash_unpriced`.
+  How IBKR words dividends, interest and fees in its activity was not observed (no paper
+  credentials in a cloud session): VERIFY-LIVE, and until then the owner classifies.
+
+Rejected: classifying from the size of a change (a fee and a correction can be the same amount);
+a freeze on sales too (a reservation must still be met while the owner is away).
+
+### D108 · The reservation planner (§5.15)
+
+- **Order of sources.** The cash line first (the book's cash and the proceeds of sales already
+  working), then sales ranked by `tax + trading + strategy` cost per euro raised, each weighed by
+  `capital.planner.weights` (1, 1, 1). Tax is the lot engine's on the live lots, so losses go
+  before gains and a loss the two-month rule would defer saves nothing; trading is the cost
+  model's; strategy is a share of the proceeds by `StrategyValue`'s category (an exit the
+  strategy makes anyway 0; `capital.planner.strategy_cost`: the part of a core role above its
+  target 0, an ordinary holding 0.01, a protected one 0.05), or the position's usable expected
+  return when it has one (never below the overweight's share). A sale whose tax or trading cost
+  is unknown comes after every one whose cost is known. "Above its target" is measured against
+  the targets before the reservation: measured after, every holding would be overweight the
+  moment a large reservation exists.
+- **StrategyValue's default** protects a satellite or options position for
+  `capital.planner.entry_window_days` (20) after it opened and gives no expected return; probes and
+  catalysts arrive with the satellite (Session 15). An expected return counts only from a layer
+  whose outcome is sufficient (§5.9).
+- **Settlement.** Each venue carries `settlement_sessions` in `venues.yaml` with its source (T+1
+  in the US, Canada, Mexico, India, China and on Eurex from their T+1 dates; T+2 elsewhere; the
+  rows read only in secondary sources are `verify_live`). A sale's last safe session is the last
+  session of its venue whose settlement, counted on that venue's calendar, meets the due date
+  less `capital.reservations.buffer_days` (2); a holiday moves it earlier, and a sale that cannot
+  settle in time is not planned: the reservation is short, and that is alerted.
+- **Pacing** (`capital.pacing`). An exit the strategy makes anyway and an overweight are sold at
+  once. With a usable expected return, one below `weak_below` (2 % a year) is sold at once, one at
+  or above `strong_above` (10 %) is held to the last `hold_sessions` (2) safe sessions, and one
+  between is sold in `tranches` sessions (1); without one, a protected position is held and any
+  other sold in tranches. Nothing is held past the last safe session. A strong position held is
+  offered to the owner as a later date (`capital.questions.postpone_days`, 30) whose default is the
+  date as it is.
+- **While a reservation is short of cash, the rebalancer sells nothing** (the planner's sales
+  are the ones that raise it) and spends nothing reserved; sales are exits with the reason
+  `withdrawal`, added to `execution.exit_reasons_allowed`. The plan is surveyed afresh at every
+  cycle's `reserve` step, between the NAV and the rebalance, and goes into the digest.
+
+Rejected: a plan stored and executed later (what sold, what arrived and what the owner answered
+are always read afresh); selling a protected position silently when it is the only source.
+
+### D109 · Owner questions (§5.15)
+
+- **When.** Meeting a date would cut a protected position (one whose protection lasts past the
+  last safe session): the planner asks once per reservation, with options each carrying their
+  tax and strategy cost: *proceed*, *postpone* (the first date at which the protection has
+  ended, settled, plus the buffer), *reduce* (to what the cash line and unprotected sales cover),
+  and, when the plan pays tax this year and the next year's first session still settles in time,
+  *after year-end*. A strong position held to the last safe days raises the *later date*
+  question.
+- **The deadline** is the opening of the first of the last `hold_sessions` safe sessions, so an
+  unanswered question still leaves time to sell. **The default is proceed: without an answer the
+  withdrawal wins** and the plan executes. An answer takes effect at once (postpone moves the due
+  date, reduce lowers the amount, both audited on the reservation); every question, answer and
+  expiry is audited, and an open question of a kind is unique per reservation.
+- **Channels.** `obliskiq questions list|answer <id> <option> --confirm`, a critical alert when a
+  question is asked and a warning when one expires; Telegram and MCP answers are Session 19's.
+
+### D110 · Tax on the live path; currency lots (§5.16, D69, D74)
+
+- **The tax book** (`tax/book.py`) takes every non-simulated fill once, oldest first, at the
+  heartbeat, applying it to Session 4b's lot engine under the profile's policy, and saves the
+  lots, the open loss windows, the ledger, the lot numbering, the fill and its realisations in
+  one transaction (D74), so a fill is never taken twice or half. Shadow fills never reach it.
+- **Values.** A fill is valued in the base currency at the rate of its trade date: the ledger's
+  per-currency rate, recorded by the cycle's NAV step and the heartbeat (`fx_rates`). A fill of
+  today waits for today's rate; one whose day passed without a recorded rate, a sale beyond the
+  units the lots hold, or an instrument without tax facts (`eligibility.skeleton_tax_facts`, the
+  ISIN, issuer and tracked index homogeneity needs, read from IBKR's contract search) is recorded
+  **incomplete** and alerted, and the hooks answer nothing for that security until it is complete
+  (honest degradation). Commissions enter the cost and the proceeds (art. 35).
+- **Currency lots** (`tax.currency_gains` in `es.yaml`): each foreign currency is a security of
+  its own. A conversion, a security sold in that currency or one bought with it opens or closes
+  currency lots, first in, first out, at the euro value of the day (LIRPF arts. 14.2.e, 33.1 and
+  46.b, read in the BOE's text). A currency loss is deferred when the same currency is bought
+  within the twelve months after (art. 33.5.e, none before): the conservative reading, which
+  defers most currency losses. The DGT's rulings on currency balances were read in secondary
+  sources only (VERIFY-LIVE). The window a policy applies is `wash_sale_window`: two months each
+  side for listed securities, none before and twelve after for currency.
+- **Years settle** once over and no loss window opened in them can still close, so a late
+  repurchase never reaches a settled year (D74). The hooks (`tax_cost`, `wash_sale_conflict`,
+  `harvestable_losses`, `purchase_defers_loss`) read a copy of the live lots; the rebalancer
+  never buys back inside an open window. `obliskiq tax report --year` writes the year's
+  realisations, deferred losses and summary as CSV (not tax advice).
+
+Rejected: the rate of the day the fill is taken (a heartbeat after midnight would value a fill at
+the next day's rate); a currency gain on revaluation (art. 14.2.e imputes it on payment).
+
+### D111 · The time-weighted return (§5.15)
+
+The account's NAV readings split time into periods; each period's return neutralises the owner's
+deposits and withdrawals that reached the account (matched to its cash, in the base currency at
+their day's rate), and the periods chain. `capital.twr.flow_timing: in_reading` counts a flow
+dated on a reading's day as already in that reading (`(V1 − F) / V0 − 1`); `after_reading` the
+other way. Dividends, interest and fees are the book's own return. A period with no positive base
+or a flow without a rate makes the whole return unknown, with why, never a partial number; the
+digest shows it over `runtime.status_report_days`. Session 18 attributes it.

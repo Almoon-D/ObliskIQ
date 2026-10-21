@@ -343,3 +343,22 @@ written; nothing below was observed by a session.
   before its close; from 15:00 in the week of 26–30 October, when Europe has left summer time
   and the US has not).
 
+
+## Session 7 (2026-10-21): cash activity, not yet observed
+
+Session 7 had no paper credentials and makes no Gateway login from a cloud container (Session 3),
+so how IBKR reports dividends, interest, fees, withholding and conversions in the ledger and the
+account's activity was **not observed**. What the code assumes instead, and fails closed on:
+
+- Reconciliation compares each currency's cash with the last reading plus the bot's fills
+  (`execution/fill_cash.py`) and the owner's recorded flows; any other change beyond the
+  tolerance is an unexplained cash event that freezes new buys until the owner classifies it
+  (`obliskiq cash classify E<n> <kind> --confirm`). Nothing is classified from IBKR's own
+  activity text yet.
+- The ledger's per-currency `exchangerate` (the base row's is exactly 1, see *Portfolio* above)
+  is the rate the tax lots value a fill of that day at; a day with no currency row has no rate,
+  and a fill of that day waits for one.
+
+VERIFY-LIVE(ledger and account-activity shapes of dividends, interest, fees, withholding and
+conversions) is queued in `docs/ROADMAP.md`: the first session with a working paper login records
+them here and builds the classifier's fixtures from them.

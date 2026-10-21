@@ -39,6 +39,7 @@ from ..store import nav as nav_repo
 from ..store import open_store
 from ..store import orders as repo
 from ..store import runs as run_repo
+from .capital import add_external_commands
 
 if TYPE_CHECKING:
     from .app import Loaded
@@ -334,3 +335,4 @@ def add_service_commands(commands: argparse._SubParsersAction[argparse.ArgumentP
     assign.add_argument("owner", help="core, satellite, options or unmanaged")
     assign.add_argument("--reason", required=True, help="why (audited)")
     assign.set_defaults(handler=_holdings_assign)
+    add_external_commands(holding_actions)

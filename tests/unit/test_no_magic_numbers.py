@@ -147,6 +147,7 @@ PROTOCOL_CONSTANTS: dict[str, dict[str, str]] = {
     "execution/protective.py": {"ZERO": "the zero amount"},
     "execution/executor.py": {"ZERO": "the zero amount"},
     "execution/reconcile.py": {"ZERO": "the zero amount"},
+    "execution/fill_cash.py": {"ZERO": "the zero amount"},
 }
 
 

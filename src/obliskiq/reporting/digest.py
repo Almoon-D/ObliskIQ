@@ -1,4 +1,6 @@
-"""The daily digest: mode, NAV, positions, targets, intents, fills, errors, venue status and health.
+"""The daily digest: mode, NAV and its time-weighted return, capital, positions, targets, the
+reservation plan and its reasons, open owner questions, unexplained cash, intents, fills, errors,
+venue status and health.
 
 The service gathers it after the day's last cycle (``runtime.digest``) and sends it through the
 notifier; ``obliskiq status`` prints the same gathering on demand. Everything it shows is read
@@ -19,9 +21,12 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from ..calendars.service import Calendars
 from ..calendars.status import BlockReason
+from ..capital.planner import ReservationPlan, ReservationPlanner
+from ..capital.twr import TwrResult, account_twr
 from ..config.schema import ObliskConfig
 from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
 from ..domain.calendar import PhaseKind
+from ..domain.capital import CashEvent, OwnerQuestion, QuestionState
 from ..domain.orders import (
     ExecutionMode,
     Fill,
@@ -31,6 +36,7 @@ from ..domain.orders import (
 from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
+from ..store import capital as capital_repo
 from ..store import nav as nav_repo
 from ..store import orders as repo
 from ..store import runs as run_repo
@@ -99,7 +105,11 @@ class Digest:
     kill_on: bool = True
     reconcile: ReconcileRun | None = None
     nav: NavReading | None = None
+    twr: TwrResult | None = None
     plan: RebalancePlan | None = None
+    reservations: ReservationPlan | None = None
+    questions: list[OwnerQuestion] = field(default_factory=list)
+    cash_events: list[CashEvent] = field(default_factory=list)
     intents: list[StoredIntent] = field(default_factory=list)
     fills: list[Fill] = field(default_factory=list)
     runs: list[RunRow] = field(default_factory=list)
@@ -116,6 +126,7 @@ async def gather_digest(
     modes: Modes,
     kill: KillSwitch,
     rebalancer: BasicRebalancer,
+    planner: ReservationPlanner,
     calendars: Calendars,
     venues: Sequence[str],
     health: Sequence[str],
@@ -136,11 +147,22 @@ async def gather_digest(
     window = timedelta(days=settings.runtime.status_report_days)
     series = await worker.run(nav_repo.nav_series, since=day - window, as_of=day)
     digest.nav = series[-1] if series else None
+    digest.twr = await account_twr(worker, settings, since=day - window, as_of=day)
     if digest.mode is not None:
         try:
             digest.plan = await rebalancer.survey(digest.mode)
         except ObliskError as exc:
             digest.problems.append(f"the book cannot be surveyed: {exc}")
+        try:
+            digest.reservations = await planner.survey(digest.mode)
+        except ObliskError as exc:
+            digest.problems.append(f"the reservations cannot be planned: {exc}")
+    digest.questions = await worker.run(
+        lambda store: capital_repo.questions(store, states=[QuestionState.OPEN])
+    )
+    digest.cash_events = await worker.run(
+        lambda store: capital_repo.cash_events(store, pending_only=True)
+    )
     every = await worker.run(repo.intents_in_states, list(IntentState))
     digest.intents = sorted(
         (s for s in every if s.intent.created_at >= start), key=lambda s: s.intent.created_at
@@ -164,7 +186,14 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
     mode = "unreadable" if digest.mode is None else digest.mode.value
     failed = [run for run in digest.runs if run.status in FAILED_RUNS]
     blocked = [line for line in digest.venues if line.blocked]
-    attention = len(failed) + len(blocked) + len(digest.alerts) + len(digest.problems)
+    attention = (
+        len(failed)
+        + len(blocked)
+        + len(digest.alerts)
+        + len(digest.problems)
+        + len(digest.questions)
+        + len(digest.cash_events)
+    )
     flag = f"{attention} need attention" if attention else "nothing needs attention"
     subject = f"ObliskIQ daily digest {digest.day.isoformat()} ({mode}): {flag}"
     lines = [f"Mode {mode} · kill switch {'ON' if digest.kill_on else 'off'}"]
@@ -180,6 +209,13 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
         if nav is None
         else f"NAV: {nav.nav_base:,.2f} {nav.currency} (read {nav.as_of.isoformat()})"
     )
+    twr = digest.twr
+    if twr is not None:
+        lines.append(
+            f"Time-weighted return: {twr.value:.2%} from {twr.since} to {twr.until}"
+            if twr.value is not None
+            else f"Time-weighted return: not measured ({twr.reason})"
+        )
     plan = digest.plan
     lines.append("")
     lines.append("Book (targets, positions):")
@@ -187,8 +223,10 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
         lines.append("  not surveyed")
     else:
         if plan.capital is not None:
+            c = plan.capital
             lines.append(
-                f"  managed {plan.capital.managed:,.2f} {base_currency} ({plan.capital.detail})"
+                f"  managed {c.managed:,.2f} {base_currency} ({c.detail}); reserved "
+                f"{c.reserved:,.2f}, unmanaged {c.unmanaged:,.2f}, investable {c.investable:,.2f}"
             )
         if plan.blocked is not None:
             lines.append(f"  no rebalance now: {plan.blocked}")
@@ -203,6 +241,7 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
                 f"  {decision.role} {decision.symbol}: held {decision.held} = {value}{weight}; "
                 f"target {decision.weight:.0%} = {decision.target:,.2f}; {decision.action}"
             )
+    lines += _capital_lines(digest, rows)
     lines.append("")
     lines.append(f"Intents today ({len(digest.intents)}):")
     _more(
@@ -249,3 +288,34 @@ def _run_line(run: RunRow) -> str:
     ]
     tail = "; ".join([*failing, str(error)] if error else failing)
     return f"  {run.started_at.strftime('%H:%M')} {run.command} {run.status}: {tail}"
+
+
+def _capital_lines(digest: Digest, rows: int) -> list[str]:
+    """The reservation plan and its reasons, the open questions and the unexplained cash."""
+    lines: list[str] = []
+    plan = digest.reservations
+    if plan is not None and (plan.lines or plan.blocked is not None):
+        lines.append("")
+        lines.append("Withdrawals (reservation plan):")
+        lines += [f"  {line}" for line in plan.render().splitlines()[1:]]
+    if digest.questions:
+        lines.append("")
+        lines.append(f"Questions waiting for you ({len(digest.questions)}):")
+        _more(
+            lines,
+            [
+                f"  Q{q.question_id} by {q.deadline.isoformat()} (default {q.default}): "
+                f"{q.context}; options {', '.join(o.key for o in q.options)}"
+                for q in digest.questions
+            ],
+            rows,
+        )
+    if digest.cash_events:
+        lines.append("")
+        lines.append(f"Unexplained cash, new buys frozen ({len(digest.cash_events)}):")
+        lines += [
+            f"  E{e.event_id}: {e.amount} {e.currency} since {e.detected_at.isoformat()}; "
+            f"classify with `obliskiq cash classify E{e.event_id} <kind> --confirm`"
+            for e in digest.cash_events
+        ]
+    return lines

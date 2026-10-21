@@ -83,6 +83,7 @@ class OrderPath:
     reconciler: Reconciler
     executor: Executor
     data_dir: Path
+    profile: JurisdictionProfile
     session: BrokerSession | None = None
     schedule: IbkrTradingSchedule | None = None
 
@@ -253,6 +254,7 @@ def assemble(
         reconciler=reconciler,
         executor=executor,
         data_dir=data_dir,
+        profile=profile,
         session=client.session,
         schedule=schedule,
     )
