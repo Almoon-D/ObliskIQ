@@ -85,7 +85,7 @@ option only when the date allows; a weak position sold at once and a strong one 
 safe days and never past them; deposit tranches; the unexplained-cash freeze and its
 classification; TWR equal to a hand calculation; switching the jurisdiction swaps the policy. Also
 every reason the reader and the planner stop, the CLI's refusals, the service's reserve step and
-alerts, and the heartbeat's tax book. `make check` green: TESTS_COUNT tests, coverage COVERAGE %.
+alerts, and the heartbeat's tax book. `make check` green: 3,968 tests, coverage 99.79 %.
 
 **Dependabot.** certifi 2026.10.19 (Almoon-D/ObliskIQ#37) merged; cryptography 50
 (Almoon-D/ObliskIQ#5, Almoon-D/ObliskIQ#9) stays in the follow-ups (D96).
