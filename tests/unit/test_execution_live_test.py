@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +16,9 @@ from order_rig import STOCK
 from obliskiq.domain.orders import ExecutionMode
 from obliskiq.execution.live_test import ExecutionTest
 from obliskiq.execution.runtime import OrderPath
+from obliskiq.jurisdiction import load_profile
+
+REPO = Path(__file__).resolve().parents[2]
 
 
 def path_of(rig: Any) -> OrderPath:
@@ -46,6 +50,7 @@ def path_of(rig: Any) -> OrderPath:
         reconciler=rig.reconciler,
         executor=rig.executor,
         data_dir=rig.data_dir,
+        profile=load_profile(REPO / "config", "es"),
     )
 
 

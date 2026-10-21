@@ -14,6 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Final, Literal, Protocol
@@ -31,6 +32,15 @@ ZERO = Decimal(0)
 PERCENT = Decimal(100)
 
 type LotMethod = Literal["fifo"]
+
+
+@dataclass(frozen=True, slots=True)
+class WashSaleWindow:
+    """Months before and after a loss sale in which buying back a homogeneous security defers
+    the loss. ``before_months`` zero: only a purchase after the sale defers it."""
+
+    before_months: int
+    after_months: int
 
 
 class TaxPolicy(Protocol):
@@ -56,8 +66,13 @@ class TaxPolicy(Protocol):
         """Whether a purchase of ``second`` counts as buying back ``first``."""
         ...
 
-    def wash_sale_months(self, security: SecurityIdentity) -> int | None:
-        """The window, in months each side of a loss sale, or ``None`` with no such rule."""
+    def wash_sale_window(self, security: SecurityIdentity) -> WashSaleWindow | None:
+        """The window around a loss sale of ``security``, or ``None`` with no such rule."""
+        ...
+
+    @property
+    def currency_lots(self) -> bool:
+        """Whether foreign-currency balances are kept as lots whose gains are taxed."""
         ...
 
     def savings_tax(self, base: Decimal) -> Decimal:
@@ -139,6 +154,15 @@ class ProfileTaxRules:
     def cross_offset_fraction(self) -> Decimal:
         return self._tax.loss_offset.cross_offset_fraction
 
+    @property
+    def currency_lots(self) -> bool:
+        return self._tax.currency_gains.kept_as_lots
+
+    def _currency_window(self) -> WashSaleWindow | None:
+        """The currency rule's window: a buy-back after a loss disposal only."""
+        months = self._tax.currency_gains.loss_reacquisition_months
+        return None if months is None else WashSaleWindow(before_months=0, after_months=months)
+
     def savings_tax(self, base: Decimal) -> Decimal:
         if not base.is_finite() or base < ZERO:
             raise ValueError(f"a savings base is finite and not negative, got {base}")
@@ -197,6 +221,7 @@ class ProfileTaxRules:
             self.rate_table_label(),
             f"tax {self.payment_label()}",
             f"foreign-tax credit at the average effective rate ({tax.foreign_tax_credit.source})",
+            self._currency_rule(),
             *(
                 f"withholding at source {row.country} {row.rate} ({row.confirmation}: {row.source})"
                 for row in tax.withholding_at_source
@@ -207,6 +232,21 @@ class ProfileTaxRules:
     def _own_rules(self) -> tuple[str, ...]:
         """The rules a policy states beyond the shared ones."""
         return ()
+
+    def _currency_rule(self) -> str:
+        currency = self._tax.currency_gains
+        if not currency.kept_as_lots:
+            return f"foreign-currency balances are not kept as lots ({currency.source})"
+        months = currency.loss_reacquisition_months
+        deferral = (
+            "no buy-back rule"
+            if months is None
+            else f"a loss deferred while the currency is bought back within {months} months"
+        )
+        return (
+            f"foreign-currency balances kept as {currency.lot_method} lots, a gain or loss on "
+            f"each disposal; {deferral} ({currency.source})"
+        )
 
     def _differs_as_a_swap_partner(
         self, held: SecurityIdentity, candidate: SecurityIdentity

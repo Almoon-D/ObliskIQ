@@ -18,6 +18,11 @@ The rules, each cited in ``docs/knowledge/tax-es.md`` with an official source (n
   a switch between unlisted funds is deferred only when the profile says the broker supports it.
 - **Swap partners** differ from the security they replace as the profile's swap rule requires,
   and are never homogeneous with it.
+- **Currency balances** (LIRPF arts. 14.2.e, 33.1 and 46.b): a foreign currency is a holding
+  whose gain or loss arises when it is paid out, kept as lots when the profile says so; its loss
+  is deferred while the currency is bought back within the window after the disposal
+  (art. 33.5.e, the profile's conservative reading). The two-month rule of art. 33.5.f covers
+  listed securities only, so it does not apply to a currency.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -25,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from typing import Final
 
 from ..domain.tax import COLLECTIVE_KINDS, SecurityIdentity, SecurityKind
-from .tax import ProfileTaxRules
+from .tax import ProfileTaxRules, WashSaleWindow
 from .tax_profile import TaxProfile
 
 ES_IRPF_POLICY_ID: Final = "es_irpf"
@@ -55,9 +60,12 @@ class EsIrpfTaxPolicy(ProfileTaxRules):
             and first.tracked_index == second.tracked_index
         )
 
-    def wash_sale_months(self, security: SecurityIdentity) -> int | None:
+    def wash_sale_window(self, security: SecurityIdentity) -> WashSaleWindow | None:
+        if security.kind is SecurityKind.CURRENCY:
+            return self._currency_window()
         rule = self._wash_sale
-        return rule.listed_months if security.listed else rule.unlisted_months
+        months = rule.listed_months if security.listed else rule.unlisted_months
+        return WashSaleWindow(before_months=months, after_months=months)
 
     def switch_deferral(self, sold: SecurityIdentity, bought: SecurityIdentity) -> bool:
         funds = sold.kind is SecurityKind.FUND and bought.kind is SecurityKind.FUND

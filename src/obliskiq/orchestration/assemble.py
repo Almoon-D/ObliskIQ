@@ -31,6 +31,7 @@ from ..reporting.reporter import Reporter
 from .clock import Clock
 from .jobs import Jobs
 from .nav import NavCollector
+from .parts import build_capital
 from .service import AlertHooks, Service
 
 
@@ -75,17 +76,17 @@ def build_service(
     ping_url: SecretStr | None = None,
 ) -> Service:
     """The service over an open order path."""
+    parts = build_capital(settings, path, now=clock.now)
     rebalancer = BasicRebalancer(
         settings,
-        reader=path.reader,
-        contracts=path.client.contracts,
+        capital=parts.capital,
         directory=path.directory,
         calendars=path.calendars,
         worker=path.worker,
-        book=path.book,
-        pricer=path.pricer,
+        maker=parts.maker,
         costs=CostBook.from_config(settings),
         kill=path.kill,
+        tax=parts.tax,
         now=clock.now,
     )
     venues = sorted({*calendar_venues(settings, path.directory), *anchor_venues(settings)})
@@ -93,6 +94,7 @@ def build_service(
         settings,
         path=path,
         rebalancer=rebalancer,
+        capital=parts,
         nav=NavCollector(settings, reader=path.reader, worker=path.worker, now=clock.now),
         reporter=reporter,
         data_dir=path.data_dir,

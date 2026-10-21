@@ -104,6 +104,23 @@ class ForeignTaxCreditRule(FrozenModel):
     source: NonEmptyText
 
 
+class CurrencyGainsRule(FrozenModel):
+    """How gains and losses on foreign-currency balances are taxed.
+
+    ``kept_as_lots``: each foreign currency is a fungible holding whose units are acquired at
+    their base-currency value on the day they come in and disposed of, oldest first, at their
+    value on the day they go out (a conversion, or a payment in that currency); the difference is
+    a gain or a loss. ``loss_reacquisition_months``: a currency loss is deferred while the same
+    currency is bought back within that many months after the disposal, and integrated as those
+    units are disposed of (``None``: no such rule).
+    """
+
+    kept_as_lots: bool
+    lot_method: Literal["fifo"]
+    loss_reacquisition_months: PositiveInt | None
+    source: NonEmptyText
+
+
 class SwapPartnerRule(FrozenModel):
     """What a swap partner must differ in from the security it replaces."""
 
@@ -124,6 +141,7 @@ class TaxProfile(FrozenModel):
     withholding_at_source: list[WithholdingRow]
     fund_switch_deferral_at_broker: bool
     swap_partner: SwapPartnerRule
+    currency_gains: CurrencyGainsRule
 
     @model_validator(mode="after")
     def _one_withholding_row_per_country(self) -> Self:

@@ -1,18 +1,21 @@
 """The service's jobs: a decision cycle, the heartbeat and the daily digest (MASTER_PLAN §5.14).
 
-**A decision cycle** is one run record of three guarded steps: ``nav`` (today's NAV row,
-``orchestration/nav.py``), ``rebalance`` (the skeleton's targets against the book, as intents,
+**A decision cycle** is one run record of four guarded steps: ``nav`` (today's NAV row and the
+day's exchange rates, ``orchestration/nav.py``), ``reserve`` (the owner questions whose deadline
+passed take their default, then the reservation planner's survey, questions and today's sales,
+``capital/planner.py``), ``rebalance`` (the skeleton's targets against the book, as intents,
 ``decision/rebalance_basic.py``) and ``execute`` (the executor's cycle: sync, settle exits, expire,
 follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry run reads and
-plans, and writes nothing: no NAV row, no run record, no intent, no order. The owner hears a run
-summary when a cycle did something or something failed.
+plans, and writes nothing: no NAV row, no run record, no question, no intent, no order. The owner
+hears a run summary when a cycle did something or something failed, and every question the
+planner asks.
 
 **The heartbeat** (every ``runtime.heartbeat_seconds``): the executor's cycle over the intents
 already made, so reprices keep their pace, a staged intent goes out as its venue opens, a fill
 (one a restart's cOID lookup found included) is followed and its holding registered, the stops are
-checked and the broker is reconciled; then stuck intents, venues blocked when they should trade,
-the broker session, the health file and the ping. Every condition it finds is alerted once while
-it holds (``reporting/alerts.py``).
+checked and the broker is reconciled; then the tax book takes the new fills (``tax/book.py``);
+then stuck intents, venues blocked when they should trade, the broker session, the health file and
+the ping. Every condition it finds is alerted once while it holds (``reporting/alerts.py``).
 
 **The digest** gathers and sends the day's report (``reporting/digest.py``).
 
@@ -28,8 +31,10 @@ from typing import Any
 from pydantic import SecretStr
 
 from .. import __version__
+from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.schema import ObliskConfig
 from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
+from ..domain.capital import OwnerQuestion
 from ..domain.orders import (
     TERMINAL_STATES,
     ExecutionMode,
@@ -48,12 +53,13 @@ from ..reporting.summary import CycleSummary, format_cycle
 from ..store import orders as repo
 from .health import ping, write_heartbeat
 from .nav import NavCollector, NavOutcome
+from .parts import CapitalParts
 from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcome
 
 log = get_logger("orchestration.jobs")
 
 #: The run log's names for the steps of a cycle and of the digest.
-CYCLE_STEPS = ("nav", "rebalance", "execute")
+CYCLE_STEPS = ("nav", "reserve", "rebalance", "execute")
 DIGEST_STEPS = ("digest",)
 #: Alert sources: the job whose rounds raise and clear a condition.
 HEARTBEAT = "heartbeat"
@@ -69,6 +75,8 @@ class CycleResult:
     made: list[OrderIntent] = field(default_factory=list)
     report: CycleReport | None = None
     nav: NavOutcome | None = None
+    reservations: ReservationPlan | None = None
+    planner: PlannerActions | None = None
 
 
 class Jobs:
@@ -80,6 +88,7 @@ class Jobs:
         *,
         path: OrderPath,
         rebalancer: BasicRebalancer,
+        capital: CapitalParts,
         nav: NavCollector,
         reporter: Reporter,
         data_dir: Path,
@@ -91,6 +100,7 @@ class Jobs:
         self._settings = settings
         self._path = path
         self._rebalancer = rebalancer
+        self._capital = capital
         self._nav = nav
         self._reporter = reporter
         self._data_dir = data_dir
@@ -133,9 +143,23 @@ class Jobs:
         await record.begin()
         try:
             mode = await path.modes.current()
-            result.nav = await record.step(
-                "nav", lambda: self._nav.collect(dry_run=dry_run), _judge_nav
+            result.nav = await record.step("nav", lambda: self._read_nav(dry_run), _judge_nav)
+
+            async def reserve() -> tuple[ReservationPlan, PlannerActions]:
+                if not dry_run:
+                    for answered in await self._capital.questions.expire_due():
+                        self._question_expired(answered.question, answered.effect)
+                plan = await self._capital.planner.survey(mode)
+                if dry_run:
+                    return plan, PlannerActions()
+                return plan, await self._capital.planner.apply(plan)
+
+            reserved = await record.step(
+                "reserve", reserve, lambda done: _judge_reserve(done, dry_run=dry_run)
             )
+            if reserved is not None:
+                result.reservations, result.planner = reserved
+                self._reservation_alerts(*reserved)
 
             async def rebalance() -> tuple[RebalancePlan, list[OrderIntent]]:
                 plan = await self._rebalancer.survey(mode)
@@ -164,6 +188,60 @@ class Jobs:
             )
             await self._notify_cycle(name, mode=mode, result=result, errors=errors)
         return result
+
+    async def _read_nav(self, dry_run: bool) -> NavOutcome:
+        """Today's NAV row and, from the same ledger read, the day's exchange rates (the rates a
+        fill of the day is valued at for tax)."""
+        outcome = await self._nav.collect(dry_run=dry_run)
+        if not dry_run and outcome.cash is not None:
+            await self._capital.tax.note_rates(outcome.cash)
+        return outcome
+
+    def _question_expired(self, question: OwnerQuestion, effect: str) -> None:
+        self._reporter.push(
+            Alert(
+                "capital.question_expired",
+                f"capital.question_expired:{question.question_id}",
+                f"Q{question.question_id} had no answer by its deadline; its default "
+                f"{question.default!r} applies: {effect}",
+                Severity.WARNING,
+                self._now(),
+                condition=False,
+            ),
+            CYCLE,
+        )
+
+    def _reservation_alerts(self, plan: ReservationPlan, actions: PlannerActions) -> None:
+        at = self._now()
+        for question in actions.asked:
+            options = "; ".join(
+                f"{o.key}: {o.label}" + ("" if o.key != question.default else " (the default)")
+                for o in question.options
+            )
+            self._reporter.push(
+                Alert(
+                    "capital.question",
+                    f"capital.question:{question.question_id}",
+                    f"Q{question.question_id}: {question.context}. Options — {options}. Answer "
+                    f"with `obliskiq questions answer {question.question_id} <option> --confirm` "
+                    f"by {question.deadline.isoformat()}, or the default applies",
+                    Severity.CRITICAL,
+                    at,
+                    condition=False,
+                ),
+                CYCLE,
+            )
+        for problem in plan.problems:
+            self._reporter.push(
+                Alert(
+                    "capital.reservation_short",
+                    condition_key("capital.reservation_short", problem.split(":")[0]),
+                    problem,
+                    Severity.CRITICAL,
+                    at,
+                ),
+                CYCLE,
+            )
 
     async def _notify_cycle(
         self,
@@ -220,6 +298,7 @@ class Jobs:
                 ),
                 HEARTBEAT,
             )
+        await self._take_fills(at, problems)
         try:
             await self._stuck_intents(at)
         except Exception as exc:  # the store failing: the health file still says so
@@ -241,6 +320,41 @@ class Jobs:
         await self._reporter.end_round(HEARTBEAT)
         await self._health(at, session, problems)
         self.last_heartbeat = at
+
+    async def _take_fills(self, at: datetime, problems: list[str]) -> None:
+        """The tax book takes the fills it has not taken yet, at the day's recorded rates."""
+        tax = self._capital.tax
+        try:
+            await tax.note_rates(await self._capital.capital.cash())
+            outcome = await tax.catch_up()
+        except Exception as exc:  # the lots are not the heartbeat's to lose
+            log.exception("the tax book could not take the fills")
+            problems.append(f"the tax book failed: {type(exc).__name__}: {exc}")
+            return
+        for what in outcome.incomplete:
+            self._reporter.push(
+                Alert(
+                    "tax.incomplete",
+                    f"tax.incomplete:{what.split(':')[0]}",
+                    f"a fill the tax lots cannot account for: {what}; that security's tax is "
+                    "not estimated until its lots are complete",
+                    Severity.WARNING,
+                    at,
+                    condition=False,
+                ),
+                HEARTBEAT,
+            )
+        if outcome.waiting is not None:
+            self._reporter.push(
+                Alert(
+                    "tax.waiting",
+                    condition_key("tax.waiting", outcome.waiting),
+                    f"the tax lots wait: {outcome.waiting}",
+                    Severity.INFO,
+                    at,
+                ),
+                HEARTBEAT,
+            )
 
     async def _stuck_intents(self, at: datetime) -> None:
         """An intent submitted with no answer, or open past its expiry, for ``stuck_after``."""
@@ -337,6 +451,7 @@ class Jobs:
                 modes=path.modes,
                 kill=path.kill,
                 rebalancer=self._rebalancer,
+                planner=self._capital.planner,
                 calendars=path.calendars,
                 venues=self._venues,
                 health=self.health_lines(),
@@ -358,6 +473,25 @@ def _judge_nav(outcome: NavOutcome) -> StepOutcome:
     if outcome.reading is None:
         return StepOutcome("nav", ERROR, outcome.reason)
     return StepOutcome("nav", OK, outcome.reason)
+
+
+def _judge_reserve(done: tuple[ReservationPlan, PlannerActions], *, dry_run: bool) -> StepOutcome:
+    plan, actions = done
+    detail = {
+        "reservations": len(plan.lines),
+        "sales_today": len(plan.sales_today),
+        "intents": len(actions.intents),
+        "questions": len(plan.to_ask),
+    }
+    if plan.blocked is not None:
+        failed = plan.blocked.startswith(("the account cannot be read", "the account's net"))
+        return StepOutcome("reserve", ERROR if failed else SKIPPED, plan.blocked, detail)
+    if plan.problems:
+        return StepOutcome("reserve", DEGRADED, "; ".join(plan.problems), detail)
+    if not plan.lines:
+        return StepOutcome("reserve", OK, "no open reservation", detail)
+    made = "planned" if dry_run else f"{len(actions.intents)} sale(s) made"
+    return StepOutcome("reserve", OK, f"{len(plan.lines)} reservation(s); {made}", detail)
 
 
 def _judge_plan(planned: tuple[RebalancePlan, list[OrderIntent]], *, dry_run: bool) -> StepOutcome:

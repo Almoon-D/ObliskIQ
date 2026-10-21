@@ -793,7 +793,7 @@ def test_the_digest_reports_coverage_and_what_awaits_a_live_reading(
     ) in pending
     assert any(key == "EUREX" and note.what == "ibkr_exchange" for key, note in pending)
     provenance = calendars.provenance("XNYS")
-    assert {n.what for n in provenance.notes} == {"calendar", "phases"}
+    assert {n.what for n in provenance.notes} == {"calendar", "phases", "settlement"}
 
 
 def test_is_open_follows_the_regular_phase_only(calendars: Calendars) -> None:

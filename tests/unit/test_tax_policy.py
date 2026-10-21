@@ -12,9 +12,10 @@ import pytest
 from pydantic import ValidationError
 
 from obliskiq.config import ObliskConfig
-from obliskiq.domain.tax import SecurityIdentity, SecurityKind
+from obliskiq.domain.tax import SecurityIdentity, SecurityKind, currency_identity
 from obliskiq.errors import PolicyError
 from obliskiq.jurisdiction import TAX_POLICIES, JurisdictionProfile, load_profile
+from obliskiq.jurisdiction.tax import WashSaleWindow
 from obliskiq.jurisdiction.tax_es_irpf import EsIrpfTaxPolicy
 from obliskiq.jurisdiction.tax_generic import GenericTaxPolicy
 from obliskiq.jurisdiction.tax_profile import TaxProfile
@@ -160,8 +161,36 @@ def test_shares_of_one_issuer_are_homogeneous_and_a_share_is_not_an_etf(es):
 
 
 def test_the_window_is_two_months_listed_and_a_year_unlisted(es):
-    assert es.wash_sale_months(etf("A")) == 2
-    assert es.wash_sale_months(fund("F")) == 12
+    assert es.wash_sale_window(etf("A")) == WashSaleWindow(before_months=2, after_months=2)
+    assert es.wash_sale_window(fund("F")) == WashSaleWindow(before_months=12, after_months=12)
+
+
+def test_a_currency_loss_waits_only_for_a_buy_back_after_it(es, tax_profile):
+    """Art. 33.5.e, read conservatively: the currency bought back within the year after the
+    disposal; currency already held never takes the loss."""
+    assert es.currency_lots
+    assert es.wash_sale_window(currency_identity("USD")) == WashSaleWindow(
+        before_months=0, after_months=tax_profile.currency_gains.loss_reacquisition_months
+    )
+    assert es.homogeneous(currency_identity("USD"), currency_identity("USD"))
+    assert not es.homogeneous(currency_identity("USD"), currency_identity("GBP"))
+    assert not es.homogeneous(currency_identity("USD"), etf("A"))
+    free = tax_profile.model_copy(
+        update={
+            "currency_gains": tax_profile.currency_gains.model_copy(
+                update={"loss_reacquisition_months": None}
+            )
+        }
+    )
+    assert EsIrpfTaxPolicy(free).wash_sale_window(currency_identity("USD")) is None
+    assert "no buy-back rule" in " ".join(EsIrpfTaxPolicy(free).describe())
+    untaxed = tax_profile.model_copy(
+        update={
+            "currency_gains": tax_profile.currency_gains.model_copy(update={"kept_as_lots": False})
+        }
+    )
+    assert not EsIrpfTaxPolicy(untaxed).currency_lots
+    assert "not kept as lots" in " ".join(EsIrpfTaxPolicy(untaxed).describe())
 
 
 # ── switches (art. 94.1.a) and swap partners ──
@@ -216,7 +245,8 @@ def test_the_lot_method_and_offsets_come_from_the_profile(es):
 
 def test_the_generic_policy_has_no_wash_sale_rule_and_no_switch_deferral(tax_profile):
     generic = GenericTaxPolicy("generic", tax_profile)
-    assert generic.wash_sale_months(etf("A")) is None
+    assert generic.wash_sale_window(etf("A")) is None
+    assert generic.wash_sale_window(currency_identity("USD")) == WashSaleWindow(0, 12)
     assert not generic.switch_deferral(fund("F"), fund("G"))
     assert generic.homogeneous(etf("A"), etf("A"))
     assert generic.homogeneous(etf("A", isin="IE00B4L5Y983"), etf("B", isin="IE00B4L5Y983"))

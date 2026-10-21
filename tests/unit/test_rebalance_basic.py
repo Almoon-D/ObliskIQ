@@ -13,12 +13,12 @@ from typing import Any
 
 import pytest
 import respx
+from capital_rig import make_rebalancer
 from fake_broker import EURUSD, FakeBroker
 from order_rig import build_rig
 from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market
 
 from obliskiq.calendars.service import Calendars
-from obliskiq.capital.managed import managed_capital
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_runtime import CapitalConfig
 from obliskiq.decision.rebalance_basic import (
@@ -27,6 +27,7 @@ from obliskiq.decision.rebalance_basic import (
     confirm_targets,
     minimum_trade,
 )
+from obliskiq.domain.capital import Adjustment, AdjustmentKind
 from obliskiq.domain.orders import (
     ExecutionMode,
     Fill,
@@ -41,8 +42,7 @@ from obliskiq.domain.orders import (
 )
 from obliskiq.execution.executor import RETRY_NEXT_WINDOW
 from obliskiq.execution.instruments import ConfiguredDirectory
-from obliskiq.execution.pricing import Pricer
-from obliskiq.quant.costs import CostBook
+from obliskiq.store import capital as capital_repo
 from obliskiq.store import orders as repo
 
 #: Monday 26 October 2026, 10:00 in Amsterdam and London's morning: both venues trade.
@@ -79,20 +79,7 @@ async def rig(
 
 
 def rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> BasicRebalancer:
-    chosen = settings if settings is not None else rig.settings
-    return BasicRebalancer(
-        chosen,
-        reader=rig.reader,
-        contracts=rig.ibkr.contracts,
-        directory=kw.pop("directory", ConfiguredDirectory.from_settings(chosen)),
-        calendars=rig.calendars,
-        worker=rig.worker,
-        book=rig.book,
-        pricer=Pricer(chosen),
-        costs=CostBook.from_config(chosen),
-        kill=rig.kill,
-        now=rig.clock,
-    )
+    return make_rebalancer(rig, settings, **kw)
 
 
 def by_role(plan: RebalancePlan) -> dict[str, Any]:
@@ -107,7 +94,15 @@ def with_trading(settings: ObliskConfig, **values: Any) -> ObliskConfig:
     return settings.model_copy(update={"trading": settings.trading.model_copy(update=values)})
 
 
+#: What one unit of each vehicle is worth in euros at the skeleton market's quotes.
+UNIT_EUR = {IBGM: Decimal("177.50"), EMIM: Decimal("46.42"), IWDA: Decimal("126.033")}
+
+
 async def hold(rig: Any, conid: int, units: str, currency: str) -> None:
+    """The core holds ``units``, and the book paid for them: its cash falls by their value, so
+    the book stays at its cap of 1,000 (a holding assigned without a fill would join the book as
+    a contribution, DECISIONS D106)."""
+    before = rig.broker.positions.get(conid)
     rig.broker.hold(conid, units, currency)
     await rig.store(
         repo.assign_holding,
@@ -115,6 +110,19 @@ async def hold(rig: Any, conid: int, units: str, currency: str) -> None:
             conid=conid, owner=Sleeve.CORE, assigned_by="test", assigned_at=OPEN, reason="test"
         ),
     )
+    added = Decimal(units) - (Decimal(0) if before is None else before[0])
+    if conid in UNIT_EUR and added:
+        await rig.store(
+            capital_repo.record_flow,
+            Adjustment(
+                category=AdjustmentKind.CORRECTION,
+                amount=-(added * UNIT_EUR[conid]),
+                currency="EUR",
+                on=OPEN.date(),
+                recorded_at=OPEN,
+                recorded_by="test",
+            ),
+        )
 
 
 # ── the plan ──
@@ -126,11 +134,14 @@ async def test_an_empty_book_buys_every_role_largest_shortfall_first(rig: Any) -
     assert plan.capital is not None
     assert plan.capital.managed == Decimal(1000)
     assert plan.spendable == Decimal(975)  # the cap, less the cash floor of 25
+    # The core's budget is 950: its own 70 % with the inactive satellite's and options' shares;
+    # the cash floor of 5 % stays cash.
+    assert plan.core_capital == Decimal(950)
     roles = by_role(plan)
     assert [(roles[r].action, roles[r].quantity) for r in roles] == [
-        ("buy", Decimal(1)),  # world_equity: 180 of target, one IWDA is 126.03 in euros
-        ("buy", Decimal(3)),  # em_equity: 140, three EMIM are 139.26
-        ("buy", Decimal(3)),  # euro_govt_bonds: 680, three IBGM are 532.50
+        ("buy", Decimal(1)),  # world_equity: 171 of target, one IWDA is 126.03 in euros
+        ("buy", Decimal(2)),  # em_equity: 133, two EMIM are 92.84
+        ("buy", Decimal(3)),  # euro_govt_bonds: 646, three IBGM are 532.50
     ]
     assert roles["world_equity"].notional == Decimal("126.0330")
     assert "world_equity" in plan.render()
@@ -333,7 +344,7 @@ async def test_a_held_role_without_a_price_stops_the_plan(rig: Any) -> None:
     await hold(rig, IBGM, "3", "EUR")
     del rig.broker.quotes[IBGM]
     plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
-    assert plan.blocked == "a held role has no price: euro_govt_bonds"
+    assert plan.blocked == f"a held position has no price: conid {IBGM}"
     assert "nothing trades" in plan.render()
 
 
@@ -429,17 +440,7 @@ async def test_each_target_is_confirmed_through_the_contract_search(rig: Any) ->
     }
 
 
-def test_managed_capital_follows_its_mode() -> None:
-    cap = CapitalConfig(mode="cap", cap_base=Decimal(1000))
-    assert managed_capital(cap, Decimal(100000)).managed == Decimal(1000)  # type: ignore[union-attr]
-    below = managed_capital(cap, Decimal(500))
-    assert below.managed == Decimal(500)
-    assert "below the cap" in below.detail  # type: ignore[union-attr]
-    whole = managed_capital(CapitalConfig(mode="whole_account", cap_base=None), Decimal(7))
-    assert whole.managed == Decimal(7)  # type: ignore[union-attr]
-    assert "nothing is managed" in str(managed_capital(cap, None))
-    assert "nothing is managed" in str(managed_capital(cap, Decimal(0)))
-    unchecked = CapitalConfig.model_construct(mode="cap", cap_base=None)
-    assert managed_capital(unchecked, Decimal(1)) == "capital.mode cap names no cap_base"
+def test_a_capped_book_names_its_cap(shipped_settings: ObliskConfig) -> None:
+    capital = shipped_settings.capital.model_dump()
     with pytest.raises(ValueError, match=r"needs capital\.cap_base"):
-        CapitalConfig(mode="cap", cap_base=None)
+        CapitalConfig.model_validate(capital | {"cap_base": None})

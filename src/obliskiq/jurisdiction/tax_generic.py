@@ -1,17 +1,18 @@
 """The ``generic`` tax policy: a template for a new jurisdiction.
 
-FIFO lots, no wash-sale rule, losses offset gains and carry forward as the profile says, the
-profile's rate scale and payment date. Two securities are homogeneous only when they are the
-same security, no switch keeps a gain deferred, and a swap partner is any other security that
-the profile's swap rule allows. A new country copies this module and states what differs.
+FIFO lots, no wash-sale rule for securities, losses offset gains and carry forward as the
+profile says, the profile's rate scale and payment date. Two securities are homogeneous only
+when they are the same security, no switch keeps a gain deferred, and a swap partner is any
+other security that the profile's swap rule allows. Currency balances follow the profile's
+currency rule. A new country copies this module and states what differs.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from typing import Final
 
-from ..domain.tax import SecurityIdentity
-from .tax import ProfileTaxRules
+from ..domain.tax import SecurityIdentity, SecurityKind
+from .tax import ProfileTaxRules, WashSaleWindow
 
 GENERIC_POLICY_ID: Final = "generic"
 
@@ -22,9 +23,10 @@ class GenericTaxPolicy(ProfileTaxRules):
     def homogeneous(self, first: SecurityIdentity, second: SecurityIdentity) -> bool:
         return first.key == second.key or (first.isin is not None and first.isin == second.isin)
 
-    def wash_sale_months(self, security: SecurityIdentity) -> int | None:
-        del security  # no security has a wash-sale window here
-        return None
+    def wash_sale_window(self, security: SecurityIdentity) -> WashSaleWindow | None:
+        if security.kind is SecurityKind.CURRENCY:
+            return self._currency_window()
+        return None  # no security has a wash-sale window here
 
     def switch_deferral(self, sold: SecurityIdentity, bought: SecurityIdentity) -> bool:
         del sold, bought  # every switch is a sale and a purchase

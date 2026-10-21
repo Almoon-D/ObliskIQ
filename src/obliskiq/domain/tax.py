@@ -43,10 +43,15 @@ class SecurityKind(StrEnum):
     FUND = "fund"
     BOND = "bond"
     OPTION = "option"
+    #: A balance in a foreign currency, kept as lots when the profile taxes currency gains.
+    CURRENCY = "currency"
 
 
 #: Collective investments: their homogeneity follows the issuer and the index they track.
 COLLECTIVE_KINDS = frozenset({SecurityKind.ETF, SecurityKind.FUND})
+
+#: How a currency balance is named as a security: ``CCY:`` and its ISO code.
+CURRENCY_KEY_PREFIX = "CCY:"
 
 
 class SecurityIdentity(DomainModel):
@@ -69,7 +74,23 @@ class SecurityIdentity(DomainModel):
     def _collective_names_issuer_and_index(self) -> Self:
         if self.kind in COLLECTIVE_KINDS and (self.issuer is None or self.tracked_index is None):
             raise ValueError("an ETF or a fund names its issuer and the index it tracks")
+        if (self.kind is SecurityKind.CURRENCY) != self.key.startswith(CURRENCY_KEY_PREFIX):
+            raise ValueError(
+                f"a currency, and only a currency, is keyed {CURRENCY_KEY_PREFIX}<code>"
+            )
         return self
+
+
+def currency_identity(code: str) -> SecurityIdentity:
+    """A foreign-currency balance as a security: fungible, homogeneous only with itself."""
+    return SecurityIdentity(
+        key=f"{CURRENCY_KEY_PREFIX}{code}",
+        kind=SecurityKind.CURRENCY,
+        isin=None,
+        issuer=None,
+        tracked_index=None,
+        listed=False,
+    )
 
 
 class TaxLot(DomainModel):
@@ -180,3 +201,39 @@ class TaxYearSummary(DomainModel):
     expired: Magnitude
     rate_table_covers_year: bool
     payment_date: date
+
+
+class OpenLossWindow(DomainModel):
+    """Loss units of a sale that a homogeneous purchase may still take until ``closes_on``: the
+    lot engine's state beside its lots, saved with them (DECISIONS D74)."""
+
+    security: NonEmptyText
+    sold_on: date
+    closes_on: date
+    loss_per_unit: Magnitude
+    units: Quantity
+
+    @model_validator(mode="after")
+    def _closes_after_the_sale(self) -> Self:
+        if self.closes_on < self.sold_on:
+            raise ValueError("a loss window closes on or after its sale")
+        return self
+
+
+class LedgerYear(DomainModel):
+    """One tax year's components as the ledger accumulates them, before it settles."""
+
+    tax_year: int
+    income: Money
+    gains: Money
+    withheld: Magnitude
+    foreign_income: Magnitude
+
+
+class LedgerState(DomainModel):
+    """Everything the tax ledger holds, saved whole beside the lots: the open years, the
+    negative balances carried forward and the settled years."""
+
+    years: tuple[LedgerYear, ...]
+    carried: tuple[CarryForward, ...]
+    settled: tuple[TaxYearSummary, ...]

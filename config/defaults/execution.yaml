@@ -10,10 +10,11 @@ discipline:
   # Entries are limit orders: a patient limit or an IBKR algo with a limit cap, never a stop.
   # lite.
   entry_order_type: limit_only
-  # The only reasons an exit or a protective stop may give. lite.
+  # The only reasons an exit or a protective stop may give. lite's, with rebalance (the core,
+  # D104) and withdrawal (the reservation planner's sales, D108).
   exit_reasons_allowed:
     [invalidation, target, time_window, zombie, mandatory_close, stop, trailing_stop, override,
-     rebalance]
+     rebalance, withdrawal]
 
 execution:
   modes:

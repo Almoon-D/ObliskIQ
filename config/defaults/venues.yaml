@@ -9,7 +9,9 @@
 # Times are quoted "HH:MM" (YAML reads an unquoted 10:00 as the number 600).
 #
 # `venues` is keyed by market code (MIC). Unless the MIC is in `synthetic_calendars`, it is also
-# the exchange_calendars name of the venue's calendar. Venue-specific extras live in the side
+# the exchange_calendars name of the venue's calendar. `settlement_sessions` is how many of the
+# venue's sessions after a trade its cash settles on (T+n), counted on the venue's calendar: the
+# reservation planner's lag (DECISIONS D108), with its source under `sources.settlement`. Venue-specific extras live in the side
 # sections below, keyed by the same MIC, so no venue carries a null for a block it lacks.
 
 calendars:
@@ -39,6 +41,7 @@ venues:
     name: "NYSE"
     region: America
     timezone: America/New_York
+    settlement_sessions: 1
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -51,10 +54,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "SEC Rule 15c6-1 as amended (Release 34-96930): T+1 from 2024-05-28"
+        verify_live: false
   XNAS:
     name: "Nasdaq"
     region: America
     timezone: America/New_York
+    settlement_sessions: 1
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -67,10 +74,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "SEC Rule 15c6-1 as amended (Release 34-96930): T+1 from 2024-05-28"
+        verify_live: false
   XTSE:
     name: "Toronto Stock Ex."
     region: America
     timezone: America/Toronto
+    settlement_sessions: 1
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -150, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -82,10 +93,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "CSA amendments to NI 24-101: T+1 from 2024-05-27"
+        verify_live: false
   BVMF:
     name: "B3 Bolsa do Brasil"
     region: America
     timezone: America/Sao_Paulo
+    settlement_sessions: 2
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
@@ -97,10 +112,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "B3 equities settle D+2 (a move to D+1 is planned for 2028); secondary sources read 2026-10-21"
+        verify_live: true
   XMEX:
     name: "Bolsa de Méjico"
     region: America
     timezone: America/Mexico_City
+    settlement_sessions: 1
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -110,10 +129,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "Grupo BMV press release of 2024-05-27: T+1 from that day"
+        verify_live: false
   XSGO:
     name: "Bolsa de Santiago"
     region: America
     timezone: America/Santiago
+    settlement_sessions: 2
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -123,10 +146,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "Bolsa de Santiago cash market settles T+2 (nuam's move to T+1 is planned for 2027); secondary sources read 2026-10-21"
+        verify_live: true
   XLON:
     name: "London Stock Ex."
     region: Europe
     timezone: Europe/London
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -10, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -139,10 +166,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "UK securities settle T+2; the UK's move to T+1 applies from 2027-10-11 (Accelerated Settlement Taskforce)"
+        verify_live: false
   XMAD:
     name: "Bolsa de Madrid"
     region: Europe
     timezone: Europe/Madrid
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -155,10 +186,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
+        verify_live: false
   XETR:
     name: "Deutsche Börse Xetra"
     region: Europe
     timezone: Europe/Berlin
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -5, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -170,10 +205,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
+        verify_live: false
   XPAR:
     name: "Euronext Paris"
     region: Europe
     timezone: Europe/Paris
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -105, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -186,10 +225,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
+        verify_live: false
   XAMS:
     name: "Euronext Amsterdam"
     region: Europe
     timezone: Europe/Amsterdam
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -105, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -202,10 +245,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
+        verify_live: false
   XMIL:
     name: "Euronext Milán"
     region: Europe
     timezone: Europe/Rome
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -90, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -218,10 +265,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
+        verify_live: false
   XSWX:
     name: "SIX Swiss Ex."
     region: Europe
     timezone: Europe/Zurich
+    settlement_sessions: 2
     phase_windows:
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 10}
@@ -233,10 +284,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "SIX: T+2 (Switzerland plans T+1 with the EU on 2027-10-11); secondary sources read 2026-10-21"
+        verify_live: true
   XTKS:
     name: "Tokyo Stock Ex."
     region: Asia
     timezone: Asia/Tokyo
+    settlement_sessions: 2
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -60, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
@@ -248,10 +303,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "JPX: T+2 since 2019-07-16"
+        verify_live: false
   XHKG:
     name: "Hong Kong Ex."
     region: Asia
     timezone: Asia/Hong_Kong
+    settlement_sessions: 2
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 10}
@@ -263,10 +322,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "HKEX: Stock Connect and CCASS settle exchange trades T+2"
+        verify_live: false
   XSHG:
     name: "Shanghai Stock Ex."
     region: Asia
     timezone: Asia/Shanghai
+    settlement_sessions: 1
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -3, end_offset_minutes: 0}
@@ -278,10 +341,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "China A shares: securities T+0, cash T+1 (SSE rules); secondary sources read 2026-10-21"
+        verify_live: true
   XSHE:
     name: "Shenzhen Stock Ex."
     region: Asia
     timezone: Asia/Shanghai
+    settlement_sessions: 1
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -3, end_offset_minutes: 0}
@@ -293,10 +360,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "China A shares: securities T+0, cash T+1 (SZSE rules); secondary sources read 2026-10-21"
+        verify_live: true
   XBOM:
     name: "BSE India"
     region: Asia
     timezone: Asia/Kolkata
+    settlement_sessions: 1
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 30}
@@ -308,10 +379,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "SEBI circular of 2021-09-07: T+1 phased in by 2023-01-27"
+        verify_live: false
   XNSE:
     name: "NSE India"
     region: Asia
     timezone: Asia/Kolkata
+    settlement_sessions: 1
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 30}
@@ -323,10 +398,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "SEBI circular of 2021-09-07: T+1 phased in by 2023-01-27"
+        verify_live: false
   XKRX:
     name: "Korea Ex."
     region: Asia
     timezone: Asia/Seoul
+    settlement_sessions: 2
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -338,10 +417,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "KRX equities settle T+2; secondary sources read 2026-10-21"
+        verify_live: true
   XTAI:
     name: "Taiwan Stock Ex."
     region: Asia
     timezone: Asia/Taipei
+    settlement_sessions: 2
     phase_windows:
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
     incident_source: {type: manual, scope: market_wide}
@@ -352,10 +435,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "TWSE equities settle T+2; secondary sources read 2026-10-21"
+        verify_live: true
   XSES:
     name: "Singapore Ex."
     region: Asia
     timezone: Asia/Singapore
+    settlement_sessions: 2
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 6}
@@ -368,10 +455,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "SGX: T+2 since 2018-12-10"
+        verify_live: false
   XASX:
     name: "Australian Securities Ex."
     region: Oceania
     timezone: Australia/Sydney
+    settlement_sessions: 2
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -180, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 11}
@@ -384,10 +475,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "ASX Settlement Operating Rules: T+2 since 2016-03-07"
+        verify_live: false
   CHIA:
     name: "Cboe Australia"
     region: Oceania
     timezone: Australia/Sydney
+    settlement_sessions: 2
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -397,10 +492,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "Cboe Australia trades settle through ASX Settlement (CHESS): T+2"
+        verify_live: false
   XNZE:
     name: "New Zealand"
     region: Oceania
     timezone: Pacific/Auckland
+    settlement_sessions: 2
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -90, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 15}
@@ -412,10 +511,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "NZX Clearing: T+2 since 2016-03-07"
+        verify_live: false
   XSPX:
     name: "South Pacific Stock Ex."
     region: Oceania
     timezone: Pacific/Fiji
+    settlement_sessions: 2
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -425,10 +528,14 @@ venues:
       phases:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
         verify_live: true
+      settlement:
+        origin: "South Pacific Stock Exchange: T+2 assumed; no primary source read"
+        verify_live: true
   XEUR:
     name: "Eurex"
     region: Europe
     timezone: Europe/Berlin
+    settlement_sessions: 1
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -437,6 +544,9 @@ venues:
         verify_live: true
       phases:
         origin: "none modelled: no source for Eurex auction windows"
+        verify_live: true
+      settlement:
+        origin: "Eurex Clearing: an option's premium is settled on the exchange day after the trade; secondary sources read 2026-10-21"
         verify_live: true
 
 # Venues the library lacks: fixed hours, a weekday set and a declared holiday list.

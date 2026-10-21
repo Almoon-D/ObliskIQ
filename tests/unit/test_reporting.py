@@ -18,7 +18,7 @@ from pydantic import SecretStr
 from service_rig import RecordingNotifier
 
 from obliskiq.calendars.status import Disagreement, DisagreementKind
-from obliskiq.capital.managed import ManagedCapital
+from obliskiq.capital.managed import CapitalView
 from obliskiq.config import ObliskConfig
 from obliskiq.decision.rebalance_basic import RebalancePlan, RoleDecision
 from obliskiq.domain.orders import (
@@ -269,11 +269,26 @@ def _decision(action: str, **kw: Any) -> RoleDecision:
     return RoleDecision(**fields)
 
 
+def _capital() -> CapitalView:
+    return CapitalView(
+        mode="cap",
+        nav=Decimal(100000),
+        managed=Decimal(1000),
+        unmanaged=Decimal(0),
+        reserved=Decimal(0),
+        investable=Decimal(1000),
+        book_value=Decimal(0),
+        book_cash=Decimal(1000),
+        holdings=(),
+        detail="a book of 1000.00 (started at 1000)",
+    )
+
+
 def test_a_cycle_summary_counts_and_lists_what_it_did() -> None:
     plan = RebalancePlan(
         mode=ExecutionMode.PAPER,
         at=AT,
-        capital=ManagedCapital("cap", Decimal(100000), Decimal(1000), "capped at 1000"),
+        capital=_capital(),
         spendable=Decimal(975),
         decisions=[
             _decision("buy"),
@@ -321,7 +336,7 @@ def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
     plan = RebalancePlan(
         mode=ExecutionMode.SHADOW,
         at=AT,
-        capital=ManagedCapital("cap", Decimal(100000), Decimal(1000), "capped at 1000"),
+        capital=_capital(),
         decisions=[
             _decision("hold", held=Decimal(3), value=Decimal("532.5")),
             _decision("skip", value=None, symbol="IWDA"),
@@ -372,7 +387,7 @@ def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
     subject, body = render_digest(digest, rows=10, base_currency="EUR")
     assert subject == "ObliskIQ daily digest 2026-10-26 (shadow): 4 need attention"
     assert "NAV: 100,000.00 EUR" in body
-    assert "managed 1,000.00 EUR (capped at 1000)" in body
+    assert "managed 1,000.00 EUR (a book of 1000.00 (started at 1000))" in body
     assert "no rebalance now: reconciliation is drift" in body
     assert "held 3 = 532.50 (53.2%)" in body
     assert "IWDA: held 0 = unvalued" in body

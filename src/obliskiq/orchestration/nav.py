@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ..config.schema import ObliskConfig
-from ..execution.account import AccountReader
+from ..execution.account import AccountReader, CashRead
 from ..store.nav import NavReading, record_nav
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
@@ -25,10 +25,11 @@ NAV_SOURCE = "cp"
 
 @dataclass(frozen=True, slots=True)
 class NavOutcome:
-    """The reading recorded, or why there is none."""
+    """The reading recorded, or why there is none, and the ledger read it came from."""
 
     reading: NavReading | None
     reason: str
+    cash: CashRead | None = None
 
 
 class NavCollector:
@@ -55,6 +56,7 @@ class NavCollector:
                 "the account ledger carried no base-currency net liquidation value"
                 + (f" ({cash.nav_refusal})" if cash.nav_refusal else "")
                 + "; a NAV that was not read is not a NAV of zero",
+                cash,
             )
         at = self._now()
         # as_of is the day the reading was TAKEN, never the day it is about.
@@ -67,4 +69,4 @@ class NavCollector:
         )
         if not dry_run:
             await self._worker.run(record_nav, reading)
-        return NavOutcome(reading, f"{cash.nav} {self._base}")
+        return NavOutcome(reading, f"{cash.nav} {self._base}", cash)

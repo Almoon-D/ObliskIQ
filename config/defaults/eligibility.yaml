@@ -73,3 +73,30 @@ eligibility:
       multiplier: "1"
       underlying_conid: null
       expiry: null
+
+  # What the tax rules need to know of each listed instrument (jurisdiction/tax_es_irpf.py): its
+  # ISIN, and for a fund its issuer and the index it tracks, which decide homogeneity (the two-month
+  # rule) and swap partners. Each ISIN was searched in IBKR's contract search, which resolved it to
+  # the conid listed [MCP ✓ 2026-10-21]; issuers and indices are from the issuers' fact sheets.
+  # Removed with the allowlist in Session 8, whose universe describes every instrument.
+  skeleton_tax_facts:
+    - conid: 89005163
+      isin: DE000A0F5UJ7
+      issuer: iShares
+      tracked_index: STOXX Europe 600 Banks
+    - conid: 7089
+      isin: US35671D8570
+      issuer: Freeport-McMoRan Inc
+      tracked_index: null
+    - conid: 78999785
+      isin: IE00B4L5Y983
+      issuer: iShares
+      tracked_index: MSCI World
+    - conid: 153454120
+      isin: IE00BKM4GZ66
+      issuer: iShares
+      tracked_index: MSCI Emerging Markets IMI
+    - conid: 43614383
+      isin: IE00B1FZS806
+      issuer: iShares
+      tracked_index: Bloomberg Euro Government Bond 7-10 Year Term

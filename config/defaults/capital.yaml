@@ -1,10 +1,85 @@
-# Managed capital (MASTER_PLAN §5.15), Session 6's minimal form; Session 7 adds the cash-flow
-# ledger, reservations and sleeve budgets.
+# Capital and cash flows (MASTER_PLAN §5.15, §11 row 2): how much the bot manages, the sleeve
+# budgets, how deposits are deployed, how dated withdrawals are planned for, and how returns are
+# measured. Read by obliskiq.capital; DECISIONS D104 and D106-D111 say why each value is what it is.
 capital:
-  # whole_account: the bot manages the account's whole net liquidation value. cap: it manages at
-  # most cap_base, so a large paper balance behaves like the real account size and minimum trades,
-  # integer shares and commissions are simulated honestly. cap until the owner sizes the book.
+  # whole_account: the bot manages the account's whole net liquidation value. cap: it manages a
+  # book that starts at cap_base and then follows the owner's recorded flows and its own returns,
+  # never more than the account holds, so a large paper balance behaves like the real account size
+  # and minimum trades, integer shares and commissions are simulated honestly. cap until the owner
+  # sizes the book.
   mode: cap
-  # The cap, in the base currency. QUOTED. Read in mode cap. A judgement: a small book until the
-  # owner states its size in config/owner.yaml.
+  # The book's size at its start, in the base currency. QUOTED. Read in mode cap. A judgement: a
+  # small book until the owner states its size in config/owner.yaml.
   cap_base: "1000"
+
+  # The sleeve budgets, as shares of investable capital (managed less reserved less unmanaged).
+  # MASTER_PLAN §11 row 2: core 70, equity satellite 20, option premium 5 (at most 5, D88), cash at
+  # least 5. A sleeve with no active layer leaves its budget in the core (Session 17's rule); the
+  # cash floor stays cash. QUOTED.
+  budgets:
+    core: "0.70"
+    equity_satellite: "0.20"
+    option_premium: "0.05"
+    cash_floor: "0.05"
+  # The most the capital allocation rule (Session 18) may move the equity satellite's budget to.
+  # The owner's decision, open (MASTER_PLAN §11): until it is set the ceiling is the budget itself,
+  # so nothing moves. QUOTED.
+  satellite_ceiling: "0.20"
+
+  deployment:
+    # A deposit is deployed toward the targets over this many days, in equal daily tranches; 1
+    # deploys it at once. A judgement.
+    tranche_days: 1
+
+  reservations:
+    # Calendar days between the day a sale's cash settles and the withdrawal's due date, for the
+    # conversion back to the base currency and the transfer out. A judgement.
+    buffer_days: 2
+
+  planner:
+    # How the reservation planner weighs a sale's costs, each in the base currency: the tax it adds
+    # to the year, its trading cost (commission, spread and slippage) and its strategy cost. A
+    # judgement: one euro is one euro.
+    weights:
+      tax: "1"
+      trading: "1"
+      strategy: "1"
+    # Strategy cost as a share of the value sold, by what the default StrategyValue knows of the
+    # position (Sessions 13, 15 and 17 replace it): the part of a core role above its new target,
+    # an ordinary holding, and a protected one (inside its entry window, a probe awaiting
+    # confirmation, a thesis with a pending catalyst). The cash line costs nothing. A judgement.
+    strategy_cost:
+      overweight: "0"
+      ordinary: "0.01"
+      protected: "0.05"
+    # A satellite or options position is protected for this many days after its first fill (its
+    # entry window). A judgement until Session 15's entry rules.
+    entry_window_days: 20
+    # The sleeves whose positions are theses that an entry window protects; core lines are not.
+    protected_sleeves: [satellite, options]
+
+  pacing:
+    # A planned sale is paced by its position's expected annual return, used only when it comes
+    # from a layer whose research outcome is sufficient (MASTER_PLAN §5.9): below weak_below it
+    # is sold at once; at or above strong_above it is held to the last safe days and a later date
+    # is offered to the owner. Without such evidence the strategy-cost ranking decides: protected
+    # positions are held, the others sold at once. QUOTED. A judgement.
+    weak_below: "0.02"
+    strong_above: "0.10"
+    # A sale made at once is split into this many tranches, one per session. 1: one order.
+    tranches: 1
+    # A held sale is made over the last this-many safe sessions before the withdrawal's last safe
+    # day, never after it.
+    hold_sessions: 2
+
+  questions:
+    # A postponement offered when no position says how long it stays protected: this many days
+    # after the due date. A judgement.
+    postpone_days: 30
+
+  twr:
+    # How a flow dated on a day with a NAV reading enters the time-weighted return: in_reading,
+    # the reading already holds it (the flow happened before the day's cycle); after_reading, it
+    # arrived after the reading and belongs to the next period. The service reads the NAV during
+    # the day and owners announce flows as they make them, so in_reading by default.
+    flow_timing: in_reading

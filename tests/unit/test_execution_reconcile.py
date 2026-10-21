@@ -12,6 +12,8 @@ import pytest
 from fake_broker import EURUSD
 from order_rig import EUR_ETF, STOCK
 
+from obliskiq.capital.flows import CashLedger
+from obliskiq.domain.capital import AdjustmentKind
 from obliskiq.domain.orders import (
     UNMANAGED,
     IntentState,
@@ -22,6 +24,7 @@ from obliskiq.domain.orders import (
 from obliskiq.execution.boundary import OrderAlertKind
 from obliskiq.execution.pretrade import PretradeRefusal, Reason
 from obliskiq.ibkr.orders import PlacementStatus
+from obliskiq.store import capital as capital_repo
 from obliskiq.store import orders as repo
 
 
@@ -132,10 +135,23 @@ async def test_cash_follows_the_bots_fills_and_a_gap_beyond_tolerance_is_drift(r
     usd, rate = rig.broker.cash["USD"]
     rig.broker.cash["USD"] = (usd + Decimal(50), rate)  # a dividend nobody announced
     income = await rig.reconciler.run()
-    assert income.status is ReconcileStatus.GREEN
-    assert "cash_arrived" in kinds(income)  # more cash is noted, and anchors the next run
-    assert (await rig.reconciler.run()).findings == ()
-    rig.broker.cash["USD"] = (usd - Decimal(50), rate)  # a fee nobody explained
+    # More cash than expected is unexplained too: new buys wait until it is classified.
+    assert income.status is ReconcileStatus.DRIFT
+    assert "cash_unexplained" in kinds(income)
+    (event,) = await rig.store(capital_repo.cash_events, pending_only=True)
+    assert (event.currency, event.amount) == ("USD", Decimal(50))
+    assert f"E{event.event_id}" in income.findings[0].detail
+    assert (await rig.reconciler.run()).status is ReconcileStatus.DRIFT  # until classified
+    ledger = CashLedger(rig.worker, base_currency="EUR", now=rig.clock)
+    pending = await ledger.pending_event(event.event_id)
+    dividend = ledger.classification(
+        pending, AdjustmentKind.DIVIDEND, actor="owner", in_book=False, note=None
+    )
+    await ledger.classify(pending, dividend, actor="owner")
+    rig.clock.advance(1)
+    assert (await rig.reconciler.run()).status is ReconcileStatus.GREEN
+    assert (await rig.reconciler.run()).findings == ()  # the anchor holds it now
+    rig.broker.cash["USD"] = (usd, rate)  # a fee nobody explained
     drift = await rig.reconciler.run()
     assert drift.status is ReconcileStatus.DRIFT
     assert "cash_unexplained" in kinds(drift)

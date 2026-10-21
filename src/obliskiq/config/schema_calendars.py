@@ -110,12 +110,15 @@ class IncidentSourceConfig(FrozenModel):
 class VenueSources(FrozenModel):
     calendar: Provenance
     phases: Provenance
+    settlement: Provenance
 
 
 class VenueConfig(FrozenModel):
     name: NonEmptyText
     region: Region
     timezone: TimeZoneName
+    #: The venue's sessions after a trade on which its cash settles (T+n).
+    settlement_sessions: NonNegativeInt
     phase_windows: list[PhaseWindowConfig]
     incident_source: IncidentSourceConfig
     sources: VenueSources

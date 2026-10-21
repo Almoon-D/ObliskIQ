@@ -22,7 +22,15 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
-from ..domain.tax import CarryForward, Component, IncomeEvent, Realisation, TaxYearSummary
+from ..domain.tax import (
+    CarryForward,
+    Component,
+    IncomeEvent,
+    LedgerState,
+    LedgerYear,
+    Realisation,
+    TaxYearSummary,
+)
 from ..errors import TaxError
 from ..jurisdiction.tax import TaxPolicy
 
@@ -79,6 +87,40 @@ class TaxLedger:
         twin._carry = [replace(carry) for carry in self._carry]
         twin._settled = dict(self._settled)  # summaries are immutable
         return twin
+
+    def snapshot(self) -> LedgerState:
+        """Everything the ledger holds, to be saved whole."""
+        return LedgerState(
+            years=tuple(
+                LedgerYear(
+                    tax_year=year,
+                    income=row.income,
+                    gains=row.gains,
+                    withheld=row.withheld,
+                    foreign_income=row.foreign_income,
+                )
+                for year, row in sorted(self._years.items())
+            ),
+            carried=tuple(
+                CarryForward(component=c.component, arising_year=c.arising_year, amount=c.amount)
+                for c in self._carry
+            ),
+            settled=self.settled(),
+        )
+
+    def restore(self, state: LedgerState) -> None:
+        """Load a saved state into a ledger that holds nothing (a restart from the store)."""
+        if self._years or self._carry or self._settled:
+            raise TaxError("a ledger can be restored only when it holds nothing")
+        for year in state.years:
+            self._years[year.tax_year] = _Year(
+                income=year.income,
+                gains=year.gains,
+                withheld=year.withheld,
+                foreign_income=year.foreign_income,
+            )
+        self._carry = [_Carry(c.component, c.arising_year, c.amount) for c in state.carried]
+        self._settled = {summary.tax_year: summary for summary in state.settled}
 
     # ── recording ──
 
