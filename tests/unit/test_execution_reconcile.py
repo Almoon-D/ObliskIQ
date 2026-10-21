@@ -13,7 +13,7 @@ from fake_broker import EURUSD
 from order_rig import EUR_ETF, STOCK
 
 from obliskiq.capital.flows import CashLedger
-from obliskiq.domain.capital import AdjustmentKind
+from obliskiq.domain.capital import AdjustmentKind, Deposit, Withdrawal
 from obliskiq.domain.orders import (
     UNMANAGED,
     IntentState,
@@ -289,3 +289,77 @@ async def test_a_position_that_moved_beside_a_recent_order_is_settling(rig: Any)
     run = await rig.reconciler.run()
     assert run.status is ReconcileStatus.GREEN, run.findings
     assert "position_settling" in kinds(run)
+
+
+# ── the owner's recorded flows explain cash (Session 7) ──
+
+
+async def _flow(rig: Any, flow: Any) -> Any:
+    return await rig.store(capital_repo.record_flow, flow)
+
+
+async def test_an_announced_deposit_explains_the_cash_it_brings_once(rig: Any) -> None:
+    assert (await rig.reconciler.run()).status is ReconcileStatus.GREEN
+    deposit = await _flow(
+        rig,
+        Deposit(
+            amount=Decimal(1000),
+            currency="EUR",
+            on=rig.clock().date(),
+            recorded_at=rig.clock(),
+            recorded_by="owner",
+        ),
+    )
+    assert (await rig.reconciler.run()).status is ReconcileStatus.GREEN  # not arrived: no gap
+    eur, rate = rig.broker.cash["EUR"]
+    rig.broker.cash["EUR"] = (eur + Decimal("1000.40"), rate)  # within the tolerance
+    rig.clock.advance(1)
+    arrived = await rig.reconciler.run()
+    assert arrived.status is ReconcileStatus.GREEN
+    assert "cash_flow_arrived" in kinds(arrived)
+    assert "deposit F1" in arrived.findings[0].detail
+    matched = await rig.store(capital_repo.get_flow, deposit.flow_id)
+    assert matched.matched_at is not None
+    rig.clock.advance(1)
+    assert (await rig.reconciler.run()).findings == ()  # counted once, in the anchor now
+
+
+async def test_a_recorded_withdrawal_explains_the_cash_that_left(rig: Any) -> None:
+    assert (await rig.reconciler.run()).status is ReconcileStatus.GREEN
+    await _flow(
+        rig,
+        Withdrawal(
+            amount=Decimal(300),
+            currency="USD",
+            on=rig.clock().date(),
+            recorded_at=rig.clock(),
+            recorded_by="owner",
+        ),
+    )
+    usd, rate = rig.broker.cash["USD"]
+    rig.broker.cash["USD"] = (usd - Decimal(300), rate)
+    rig.clock.advance(1)
+    run = await rig.reconciler.run()
+    assert run.status is ReconcileStatus.GREEN and "cash_flow_arrived" in kinds(run)
+
+
+async def test_a_deposit_of_another_amount_does_not_explain_the_cash(rig: Any) -> None:
+    assert (await rig.reconciler.run()).status is ReconcileStatus.GREEN
+    await _flow(
+        rig,
+        Deposit(
+            amount=Decimal(500),
+            currency="EUR",
+            on=rig.clock().date(),
+            recorded_at=rig.clock(),
+            recorded_by="owner",
+        ),
+    )
+    eur, rate = rig.broker.cash["EUR"]
+    rig.broker.cash["EUR"] = (eur + Decimal(800), rate)
+    rig.clock.advance(1)
+    run = await rig.reconciler.run()
+    assert run.status is ReconcileStatus.DRIFT
+    assert "cash_unexplained" in kinds(run)
+    (event,) = await rig.store(capital_repo.cash_events, pending_only=True)
+    assert (event.currency, event.amount) == ("EUR", Decimal(800))
