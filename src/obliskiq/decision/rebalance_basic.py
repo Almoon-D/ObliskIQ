@@ -250,7 +250,7 @@ class BasicRebalancer:
         maker: IntentMaker,
         costs: CostBook,
         kill: KillSwitch,
-        tax: TaxBook | None = None,
+        tax: TaxBook,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._settings = settings
@@ -269,10 +269,6 @@ class BasicRebalancer:
         self._floor = settings.execution.pretrade.cash_floor
         self._budgets = SleeveBudgets(settings.capital)
         self._refused: dict[int, str] = {}
-
-    @property
-    def capital(self) -> CapitalReader:
-        return self._capital
 
     def refuse(self, refused: dict[int, str]) -> None:
         """Roles whose conid is not confirmed (:func:`confirm_targets`): skipped, with why."""
@@ -331,8 +327,6 @@ class BasicRebalancer:
         return await self._capital.valuer.cash_value(held, cash)
 
     async def _hooks(self) -> TaxHooks | None:
-        if self._tax is None:
-            return None
         try:
             return await self._tax.hooks()
         except TaxError as exc:

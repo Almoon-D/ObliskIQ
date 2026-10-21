@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 import respx
 from capital_rig import capital_parts, make_rebalancer
-from fake_broker import FakeBroker
+from fake_broker import EURUSD, FakeBroker
 from order_rig import build_rig, terms
 from service_rig import EMIM, IBGM, SERVICE_VENUES, skeleton_market
 
@@ -26,6 +26,7 @@ from obliskiq.domain.orders import (
     UNMANAGED,
     ExecutionMode,
     Fill,
+    IntentRole,
     IntentState,
     OrderSide,
     Sleeve,
@@ -227,3 +228,28 @@ async def test_an_unreadable_account_or_nav_manages_nothing(rig: Any) -> None:
     rig.broker.unavailable.clear()
     rig.broker.nav = None
     assert "nothing is managed" in str(await read(rig))
+
+
+async def test_a_conversion_in_the_book_moves_its_cash_but_is_no_holding(rig: Any) -> None:
+    conversion = await rig.intent(
+        terms(side=OrderSide.BUY, cash="116.51", conversion=True, conid=EURUSD),
+        role=IntentRole.CONVERSION,
+        reason="fund a trade",
+        state=IntentState.SUBMITTED,
+        mode=SHADOW,
+    )
+    await rig.store(
+        repo.upsert_fills,
+        [
+            Fill(
+                execution_id="fx-1", coid=conversion.coid, conid=EURUSD, side=OrderSide.BUY,
+                quantity=D(100), price=D("1.1651"), commission=D(0), executed_at=NOW,
+                simulated=True,
+            )
+        ],
+    )  # fmt: skip
+    view = await read(rig, SHADOW)
+    assert isinstance(view, CapitalView)
+    assert view.holdings == ()
+    # Buying EUR.USD: 100 euros in, 116.51 dollars out, worth 100.1986 euros at 0.86.
+    assert view.book_cash == D("999.8014")

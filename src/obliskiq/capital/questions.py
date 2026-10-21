@@ -133,8 +133,7 @@ class OwnerQuestions:
                     if question.deadline > at or question.question_id is None:
                         continue
                     option = question.option(question.default)
-                    if option is None:  # the model refuses a default that is no option
-                        continue
+                    assert option is not None  # the model refuses a default that is no option
                     effect = _apply(store, question, option, at=at, actor=DEADLINE_ACTOR)
                     closed = repo.close_question(
                         store, question.question_id, state=QuestionState.EXPIRED,

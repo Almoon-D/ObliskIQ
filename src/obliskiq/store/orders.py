@@ -673,18 +673,13 @@ class IntentFill:
     reason: str
 
 
-def intent_fills(store: Store, *, as_of: datetime | None = None) -> list[IntentFill]:
-    """Every fill of an intent the bot made (foreign fills left out), oldest first; with
-    ``as_of``, those executed at or before it."""
-    sql = (
+def intent_fills(store: Store) -> list[IntentFill]:
+    """Every fill of an intent the bot made (foreign fills left out), oldest first."""
+    rows = store.execute(
         "SELECT f.*, i.sleeve AS i_sleeve, i.mode AS i_mode, i.role AS i_role, "
-        "i.reason AS i_reason FROM fills f JOIN intents i ON i.intent_id = f.intent_id"
-    )
-    parameters: tuple[str, ...] = ()
-    if as_of is not None:
-        sql += " WHERE f.executed_at <= ?"
-        parameters = (stamp_text(as_of),)
-    rows = store.execute(sql + " ORDER BY f.executed_at, f.execution_id", parameters).fetchall()
+        "i.reason AS i_reason FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
+        "ORDER BY f.executed_at, f.execution_id"
+    ).fetchall()
     return [_intent_fill_from_row(row) for row in rows]
 
 

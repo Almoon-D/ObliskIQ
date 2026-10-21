@@ -23,7 +23,7 @@ from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market
 
 from obliskiq.calendars.service import Calendars
 from obliskiq.capital.planner import Category, Pace, ReservationPlan
-from obliskiq.capital.strategy import ExpectedReturn, PositionFacts, Protected
+from obliskiq.capital.strategy import ExpectedReturn, PositionFacts, Protected, Protection
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.capital import (
     OptionEffect,
@@ -43,9 +43,11 @@ from obliskiq.domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
+from obliskiq.errors import CalendarError, TaxError
 from obliskiq.orchestration.parts import CapitalParts
 from obliskiq.store import capital as capital_repo
 from obliskiq.store import orders as repo
+from obliskiq.tax.book import TaxHooks
 
 D = Decimal
 #: The satellite's stand-in thesis: iShares STOXX Europe 600 Banks on Xetra, in euros.
@@ -579,3 +581,170 @@ async def test_reservations_close_when_withdrawn(rig: Any) -> None:
     assert (await survey(capital_parts(rig))).lines == []
     assert OptionEffect.PROCEED.value == "proceed"
     assert IWDA  # the skeleton's dollar line is not part of these plans
+
+
+# ── what the strategy says, and what cannot be known ──
+
+
+@dataclass
+class Stance:
+    """A strategy value that exits ``exits`` anyway and protects ``guarded`` until ``until``."""
+
+    exits: frozenset[int] = frozenset()
+    guarded: frozenset[int] = frozenset()
+    until: date | None = None
+
+    def would_exit(self, position: PositionFacts, *, today: date) -> bool:
+        return position.conid in self.exits
+
+    def protection(self, position: PositionFacts, *, today: date) -> Protected | None:
+        if position.conid not in self.guarded:
+            return None
+        return Protected(Protection.PENDING_CATALYST, self.until)
+
+    def expected_return(self, position: PositionFacts, *, today: date) -> ExpectedReturn | None:
+        return None
+
+
+async def test_an_exit_the_strategy_makes_anyway_costs_nothing_and_goes_at_once(rig: Any) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig, strategy=Stance(exits=frozenset({IBGM})))
+    await reserve(rig, "1200", NOW.date() + timedelta(days=14))
+    (sale,) = (await survey(parts)).lines[0].sales
+    assert (sale.category, sale.pace, sale.strategy) == (Category.EXIT_ANYWAY, Pace.NOW, 0)
+    assert sale.today_units == D(3)
+
+
+async def test_a_middling_expected_return_is_sold_in_tranches(rig: Any) -> None:
+    await bought(rig, EMIM, "2", "46.42", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig, strategy=Expects({EMIM: D("0.05")}))
+    await reserve(rig, "950", date(2026, 11, 13))
+    (sale,) = (await survey(parts)).lines[0].sales
+    assert sale.pace is Pace.TRANCHES
+    assert "expects 5.0% a year: sold in tranches" in sale.reason
+    assert sale.strategy == sale.proceeds * D("0.05")  # the expected return is the cost
+
+
+async def test_a_protection_with_no_end_postpones_by_the_configured_days(rig: Any) -> None:
+    await bought(rig, EXV1, "40", "20", sleeve=Sleeve.SATELLITE, at=NOW - timedelta(days=2))
+    parts = capital_parts(rig, strategy=Stance(guarded=frozenset({EXV1})))
+    due = NOW.date() + timedelta(days=10)
+    await reserve(rig, "500", due)
+    plan = await survey(parts)
+    (question,) = plan.to_ask
+    assert "EXV1 (pending catalyst)" in question.context
+    postpone = question.option("postpone")
+    assert postpone is not None
+    assert postpone.due_date == due + timedelta(days=30)  # capital.questions.postpone_days
+    first = await parts.planner.apply(plan)
+    assert len(first.asked) == 1
+    assert (await parts.planner.apply(plan)).asked == []  # the same question is asked once
+
+
+async def test_a_question_on_the_last_safe_day_is_due_at_its_open(rig: Any) -> None:
+    await bought(rig, EXV1, "40", "20", sleeve=Sleeve.SATELLITE, at=NOW - timedelta(days=2))
+    parts = capital_parts(rig)
+    await reserve(rig, "500", date(2026, 10, 25))  # settled by the 23rd: today is the last day
+    (question,) = (await survey(parts)).to_ask
+    assert question.deadline == NOW  # the session is open: no later deadline leaves time to sell
+
+
+async def test_without_readable_lots_or_costs_the_plan_says_unknown(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig)
+    await reserve(rig, "600", NOW.date() + timedelta(days=14))
+
+    async def unreadable() -> Any:
+        raise TaxError("the lots are corrupt")
+
+    def unpriced(*args: Any, **kwargs: Any) -> Any:
+        raise ValueError("no schedule")
+
+    monkeypatch.setattr(parts.tax, "hooks", unreadable)
+    monkeypatch.setattr(parts.planner._costs, "leg_cost", unpriced)
+    plan = await survey(parts)
+    (sale,) = plan.lines[0].sales
+    assert (sale.tax, sale.trading) == (None, None)
+    assert "tax unknown, trading unknown" in plan.render()
+
+
+async def test_a_tax_the_lots_cannot_estimate_is_unknown(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig)
+    await parts.tax.catch_up()
+    await reserve(rig, "600", NOW.date() + timedelta(days=14))
+
+    def refused(self: Any, *args: Any, **kwargs: Any) -> Any:
+        raise TaxError("a security the engine does not know")
+
+    monkeypatch.setattr(TaxHooks, "trial_tax", refused)
+    (sale,) = (await survey(parts)).lines[0].sales
+    assert sale.tax is None
+    assert sale.trading is not None
+
+
+async def test_a_holding_the_calendars_cannot_place_is_left_out_with_why(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    await bought(rig, EMIM, "2", "46.42", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig)
+    await reserve(rig, "900", NOW.date() + timedelta(days=14))
+    calendars = rig.calendars
+    real_venue, real_last = calendars.venue_for_ibkr, calendars.last_safe_session
+
+    def venue_for_ibkr(code: str) -> str:
+        if code == "AEB":
+            raise CalendarError("no venue for AEB")
+        return real_venue(code)
+
+    monkeypatch.setattr(calendars, "venue_for_ibkr", venue_for_ibkr)
+    assert (await survey(parts)).lines[0].sales == []  # both list on Amsterdam
+    monkeypatch.setattr(calendars, "venue_for_ibkr", real_venue)
+
+    def beyond(venue: str, settle_by: date, *, from_day: date) -> date | None:
+        raise CalendarError(f"{venue} is not covered to {settle_by.isoformat()}")
+
+    monkeypatch.setattr(calendars, "last_safe_session", beyond)
+    (line,) = (await survey(parts)).lines
+    assert line.sales == []
+    assert any("is not covered" in note for note in line.notes)
+    monkeypatch.setattr(calendars, "last_safe_session", real_last)
+
+
+async def test_a_position_with_a_working_sale_is_left_to_it(rig: Any) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    await bought(rig, EXV1, "10", "20", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    working = await rig.intent(
+        terms(conid=IBGM, side=OrderSide.SELL, quantity="2", limit="177.50"),
+        role=IntentRole.EXIT,
+        reason="rebalance",
+        state=IntentState.SUBMITTED,
+    )
+    await rig.store(
+        repo.upsert_fills,
+        [
+            Fill(
+                execution_id="part", coid=working.coid, conid=IBGM, side=OrderSide.SELL,
+                quantity=D(1), price=D("177.50"), commission=D(0), executed_at=NOW,
+            )
+        ],
+    )  # fmt: skip
+    await rig.intent(  # a withdrawal sale of a position no longer held: nothing to wait for
+        terms(conid=EMIM, side=OrderSide.SELL, quantity="2", limit="46"),
+        role=IntentRole.EXIT,
+        reason="withdrawal",
+        state=IntentState.SUBMITTED,
+    )
+    parts = capital_parts(rig)
+    await reserve(rig, "600", NOW.date() + timedelta(days=14))
+    (line,) = (await survey(parts)).lines
+    assert line.from_cash == D(445)  # 1,000 less 532.50 and 200, plus the unit sold at 177.50
+    # IBGM is the rebalancer's to sell: its proceeds are not the reservation's, and it is spared.
+    assert [s.symbol for s in line.sales] == ["EXV1"]
+    (sale,) = line.sales
+    assert sale.category is Category.OVERWEIGHT  # not a skeleton role: all of it above target

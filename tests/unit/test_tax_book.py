@@ -19,7 +19,7 @@ import pytest
 
 from obliskiq.config import ObliskConfig, load_config
 from obliskiq.domain.orders import Fill, OrderSide
-from obliskiq.domain.tax import SecurityKind
+from obliskiq.domain.tax import Realisation, SecurityKind, TaxLot
 from obliskiq.errors import TaxError
 from obliskiq.execution.account import CashLine, CashRead
 from obliskiq.execution.instruments import ConfiguredDirectory
@@ -348,14 +348,25 @@ async def test_the_annual_report_lists_realised_results_and_deferred_losses(
         fill(IBGM, SELL, "10", "80", date(2026, 11, 2)),  # a loss waiting for a buy-back
         fill(EXV1, BUY, "4", "20", date(2026, 2, 2)),
         fill(EXV1, SELL, "2", "15", date(2026, 3, 2)),  # deferred: two units still held
+        fill(IWDA, BUY, "1", "100", date(2026, 1, 5)),  # a lot with no deferred loss
+    )
+    await worker.run(
+        fx_repo.record_rates, [FxRate("USD", date(2026, 1, 5), D("0.9"), "test", clock.now)]
     )
     await book.catch_up()
     engine = await book.engine()
     first, last = year_bounds(2026)
     assert (first, last) == (date(2026, 1, 1), date(2026, 12, 31))
+    earlier = Realisation(
+        security=str(IBGM), lot_id="L0", acquired_on=date(2025, 1, 2), disposed_on=date(2025, 6, 2),
+        quantity=D(1), proceeds=D(1), cost=D(1), released=D(0), deferred=D(0),
+    )  # fmt: skip
     text = annual_csv(
         2026,
-        realisations=await worker.run(lots_repo.realisations_between, since=first, until=last),
+        realisations=[
+            earlier,  # another year's: not this report's
+            *await worker.run(lots_repo.realisations_between, since=first, until=last),
+        ],
         lots=engine.lots(),
         windows=engine.loss_windows(),
         summary=engine.ledger.provisional(2026),
@@ -418,3 +429,111 @@ async def test_a_year_with_a_loss_window_still_open_waits_to_settle(
     assert (await book.catch_up()).settled == []
     clock.now = datetime(2027, 2, 16, tzinfo=UTC)
     assert (await book.catch_up()).settled == [2026]
+
+
+# ── the decision hooks over the live lots ──
+
+
+async def test_the_hooks_answer_from_the_live_lots(
+    shipped_settings: ObliskConfig, worker: StoreWorker, clock: Clock
+) -> None:
+    book = book_of(shipped_settings, worker, clock)
+    await record(
+        worker,
+        fill(IBGM, BUY, "10", "100", date(2026, 1, 5)),
+        fill(IBGM, SELL, "4", "80", date(2026, 11, 20)),  # a loss: its window runs to January
+    )
+    await book.catch_up()
+    hooks = await book.hooks()
+    (lot,) = hooks.lots(IBGM)
+    assert lot.quantity == D(6)
+    assert hooks.complete(IBGM, D(6))
+    assert not hooks.complete(EXV1, D(0))  # nothing the lots ever held
+    gain = hooks.tax_cost(IBGM, units=D(2), price=D(130), on=date(2026, 12, 1))
+    assert gain.realised == D(60)
+    assert gain.tax == 0  # the year's loss of 80 absorbs it
+    buy_back = hooks.wash_sale_conflict(
+        IBGM, side=OrderSide.BUY, units=D(4), price=D(85), on=date(2026, 12, 1)
+    )
+    assert buy_back is not None
+    assert buy_back.kind == "purchase_defers_earlier_loss"
+    assert buy_back.dates == (date(2026, 11, 20),)
+    sale = hooks.wash_sale_conflict(
+        IBGM, side=OrderSide.SELL, units=D(2), price=D(90), on=date(2026, 12, 1)
+    )
+    assert sale is None  # the units held were bought outside the window: the loss counts now
+    (loss,) = hooks.harvestable_losses({IBGM: D(90)}, on=date(2026, 12, 1))
+    assert (loss.security, loss.quantity, loss.unrealised_loss) == (str(IBGM), D(6), D(60))
+    assert hooks.provisional(2026).gains < 0
+    engine = await book.engine()  # restored from the store: its ledger holds the year
+    with pytest.raises(TaxError, match="only when it holds nothing"):
+        engine.ledger.restore(engine.ledger.snapshot())
+
+
+async def test_a_conversion_on_a_pair_without_the_base_currency_is_incomplete(
+    shipped_settings: ObliskConfig, worker: StoreWorker, clock: Clock
+) -> None:
+    currency = shipped_settings.execution.currency
+    yen = currency.pairs[0].model_copy(
+        update={"symbol": "USD.JPY", "conid": 15016059, "base": "USD", "quote": "JPY"}
+    )
+    execution = shipped_settings.execution.model_copy(
+        update={"currency": currency.model_copy(update={"pairs": [*currency.pairs, yen]})}
+    )
+    settings = shipped_settings.model_copy(update={"execution": execution})
+    book = book_of(settings, worker, clock)
+    cross = fill(15016059, BUY, "100", "150", date(2026, 6, 1))
+    await record(worker, cross)
+    (why,) = (await book.catch_up()).incomplete
+    assert "the pair USD.JPY does not name the base currency" in why
+
+
+async def test_a_fill_of_an_instrument_without_tax_facts_is_incomplete(
+    shipped_settings: ObliskConfig, worker: StoreWorker, clock: Clock
+) -> None:
+    facts = [f for f in shipped_settings.eligibility.skeleton_tax_facts if f.conid != IBGM]
+    eligibility = shipped_settings.eligibility.model_copy(update={"skeleton_tax_facts": facts})
+    book = book_of(shipped_settings.model_copy(update={"eligibility": eligibility}), worker, clock)
+    await record(worker, fill(IBGM, BUY, "1", "100", date(2026, 6, 1)))
+    (why,) = (await book.catch_up()).incomplete
+    assert "has no tax facts (eligibility.skeleton_tax_facts)" in why
+
+
+async def test_saved_lots_under_a_key_no_security_has_refuse_to_load(
+    shipped_settings: ObliskConfig, worker: StoreWorker, clock: Clock
+) -> None:
+    stray = TaxLot(
+        lot_id="L1", security="not-a-conid", acquired_on=date(2026, 1, 2), quantity=D(1),
+        cost=D(1), deferred_loss=D(0), replacement_units=D(0),
+    )  # fmt: skip
+    await worker.run(lots_repo.save_tax_lots, [stray], saved_at=clock.now)
+    with pytest.raises(TaxError, match="not-a-conid"):
+        await book_of(shipped_settings, worker, clock).engine()
+
+
+async def test_a_profile_that_keeps_no_currency_lots_counts_no_currency_result(
+    shipped_settings: ObliskConfig, worker: StoreWorker, clock: Clock, tmp_path: Path
+) -> None:
+    config_dir = tmp_path / "config"
+    shutil.copytree(Path(__file__).resolve().parents[2] / "config", config_dir)
+    spain = config_dir / "jurisdictions" / "es.yaml"
+    text = spain.read_text(encoding="utf-8")
+    assert "kept_as_lots: true" in text
+    spain.write_text(text.replace("kept_as_lots: true", "kept_as_lots: false"), encoding="utf-8")
+    book = book_of(shipped_settings, worker, clock, "es", config_dir)
+    assert book.policy.currency_lots is False
+    await worker.run(
+        fx_repo.record_rates,
+        [FxRate("USD", date(2026, 6, 2), D("0.9"), "test", clock.now)],
+    )
+    await record(
+        worker,
+        fill(EURUSD, BUY, "1000", "1.10", date(2026, 6, 1)),  # euros into dollars
+        fill(IWDA, BUY, "1", "100", date(2026, 6, 2)),  # dollars paid out
+        fill(EURUSD, SELL, "500", "1.20", date(2026, 6, 3)),  # dollars back into euros
+    )
+    outcome = await book.catch_up()
+    assert len(outcome.applied) == 3
+    engine = await book.engine()
+    assert [lot.security for lot in engine.lots()] == [str(IWDA)]
+    assert engine.ledger.provisional(2026).gains == 0

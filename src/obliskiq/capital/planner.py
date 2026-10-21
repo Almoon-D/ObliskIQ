@@ -339,7 +339,7 @@ class ReservationPlanner:
         chosen_all: list[_Chosen] = []
         for reservation in reservations:
             rate = await self._capital.valuer.rate(reservation.currency, cash)
-            if rate is None:
+            if rate is None:  # pragma: no cover - the reader valued it from this same read
                 plan.blocked = f"{reservation.currency} has no rate to the base currency"
                 return plan
             line = ReservationLine(reservation, reservation.amount * rate)
@@ -590,8 +590,6 @@ class ReservationPlanner:
                 take = min(piece.units, units)
                 piece.units -= take
                 units -= take
-                if units <= ZERO:
-                    break
 
     def _score(self, choice: _Chosen) -> Decimal:
         weights = self._planner.weights
@@ -657,8 +655,8 @@ class ReservationPlanner:
     def _trading_of(self, candidate: _Candidate, units: Decimal, on: date) -> Decimal | None:
         instrument = candidate.holding.unit.instrument
         rate = candidate.holding.unit.rate
-        if instrument is None or rate is None or rate <= ZERO:
-            return None
+        assert instrument is not None  # a candidate is described
+        assert rate is not None  # and priced
         price = candidate.unit / (instrument.multiplier * rate)
         try:
             leg = self._costs.leg_cost(
@@ -701,10 +699,9 @@ class ReservationPlanner:
 
     def _sessions(self, venue: str, start: date, end: date) -> list[date]:
         days: list[date] = []
-        day: date | None = start
+        day = self._first_session(venue, start)
         while day is not None and day <= end:
-            if self._calendars.session_bounds(venue, day) is not None:
-                days.append(day)
+            days.append(day)
             day = self._calendars.next_session(venue, day)
         return days
 
@@ -734,12 +731,8 @@ class ReservationPlanner:
             if freed is not None and freed <= last:
                 start = max(start, freed)
         if not_before is not None:
-            first = self._first_session(venue, not_before)
-            if first is not None:
-                start = max(start, first)
-        if start > last:
-            start = last
-        window = self._sessions(venue, start, last)
+            start = max(start, self._first_session(venue, not_before) or start)
+        window = self._sessions(venue, min(start, last), last)
         if pace is Pace.NOW:
             window = window[:1]
         elif pace is Pace.TRANCHES:
@@ -749,9 +742,6 @@ class ReservationPlanner:
             remaining = [day for day in window if day >= today] or [window[-1]]
             count = len(remaining)
             today_units = min(choice.units, _whole(choice.units / count, ROUND_CEILING))
-        if today > last:
-            today_units = choice.units
-            why += "; past its last safe day, sold now"
         assert line.reservation.reservation_id is not None
         return PlannedSale(
             reservation_id=line.reservation.reservation_id,
@@ -926,8 +916,7 @@ class ReservationPlanner:
     @staticmethod
     def _protection_text(candidate: _Candidate) -> str:
         protection = candidate.protection
-        if protection is None:
-            return candidate.holding.sleeve.value
+        assert protection is not None  # only a protected candidate is named
         until = "" if protection.until is None else f" until {protection.until.isoformat()}"
         return f"{protection.why.value.replace('_', ' ')}{until}"
 
@@ -945,10 +934,9 @@ class ReservationPlanner:
         latest: date | None = None
         for choice in protected:
             protection = choice.candidate.protection
-            if protection is None or protection.until is None:
-                return reservation.due_date + self._postpone
-            first = self._first_session(choice.candidate.venue, protection.until)
-            if first is None:
+            until = None if protection is None else protection.until
+            first = None if until is None else self._first_session(choice.candidate.venue, until)
+            if first is None:  # an open-ended protection, or one beyond the calendar
                 return reservation.due_date + self._postpone
             settled = self._calendars.settlement_date(choice.candidate.venue, first)
             latest = settled if latest is None else max(latest, settled)
@@ -963,9 +951,7 @@ class ReservationPlanner:
         if tax is None or tax <= ZERO or last.year <= today.year:
             return None
         first = self._first_session(venue, date(today.year + 1, 1, 1))
-        if first is None or first > last:
-            return None
-        return first
+        return first if first is not None and first <= last else None
 
     # ── writing ──
 

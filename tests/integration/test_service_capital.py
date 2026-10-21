@@ -229,3 +229,37 @@ async def test_shadow_fills_never_reach_the_tax_lots(make: Any) -> None:
     assert filled_intents
     assert all(i.intent.mode is ExecutionMode.SHADOW for i in filled_intents)
     assert await s.rig.store(lots_repo.taken_fills) == {}
+
+
+async def test_the_reserve_step_skips_under_the_kill_switch_and_the_cycle_goes_on(
+    make: Any,
+) -> None:
+    s = await make(paper=True)
+    await reserve(s, "300", MONDAY + timedelta(days=10))
+    await s.rig.kill.turn_on(actor="test", reason="drill")
+    s.clock.wall.now = EUROPE_CYCLE
+    await s.service.jobs.cycle("europe", MONDAY)
+    run = await europe_run(s)
+    assert step_of(run, "reserve")["status"] == "skipped"
+    assert "kill switch" in step_of(run, "reserve")["reason"]
+    assert step_of(run, "rebalance")["status"] == "skipped"
+
+
+async def test_a_reserve_or_rebalance_step_that_breaks_is_an_error_the_cycle_survives(
+    make: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = await make(paper=True)
+
+    async def broken(mode: Any) -> Any:
+        raise RuntimeError("the planner broke")
+
+    monkeypatch.setattr(s.service.jobs._capital.planner, "survey", broken)
+    monkeypatch.setattr(s.service._rebalancer, "survey", broken)
+    s.clock.wall.now = EUROPE_CYCLE
+    result = await s.service.jobs.cycle("europe", MONDAY)
+    assert result.reservations is None
+    assert result.plan is None
+    run = await europe_run(s)
+    assert step_of(run, "reserve")["status"] == "error"
+    assert step_of(run, "rebalance")["status"] == "error"
+    assert step_of(run, "execute")["status"] == "ok"

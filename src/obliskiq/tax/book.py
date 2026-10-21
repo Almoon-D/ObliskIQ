@@ -365,8 +365,7 @@ class TaxBook:
                     )
             return realisations, notes
         instrument = self._directory.describe(fill.conid)
-        if instrument is None:  # _rate refused it already
-            raise TaxError(f"conid {fill.conid} is described by no instrument")
+        assert instrument is not None  # _rate refused an undescribed conid already
         identity = identity_of(fill.conid, self._directory, self._facts)
         if identity is None:
             raise TaxError(f"conid {fill.conid} has no tax facts (eligibility.skeleton_tax_facts)")

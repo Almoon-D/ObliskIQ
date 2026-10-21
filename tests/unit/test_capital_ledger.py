@@ -15,10 +15,13 @@ import pytest
 
 from obliskiq.capital.flows import CashLedger, LedgerRefusal, parse_record_id, record_label
 from obliskiq.capital.questions import DEADLINE_ACTOR, OwnerQuestions, QuestionRefusal
+from obliskiq.capital.twr import account_twr
 from obliskiq.config import ObliskConfig
+from obliskiq.config.schema_instruments import EligibilityConfig
 from obliskiq.domain.capital import (
     Adjustment,
     AdjustmentKind,
+    CashEvent,
     CashEventState,
     Deposit,
     ExternalHolding,
@@ -31,9 +34,13 @@ from obliskiq.domain.capital import (
     Withdrawal,
     WithdrawalReservation,
 )
+from obliskiq.domain.tax import OpenLossWindow, SecurityIdentity, SecurityKind
 from obliskiq.errors import StoreError
 from obliskiq.store import Store, open_store
 from obliskiq.store import capital as repo
+from obliskiq.store import fx as fx_repo
+from obliskiq.store import lots as lots_repo
+from obliskiq.store import nav as nav_repo
 from obliskiq.store.worker import StoreWorker
 
 D = Decimal
@@ -447,3 +454,140 @@ def test_an_external_holding_refuses_a_value_that_is_not_finite() -> None:
     for field in ("quantity", "market_value_base"):
         with pytest.raises(ValueError, match="finite"):
             _holding(**{field: D("Infinity")})
+
+
+# ── what a record refuses, and rows the store cannot read ──
+
+
+def test_records_refuse_what_cannot_be_true() -> None:
+    with pytest.raises(ValueError, match="moves some money"):
+        Adjustment(
+            category=AdjustmentKind.FEE, amount=D(0), currency="EUR", on=TODAY, recorded_at=AT,
+            recorded_by="o",
+        )  # fmt: skip
+    with pytest.raises(ValueError, match="due on or after the day it is made"):
+        WithdrawalReservation(
+            amount=D(1), currency="EUR", due_date=TODAY - timedelta(days=1), reason="r",
+            created_at=AT, created_by="o", updated_at=AT,
+        )  # fmt: skip
+    good = question(1)
+    with pytest.raises(ValueError, match="the answer is one of the options"):
+        OwnerQuestion.model_validate(
+            good.model_dump()
+            | {"state": "answered", "answer": "sell", "answered_at": AT, "answered_by": "o"}
+        )
+    with pytest.raises(ValueError, match="says when and by whom"):
+        CashEvent(
+            currency="EUR", amount=D(1), detected_at=AT, updated_at=AT,
+            state=CashEventState.CLASSIFIED,
+        )  # fmt: skip
+    with pytest.raises(ValueError, match="only a currency, is keyed"):
+        SecurityIdentity(
+            key="CCY:USD",
+            kind=SecurityKind.SHARE,
+            isin=None,
+            issuer=None,
+            tracked_index=None,
+            listed=True,
+        )
+    with pytest.raises(ValueError, match="closes on or after its sale"):
+        OpenLossWindow(
+            security="1", sold_on=TODAY, closes_on=TODAY - timedelta(days=1),
+            loss_per_unit=D(1), units=D(1),
+        )  # fmt: skip
+
+
+def test_the_skeletons_tax_facts_name_allowlisted_conids_once(
+    shipped_settings: ObliskConfig,
+) -> None:
+    eligibility = shipped_settings.eligibility
+    fact = eligibility.skeleton_tax_facts[0]
+    with pytest.raises(ValueError, match="tax facts are listed once"):
+        EligibilityConfig.model_validate(
+            eligibility.model_dump() | {"skeleton_tax_facts": [fact.model_dump()] * 2}
+        )
+    stranger = fact.model_dump() | {"conid": 424242}
+    with pytest.raises(ValueError, match=r"the allowlist does not: \[424242\]"):
+        EligibilityConfig.model_validate(
+            eligibility.model_dump() | {"skeleton_tax_facts": [stranger]}
+        )
+
+
+def test_the_store_refuses_what_a_record_cannot_be(store: Store) -> None:
+    closed = WithdrawalReservation(
+        amount=D(1), currency="EUR", due_date=TODAY, reason="r", created_at=AT, created_by="o",
+        updated_at=AT, state=ReservationState.CANCELLED,
+    )  # fmt: skip
+    with pytest.raises(StoreError, match="a reservation starts open"):
+        repo.record_reservation(store, closed)
+    repo.record_reservation(store, closed.model_copy(update={"state": ReservationState.OPEN}))
+    repo.record_question(store, question(1), actor="planner")
+    with pytest.raises(StoreError, match="has no option 'sell'"):
+        repo.close_question(store, 1, state=QuestionState.ANSWERED, answer="sell", at=AT, actor="o")
+    repo.close_question(store, 1, state=QuestionState.ANSWERED, answer="proceed", at=AT, actor="o")
+    with pytest.raises(StoreError, match="is already answered"):
+        repo.close_question(
+            store, 1, state=QuestionState.EXPIRED, answer="proceed", at=AT, actor="o"
+        )
+    with pytest.raises(StoreError, match="is not a rate"):
+        fx_repo.record_rates(store, [fx_repo.FxRate("USD", TODAY, D(0), "test", AT)])
+
+
+def test_rows_the_store_cannot_read_fail_loudly(store: Store) -> None:
+    repo.upsert_external(store, _holding(), at=AT)
+    store.execute("UPDATE external_positions SET quantity = 'three'")
+    with pytest.raises(StoreError, match=r"external_positions.quantity holds 'three'"):
+        repo.external_holdings(store)
+    store.execute("UPDATE external_positions SET quantity = 'Infinity'")
+    with pytest.raises(StoreError, match="external_positions row cannot be read"):
+        repo.external_holdings(store)
+    store.execute(
+        "INSERT INTO tax_loss_windows (position, security, sold_on, closes_on, loss_per_unit, "
+        "units) VALUES (1, '1', '2026-10-01', '2026-10-21', '1', '-1')"
+    )
+    with pytest.raises(StoreError, match="a tax_loss_windows row is invalid"):
+        lots_repo.load_tax_state(store)
+
+
+async def test_a_question_the_store_refuses_for_another_reason_is_not_swallowed(
+    worker: StoreWorker, clock: Clock
+) -> None:
+    questions = OwnerQuestions(worker, now=clock)
+    with pytest.raises(StoreError, match="carries no id"):
+        await questions.ask(question(1).model_copy(update={"question_id": 7}), actor="planner")
+
+
+async def test_the_ledger_refuses_a_withdrawal_or_an_event_it_cannot_place(
+    ledger: CashLedger,
+) -> None:
+    loose = Withdrawal(amount=D(5), currency="EUR", on=TODAY, recorded_at=AT, recorded_by="o")
+    with pytest.raises(LedgerRefusal, match="a withdrawal ends a reservation"):
+        await ledger.record_withdrawal(loose)
+    unsaved = CashEvent(currency="EUR", amount=D(3), detected_at=AT, updated_at=AT)
+    flow = ledger.classification(unsaved, AdjustmentKind.FEE, actor="o", in_book=True, note=None)
+    with pytest.raises(LedgerRefusal, match="the cash event has no id"):
+        await ledger.classify(unsaved, flow, actor="o")
+
+
+# ── the time-weighted return over the store ──
+
+
+async def test_the_accounts_return_values_a_foreign_flow_at_its_days_rate(
+    shipped_settings: ObliskConfig, worker: StoreWorker
+) -> None:
+    for day, nav in ((date(2026, 10, 1), "1000"), (date(2026, 10, 2), "1190")):
+        await worker.run(nav_repo.record_nav, nav_repo.NavReading(day, D(nav), "EUR", "test", AT))
+    dollars = Deposit(
+        amount=D(100), currency="USD", on=date(2026, 10, 2), recorded_at=AT, recorded_by="o",
+        matched_at=AT,
+    )  # fmt: skip
+    await worker.run(repo.record_flow, dollars)
+    since, until = date(2026, 9, 30), date(2026, 10, 2)
+    unknown = await account_twr(worker, shipped_settings, since=since, as_of=until)
+    assert unknown.value is None
+    assert unknown.reason == "no USD rate was recorded on 2026-10-02"
+    await worker.run(
+        fx_repo.record_rates, [fx_repo.FxRate("USD", date(2026, 10, 2), D("0.9"), "test", AT)]
+    )
+    measured = await account_twr(worker, shipped_settings, since=since, as_of=until)
+    assert measured.value == D("0.1")  # (1190 - 90) / 1000 - 1

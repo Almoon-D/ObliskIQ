@@ -27,7 +27,7 @@ from obliskiq.decision.rebalance_basic import (
     confirm_targets,
     minimum_trade,
 )
-from obliskiq.domain.capital import Adjustment, AdjustmentKind
+from obliskiq.domain.capital import Adjustment, AdjustmentKind, Deposit
 from obliskiq.domain.orders import (
     ExecutionMode,
     Fill,
@@ -40,6 +40,7 @@ from obliskiq.domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
+from obliskiq.errors import TaxError
 from obliskiq.execution.executor import RETRY_NEXT_WINDOW
 from obliskiq.execution.instruments import ConfiguredDirectory
 from obliskiq.store import capital as capital_repo
@@ -444,3 +445,32 @@ def test_a_capped_book_names_its_cap(shipped_settings: ObliskConfig) -> None:
     capital = shipped_settings.capital.model_dump()
     with pytest.raises(ValueError, match=r"needs capital\.cap_base"):
         CapitalConfig.model_validate(capital | {"cap_base": None})
+
+
+# ── deposits and the tax lots ──
+
+
+async def test_a_deposit_that_cannot_be_valued_stops_the_plan(rig: Any) -> None:
+    deployment = rig.settings.capital.deployment.model_copy(update={"tranche_days": 5})
+    whole = with_capital(rig.settings, mode="whole_account", cap_base=None, deployment=deployment)
+    pounds = Deposit(
+        amount=Decimal(50), currency="GBP", on=OPEN.date(), recorded_at=OPEN, recorded_by="o",
+        matched_at=OPEN,
+    )  # fmt: skip
+    await rig.store(capital_repo.record_flow, pounds)  # the NAV holds it: the reader is fine
+    plan = await rebalancer(rig, whole).survey(ExecutionMode.SHADOW)
+    assert plan.blocked == "a deposit cannot be valued in EUR"
+
+
+async def test_without_readable_lots_buys_proceed_unchecked_by_the_two_month_rule(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    survey = rebalancer(rig)
+
+    async def unreadable() -> Any:
+        raise TaxError("the lots are corrupt")
+
+    monkeypatch.setattr(survey._tax, "hooks", unreadable)
+    plan = await survey.survey(ExecutionMode.SHADOW)
+    assert plan.blocked is None
+    assert len(plan.trades) == 3

@@ -229,8 +229,7 @@ class CapitalReader:
         """The book's own cash by currency in mode ``cap``: the start, the in-book flows and the
         cash the book's fills moved."""
         cap = self._settings.capital.cap_base
-        if cap is None:  # the schema refuses it; kept so the type is narrowed honestly
-            return "capital.mode cap names no cap_base"
+        assert cap is not None  # the schema requires a cap_base in mode cap
         cash: dict[str, Decimal] = {self._valuer.base: cap}
 
         def add(currency: str, amount: Decimal) -> None:
