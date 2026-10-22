@@ -12,7 +12,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
-| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | partly run (owner, 2026-10-20): day 1's login and read-only preflight passed under WSL2 Ubuntu with Java 11; the paper order test placed no order; day 2, the side test and the orders open, due before Session 6 (D68) | |
+| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | logins passed (owner, 2026-10-20 and 2026-10-21): both days' unattended login and read-only preflight passed under WSL2 Ubuntu with Java 11, and Java 21 and 25 passed once (21 Oct); the paper order test has placed no order (outside the windows on Xetra and the NYSE; on ASX inside its window the first live-orders read lacked `snapshot: true`); open: the order test, after the follow-up below | v0.12.1 |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
@@ -38,6 +38,37 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+
+### T1, second day (owner, 2026-10-21, v0.12.1)
+
+Run on the owner's machine (Ubuntu 26.04.1 under WSL2, `main` at v0.12.0, mode `shadow` before and
+after each run, account masked `DU*******`), six logins from 21:55 to 23:33 UTC, each at least ten
+minutes after the previous one's start and each on its first attempt. Shapes and times:
+docs/knowledge/ibkr.md, "T1, second day".
+
+**Landed.**
+- **Day-2 login and `preflight --read-only` (Java 11): every step passed.** With day 1 (2026-10-20),
+  T1's own criterion, two unattended logins and two finished preflights, is met.
+- **Java 21 (Temurin 21.0.12.1) and Java 25 (25.0.4.1): the same read-only preflight passed** from a
+  copy of `config/` outside the clone. One day each: `ibkr.gateway.java_major_versions` stays
+  `[11]` until a second day passes (D96). No Java 17 or `--add-opens` run was needed.
+- **Playwright 1.64 on Ubuntu 26.04.1:** six unattended logins; no manual login was needed.
+
+**Not landed: no order was placed.**
+- Xetra and NYSE, outside their windows (the owner's request): the pre-trade gate refused both with
+  `venue_not_tradable` before anything reached IBKR. That is the order window working, not a
+  fault; it was not widened.
+- ASX (BHP, conid 4036812, dry run from a config copy, inside its window): the calendar gate passed,
+  then the gate refused with `account_unreadable` because the first live-orders read of a session
+  had no `snapshot: true`. The in-window rerun on Xetra and the NYSE will refuse the same way.
+  **Follow-up below.**
+
+**Windows.** Not tried again: the Gateway starts only under WSL2 Ubuntu.
+
+**Next.** The snapshot follow-up, then `preflight --paper-order-test` inside both windows
+(16:00 to 17:15 Madrid time; 15:00 from 26 October), plus one more day of the Java 21 and 25 side
+runs. Paste the masked reports into a short session: *"Record T1's findings per SESSION_PROMPTS
+§A.5."*
 
 ### Session 7 — Capital, cash flows and tax (2026-10-21, v0.12.0)
 
@@ -1318,7 +1349,8 @@ settles it.
 | Positions closed during the day listed at zero | 4a | the execution test (`--finish`) |
 | IBKR's attached orders: a whatif of an entry with a child stop-limit linked by `parentId`, then whether IBKR lists, reports and cancels the child (not adopted, D99) | review | a later session, before attached orders are designed |
 | A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | the first gap on paper (Session 6 on) |
-| A fresh unattended Gateway login after IBKR's daily reset on the machine (day 1 passed under WSL2 Ubuntu with Java 11, 2026-10-20) | review | T1 |
+| A fresh unattended Gateway login after IBKR's daily reset on the machine: settled, day 1 (2026-10-20) and day 2 (2026-10-21) passed under WSL2 Ubuntu with Java 11 [CP ✓ 2026-10-21]; the in-process re-login is Session 6's | review | settled (T1) |
+| The live orders' `snapshot: true` on a session's first read: absent on the first read after a login (the ASX order test, 2026-10-21; the execution test's first `reconcile run`); a pre-read before the read that counts, then the same read on a second call | review | the follow-up fix, then T1's order test |
 | The stop-limit's `orderType`: ObliskIQ sends `STOP_LIMIT`, IBKR's order-types page writes `STP LMT` | 5 | the execution test |
 | A GTC stop listed in a later session's live orders, and its status readable by id (D99) | 5 | the execution test (`--finish` the next day) |
 | The spot-FX commission (0.20 bp, at least USD 2.00, charged in the base currency) against a conversion's trade | 5 | the execution test |
@@ -1329,9 +1361,9 @@ settles it.
 | Telegram's `sendMessage` in HTML mode from the machine, and a digest split under the cap | 6 | Session 6's live paper cycle (with `TELEGRAM_*` set) |
 | The shadow fill at the touch (D103) against paper fills of the same orders | 6 | 18 (TCA) |
 | The health ping (`OBLISK_HEALTH_PING_URL`) from the machine | 6 | the first week of `serve` |
-| The Gateway login on Java 21 and on Java 25 (the side test; Session 3's readings do not separate Java 11 from 21) | D96 | T1 |
-| Playwright 1.64 (Chrome for Testing's headless shell) logs in on Ubuntu 26.04 with the pinned-key flag | D96 | T1 |
-| A manual Gateway login on the machine through an SSH-forwarded browser, only if the unattended one is accepted without a session (whether IBKR treats it as local is unverified) | D96 | T1 |
+| The Gateway login on Java 21 and on Java 25 (the side test): passed once each, 2026-10-21 [CP ✓ 2026-10-21]; a second day lets them into `ibkr.gateway.java_major_versions` (D96) | D96 | a second day of the side runs (the order test's rerun day) |
+| Playwright 1.64 logs in on Ubuntu 26.04 with the pinned-key flag: settled, six first-attempt logins on 2026-10-21 under WSL2 Ubuntu 26.04.1 [CP ✓ 2026-10-21] | D96 | settled (T1) |
+| A manual Gateway login on the machine through an SSH-forwarded browser: not needed, the unattended login was accepted with a session | D96 | closed (T1) |
 | European commissions (`europe_eur`, `europe_usd`, `lse_gbp`, `six_gbp`, `six_chf`, SmartRouting since D97) against an executed UCITS order | 4b | T1 (the paper order test), 6, 18 (TCA) |
 | Tax-free fund switches at IBKR (`fund_switch_deferral_at_broker: false` until verified) | 4b | 19a (mutual funds) |
 | The savings scale for tax year 2027 (the table is verified through 2026) | 4b | the monthly tax-source check (§5.16), 2027 |
@@ -1357,8 +1389,16 @@ settles it.
     already `pow`.
   - Session 8: a venue the universe admits is covered through `calendars.horizon_years`, by
     the library or a `synthetic_calendars` entry (XSHG, XBOM and XSES end 2026-12-31).
-  - T1's record, and 2027-07-01 at the latest: the Gateway's Java list. Temurin builds Java 11 to
-    at least October 2027; if no newer Java passes, D68's TWS API with IBC.
+  - The Gateway's Java list, and 2027-07-01 at the latest: Java 21 and 25 each passed one day
+    (2026-10-21); a second day of side runs adds them, newest first (D96). Temurin builds Java 11 to
+    at least October 2027.
+- **T1's order test.** `preflight --paper-order-test` has placed no order (docs/knowledge/ibkr.md,
+  "T1, second day"). Before the rerun: the first live-orders read of a session lacks `snapshot: true`
+  and the pre-trade gate, the cOID lookup and `reconcile` all treat it as incomplete, so a fresh
+  process cannot place an order. A session reads the live orders once before the read that counts
+  (the endpoint's documented pre-flight) and fails closed if the second read is also incomplete;
+  failure-branch tests for both. It is a money path: its own session, not a patch inside a record.
+  Then the order test inside both windows, and the Java side runs on that day.
 - **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year

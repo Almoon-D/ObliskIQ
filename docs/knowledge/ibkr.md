@@ -313,7 +313,8 @@ VERIFY-LIVE(secdef search without secType).
   the password was accepted. No Java version produced a usable session, and the likely cause, the
   container's changing outbound address, applied to every attempt whatever the Java. So the
   readings do not separate Java 11 from Java 21.
-  VERIFY-LIVE(Gateway login on Java 21 and 25 on the deployment machine).
+  VERIFY-LIVE(Gateway login on Java 21 and 25 on the deployment machine): one day observed, see
+  *T1, second day* below.
 
 ## T1, first day (the owner's report, 2026-10-20)
 
@@ -343,6 +344,64 @@ written; nothing below was observed by a session.
   before its close; from 15:00 in the week of 26–30 October, when Europe has left summer time
   and the US has not).
 
+## T1, second day (2026-10-21, run by the owner's session on the same machine)
+
+The same machine as the first day: Ubuntu 26.04.1 LTS under WSL2, Temurin 11.0.32.1, Playwright
+1.64 with its Chromium, paper profile over the Gateway transport, no OAuth variable in the
+distribution's environment, execution mode `shadow` before and after every run. Account masked
+`DU*******`; every run is one login, at least ten minutes after the previous one's start. Times are
+UTC. Native Windows was not tried again.
+
+- **Day-2 login and read-only preflight passed, every step** (21:55). Gateway started to logged in
+  in 13 s on the first attempt; `ssodh/init` answered `authenticated: true`, `competing: false`;
+  accounts, guard, positions (none), cash (EUR), SPY on ARCA conid 756733 (delayed, flag `DP`, 1200 s),
+  21 daily bars, contract rules (12 order types, size increment 40.0), 10 algos and 6 regular
+  sessions of the trading schedule. The login is a fresh unattended one on the calendar day after
+  day 1, with a Gateway process that was started and stopped by the command.
+  [CP ✓ 2026-10-21]
+- **Playwright 1.64's headless Chromium logs in on Ubuntu 26.04.1** with the form flow
+  (`keystroke_delay_ms`, `presubmit_wait_seconds`) unchanged: six logins that day, each on the first
+  attempt, no "Authentication failed", no session-less acceptance. `ssodh/init` was retried once
+  after a backoff of 0.7 s in the ASX order run and answered authenticated on the second try.
+  [CP ✓ 2026-10-21]
+- **Java 21 and Java 25 each passed the whole read-only preflight** with the same report (Temurin
+  21.0.12.1 at 22:18, Temurin 25.0.4.1 at 22:29), run from a copy of `config/` outside the clone
+  whose `owner.yaml` listed that version in `ibkr.gateway.java_major_versions`, with
+  `OBLISK_IBKR_GATEWAY_JAVA_HOME` pointing at that JDK. No `--add-opens` option and no Java 17 run was
+  needed. This is **one day** for each version (day 1 had no side run), so the list stays `[11]`
+  until a second day passes (D96). [CP ✓ 2026-10-21]
+- **`--paper-order-test` placed no order on any of three venues.** The command ran in `paper` mode
+  and the mode went back to `shadow` after each run.
+  - *Xetra and NYSE, 22:07 UTC (outside both windows, by the owner's choice).* EXV1 (conid 89005163)
+    and FCX (conid 7089) passed identity, algos, quote and whatif; EXV1's quote was `frozen` and
+    FCX's `unreported`; limits 36.960 and 65.14 (0.05 below the bid); whatif commission 3 EUR and
+    1.00 USD, initial margin change 11 and 2021, no warning. The **pre-trade gate then refused each
+    with `venue_not_tradable` (`outside_window`)** before anything was sent to IBKR. That refusal is
+    ObliskIQ's own order window (`calendars.order_offsets`: 30 minutes after the open to 15 before
+    the close), not an IBKR answer. [CP ✓ 2026-10-21]
+  - *ASX, 23:33 UTC (10:33 in Sydney, inside the window), a dry run with a config copy.* BHP resolved
+    through the same contract search to **conid 4036812** on ASX in AUD (22:40, read-only preflight
+    with `ibkr.preflight` set to BHP: snapshot `frozen` flag `ZB` with the prior close as last, 22 daily
+    bars, 9 order types, tick bands 0.001, 0.005 from 0.1 and 0.01 from 2, size increment 1.0,
+    algos as for SPY, schedule in `Australia/NSW`). In the window the order test passed identity,
+    algos, quote (`delayed`, limit 54.96) and whatif (commission 6 AUD, initial margin change 12,
+    **warning 4**: the report prints the count, not the text), and the calendar gate passed. The gate
+    then refused with **`account_unreadable: the live orders are not a complete snapshot`**.
+    [CP ✓ 2026-10-21]
+- **The live orders of a session's first read lack `snapshot: true`.** This is the same refusal the
+  v0.10.1 execution test met once at its first `reconcile run` (ROADMAP), now met by the pre-trade
+  gate on the first live-orders read after a login. The gate and the cOID lookup treat the list as
+  incomplete by design (*Live orders, status and trades* in `ibkr-orders.md`); nothing retries or
+  pre-reads it, so **a fresh process cannot place an order until the live orders are read once before
+  the read that counts**. The in-window rerun on Xetra and the NYSE will meet the same refusal after the
+  calendar gate passes. The fix is a code change on a money path (follow-up in ROADMAP), not done here.
+  [CP ✓ 2026-10-21]
+- **Not observed:** an order placed, read, replied to and cancelled; the cOID's presence in the live
+  orders and the trades; any answer to a `o354`/`o10164`-class reply; European and Australian
+  commissions of an executed order.
+- **T1's own criterion is met** ("both logins complete unattended and both preflights finish",
+  SESSION_PROMPTS §A.5): day 1 on 2026-10-20 and day 2 on 2026-10-21, both under WSL2 Ubuntu with
+  Java 11. The paper order test, the other half of what §A.5 says T1 proves, is still open.
 
 ## Session 7 (2026-10-21): cash activity, not yet observed
 

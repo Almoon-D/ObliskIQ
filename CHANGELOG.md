@@ -5,6 +5,22 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.12.1] - 2026-10-21
+
+T1's second day on the deployment machine, recorded. No source change; one comment in
+`config/defaults/ibkr.yaml` brought up to date.
+
+### Changed
+
+- `docs/knowledge/ibkr.md`: the second day's unattended login and read-only preflight passed under
+  WSL2 Ubuntu 26.04.1 with Java 11, so T1's two-login criterion is met; Java 21 and Java 25 each
+  passed the same preflight once; `--paper-order-test` placed no order (Xetra and the NYSE were
+  outside their windows; on ASX the first live-orders read of a session lacked `snapshot: true`).
+- `docs/ROADMAP.md`: the live verification queue settles the second-day login and Playwright 1.64
+  rows, re-dates the Java row and adds the first-read snapshot row; a follow-up for the snapshot
+  pre-read before the order test is rerun inside both windows.
+- `ibkr.gateway.java_major_versions` stays `[11]`: 21 and 25 need a second day (DECISIONS D96).
+
 ## [0.12.0] - 2026-10-21
 
 Session 7, capital, cash flows and tax: the bot knows how much it manages, plans for deposits and
