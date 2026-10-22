@@ -308,3 +308,31 @@ async def test_a_heartbeat_that_breaks_never_stops_the_service(
     monkeypatch.setattr(s.service.jobs, "heartbeat", broken)
     await run_until(s, BEFORE_EUROPE, BEFORE_EUROPE + timedelta(minutes=11))
     assert len(beats) == 3  # 08:55, 09:00 and 09:05: each failed and the next one ran
+
+
+async def test_the_service_collects_each_venue_after_its_close_and_survives_a_failing_job(
+    make: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = await make(collect=True)
+    seen: list[tuple[str, tuple[str, ...]]] = []
+    collector = s.service._collector
+    assert collector is not None
+
+    async def recorded(command: str, session_date: date, *, venues: Any, **kw: Any) -> Any:
+        seen.append((command, tuple(venues)))
+        if command == "collect:XAMS":
+            raise RuntimeError("the collector broke")
+        return None
+
+    monkeypatch.setattr(collector, "run", recorded)
+    await run_until(
+        s, datetime(2026, 10, 26, 16, 59, tzinfo=UTC), datetime(2026, 10, 26, 21, 1, tzinfo=UTC)
+    )
+    commands = [command for command, _ in seen]
+    assert commands.index("collect:XAMS") < commands.index("collect:XNYS")
+    venues = dict(seen)
+    assert venues["collect:XAMS"] == ("XAMS",)
+    # The service's calendars cover seven venues: every other venue of the plan, uncovered, is
+    # collected in New York's job.
+    assert {"XNYS", "XHKG", "XKRX"} <= set(venues["collect:XNYS"])
+    assert any(job.command == "digest" for job in s.service.ran)  # the broken job stopped nothing

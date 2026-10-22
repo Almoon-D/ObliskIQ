@@ -1,0 +1,13 @@
+Fund Holdings as of,"20/Oct/2026"
+
+Ticker,Name,Sector,Asset Class,Market Value,Weight (%),Notional Value,Shares,Price,Location,Exchange,Market Currency
+"AAPL","APPLE","Information Technology","Equity","8,344,104,027.00","5.47","8,344,104,027.00","24,577,626.00","339.50","United States","NASDAQ","USD"
+"NVDA","NVIDIA","Information Technology","Equity","8,327,868,240.45","5.46","8,327,868,240.45","38,471,235.00","216.47","United States","NASDAQ","USD"
+"7203","TOYOTA MOTOR","Consumer Discretionary","Equity","303,961,242.05","0.20","303,961,242.05","15,478,800.00","19.64","Japan","Tokyo Stock Exchange","JPY"
+"1605","INPEX","Energy","Equity","36,947,486.54","0.02","36,947,486.54","1,526,657.00","24.20","Japan","Tokyo Stock Exchange","JPY"
+"SAP","SAP","Information Technology","Equity","392,320,794.82","0.26","392,320,794.82","1,730,931.00","226.65","Germany","Xetra","EUR"
+"SIE","SIEMENS N AG","Industrials","Equity","357,845,708.88","0.23","357,845,708.88","1,222,718.00","292.67","Germany","Xetra","EUR"
+"ROP","ROCHE PS PAR AG","Health Care","Equity","554,961,523.71","0.36","554,961,523.71","1,175,041.00","472.29","Switzerland","SIX Swiss Exchange","CHF"
+"Z Z6","FTSE 100 INDEX DEC 26","Cash and/or Derivatives","Futures","0.00","0.00","58,954,573.91","409.00","14,414.23","-","IFLL","GBP"
+"ESZ6","S&P500 EMINI DEC 26","Cash and/or Derivatives","Futures","0.00","0.00","486,641,937.50","1,255.00","7,755.25","-","Index And Options Market","USD"
+

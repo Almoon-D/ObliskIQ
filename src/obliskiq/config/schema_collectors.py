@@ -14,8 +14,10 @@ from pydantic import (
     model_validator,
 )
 
+from ..domain.base import CountryCode, NonEmptyText
 from ..domain.calendar import Mic
-from .base import FrozenModel
+from .base import FrozenModel, Identifier
+from .schema_calendars import IbkrExchangeCode
 
 #: The rungs ``collectors.chain.sigma_ladder`` may name.
 type SigmaRung = Literal["realised_primary", "realised_fallback", "vendor_iv", "default"]
@@ -80,6 +82,16 @@ class CurveCollectorConfig(FrozenModel):
     min_expiries_for_roll: PositiveInt
 
 
+class CandidatesConfig(FrozenModel):
+    refresh_days: PositiveInt
+    equity_asset_class: NonEmptyText
+    date_formats: list[NonEmptyText] = Field(min_length=1)
+    name_noise: list[NonEmptyText]
+    sectors: dict[NonEmptyText, Identifier]
+    locations: dict[NonEmptyText, CountryCode]
+    exchanges: dict[NonEmptyText, IbkrExchangeCode]
+
+
 class CollectorsConfig(FrozenModel):
     retry: RetryConfig
     schedule: CollectScheduleConfig
@@ -88,6 +100,7 @@ class CollectorsConfig(FrozenModel):
     vol: VolConfig
     chain: ChainCollectorConfig
     curve: CurveCollectorConfig
+    candidates: CandidatesConfig
 
     @model_validator(mode="after")
     def _every_step_has_a_deadline(self) -> Self:

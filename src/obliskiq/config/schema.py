@@ -178,6 +178,16 @@ class ObliskConfig(FrozenModel):
             for mic in feed.venues
             if mic not in known
         ]
+        problems += [
+            f"collectors.candidates.exchanges: {code} is not in ibkr_exchanges"
+            for code in sorted(set(self.collectors.candidates.exchanges.values()))
+            if code not in self.ibkr_exchanges
+        ]
+        problems += [
+            f"collectors.candidates.sectors: {sector} is not a sector of the grid"
+            for sector in sorted(set(self.collectors.candidates.sectors.values()))
+            if sector not in self.universe.grid.sectors
+        ]
         problems += self._universe_problems()
         problems += self._paper_order_problems()
         problems += self._currency_problems()
