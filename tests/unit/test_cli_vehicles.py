@@ -80,13 +80,13 @@ def test_the_probe_prints_its_report_with_the_account_masked(
 
         async def run(self, checks: Any) -> ProbeReport:
             report = ProbeReport(self.day)
-            report.add("etf@XETR", "order", True, "previewed for DU1234567")
+            report.add("etf@XETR", "order", True, "previewed for U1234567")
             return report
 
     def with_path(loaded: Any, run_probe: Any) -> Any:
         import asyncio
 
-        client = SimpleNamespace(guard=SimpleNamespace(account_id="DU1234567"))
+        client = SimpleNamespace(guard=SimpleNamespace(account_id="U1234567"))
         return asyncio.run(run_probe(SimpleNamespace(client=client, orders=None)))
 
     monkeypatch.setattr("obliskiq.cli.app._broker_refusal", lambda _env, _out: None)
@@ -95,7 +95,7 @@ def test_the_probe_prints_its_report_with_the_account_masked(
     status, out = _run("universe", "capabilities", "--probe")
     assert status == EXIT_OK, out
     assert "whatif only, nothing placed" in out
-    assert "DU1234567" not in out
+    assert "U1234567" not in out
 
 
 def test_a_probe_that_cannot_start_says_so(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
