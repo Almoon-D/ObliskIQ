@@ -24,11 +24,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from collections.abc import Collection as Venues
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 
+from ...calendars.profiles import venue_profiles
 from ...config.schema import ObliskConfig
 from ...config.schema_universe import UniverseInstrument
 from ...domain.enums import AssetClass, InstrumentRole
@@ -47,18 +49,25 @@ from .targets import refused_as_leveraged, venue_of
 
 STEP = "universe"
 
-#: The contract search's security type for each asset class (an ETF searches as a stock).
-SEARCH_SEC_TYPE: dict[AssetClass, str] = {
-    AssetClass.STOCK: "STK",
-    AssetClass.ETF: "STK",
-    AssetClass.ETC: "STK",
-    AssetClass.INDEX: "IND",
-    AssetClass.FUND: "FUND",
-    AssetClass.BOND: "BOND",
-}
+#: The contract search's security type for each asset class the universe declares (an ETF
+#: searches as a stock).
+SEARCH_SEC_TYPE: Mapping[AssetClass, str] = MappingProxyType(
+    {
+        AssetClass.STOCK: "STK",
+        AssetClass.ETF: "STK",
+        AssetClass.ETC: "STK",
+        AssetClass.INDEX: "IND",
+        AssetClass.FUND: "FUND",
+        AssetClass.BOND: "BOND",
+    }
+)
 
 
-def _stored(declared: UniverseInstrument, identity: ContractIdentity, at: datetime) -> Instrument:
+def _stored(
+    declared: UniverseInstrument, identity: ContractIdentity, at: datetime, board_lot: int | None
+) -> Instrument:
+    """The store's record of ``declared``; a share without a lot of its own trades in its
+    venue's board lot (``venues.<MIC>.board_lot``: Tokyo's 100), where the venue has one."""
     attrs = declared.attributes
     return Instrument(
         conid=identity.conid,
@@ -70,7 +79,7 @@ def _stored(declared: UniverseInstrument, identity: ContractIdentity, at: dateti
         ucits=attrs.ucits,
         kid_status=attrs.kid,
         share_class=attrs.share_class,
-        lot_size=attrs.lot_size,
+        lot_size=attrs.lot_size if attrs.lot_size is not None else board_lot,
         option_exchange=declared.option_exchange,
         history_exchange=declared.history_exchange,
         roles=frozenset(declared.roles),
@@ -146,14 +155,16 @@ class UniverseSync:
             if identity is None or declared.conid is None:
                 continue
             if not dry_run:
+                lot = self._board_lot(declared.listing_exchange)
                 replaced = await self._worker.run(
-                    seed_instrument, _stored(declared, identity, at), at=at
+                    seed_instrument, _stored(declared, identity, at, lot), at=at
                 )
                 superseded += [
                     f"{declared.symbol}: {conid} by {identity.conid}" for conid in replaced
                 ]
             collection.succeeded(declared.symbol, 1, conid=identity.conid)
-        seeded = 0 if dry_run else await self._worker.run(_seed_candidates, at=at)
+        lots = {code: self._board_lot(code) for code in self._settings.ibkr_exchanges}
+        seeded = 0 if dry_run else await self._worker.run(_seed_candidates, at=at, lots=lots)
         if rejections and not dry_run:
             await self._worker.run(universe_repo.record_rejections, rejections)
         collection.notes.update(
@@ -165,13 +176,14 @@ class UniverseSync:
         )
         return collection
 
+    def _board_lot(self, exchange: str) -> int | None:
+        venue = venue_of(self._settings, exchange)
+        return None if venue is None else venue_profiles(self._settings)[venue].board_lot
+
     async def _identity(
         self, declared: UniverseInstrument, collection: Collection
     ) -> ContractIdentity | None:
-        sec_type = SEARCH_SEC_TYPE.get(declared.asset_class)
-        if sec_type is None:
-            collection.failed(declared.symbol, f"a {declared.asset_class} is not resolved here")
-            return None
+        sec_type = SEARCH_SEC_TYPE[declared.asset_class]  # every class the universe declares
 
         async def resolve() -> ContractIdentity:
             return await resolve_identity(
@@ -203,8 +215,9 @@ class UniverseSync:
         return identity
 
 
-def _seed_candidates(store: Store, *, at: datetime) -> int:
-    """Seed every pinned stock candidate the store has not yet seeded, as a tradable share."""
+def _seed_candidates(store: Store, *, at: datetime, lots: Mapping[str, int | None]) -> int:
+    """Seed every pinned stock candidate the store has not yet seeded, as a tradable share in
+    its venue's board lot."""
     standing = {
         held.conid
         for held in repos.list_instruments(store, as_of=at.date(), include_superseded=True)
@@ -229,7 +242,7 @@ def _seed_candidates(store: Store, *, at: datetime) -> int:
                 ucits=None,
                 kid_status=None,
                 share_class=None,
-                lot_size=None,
+                lot_size=lots.get(resolution.listing_exchange),
                 option_exchange=None,
                 history_exchange=None,
                 roles=frozenset({InstrumentRole.TRADABLE_CANDIDATE}),
@@ -252,7 +265,7 @@ def pin_in_file(path: Path, symbol: str, conid: int) -> None:
     line (and every comment) as it was. Refused when the symbol is not declared once or is
     already pinned."""
     text = path.read_text(encoding="utf-8")
-    starts = [match for match in _BLOCK.finditer(text) if match.group("symbol") == symbol]
+    starts = [m for m in _BLOCK.finditer(text) if m.group("symbol").strip("\"'") == symbol]
     if len(starts) != 1:
         raise ConfigError(f"{symbol} is declared {len(starts)} times in {path.name}, not once")
     following = _BLOCK.search(text, starts[0].end())

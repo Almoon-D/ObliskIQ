@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Iterable
 
+from obliskiq.config.schema_universe import UniverseInstrument
 from obliskiq.domain.enums import AssetClass
 from obliskiq.domain.instrument import TradedInstrument
 from obliskiq.jurisdiction.eligibility import EXCHANGE_TRADED_PRODUCTS, EligibilityVerdict
@@ -29,6 +30,11 @@ class AllowlistEligibility:
         self, eligible: bool, reason: str, *, mandatory_close: bool = False
     ) -> EligibilityVerdict:
         return EligibilityVerdict(eligible, reason, POLICY_ID, mandatory_close)
+
+    def assess_declared(self, declared: UniverseInstrument) -> EligibilityVerdict:
+        if declared.conid in self.allowed:
+            return self._verdict(True, f"{declared.symbol} is in the allowlist")
+        return self._verdict(False, f"{declared.symbol} is not in the allowlist")
 
     def assess(
         self, instrument: TradedInstrument, *, underlying: TradedInstrument | None

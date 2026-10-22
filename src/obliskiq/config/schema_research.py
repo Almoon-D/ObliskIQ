@@ -62,6 +62,9 @@ class EcbVendor(FrozenModel):
 
 class YahooVendor(FrozenModel):
     bias_notes: Notes
+    universe_start: date
+    suffixes: dict[NonEmptyText, Annotated[str, Field(pattern=r"^(\.[A-Z]{1,3})?$")]]
+    digits: dict[NonEmptyText, PositiveInt]
 
 
 class MsciVendor(FrozenModel):

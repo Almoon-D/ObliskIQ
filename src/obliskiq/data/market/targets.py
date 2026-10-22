@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from ...calendars.service import Calendars
 from ...config.schema import ObliskConfig
@@ -35,8 +36,9 @@ class MarketTarget:
     option_exchange: str | None
     currency: str
     asset_class: AssetClass
-    #: The MIC whose close schedules this target.
+    #: The MIC whose close schedules this target, and its time zone.
     venue: str
+    zone: ZoneInfo
     collect_bars: bool
     collect_chain: bool
     inception: date | None
@@ -49,16 +51,21 @@ class RootTarget:
 
     root: FuturesRootConfig
     venue: str
+    zone: ZoneInfo
 
 
-def venue_session(calendars: Calendars, venue: str, now: datetime) -> date:
+def venue_session(calendars: Calendars, venue: str, zone: ZoneInfo, now: datetime) -> date:
     """The session a collection at ``now`` is of: the venue's last completed one, or the venue's
-    own date where the calendars do not cover it."""
+    own date (in its ``zone``) where the calendars do not cover it."""
     try:
         completed = calendars.last_completed_session(venue, now)
     except CalendarError:
         completed = None
-    return completed or now.astimezone(calendars.venue(venue).zone).date()
+    return completed or now.astimezone(zone).date()
+
+
+def venue_zone(settings: ObliskConfig, venue: str) -> ZoneInfo:
+    return ZoneInfo(settings.venues[venue].timezone)
 
 
 def venue_of(settings: ObliskConfig, exchange: str) -> str | None:
@@ -93,6 +100,7 @@ def declared_targets(settings: ObliskConfig) -> tuple[MarketTarget, ...]:
                 currency=declared.currency,
                 asset_class=declared.asset_class,
                 venue=venue,
+                zone=venue_zone(settings, venue),
                 collect_bars=declared.collect_bars,
                 collect_chain=declared.collects_chain,
                 inception=declared.attributes.inception,
@@ -122,6 +130,7 @@ def candidate_targets(
                 currency=instrument.currency,
                 asset_class=instrument.asset_class,
                 venue=venue,
+                zone=venue_zone(settings, venue),
                 collect_bars=True,
                 collect_chain=False,
                 inception=None,
@@ -134,7 +143,7 @@ def candidate_targets(
 def root_targets(settings: ObliskConfig) -> tuple[RootTarget, ...]:
     """The tracked futures roots, each on the venue of its exchange."""
     return tuple(
-        RootTarget(root, venue)
+        RootTarget(root, venue, venue_zone(settings, venue))
         for root in settings.universe.futures_roots
         if root.tracked and (venue := venue_of(settings, root.exchange)) is not None
     )

@@ -30,7 +30,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import csv
-import functools
 import hashlib
 import io
 import re
@@ -38,6 +37,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from typing import NamedTuple
 
 import httpx
 
@@ -73,20 +73,35 @@ class ParsedHoldings:
     lines: tuple[Holding, ...]
 
 
+class Quoted(NamedTuple):
+    """One listing of a candidate: its ticker, its IBKR exchange (``None`` where the venue is not
+    configured) and the currency it trades in."""
+
+    ticker: str
+    exchange: str | None
+    currency: str | None
+
+
 @dataclass(frozen=True, slots=True)
 class Candidate:
     """One company a cell may hold, with every listing and source it was seen on."""
 
     key: str
     name: str
-    tickers: tuple[str, ...]
-    listing_exchanges: tuple[str, ...]
-    currency: str | None
+    listings: tuple[Quoted, ...]
     country: str | None
     #: Its largest weight in any one source (a fraction of that fund).
     weight: float | None
     sources: tuple[str, ...]
     since: date | None
+
+    @property
+    def tickers(self) -> tuple[str, ...]:
+        return tuple(sorted({listing.ticker for listing in self.listings}))
+
+    def venue_listings(self) -> tuple[Quoted, ...]:
+        """The listings on a configured venue whose currency is known, in order."""
+        return tuple(q for q in self.listings if q.exchange is not None and q.currency is not None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,17 +230,13 @@ def _source_markets(settings: ObliskConfig) -> dict[str, str | None]:
 class _Building:
     name: str
     country: str | None
-    currency: str | None
-    tickers: set[str]
-    exchanges: set[str]
+    listings: set[Quoted]
     sources: set[str]
     weight: float | None
     since: date | None
 
-    def add(self, ticker: str, exchange: str | None, source: str, weight: float | None) -> None:
-        self.tickers.add(ticker)
-        if exchange:
-            self.exchanges.add(exchange)
+    def add(self, listing: Quoted, source: str, weight: float | None) -> None:
+        self.listings.add(listing)
         self.sources.add(source)
         if weight is not None and (self.weight is None or weight > self.weight):
             self.weight = weight
@@ -234,9 +245,7 @@ class _Building:
         return Candidate(
             key=key,
             name=self.name,
-            tickers=tuple(sorted(self.tickers)),
-            listing_exchanges=tuple(sorted(self.exchanges)),
-            currency=self.currency,
+            listings=tuple(sorted(self.listings, key=lambda q: (q.exchange or "~", q.ticker))),
             country=self.country,
             weight=self.weight,
             sources=tuple(sorted(self.sources)),
@@ -269,17 +278,17 @@ def credit(
         }
         sectors = {grid.broad_sector, *([line.sector] if line.sector else [])}
         for cell in ((market, sector) for market in markets for sector in sectors):
-            seed = _Building(line.name, line.country, line.currency, set(), set(), set(), None,
-                             first.get(key))  # fmt: skip
-            entry(cell, key, seed).add(line.ticker, line.ibkr_exchange, line.fund_symbol,
-                                       line.weight)  # fmt: skip
+            seed = _Building(line.name, line.country, set(), set(), None, first.get(key))
+            listing = Quoted(line.ticker, line.ibkr_exchange, line.currency)
+            entry(cell, key, seed).add(listing, line.fund_symbol, line.weight)
     for row in scanned:
         if row.market not in grid.markets:
             continue
         name = row.company_name or row.symbol or str(row.conid)
-        seed = _Building(name, None, None, set(), set(), set(), None, row.scanned_on)
+        seed = _Building(name, None, set(), set(), None, row.scanned_on)
+        listing = Quoted(row.symbol or str(row.conid), row.listing_exchange, None)
         entry((row.market, grid.broad_sector), row.candidate_key, seed).add(
-            row.symbol or str(row.conid), row.listing_exchange, f"scanner {row.location}", None
+            listing, f"scanner {row.location}", None
         )
     return {
         cell: tuple(
@@ -381,10 +390,9 @@ class CandidateCollector:
                 collection.succeeded(declared.symbol, 0, held=str(latest.as_of))
                 continue
             try:
-                parsed = await self._pacer.retry(
-                    declared.symbol,
-                    functools.partial(self._download, declared.symbol, source.url, now),
-                )
+                # The download's own retries are the HTTP layer's (``http``); a refused or
+                # unreadable file is the same file on a second attempt.
+                parsed = await self._download(declared.symbol, source.url, now)
             except Exception as exc:  # one source never stops the refresh
                 collection.failed(declared.symbol, failure_text(exc))
                 continue
@@ -443,34 +451,28 @@ async def resolve_candidate(
     """The one contract a candidate's listing names (exact ticker on its venue, its currency
     confirmed), or the failure. Each listing the candidate was seen on is tried in turn."""
     failures: list[str] = []
-    if candidate.currency is not None:
-        for exchange in candidate.listing_exchanges:
-            for ticker in candidate.tickers:
-                try:
-                    identity = await resolve_identity(
-                        secdef,
-                        ticker,
-                        listing_exchange=exchange,
-                        currency=candidate.currency,
-                        sec_type=STOCK,
-                    )
-                except Exception as exc:  # the next listing may resolve
-                    failures.append(f"{ticker} on {exchange}: {failure_text(exc)}")
-                    continue
-                return CandidateResolution(
-                    candidate_key=candidate.key,
-                    resolved_at=at,
-                    conid=identity.conid,
-                    symbol=identity.symbol,
-                    listing_exchange=identity.listing_exchange,
-                    currency=identity.currency,
-                    pinned=pinned_for is not None,
-                    pinned_for=pinned_for,
-                    failure=None,
-                )
-    reason = "; ".join(failures) or (
-        "no listing on a configured venue" if candidate.currency else "no currency is known"
-    )
+    for ticker, exchange, currency in candidate.venue_listings():
+        if exchange is None or currency is None:  # pragma: no cover - venue_listings keeps none
+            continue
+        try:
+            identity = await resolve_identity(
+                secdef, ticker, listing_exchange=exchange, currency=currency, sec_type=STOCK
+            )
+        except Exception as exc:  # the next listing may resolve
+            failures.append(f"{ticker} on {exchange}: {failure_text(exc)}")
+            continue
+        return CandidateResolution(
+            candidate_key=candidate.key,
+            resolved_at=at,
+            conid=identity.conid,
+            symbol=identity.symbol,
+            listing_exchange=identity.listing_exchange,
+            currency=identity.currency,
+            pinned=pinned_for is not None,
+            pinned_for=pinned_for,
+            failure=None,
+        )
+    reason = "; ".join(failures) or "no listing on a configured venue with a known currency"
     return CandidateResolution(
         candidate_key=candidate.key,
         resolved_at=at,

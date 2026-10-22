@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 from ...calendars.service import Calendars
 from ...config.schema import ObliskConfig
 from ...domain.market import Bar
+from ...ibkr.errors import NoDataPermanentError
 from ...ibkr.history import HistoryReader
 from ...ibkr.models import HistoryBar
 from ...store import repos
@@ -100,13 +101,13 @@ class Backfill:
         return collection
 
     async def _one(self, target: MarketTarget, collection: Collection, *, dry_run: bool) -> None:
-        latest = venue_session(self._calendars, target.venue, self._now())
+        latest = venue_session(self._calendars, target.venue, target.zone, self._now())
         floor = years_before(latest, self._config.backfill.window_years)
         if target.inception is not None:
             floor = max(floor, target.inception)
         newest = await self._worker.run(repos.latest_bar_date, target.conid, as_of=latest)
         oldest = await self._worker.run(repos.earliest_bar_date, target.conid, as_of=latest)
-        zone = self._calendars.venue(target.venue).zone
+        zone = target.zone
         spans: list[tuple[date, date]] = []
         if newest is None or oldest is None:
             spans.append((floor, latest))
@@ -115,12 +116,21 @@ class Backfill:
             if oldest > floor:
                 spans.append((floor, oldest - timedelta(days=1)))
         bars: list[Bar] = []
-        for earliest, last in spans:
-            served = await self._history.daily_between(
-                target.conid, earliest=earliest, latest=last, exchange=target.history_exchange
-            )
-            bars += session_bars(target.conid, served.bars, zone)
-            await self._pacer.pace()
+        for index, (earliest, last) in enumerate(spans):
+            try:
+                served = await self._history.daily_between(
+                    target.conid, earliest=earliest, latest=last, exchange=target.history_exchange
+                )
+            except NoDataPermanentError:
+                if index == 0:
+                    raise
+                # Older history refused: the instrument's history starts after the window's.
+                continue
+            finally:
+                await self._pacer.pace()
+            bars += [
+                b for b in session_bars(target.conid, served.bars, zone) if b.session_date <= latest
+            ]
         if not bars and newest is None:
             collection.failed(
                 target.symbol,

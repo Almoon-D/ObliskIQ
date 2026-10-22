@@ -2,7 +2,8 @@
 
 The currencies its listings trade in, the IBKR trading permission an order there needs and the
 standard unit of its shares, each with where it comes from (``venues.yaml``). Market-data cost
-and availability are the feeds of ``market_data`` (``data/market/availability.py``).
+and availability are the feeds of ``market_data`` and the owner's plan
+(``MarketDataConfig.planned_feed``), which the snapshot collector judges each quote against.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -29,25 +30,18 @@ class VenueProfile:
     lots_source: str
     unverified: tuple[str, ...]
 
-    @property
-    def local_currency(self) -> str:
-        return self.currencies[0]
-
 
 def venue_profiles(settings: ObliskConfig) -> Mapping[str, VenueProfile]:
     """Every configured venue's profile, by MIC."""
     profiles: dict[str, VenueProfile] = {}
     for mic, config in settings.venues.items():
         sources = config.sources
-        unverified = tuple(
-            name
-            for name, provenance in (
-                ("currencies", sources.currencies),
-                ("permission", sources.permission),
-                ("lots", sources.lots),
-            )
-            if provenance.verify_live
+        checks = (
+            ("currencies", sources.currencies.verify_live),
+            ("permission", sources.permission.verify_live),
+            ("lots", sources.lots.verify_live),
         )
+        unverified = tuple(name for name, pending in checks if pending)
         profiles[mic] = VenueProfile(
             mic=mic,
             name=config.name,

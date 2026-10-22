@@ -70,10 +70,10 @@ def realised_vol(
 class SigmaLadder:
     """Resolves the strike-band sigma by walking the configured rungs in order."""
 
-    def __init__(self, config: CollectorsConfig) -> None:
-        self._vol = config.vol
-        self._rungs: tuple[SigmaRung, ...] = tuple(config.chain.sigma_ladder)
-        self._freshness_days = config.chain.bars_freshness_days
+    def __init__(self, collectors: CollectorsConfig) -> None:
+        self._vol = collectors.vol
+        self._rungs: tuple[SigmaRung, ...] = tuple(collectors.chain.sigma_ladder)
+        self._freshness_days = collectors.chain.bars_freshness_days
 
     @property
     def closes_needed(self) -> int:

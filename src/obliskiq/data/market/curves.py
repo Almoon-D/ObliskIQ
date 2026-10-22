@@ -90,7 +90,7 @@ class CurveCollector:
 
     async def _one(self, target: RootTarget, collection: Collection, *, dry_run: bool) -> None:
         root = target.root
-        session = venue_session(self._calendars, target.venue, self._now())
+        session = venue_session(self._calendars, target.venue, target.zone, self._now())
         ladders = await self._secdef.futures([root.root])
         await self._pacer.pace()
         ladder = [r for r in ladders.get(root.root, ()) if r.expiry >= session]

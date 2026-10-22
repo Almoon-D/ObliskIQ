@@ -5,8 +5,9 @@ core:
   # Three roles of variant A, the static risk balance the owner's point selects (DECISIONS D91),
   # weighted as A weights them (research/preregistrations/core-allocation.md: WORLD 9 %, EM 7 %,
   # EGB_INT 34 %) scaled to fill the book. Each conid is pinned and described in
-  # eligibility.skeleton_allowlist; the vehicles are candidates, not Session 9's selection. Like the
-  # real core, these positions carry no protective stops. QUOTED weights.
+  # config/universe.yaml, its role among the instrument's core roles; the vehicles are candidates,
+  # not Session 9's selection. Like the real core, these positions carry no protective stops.
+  # QUOTED weights.
   skeleton_targets:
     # Global developed equity: iShares Core MSCI World UCITS ETF (Acc) on the LSE, quoted in USD,
     # so a cycle exercises the currency conversion.

@@ -184,6 +184,15 @@ class ObliskConfig(FrozenModel):
             if code not in self.ibkr_exchanges
         ]
         problems += [
+            f"research.data.yahoo.{field}.{code}: not in ibkr_exchanges"
+            for field, codes in (
+                ("suffixes", self.research.data.yahoo.suffixes),
+                ("digits", self.research.data.yahoo.digits),
+            )
+            for code in sorted(codes)
+            if code not in self.ibkr_exchanges
+        ]
+        problems += [
             f"collectors.candidates.sectors: {sector} is not a sector of the grid"
             for sector in sorted(set(self.collectors.candidates.sectors.values()))
             if sector not in self.universe.grid.sectors

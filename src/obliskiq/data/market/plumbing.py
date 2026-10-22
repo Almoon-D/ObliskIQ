@@ -19,7 +19,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...config.schema_collectors import RetryConfig
+from ...config.schema_collectors import CollectorsConfig
 from ...errors import ObliskError
 from ...ibkr.errors import AmbiguousContractError, IbkrError, RetryAdvice
 from ...logging_setup import get_logger
@@ -120,14 +120,14 @@ def is_permanent(error: BaseException) -> bool:
 class Pacer:
     """Retries one target whole and paces the calls of a loop (``collectors.retry``)."""
 
-    def __init__(self, config: RetryConfig, sleep: Sleep) -> None:
-        self._config = config
+    def __init__(self, collectors: CollectorsConfig, sleep: Sleep) -> None:
+        self._collectors = collectors
         self._sleep = sleep
 
     def delay_for(self, attempt: int) -> float:
         """Capped exponential backoff; ``attempt`` is zero-based."""
-        backoff = float(self._config.backoff_seconds * 2**attempt)
-        return min(backoff, self._config.backoff_max_seconds)
+        backoff = float(self._collectors.retry.backoff_seconds * 2**attempt)
+        return min(backoff, self._collectors.retry.backoff_max_seconds)
 
     async def retry[T](self, target: str, operation: Callable[[], Awaitable[T]]) -> T:
         """Run ``operation``; on a failure that may pass, back off and run it again. The last
@@ -139,7 +139,7 @@ class Pacer:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                if is_permanent(exc) or attempt >= self._config.target_retries:
+                if is_permanent(exc) or attempt >= self._collectors.retry.target_retries:
                     raise
                 wait = self.delay_for(attempt)
                 log.warning(
@@ -152,7 +152,7 @@ class Pacer:
     async def pace(self) -> None:
         """The pause between two calls of a loop, jittered so several loops recovering from one
         shared failure do not hit the same instant."""
-        spacing = self._config.request_spacing_seconds
+        spacing = self._collectors.retry.request_spacing_seconds
         if spacing > 0:
             await self._sleep(spacing * (1 + random.random()))
 

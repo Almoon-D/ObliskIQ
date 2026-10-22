@@ -121,7 +121,7 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 | `session.competing_session` | Another login took the paper username: stop it (a Claude session, a browser). |
 | `service.downgraded` | Three cycles in a row failed; the mode is shadow. Read the run log (`status`, the digest's errors), fix the cause, then `mode set paper` again. |
 | `service.stuck_intent` | An order with no answer, or open past its expiry. `uv run obliskiq intents list`; compare with IBKR's open orders; `reconcile run`. |
-| `service.target_unconfirmed` | IBKR resolves a skeleton fund to another conid: that role is not traded. Report it; the conid in `config/defaults/eligibility.yaml` needs a correction. |
+| `service.target_unconfirmed` | IBKR resolves a skeleton fund to another conid: that role is not traded. Report it; the conid in `config/universe.yaml` needs a correction (a corrected pin supersedes the old conid). |
 | `order.warning_declined` | IBKR asked to confirm a warning the reply policy does not confirm; the order was cancelled. The alert and `intents list --all` carry IBKR's own words. |
 
 ## Read the digest

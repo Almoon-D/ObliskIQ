@@ -327,7 +327,7 @@ class Service:
 
     async def _collect_job(self, job: Job) -> None:
         """One venue's collection after its close (``data/market/daily.py``)."""
-        if self._collector is None or self._collect is None:
+        if self._collector is None or self._collect is None:  # pragma: no cover - never scheduled
             return
         venues = self._collect.venues_of(self._path.calendars, job)
         await self._collector.run(job.command, job.session_date, venues=venues)

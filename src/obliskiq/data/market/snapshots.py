@@ -121,7 +121,11 @@ class SnapshotCollector:
                 continue
             said, short = availability(self._settings, target, quote)
             venues[f"{target.venue}: {said.split(' ', 1)[0]}"] += 1
-            rows.append(snapshot_of(quote, venue_session(self._calendars, target.venue, at), at))
+            rows.append(
+                snapshot_of(
+                    quote, venue_session(self._calendars, target.venue, target.zone, at), at
+                )
+            )
             collection.succeeded(target.symbol, 1, degraded=short, reason=said if short else "")
         if rows and not dry_run:
             await self._worker.run(repos.upsert_snapshots, rows)

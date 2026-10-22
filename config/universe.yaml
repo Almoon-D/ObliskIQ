@@ -4184,7 +4184,7 @@ universe:
       bond_issuer: null
       source: >-
         a share (lite universe.yaml @b1ebd49); ISIN and issuer from IBKR's contract search [MCP ✓
-        2026-10-21] (eligibility.skeleton_tax_facts, Session 7)
+        2026-10-21]
     exposures:
       grid: {market: us, sector: materials, measures: false}
       macro_board: []

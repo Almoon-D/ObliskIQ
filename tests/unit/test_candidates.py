@@ -20,6 +20,7 @@ from obliskiq.config import ObliskConfig
 from obliskiq.data.candidates import (
     Candidate,
     CandidateCollector,
+    Quoted,
     candidate_cells,
     candidate_key,
     coverage_problems,
@@ -171,7 +172,7 @@ def test_every_cell_has_candidates_or_a_declared_gap_and_a_stale_gap_is_reported
 
 
 def _candidate() -> Candidate:
-    return Candidate("de:x", "X", ("X",), ("IBIS",), "EUR", "DE", 0.1, ("EWG",), OCT_20)
+    return Candidate("de:x", "X", (Quoted("X", "IBIS", "EUR"),), "DE", 0.1, ("EWG",), OCT_20)
 
 
 # ── refreshing and resolving ──
@@ -202,7 +203,7 @@ def collector(rig: MarketRig, fetch: Callable[[str], Any], *, scanner: bool = Tr
         fetch=fetch,
         scanner=rig.client.scanner if scanner else None,
         worker=rig.worker,
-        pacer=Pacer(rig.settings.collectors.retry, rig.session.clock.sleep),
+        pacer=Pacer(rig.settings.collectors, rig.session.clock.sleep),
         now=rig.now,
     )
 
@@ -252,8 +253,10 @@ async def test_without_a_session_the_scanner_is_reported_not_run(rig: MarketRig)
 
 
 async def test_a_candidate_resolves_on_its_listing_or_says_why_not(rig: MarketRig) -> None:
-    toyota = Candidate("jp:toyota_motor", "TOYOTA MOTOR", ("7203",), ("TSEJ",), "JPY", "JP", 0.03,
-                       ("EWJ",), OCT_20)  # fmt: skip
+    toyota = Candidate(
+        "jp:toyota_motor", "TOYOTA MOTOR", (Quoted("7203", "TSEJ", "JPY"),), "JP", 0.03,
+        ("EWJ",), OCT_20,
+    )  # fmt: skip
     rig.market.contracts[13976] = ("7203", "TSEJ", "JPY")
     found = await resolve_candidate(rig.client.secdef, toyota, at=AT, pinned_for="h-1")
     assert (found.conid, found.listing_exchange, found.pinned, found.failure) == (
@@ -263,6 +266,29 @@ async def test_a_candidate_resolves_on_its_listing_or_says_why_not(rig: MarketRi
     wrong = await resolve_candidate(rig.client.secdef, toyota, at=AT, pinned_for=None)
     assert wrong.conid is None
     assert "not the declared JPY" in (wrong.failure or "")
-    unlisted = dataclasses.replace(toyota, listing_exchanges=())
+    unlisted = dataclasses.replace(toyota, listings=(Quoted("7203", None, "JPY"),))
     nowhere = await resolve_candidate(rig.client.secdef, unlisted, at=AT, pinned_for=None)
-    assert nowhere.failure == "no listing on a configured venue"
+    assert nowhere.failure == "no listing on a configured venue with a known currency"
+
+
+def test_a_candidate_keeps_each_listing_with_its_own_exchange_and_currency(
+    shipped_settings: ObliskConfig,
+) -> None:
+    from obliskiq.domain.universe import Holding
+
+    def held(fund: str, ticker: str, exchange: str | None, currency: str) -> Holding:
+        return Holding(
+            fund_symbol=fund, as_of=OCT_20, line=0, ticker=ticker, name="SHELL PLC",
+            asset_class="Equity", issuer_sector="Energy", sector="energy",
+            location="United Kingdom", country="GB", exchange=None, ibkr_exchange=exchange,
+            currency=currency, weight=0.05, candidate_key="gb:shell",
+        )  # fmt: skip
+
+    lines = [held("ISF", "SHEL", "LSE", "GBP"), held("EZU", "SHELL", "AEB", "EUR"),
+             held("EWU", "SHEL", None, "GBP")]  # fmt: skip
+    (shell,) = credit(shipped_settings, lines, [])[("uk", "energy")]
+    assert shell.listings == (
+        Quoted("SHELL", "AEB", "EUR"), Quoted("SHEL", "LSE", "GBP"), Quoted("SHEL", None, "GBP"),
+    )  # fmt: skip
+    assert shell.venue_listings() == shell.listings[:2]
+    assert shell.tickers == ("SHEL", "SHELL")

@@ -20,6 +20,7 @@ from typing import Final, Literal, Protocol, Self
 from pydantic import Field, model_validator
 
 from ..config.base import FrozenModel
+from ..config.schema_universe import UniverseInstrument
 from ..domain.base import NonEmptyText
 from ..domain.enums import AssetClass
 from ..domain.instrument import TradedInstrument
@@ -52,6 +53,11 @@ class EligibilityPolicy(Protocol):
         self, instrument: TradedInstrument, *, underlying: TradedInstrument | None
     ) -> EligibilityVerdict:
         """Judge ``instrument``; ``underlying`` is an option's underlying, else ``None``."""
+        ...
+
+    def assess_declared(self, declared: UniverseInstrument) -> EligibilityVerdict:
+        """Judge a universe instrument by its declared attributes alone, before it is pinned or
+        described (``obliskiq universe validate``); an order is judged by :meth:`assess`."""
         ...
 
 

@@ -2563,3 +2563,140 @@ dated on a reading's day as already in that reading (`(V1 − F) / V0 − 1`); `
 other way. Dividends, interest and fees are the book's own return. A period with no positive base
 or a flow without a rate makes the whole return unknown, with why, never a partial number; the
 digest shows it over `runtime.status_report_days`. Session 18 attributes it.
+
+## Session 8 — Universe and market-data collectors (2026-10-22)
+
+### D112 · The universe is configuration, one file, validated whole (§5.3, D69)
+
+- **One file, one section.** `config/universe.yaml` holds the `universe` section, merged after
+  `config/defaults/` and before `owner.yaml`; a `universe` key anywhere else, or another key in it,
+  is refused. Lite's `universe.yaml` is ported whole, its comments with it, regrouped into roles
+  (`data`, `tradable_candidate`, `option_underlying`), attributes (domicile, UCITS, KID, share
+  class and its hedge, fee, lot, inception, ISIN, issuer, tracked index, replication, bond
+  issuer, with the source of each instrument's facts and its date) and exposures (core roles, one
+  grid cell, macro-board entities, the concentration country, the commodity bucket). Unknown is
+  `null`, never a default.
+- **Validated whole.** The grid matrix is complete (every cell measured by exactly one instrument
+  or unmapped with a reason; a market's native index is never a wrapper of another currency), the
+  macro board's every cell is claimed or declared unmapped, every reference resolves (buckets,
+  roots, proxies, holdings markets), every exchange code is in `ibkr_exchanges` and every
+  instrument lists in one of its venue's currencies. `data_only_reason` is set exactly when an
+  instrument is not a tradable candidate (lite's `tradable`/`untradeable_reason` invariant) and
+  an index is never tradable.
+- **Added beyond lite:** IWDA, EMIM and IBGM (the skeleton's funds) with their iShares UK facts,
+  and the sixteen iShares US country funds (data and option underlyings, and candidate sources).
+  Pins were read through the owner's IBKR connector (contract search, read-only) [MCP ✓
+  2026-10-22].
+- **Look-through (D69):** the country, sector and currency weights live in the store, from the
+  issuer's holdings files on their cadence (D117); the universe owns the source URL. One owner per
+  fact: a weight in the config would be a snapshot that never refreshes.
+- **Dropped:** lite's `dividend_yield` (null on every row; it returns with its consumer, Session
+  12) and `top2_concentration` (computed from the stored holdings).
+- **A correction:** lite recorded ISF as UK-domiciled and not UCITS; iShares' page says Ireland,
+  UCITS, ISIN IE0005042456 [read 2026-10-21]. The universe carries the issuer's facts.
+
+Rejected: the universe as store rows seeded by hand (an edit would leave no review trail); the
+weights in the config (stale by design).
+
+### D113 · Eligibility under `es`: the `eu_priips` policy (§2, §5.3, §5.16)
+
+- **Computed from attributes.** A share is not a packaged product: eligible. A packaged product
+  (`eligibility.kid_required`: ETF, ETC, fund) needs its KID available; an ETF or fund must be
+  UCITS (`ucits_required`); a futures-tracking ETC is eligible only while lite's contango rule
+  passes, through a `ContangoCheck` that fails closed until Session 12 builds it; government bonds
+  on, corporate bonds off by default; an index is never bought. An option on an eligible
+  underlying is eligible; on an ineligible ETP it is allowed with the mandatory close
+  (`options_on_ineligible_etps`), on anything else refused. A verdict says why in the attributes'
+  words ("SPY is an etf domiciled in US, UCITS False, with its PRIIPs KID unavailable: …"), which
+  is how the acceptance's "eligibility explains why US-domiciled ETFs are rejected" is met.
+- **Selected by the profile** (`es.yaml: policies.eligibility: eu_priips`, its `eligibility`
+  section with the regulation's citation); `config validate` builds it, so a profile without its
+  data fails at once. Wired into pre-trade unchanged: the gate asks the profile's policy.
+- **Leveraged and inverse products are rejected at ingestion** by their resolved description
+  (`instruments.leveraged_inverse_markers`): never seeded, never in the directory, recorded in
+  `universe_rejections`.
+- **The skeleton's allowlist is gone.** Its config key, `SkeletonEligibility` and
+  `ConfiguredDirectory` are removed; `UniverseDirectory` describes every pinned tradable candidate
+  and option underlying with a resolved description (a data-only instrument is measured, never
+  named by an order). Tax facts (ISIN, issuer, tracked index) come from the universe's attributes.
+
+Rejected: an allowlist beside the attributes (two owners of one fact that drift); reading domicile
+or UCITS from IBKR's description (it does not carry them).
+
+### D114 · Venue profiles and the market-data plan (§5.3, §5.13)
+
+- `venues.yaml` gains, per venue, the currencies its listings trade in, the IBKR trading
+  permission an order there needs and the board lot (Tokyo's 100), each with its source and
+  whether it still awaits a live reading; settlement and transaction taxes stay where they were.
+  `settlement_sessions` may be unknown (`null`, Tel Aviv): a settlement date there raises rather
+  than guess. New venue XTAE and the IBKR codes the universe sends (B3, BVME.ETF, HKFE, KRX, KSE,
+  NSE, OSE.JPN, SEHKNTL, TASE and the futures exchanges), all VERIFY-LIVE.
+- `market_data.feeds` lists the subscriptions with price, waiver, venues and asset classes;
+  `owner.yaml: market_data.plan` defaults to OPRA L1, Eurex Core L1 and the complimentary US feed.
+  The snapshot collector judges each quote against the plan: delayed where a planned feed streams
+  the venue is degraded (a subscription missing or not shared with the session); delayed elsewhere
+  is what the plan buys.
+- A share without a lot of its own is stored with its venue's board lot.
+
+### D115 · The market-data collectors (§5.13, D71; lite `collect/`)
+
+- **Ported:** the universe sync (seed by confirmed pin, supersede a corrected pin, report an
+  unpinned instrument with the conid it resolves to, reject at ingestion), the daily-bar backfill
+  (the window once, then the newest bar re-asked with an overlap and older history down to the
+  window or the inception; Session 3's reader probes the cap, walks backwards and steps a refused
+  span down; a bar is dated in its venue's time zone), underlying snapshots, the option-chain
+  collector and the curve collector, with lite's per-target retry, pacing and verdicts (one dead
+  target degrades a run; zero chain rows is a failure; worst step wins).
+- **The chain collector stores surfaces forward** (H8's history, D71): every option underlying,
+  daily, inside the tenor window and a volatility-scaled strike band (lite's sigma ladder, every
+  fallback degraded and recorded on the row), the declared option venue sent verbatim, the venue
+  and the contract's multiplier on every row (migration 009), the underlying's snapshot and its
+  rows in one transaction, and no snapshot row made of a bar close.
+- **Not ported:** lite's paid option vendor (a paid service), its MCP capture route, the macro
+  pull (Session 10), the NAV collector (Session 6 owns it), the portfolio union (Session 6's
+  holdings registry) and the Parkinson and Garman-Klass estimators (with their consumers, the
+  indicators of Session 11).
+
+### D116 · Collection runs per venue after its close (§5.14, D102)
+
+The service schedules one collection job per venue the universe collects on, at its regular close
+plus `collectors.schedule.after_close_minutes`, through the calendars, as `collect:<MIC>` in the
+run log; each step has a deadline (`collectors.step_deadline_seconds`, the chain step the largest)
+and a step that raises or outruns it does not stop the next. A venue the calendars do not cover
+that day (XSHG after 2026-12-31) and any venue outside the plan where a pinned candidate lists
+collect in `fallback_venue`'s job, so no venue is silently dropped. `collectors.schedule.enabled`
+turns the service's jobs off; `obliskiq collect` runs them by hand under the service lock.
+
+### D117 · Stock candidates per grid cell (§5.3)
+
+- **Sources:** the iShares holdings files the universe names (the US site's form and the UK
+  site's) and the IBKR scanner runs it declares. Each file is stored with its own date ("Fund
+  Holdings as of"), its download stamp and its hash, every line with the issuer's words beside what
+  they map to (`collectors.candidates`: sector, location, exchange; unmapped stays unmapped).
+- **Crediting:** a share line counts for the market of its location's country and for the market
+  its file is a source for; for its own sector's cell and the broad cell. Listings of one company
+  are one candidate (country and name less `name_noise`), each listing kept with its exchange and
+  currency. A scanner row counts for its market's broad cell.
+- **Point in time:** a read as of a date takes each fund's newest file of that date that was held
+  by then; a stock enters a cell on the date its first such file showed it.
+- **Every cell has candidates or a declared gap** (`universe.candidates.gaps`, with the reason),
+  and `coverage_problems` reports a cell with neither and a gap that has candidates. Measured on the
+  live files of 2026-10-20 and 2026-10-21: 182 of 192 cells hold candidates (3,954 companies), the
+  other 10 are the declared gaps.
+- **Resolved on demand, pinned for a thesis:** `obliskiq universe pin --candidate <key> --thesis
+  <id>` resolves one listing (exact ticker on its venue, currency confirmed) and pins it; the next
+  universe step seeds it and it is collected. Files are refreshed every `refresh_days`.
+
+Rejected: resolving every candidate up front (IBKR's pacing, and most are never needed); matching
+listings by ticker (a company's tickers differ by venue); crediting by the file alone (MSCI World's
+Japanese lines are Japan's).
+
+### D118 · Research history for the universe (§5.9, D64)
+
+`obliskiq research data load-universe` reads every pinned tradable candidate from Yahoo through
+`research/data.py` (`--candidates N`: and the N largest stock candidates of each cell, home listing
+first), from `research.data.yahoo.universe_start` or the instrument's inception. Yahoo's symbol is
+the IBKR symbol in Yahoo's form (the suffix by IBKR exchange, from legacy global_vehicles'
+`EXCHANGE_SUFFIX_MAP`; a share class's dot as a dash; Hong Kong padded to four digits); a fund's
+ongoing charge is in its bias notes, since its closes are net of it. Loaded 2026-10-22: 23 of 23
+tradable candidates and 181 of 181 top candidates (ROADMAP, Session 8's log).

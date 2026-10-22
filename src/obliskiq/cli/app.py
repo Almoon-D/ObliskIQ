@@ -60,6 +60,7 @@ from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .capital import add_capital_commands
+from .collect import add_collect_commands
 from .research import add_research_commands
 from .service import add_service_commands
 
@@ -553,6 +554,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_service_commands(commands)
     add_capital_commands(commands)
     add_research_commands(commands)
+    add_collect_commands(commands)
     return parser
 
 

@@ -64,7 +64,7 @@ class MarketCollector:
         self._settings = settings
         self._worker = worker
         self._now = now
-        pacer = Pacer(settings.collectors.retry, sleep)
+        pacer = Pacer(settings.collectors, sleep)
         secdef, marketdata = client.secdef, client.marketdata
         self.universe = UniverseSync(settings, secdef=secdef, worker=worker, pacer=pacer, now=now)
         self.backfill = Backfill(

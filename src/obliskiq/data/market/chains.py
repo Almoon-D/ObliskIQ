@@ -68,6 +68,8 @@ log = get_logger("data.market.chains")
 
 STEP = "chains"
 OPTION_SEC_TYPE = "OPT"
+#: Digits of the sigma the run log keeps (the row keeps it whole).
+SIGMA_LOG_DIGITS = 6
 #: IBKR's maturity form, YYYYMMDD.
 _MATURITY_LENGTH = len("YYYYMMDD")
 
@@ -163,7 +165,7 @@ class ChainCollector:
         return collection
 
     async def _one(self, target: MarketTarget, collection: Collection, *, dry_run: bool) -> None:
-        session = venue_session(self._calendars, target.venue, self._now())
+        session = venue_session(self._calendars, target.venue, target.zone, self._now())
         quotes = await self._marketdata.snapshot([target.conid], underlying=True)
         quote = quotes.get(target.conid)
         await self._pacer.pace()
@@ -230,7 +232,7 @@ class ChainCollector:
             + (" on stale bars" if sigma.is_stale else "")
             if degraded
             else "",
-            sigma=round(sigma.value, 6),
+            sigma=round(sigma.value, SIGMA_LOG_DIGITS),
             sigma_source=sigma.source,
             spot=spot,
             exchange=exchange,

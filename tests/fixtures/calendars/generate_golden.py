@@ -33,8 +33,8 @@ DAYS = (
 )
 VENUES = (
     "BVMF", "XAMS", "XASX", "XBOM", "XETR", "XEUR", "XHKG", "XKRX", "XLON", "XMAD", "XMEX",
-    "XMIL", "XNAS", "XNYS", "XNZE", "XPAR", "XSES", "XSGO", "XSHG", "XSWX", "XTAI", "XTKS",
-    "XTSE",
+    "XMIL", "XNAS", "XNYS", "XNZE", "XPAR", "XSES", "XSGO", "XSHG", "XSWX", "XTAE", "XTAI",
+    "XTKS", "XTSE",
 )  # fmt: skip
 
 

@@ -996,6 +996,95 @@ def derive_dataset(
     return (LoadedSeries(series, tuple(observations)),)
 
 
+@dataclass(frozen=True, slots=True)
+class Listing:
+    """An instrument whose research history is read from Yahoo: the universe's tradable
+    candidates and the grid's stock candidates (``data/candidates.py``)."""
+
+    key: str
+    symbol: str
+    exchange: str
+    currency: str
+    inception: date | None
+    note: str
+
+
+def yahoo_symbol(
+    symbol: str, exchange: str, suffixes: Mapping[str, str], digits: Mapping[str, int]
+) -> str | None:
+    """Yahoo's symbol for ``symbol`` on the IBKR listing ``exchange``; ``None`` where Yahoo's
+    suffix for the exchange is not configured. A share class's dot or space is Yahoo's dash
+    (``RCI.B`` is ``RCI-B``), a trailing dot is dropped (``NG.``), and a venue whose numeric
+    codes Yahoo pads (``digits``) is padded (Hong Kong's ``700`` is ``0700``)."""
+    suffix = suffixes.get(exchange)
+    if suffix is None:
+        return None
+    cleaned = symbol.strip().rstrip(".").replace(" ", "-").replace(".", "-")
+    width = digits.get(exchange)
+    if width is not None and cleaned.isdigit():
+        cleaned = cleaned.zfill(width)
+    return f"{cleaned}{suffix}"
+
+
+def universe_listings(settings: ObliskConfig) -> tuple[Listing, ...]:
+    """The universe's pinned tradable candidates as listings; a fund's ongoing charge is noted,
+    since its closes are net of it."""
+    listings: list[Listing] = []
+    for declared in settings.universe.instruments:
+        if not declared.tradable or declared.conid is None:
+            continue
+        fee = declared.attributes.fee
+        charge = "" if fee is None else f" Its ongoing charge, {fee:.2%} a year, is in its price."
+        listings.append(
+            Listing(
+                key=declared.symbol,
+                symbol=declared.symbol,
+                exchange=declared.listing_exchange,
+                currency=declared.currency,
+                inception=declared.attributes.inception,
+                note=(
+                    f"The universe's tradable candidate {declared.symbol} on "
+                    f"{declared.listing_exchange}.{charge}"
+                ),
+            )
+        )
+    return tuple(listings)
+
+
+def _dataset_id(prefix: str, key: str) -> str:
+    return f"{prefix}_{re.sub(r'[^a-z0-9]+', '_', key.lower()).strip('_')}"
+
+
+def universe_datasets(
+    settings: ObliskConfig, listings: Iterable[Listing], *, prefix: str
+) -> tuple[tuple[YahooDataset, ...], tuple[str, ...]]:
+    """A Yahoo dataset per listing, and the listings that have no Yahoo symbol (with why)."""
+    yahoo = settings.research.data.yahoo
+    datasets: list[YahooDataset] = []
+    skipped: list[str] = []
+    for listing in listings:
+        symbol = yahoo_symbol(listing.symbol, listing.exchange, yahoo.suffixes, yahoo.digits)
+        if symbol is None:
+            skipped.append(f"{listing.key}: no Yahoo suffix for {listing.exchange}")
+            continue
+        start = max(yahoo.universe_start, listing.inception or yahoo.universe_start)
+        datasets.append(
+            YahooDataset(
+                id=_dataset_id(prefix, listing.key),
+                vendor="yahoo",
+                symbol=symbol,
+                currency=listing.currency,
+                start=start,
+                bias_notes=[
+                    listing.note,
+                    f"Read from Yahoo as {symbol}; a listing Yahoo maps differently from IBKR is "
+                    "a different series (VERIFY by its first close against IBKR's).",
+                ],
+            )
+        )
+    return tuple(datasets), tuple(skipped)
+
+
 def store_loaded(store: Store, loaded: Iterable[LoadedSeries]) -> int:
     """Replace each loaded series in the research store; the number of rows written."""
     return sum(replace_research_series(store, item.series, item.observations) for item in loaded)

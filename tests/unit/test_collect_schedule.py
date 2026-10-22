@@ -86,3 +86,24 @@ def test_the_shipped_plan_covers_the_universe_and_its_calendars_are_built(
         update={"collectors": shipped_settings.collectors.model_copy(update={"schedule": schedule})}
     )
     assert "XKRX" not in calendar_extras(off)
+
+
+def test_every_venue_an_order_can_name_is_covered_through_the_horizon(
+    shipped_settings: ObliskConfig, calendars: Calendars
+) -> None:
+    """A tradable candidate's or an option underlying's venue has a calendar to the end of the
+    planning window, by the library or a synthetic entry; a data-only venue need not."""
+    from obliskiq.data.market.targets import venue_of
+
+    coverage = calendars.coverage()
+    horizon = shipped_settings.calendars.horizon_years
+    end = date(2026, 10, 9).replace(year=2026 + horizon)
+    short = sorted(
+        f"{declared.symbol} on {venue}"
+        for declared in shipped_settings.universe.instruments
+        if declared.tradable or declared.collects_chain
+        if (venue := venue_of(shipped_settings, declared.listing_exchange)) is not None
+        and ((window := coverage.get(venue)) is None or window[1] < end)
+    )
+    assert short == []
+    assert coverage["XSHG"] is not None  # a data-only venue may end sooner
