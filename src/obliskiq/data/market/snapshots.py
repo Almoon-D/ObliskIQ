@@ -68,7 +68,8 @@ def availability(settings: ObliskConfig, target: MarketTarget, quote: Quote) -> 
     feed = settings.market_data.planned_feed(target.venue, target.asset_class)
     status = quote.market_data_status.value if quote.market_data_status else "unreported"
     if feed is None:
-        return f"{status} (no feed of the plan covers {target.venue})", False
+        kind = target.asset_class.value
+        return f"{status} (no feed of the plan streams {kind}s on {target.venue})", False
     if quote.market_data_status is MarketDataStatus.REALTIME:
         return f"realtime ({feed.id})", False
     return f"{status} although the plan's {feed.id} streams {target.venue} in real time", True
