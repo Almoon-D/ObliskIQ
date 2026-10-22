@@ -38,6 +38,9 @@ the observation that settled it.
   and how expiry and daylight saving behave.
 - `costs.md` — the commission schedules, the transaction taxes and the friction assumptions
   behind `costs.yaml`, and how well each was confirmed.
+- `ibkr-capabilities.md` — what the Web API searches, quotes and previews per asset class and
+  venue, the order types, algos and trading permissions seen, the capability probe, and what
+  IBKR's contract search returns for the core's UCITS funds and ETCs.
 - `ibkr.md` — the Client Portal Web API: pacing, sessions, field ids, units, search, history,
   the ledger, the trading schedule, the Client Portal Gateway, lite's live readings and
   Session 3's Gateway trial, and the Gateway archive's Java runtime.
@@ -54,8 +57,10 @@ the observation that settled it.
   read from the SEC and Tiingo; the vendors that refused the container.
 - `runtimes.md` — Python, Java, Ubuntu, Playwright and uv: releases, support windows and
   platform support, with the publisher's page and the date each was read.
+- `universe-sources.md` — the core's candidate vehicles per role: their identifiers and the two
+  sources that confirmed them, their conids, their measured tracking and partner correlations.
 - `tax-es.md` — Spain's rules on the savings base as the `es_irpf` policy applies them, each with
   its article and the official text it was read in (not tax advice).
 
-More files are added by the sessions that verify them (`ibkr-capabilities.md`,
-`macro-sources.md`, …); none is written ahead of the evidence.
+More files are added by the sessions that verify them (`macro-sources.md`, …); none is written
+ahead of the evidence.

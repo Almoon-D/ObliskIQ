@@ -207,3 +207,21 @@ time):
 9. `uv run obliskiq mode set shadow --reason "Session 6 live cycle done"`
 10. Paste the masked outputs into a short session: *"Record Session 6's live paper cycle per
     SESSION_PROMPTS §A.5."*
+
+## Session 9's capability probe (owner, on the machine)
+
+Reads what the Web API can do per asset class and venue on the paper account: a search, a
+snapshot, the contract rules, the algos and a whatif preview per check. Nothing is placed: the
+preview is the only order endpoint it calls, and the paper guard refuses it on an account without
+the paper prefix. A preview needs a bid, so run it while Europe and New York are both open (15:30
+to 17:30 Madrid time); ASX's check reports no bid then and is read in its own session.
+
+1. The bot paused (see "Before a Claude session with live IBKR checks").
+2. `uv run obliskiq universe capabilities`: the readings recorded today, and which venues the
+   vehicle selector may propose.
+3. `uv run obliskiq universe capabilities --probe`: one block per check, with the account masked.
+4. `uv run obliskiq universe vehicles world_equity` (and any other role): the ranking as the
+   recorded capabilities stand.
+5. Paste the masked output into a short session: *"Record Session 9's capability probe per
+   SESSION_PROMPTS §A.5."* The readings enter `config/defaults/capabilities.yaml` and
+   `docs/knowledge/ibkr-capabilities.md` by a reviewed change; the probe writes nothing itself.

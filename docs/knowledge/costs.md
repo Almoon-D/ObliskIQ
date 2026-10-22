@@ -61,9 +61,9 @@ the row's `verify_live` is cleared.
 |---|---|---|---|---|
 | GB | Stamp duty reserve tax, Finance Act 1986 s.87 | 0.5 %, purchases | — | official: HMRC Stamp Taxes on Shares Manual STSM031010 `[HMRC ✓ 2026-10-09]`. Newly listed companies are relieved for three years from listing (HM Treasury, 2025-11-26); the estimate ignores the relief and errs high. |
 | HK | Stamp duty, Cap. 117 | 0.1 % from each of buyer and seller | 2023-11-17 | official: IRD press release 2023-11-15 and HKEX circular CT 158/2023 `[IRD ✓ 2026-10-09]`. ETFs are exempt; the estimate ignores that and errs high. |
-| ES | Impuesto sobre las Transacciones Financieras, Ley 5/2020 | 0.2 %, purchases of shares of listed Spanish companies above EUR 1,000 million market capitalisation | 2021-01-16 | secondary sources citing the provision `[secondary ✓ 2026-10-09]`; the AEAT list of taxable issuers is published yearly, so the caller must say whether the issuer is on it (`needs_issuer_list`) |
+| ES | Impuesto sobre las Transacciones Financieras, Ley 5/2020 | 0.2 %, purchases of shares of listed Spanish companies above EUR 1,000 million market capitalisation | 2021-01-16 | official: Ley 5/2020 (BOE-A-2020-12356) arts. 2.1 and 7 `[BOE ✓ 2026-10-21]`; the AEAT list of taxable issuers is published yearly, so the caller must say whether the issuer is on it (`needs_issuer_list`) |
 | FR | Taxe sur les transactions financieres, CGI art. 235 ter ZD | 0.4 %, purchases, above EUR 1,000 million | 2025-04-01 | secondary sources `[secondary ✓ 2026-10-09]`; amendments to raise the rate again for 2026 were tabled and whether any passed was not established, so the rate may be higher. BOFiP BOI-ANNX-000467 lists issuers |
-| IT | Financial transaction tax, Legge 228/2012 art. 1 c. 491–500 | **unknown** (`null`) | — | sources disagree: 0.1 % regulated / 0.2 % otherwise until 2025, and one secondary source reports 0.2 % / 0.4 % from 2026-01-01 (Legge 199/2025 c. 29); no official text was read |
+| IT | Financial transaction tax, Legge 228/2012 art. 1 c. 491–500 | **unknown** (`null`) | — | Legge 199/2025 art. 1 c. 29 raises comma 491's first-sentence rate from 0.2 % to 0.4 % for transfers from 2026-01-01 (c. 31) `[Normattiva ✓ 2026-10-22]`; the rate on regulated markets and MTFs (until 2025 half the standard rate, per secondary sources) and the side that owes it are in Legge 228/2012's own text, which Normattiva did not serve that day, so no rate is entered |
 
 - A country with no row is **not modelled**: the estimate says `applies: false` and the leg
   carries the label `tax_not_modelled`. That is not the same as untaxed, and it is not a gap
@@ -72,8 +72,10 @@ the row's `verify_live` is cleared.
   that position.
 - A share whose issuer country the caller does not give is `tax_unknown` and has no total;
   for any other asset class a missing country is labelled `tax_not_modelled`.
-- `VERIFY-LIVE(taxes)`: the ES, FR and IT rows need the official texts; the GB and HK rows are
-  read from official sources but not from an executed trade's confirmation.
+- `VERIFY-LIVE(taxes)`: the FR row needs its official text (Légifrance refused the container on
+  2026-10-22) and the IT row Legge 228/2012's commi 491 and 494; the ES row was read in Ley 5/2020's
+  BOE text (2026-10-21); the GB and HK rows are read from official sources but not from an executed
+  trade's confirmation. None applies to the core's UCITS ETFs and ETCs: each taxes shares.
 
 ## Friction tiers (assumptions)
 
