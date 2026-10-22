@@ -31,7 +31,7 @@ from ..ibkr.schedule_source import IbkrTradingSchedule
 from ..ibkr.session import AlertHook, BrokerSession
 from ..ibkr.transport import Transport, build_transport, transport_refusal
 from ..ibkr.transport.gateway_login import LoginDriver
-from ..jurisdiction.eligibility import ELIGIBILITY_POLICIES
+from ..jurisdiction.eligibility_policies import ELIGIBILITY_POLICIES
 from ..jurisdiction.profile import JurisdictionProfile
 from ..quant.costs import CostBook
 from ..store import open_store
@@ -45,7 +45,7 @@ from .currency import CurrencyManager
 from .executor import Executor
 from .exits import ExitCoordinator
 from .flatten import Flattener
-from .instruments import ConfiguredDirectory
+from .instruments import UniverseDirectory
 from .killswitch import KillSwitch
 from .ledger import StoreClearanceLedger
 from .modes import Modes
@@ -73,7 +73,7 @@ class OrderPath:
     gate: PretradeGate
     coordinator: ExitCoordinator
     reader: IbkrAccountReader
-    directory: ConfiguredDirectory
+    directory: UniverseDirectory
     calendars: Calendars
     approvals: ApprovalQueue
     flattener: Flattener
@@ -88,7 +88,7 @@ class OrderPath:
     schedule: IbkrTradingSchedule | None = None
 
 
-def calendar_venues(settings: ObliskConfig, directory: ConfiguredDirectory) -> tuple[str, ...]:
+def calendar_venues(settings: ObliskConfig, directory: UniverseDirectory) -> tuple[str, ...]:
     """The venues the directory's instruments trade on (an unmapped code is left to the gate,
     which refuses it)."""
     exchanges = settings.ibkr_exchanges
@@ -100,7 +100,7 @@ def calendar_venues(settings: ObliskConfig, directory: ConfiguredDirectory) -> t
 
 
 def schedule_references(
-    calendars: Calendars, directory: ConfiguredDirectory
+    calendars: Calendars, directory: UniverseDirectory
 ) -> dict[str, tuple[int, str | None]]:
     """One reference contract per venue for IBKR's trading schedule: the first instrument the
     directory lists on it, with its listing exchange."""
@@ -146,7 +146,7 @@ def assemble(
         alert=alert,
         now=now,
     )
-    directory = ConfiguredDirectory.from_settings(settings)
+    directory = UniverseDirectory.from_settings(settings)
     reader = IbkrAccountReader(client, orders, settings, now=now)
     gate = PretradeGate(
         settings,
@@ -302,7 +302,7 @@ async def open_order_path(
     await client.start()
     worker = StoreWorker(lambda: open_store(settings, data_dir))
     try:
-        directory = ConfiguredDirectory.from_settings(settings)
+        directory = UniverseDirectory.from_settings(settings)
         built: list[Calendars] = []
 
         def trading_weekday(venue: str, day: date) -> bool:

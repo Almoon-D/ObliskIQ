@@ -75,20 +75,14 @@ async def cleared(rig: Any, stored: Any, **kwargs: Any) -> PretradeClearance:
 
 
 def describe(rig: Any, conid: int, **changes: Any) -> None:
-    """Describe a test instrument otherwise than the allowlist does."""
+    """Describe a test instrument otherwise in the gate's directory."""
     rig.directory.instruments[conid] = rig.directory.instruments[conid].model_copy(update=changes)
 
 
 def redescribe(rig: Any, conid: int, **changes: Any) -> None:
-    """Describe a test instrument otherwise, in the directory and the allowlist alike."""
+    """Describe a test instrument otherwise (the gate reads the directory)."""
     describe(rig, conid, **changes)
-    instrument = rig.directory.instruments[conid]
-    allowlist = [
-        instrument if listed.conid == conid else listed
-        for listed in rig.settings.eligibility.skeleton_allowlist
-    ]
-    eligibility = rig.settings.eligibility.model_copy(update={"skeleton_allowlist": allowlist})
-    rig.make_gate(settings=rig.settings.model_copy(update={"eligibility": eligibility}))
+    rig.make_gate()
 
 
 async def working(rig: Any, **kwargs: Any) -> tuple[Any, str]:
@@ -568,10 +562,10 @@ async def test_a_prohibited_product_is_refused_on_every_side_and_through_an_opti
 async def test_reason_ineligible(rig: Any) -> None:
     await refused(rig, await rig.staged(US_ETF), Reason.INELIGIBLE)
     stored = await rig.staged()
-    describe(rig, STOCK, description="described otherwise")
+    rig.eligibility.allowed.discard(STOCK)
     answer = await refused(rig, stored, Reason.INELIGIBLE)
-    assert "skeleton policy" in answer.reason  # the skeleton says so in every verdict
-    describe(rig, STOCK, description="STK1 test instrument")
+    assert "not in the allowlist" in answer.reason  # the policy's own reason reaches the owner
+    rig.eligibility.allowed.add(STOCK)
     await cleared(rig, stored)
 
 

@@ -15,11 +15,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from eligibility_double import AllowlistEligibility
 from fake_broker import ACCOUNT, FakeBroker
 
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
-from obliskiq.config.schema_instruments import EligibilityConfig
 from obliskiq.domain.enums import AssetClass, MarketDataStatus
 from obliskiq.domain.instrument import TradedInstrument
 from obliskiq.domain.orders import (
@@ -62,7 +62,6 @@ from obliskiq.ibkr.client import IbkrClient
 from obliskiq.ibkr.guard import AccountGuard
 from obliskiq.ibkr.orders import OrderClient
 from obliskiq.ibkr.session import BrokerSession
-from obliskiq.jurisdiction.eligibility import SkeletonEligibility
 from obliskiq.quant.costs import CostBook
 from obliskiq.store import open_database
 from obliskiq.store import orders as repo
@@ -156,16 +155,6 @@ INSTRUMENTS: dict[int, TradedInstrument] = {
 
 #: The allowlist the gate tests run under: every test instrument but the US ETF.
 ALLOWED = (STOCK, EUR_ETF, OPTION, ETP_OPTION, LEVERAGED, FUTURE, FUTURE_OPTION)
-
-
-def gate_settings(settings: ObliskConfig) -> ObliskConfig:
-    """The shipped settings with the test instruments in the skeleton allowlist."""
-    allowlist = [INSTRUMENTS[conid] for conid in ALLOWED]
-    return settings.model_copy(
-        update={
-            "eligibility": EligibilityConfig(skeleton_allowlist=allowlist, skeleton_tax_facts=[])
-        }
-    )
 
 
 def whole_account(settings: ObliskConfig) -> ObliskConfig:
@@ -309,6 +298,7 @@ class Rig:
     approvals: ApprovalQueue
     flattener: Flattener
     alerts: list[OrderAlert] = field(default_factory=list)
+    eligibility: AllowlistEligibility = field(default_factory=lambda: AllowlistEligibility(ALLOWED))
     pricer: Pricer = None  # type: ignore[assignment]
     currency: CurrencyManager = None  # type: ignore[assignment]
     protective: ProtectiveManager = None  # type: ignore[assignment]
@@ -384,7 +374,7 @@ class Rig:
             guard=self.guard,
             calendars=calendars if calendars is not None else self.calendars,
             directory=self.directory,
-            eligibility=SkeletonEligibility(chosen.eligibility.skeleton_allowlist),
+            eligibility=self.eligibility,
             reader=self.reader,
             alert=self.alerts.append,
             now=self.clock,

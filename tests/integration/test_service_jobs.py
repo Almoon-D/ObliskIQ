@@ -153,7 +153,7 @@ async def test_the_trading_schedule_is_refreshed_from_one_contract_per_venue(
     (references,) = asked
     assert references["XAMS"] == (43614383, "AEB")  # the first instrument listed there
     assert references["XLON"] == (78999785, "LSEETF")
-    assert references["XNYS"] == (7089, "NYSE")
+    assert references["XNYS"] == (4347, "NYSE")  # ALB, the lowest conid listed there
 
     async def broken(contracts: Any, references: dict[str, Any]) -> list[str]:
         raise RuntimeError("the schedule endpoint broke")

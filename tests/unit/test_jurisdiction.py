@@ -58,7 +58,7 @@ def test_the_shipped_spanish_profile_loads(repo_root):
     profile = load_profile(repo_root / "config", "es")
     assert profile.id == "es"
     assert profile.name == "Spain"
-    assert profile.policies == {"eligibility": "skeleton", "tax": "es_irpf"}
+    assert profile.policies == {"eligibility": "eu_priips", "tax": "es_irpf"}
     assert profile.tax is not None
 
 

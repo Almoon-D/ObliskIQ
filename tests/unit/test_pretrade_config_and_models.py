@@ -10,11 +10,9 @@ from typing import Any
 
 import pytest
 from order_rig import terms
-from traded import STOCK
 
 from obliskiq.config.schema_execution import ApprovalConfig, CapsConfig
 from obliskiq.config.schema_ibkr import PaperOrderConfig
-from obliskiq.config.schema_instruments import EligibilityConfig
 from obliskiq.domain.orders import OrderSide, Sleeve, StopResize, StopResizeState
 from obliskiq.execution.account import quote_read
 from obliskiq.ibkr.decode import decode_ledger
@@ -44,11 +42,9 @@ def test_the_caps_and_lists_refuse_what_does_not_fit() -> None:
         ApprovalConfig(sleeves=[Sleeve.CORE, Sleeve.CORE])
     with pytest.raises(ValueError, match="each conid is listed once"):
         PaperOrderConfig(conids=[1, 1], limit_offset_fraction=Decimal("0.05"), intent_ttl_minutes=1)
-    with pytest.raises(ValueError, match="each conid is listed once"):
-        EligibilityConfig(skeleton_allowlist=[STOCK, STOCK], skeleton_tax_facts=[])
 
 
-def test_the_paper_order_conids_must_be_allowlisted(config_dir: Any) -> None:
+def test_the_paper_order_conids_must_be_tradable_universe_instruments(config_dir: Any) -> None:
     from obliskiq.config import ConfigInvalid, load_config
 
     owner = config_dir / "owner.yaml"
@@ -57,7 +53,7 @@ def test_the_paper_order_conids_must_be_allowlisted(config_dir: Any) -> None:
         + "\nibkr:\n  preflight:\n    paper_order:\n      conids: [756733]\n",
         encoding="utf-8",
     )
-    with pytest.raises(ConfigInvalid, match=r"756733 is not in eligibility\.skeleton_allowlist"):
+    with pytest.raises(ConfigInvalid, match=r"756733 \(SPY\) is not a tradable candidate"):
         load_config(config_dir)
 
 
@@ -150,7 +146,7 @@ def test_a_previous_close_is_no_price_and_a_halt_is_flagged() -> None:
     assert quote_read(quote(last_kind=LastKind.HALTED), option=False, read_at=NOW).halted
 
 
-def test_the_execution_test_conid_must_be_allowlisted(config_dir: Any) -> None:
+def test_the_execution_test_conid_must_be_a_tradable_universe_instrument(config_dir: Any) -> None:
     from obliskiq.config import ConfigInvalid, load_config
 
     owner = config_dir / "owner.yaml"
@@ -159,5 +155,5 @@ def test_the_execution_test_conid_must_be_allowlisted(config_dir: Any) -> None:
         + "\nibkr:\n  preflight:\n    execution_test:\n      conid: 756733\n",
         encoding="utf-8",
     )
-    with pytest.raises(ConfigInvalid, match=r"execution_test\.conid: 756733 is not in"):
+    with pytest.raises(ConfigInvalid, match=r"execution_test\.conid: 756733 \(SPY\) is not a"):
         load_config(config_dir)

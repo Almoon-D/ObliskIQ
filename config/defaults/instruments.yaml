@@ -33,9 +33,14 @@ instruments:
     - "DOUBLE LONG"
     - "DOUBLE SHORT"
 
-# lite's `tenor` block (legacy/lite/config.yaml:93-104): the one key the pre-trade gate reads.
-# The options sleeve (Session 12) ports the rest.
+# lite's `tenor` block (legacy/lite/config.yaml:93-104): the keys the chain collector and the
+# pre-trade gate read. The options sleeve (Session 12) ports the rest.
 tenor:
+  # The entry window for undated theses: the chain collector photographs only the expiries inside
+  # it (the catalyst sets the tenor of a dated thesis). The minimum is lite's hold_days_min plus
+  # its expiry buffer, the maximum a 190-day hold plus the buffer. lite.
+  entry_dte_min: 90
+  entry_dte_max: 200
   # An option is closed this many sessions before its last tradable session, regardless of
   # moneyness: an option on an ineligible ETP is never opened inside that window, and inside it
   # an unresolved calendar disagreement blocks any order on the option (the earlier date wins).

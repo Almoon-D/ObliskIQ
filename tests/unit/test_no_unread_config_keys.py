@@ -45,6 +45,10 @@ RUNTIME_KEYED = {
 #: the reason: ``profile.tax.payment.day`` is read as ``tax.payment.day``.
 PROFILE_SECTIONS_HELD_BY_NAME = {
     "tax": "a tax policy is built from the profile's tax section and reads it as `tax`",
+    "eligibility": (
+        "an eligibility policy is built from the profile's eligibility section and reads it as "
+        "`eligibility`"
+    ),
 }
 
 #: Sections keyed by data, with the package that must read the fields beneath each key.

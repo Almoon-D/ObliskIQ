@@ -4,11 +4,29 @@
 id: es
 name: Spain
 policies:
-  # What may be bought: the skeleton allowlist (config/defaults/eligibility.yaml) until Session 8
-  # registers eu_priips and selects it here.
-  eligibility: skeleton
+  # What may be bought: EU PRIIPs, computed from the universe's attributes
+  # (jurisdiction/eligibility_eu_priips.py) with the values under `eligibility` below.
+  eligibility: eu_priips
   # How gains are taxed: Spain's IRPF on the savings base (jurisdiction/tax_es_irpf.py).
   tax: es_irpf
+
+# What the eligibility policy applies (MASTER_PLAN §2). Regulation (EU) No 1286/2014 (PRIIPs): a
+# packaged retail investment product is offered to an EU retail investor only with a key information
+# document (arts. 5 and 13); ETFs, ETCs and funds are packaged, shares and plain government bonds are
+# not. Not legal advice.
+eligibility:
+  kid_required: [etf, etc, fund]
+  # ETFs and funds only in the UCITS form (Directive 2009/65/EC): a non-UCITS fund, such as a US
+  # 1940 Act ETF, has no KID either. ETCs are notes, not funds, and need only their KID.
+  ucits_required: [etf, fund]
+  government_bonds: true
+  # Off by default (MASTER_PLAN §5.3): a corporate bond can carry features that make it a packaged
+  # product, and the bond rule (Session 19a) decides direct bonds at all.
+  corporate_bonds: false
+  # A listed option on an ETP the policy refuses is held only if closed before expiry, so the ETP
+  # is never delivered (tenor.mandatory_close_trading_days).
+  options_on_ineligible_etps: mandatory_close
+  source: Regulation (EU) No 1286/2014 (PRIIPs) arts. 4, 5 and 13; Directive 2009/65/EC (UCITS); MASTER_PLAN §2, profile es; read 2026-10-22
 
 tax:
   # Homogeneous securities are sold first in, first out (LIRPF art. 37.2; art. 94.1.a for funds).

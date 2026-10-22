@@ -17,7 +17,6 @@ from obliskiq.capital.flows import CashLedger, LedgerRefusal, parse_record_id, r
 from obliskiq.capital.questions import DEADLINE_ACTOR, OwnerQuestions, QuestionRefusal
 from obliskiq.capital.twr import account_twr
 from obliskiq.config import ObliskConfig
-from obliskiq.config.schema_instruments import EligibilityConfig
 from obliskiq.domain.capital import (
     Adjustment,
     AdjustmentKind,
@@ -495,22 +494,6 @@ def test_records_refuse_what_cannot_be_true() -> None:
             security="1", sold_on=TODAY, closes_on=TODAY - timedelta(days=1),
             loss_per_unit=D(1), units=D(1),
         )  # fmt: skip
-
-
-def test_the_skeletons_tax_facts_name_allowlisted_conids_once(
-    shipped_settings: ObliskConfig,
-) -> None:
-    eligibility = shipped_settings.eligibility
-    fact = eligibility.skeleton_tax_facts[0]
-    with pytest.raises(ValueError, match="tax facts are listed once"):
-        EligibilityConfig.model_validate(
-            eligibility.model_dump() | {"skeleton_tax_facts": [fact.model_dump()] * 2}
-        )
-    stranger = fact.model_dump() | {"conid": 424242}
-    with pytest.raises(ValueError, match=r"the allowlist does not: \[424242\]"):
-        EligibilityConfig.model_validate(
-            eligibility.model_dump() | {"skeleton_tax_facts": [stranger]}
-        )
 
 
 def test_the_store_refuses_what_a_record_cannot_be(store: Store) -> None:

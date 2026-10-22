@@ -103,7 +103,7 @@ class VenueRuntime:
     before_close: timedelta
     incident_policy: IncidentPolicy
     provenance: VenueProvenance
-    settlement_sessions: int
+    settlement_sessions: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,8 +439,11 @@ class Calendars:
     def settlement_date(self, mic: str, trade_day: date) -> date:
         """The day a trade made on ``trade_day`` settles: the venue's ``settlement_sessions``-th
         session after it (T+n on the venue's calendar, so a holiday pushes it later). A date the
-        calendar does not cover raises: a settlement it cannot date is never assumed."""
+        calendar does not cover, or a venue whose lag is not sourced, raises: a settlement it
+        cannot date is never assumed."""
         runtime = self._runtime(mic)
+        if runtime.settlement_sessions is None:
+            raise CalendarCoverageError(f"{mic}: the venue's settlement lag is not sourced")
         day = trade_day
         for _ in range(runtime.settlement_sessions):
             following = runtime.schedule.next_session(day)

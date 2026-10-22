@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from typing import Final
 
-from .eligibility import ELIGIBILITY_POLICIES
+from .eligibility_policies import ELIGIBILITY_POLICIES
 from .registry import PolicyKind
 from .tax_policies import TAX_POLICIES
 

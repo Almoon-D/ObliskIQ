@@ -1,0 +1,73 @@
+# The market-data collectors (data/market/): what they walk, how hard they retry, when they run
+# and how the option-chain collector sizes its strike band. Values are ObliskIQ-lite-MCP's
+# (config.yaml `collectors` and `data`, @b1ebd49) unless a comment says otherwise.
+collectors:
+  # Per-TARGET retry, on top of the per-request retry in `http` and the session's own: one dead
+  # underlying degrades a run, it never kills it. Backoff before retry n is backoff_seconds * 2^n,
+  # capped at backoff_max_seconds. request_spacing_seconds paces the calls of one loop (jittered
+  # up to twice it), the guard IBKR's pacing limits exist for.
+  retry:
+    target_retries: 2
+    backoff_seconds: 2.0
+    backoff_max_seconds: 30.0
+    request_spacing_seconds: 0.25
+
+  # When the service collects: one job per venue the universe collects on, after that venue's
+  # regular close through the calendars (so daylight saving and half-days follow the venue). A
+  # venue the calendars do not cover that day collects in fallback_venue's job instead. Judgements:
+  # after the closing auction has printed, and New York as the last close of the day.
+  schedule:
+    after_close_minutes: 30
+    fallback_venue: XNYS
+
+  # The wall-clock budget of each step of one collection job, in seconds: a step that outruns it
+  # is abandoned and recorded as an error, and the steps after it still run. The chain step gets
+  # the largest share because a chain not collected today is gone (lite measured 57 minutes for
+  # 24 underlyings on 2026-09-11); bars are recoverable at any time, so they yield first.
+  step_deadline_seconds:
+    universe: 600
+    backfill: 1200
+    snapshots: 600
+    chains: 3600
+    curves: 600
+
+  # Daily bars: the window held, and the overlap re-asked at the newest end so a partial final
+  # bar is corrected without re-fetching what is held. The chunked walk is ibkr.history's.
+  backfill:
+    window_years: 2
+    overlap_days: 5
+
+  # Realised volatility for the strike band: the standard deviation of daily log returns over a
+  # tenor of sessions, annualised on trading_days_per_year (the 252 of lite's `T/252`).
+  vol:
+    trading_days_per_year: 252
+    primary_tenor_days: 30
+    fallback_tenor_days: 10
+    # The last-resort strike-band sigma only, time-scaled by each expiry's tau; a row sized from
+    # it says so. Never a substitute for a measured volatility anywhere else.
+    sigma_default: 0.35
+
+  chain:
+    # Rungs tried in order; every one after the first marks the target degraded. realised_primary
+    # and realised_fallback read vol.primary_tenor_days and vol.fallback_tenor_days of bars,
+    # vendor_iv the underlying's quoted implied vol, default vol.sigma_default.
+    sigma_ladder: [realised_primary, realised_fallback, vendor_iv, default]
+    # k in spot * exp(±k * sigma * sqrt(tau)): roughly k standard deviations of the terminal
+    # distribution, never a fixed percentage band.
+    strike_bounds_sigma: 2.0
+    # The tenor window (tenor.entry_dte_min..max) holds two to four monthly expiries.
+    max_expiries_per_underlying: 4
+    max_strikes_per_expiry: 60
+    # A fallback sigma means a wider, less trustworthy band; it must not also ask for the most
+    # strikes.
+    max_strikes_per_expiry_on_fallback: 24
+    # A fallback on an instrument listed for longer than this is a warning (degraded); on a
+    # newer listing thin history is expected.
+    new_listing_grace_days: 400
+    # Daily bars older than this make a realised rung stale: enough closes say nothing of when.
+    bars_freshness_days: 5
+
+  # Futures curves, data only: up to this many expiries a root, and the fewest that have a shape.
+  curve:
+    max_expiries_per_root: 12
+    min_expiries_for_roll: 2

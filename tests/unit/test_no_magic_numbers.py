@@ -148,6 +148,9 @@ PROTOCOL_CONSTANTS: dict[str, dict[str, str]] = {
     "execution/executor.py": {"ZERO": "the zero amount"},
     "execution/reconcile.py": {"ZERO": "the zero amount"},
     "execution/fill_cash.py": {"ZERO": "the zero amount"},
+    "execution/instruments.py": {
+        "UNIT_MULTIPLIER": "one unit of a share, fund or bond costs its price (a unit)"
+    },
 }
 
 

@@ -11,8 +11,14 @@
 # `venues` is keyed by market code (MIC). Unless the MIC is in `synthetic_calendars`, it is also
 # the exchange_calendars name of the venue's calendar. `settlement_sessions` is how many of the
 # venue's sessions after a trade its cash settles on (T+n), counted on the venue's calendar: the
-# reservation planner's lag (DECISIONS D108), with its source under `sources.settlement`. Venue-specific extras live in the side
-# sections below, keyed by the same MIC, so no venue carries a null for a block it lacks.
+# reservation planner's lag (DECISIONS D108), with its source under `sources.settlement`; null is
+# not sourced, and no sale is planned there. The venue profile (MASTER_PLAN §5.3): `currencies`, the
+# currencies its listings trade in (a universe instrument must list in one of them);
+# `trading_permission`, the IBKR permission an order there needs; `board_lot`, the standard unit of
+# its shares (null where it varies by stock or is not sourced), each with its source under
+# `sources`. Market-data cost and availability are the feeds of config/defaults/market_data.yaml.
+# Venue-specific extras live in the side sections below, keyed by the same MIC, so no venue
+# carries a null for a block it lacks.
 
 calendars:
   # How much calendar to build around today: sessions, holidays and early closes outside
@@ -42,6 +48,9 @@ venues:
     region: America
     timezone: America/New_York
     settlement_sessions: 1
+    currencies: [USD]
+    trading_permission: "Stocks: United States"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -57,11 +66,23 @@ venues:
       settlement:
         origin: "SEC Rule 15c6-1 as amended (Release 34-96930): T+1 from 2024-05-28"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XNAS:
     name: "Nasdaq"
     region: America
     timezone: America/New_York
     settlement_sessions: 1
+    currencies: [USD]
+    trading_permission: "Stocks: United States"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -77,11 +98,23 @@ venues:
       settlement:
         origin: "SEC Rule 15c6-1 as amended (Release 34-96930): T+1 from 2024-05-28"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XTSE:
     name: "Toronto Stock Ex."
     region: America
     timezone: America/Toronto
     settlement_sessions: 1
+    currencies: [CAD]
+    trading_permission: "Stocks: Canada"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -150, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -96,11 +129,23 @@ venues:
       settlement:
         origin: "CSA amendments to NI 24-101: T+1 from 2024-05-27"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   BVMF:
     name: "B3 Bolsa do Brasil"
     region: America
     timezone: America/Sao_Paulo
     settlement_sessions: 2
+    currencies: [BRL]
+    trading_permission: "Stocks: Brazil"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
@@ -115,11 +160,23 @@ venues:
       settlement:
         origin: "B3 equities settle D+2 (a move to D+1 is planned for 2028); secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XMEX:
     name: "Bolsa de Méjico"
     region: America
     timezone: America/Mexico_City
     settlement_sessions: 1
+    currencies: [MXN]
+    trading_permission: "Stocks: Mexico"
+    board_lot: null
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -132,11 +189,23 @@ venues:
       settlement:
         origin: "Grupo BMV press release of 2024-05-27: T+1 from that day"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XSGO:
     name: "Bolsa de Santiago"
     region: America
     timezone: America/Santiago
     settlement_sessions: 2
+    currencies: [CLP]
+    trading_permission: "Stocks: Chile"
+    board_lot: null
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -149,11 +218,23 @@ venues:
       settlement:
         origin: "Bolsa de Santiago cash market settles T+2 (nuam's move to T+1 is planned for 2027); secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XLON:
     name: "London Stock Ex."
     region: Europe
     timezone: Europe/London
     settlement_sessions: 2
+    currencies: [GBP, USD, EUR]
+    trading_permission: "Stocks: United Kingdom"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -10, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -169,11 +250,23 @@ venues:
       settlement:
         origin: "UK securities settle T+2; the UK's move to T+1 applies from 2027-10-11 (Accelerated Settlement Taskforce)"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency, and the USD and EUR lines of London-listed ETFs (IWDA in USD on LSEETF, IBKR contract search [MCP ✓ 2026-10-20])"
+        verify_live: true
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XMAD:
     name: "Bolsa de Madrid"
     region: Europe
     timezone: Europe/Madrid
     settlement_sessions: 2
+    currencies: [EUR]
+    trading_permission: "Stocks: Spain"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -189,11 +282,23 @@ venues:
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XETR:
     name: "Deutsche Börse Xetra"
     region: Europe
     timezone: Europe/Berlin
     settlement_sessions: 2
+    currencies: [EUR]
+    trading_permission: "Stocks: Germany"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -5, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -208,11 +313,23 @@ venues:
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XPAR:
     name: "Euronext Paris"
     region: Europe
     timezone: Europe/Paris
     settlement_sessions: 2
+    currencies: [EUR]
+    trading_permission: "Stocks: France"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -105, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -228,11 +345,23 @@ venues:
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XAMS:
     name: "Euronext Amsterdam"
     region: Europe
     timezone: Europe/Amsterdam
     settlement_sessions: 2
+    currencies: [EUR]
+    trading_permission: "Stocks: Netherlands"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -105, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -248,11 +377,23 @@ venues:
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XMIL:
     name: "Euronext Milán"
     region: Europe
     timezone: Europe/Rome
     settlement_sessions: 2
+    currencies: [EUR]
+    trading_permission: "Stocks: Italy"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -90, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 5}
@@ -268,11 +409,23 @@ venues:
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XSWX:
     name: "SIX Swiss Ex."
     region: Europe
     timezone: Europe/Zurich
     settlement_sessions: 2
+    currencies: [CHF, USD, EUR]
+    trading_permission: "Stocks: Switzerland"
+    board_lot: null
     phase_windows:
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 10}
@@ -287,11 +440,23 @@ venues:
       settlement:
         origin: "SIX: T+2 (Switzerland plans T+1 with the EU on 2027-10-11); secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency, and the USD lines SIX lists for foreign shares (NTRUSD, CCJUSD in IBKR's contract search [MCP ✓ 2026-10-22])"
+        verify_live: true
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XTKS:
     name: "Tokyo Stock Ex."
     region: Asia
     timezone: Asia/Tokyo
     settlement_sessions: 2
+    currencies: [JPY]
+    trading_permission: "Stocks: Japan"
+    board_lot: 100
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -60, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
@@ -306,11 +471,23 @@ venues:
       settlement:
         origin: "JPX: T+2 since 2019-07-16"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "MASTER_PLAN §5.3 (Japan trades shares in units of 100); not re-read at the exchange in this session"
+        verify_live: true
   XHKG:
     name: "Hong Kong Ex."
     region: Asia
     timezone: Asia/Hong_Kong
     settlement_sessions: 2
+    currencies: [HKD]
+    trading_permission: "Stocks: Hong Kong"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 10}
@@ -325,11 +502,23 @@ venues:
       settlement:
         origin: "HKEX: Stock Connect and CCASS settle exchange trades T+2"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "HKEX board lots are set per stock (MASTER_PLAN §5.3); the instrument declares its own"
+        verify_live: true
   XSHG:
     name: "Shanghai Stock Ex."
     region: Asia
     timezone: Asia/Shanghai
     settlement_sessions: 1
+    currencies: [CNY]
+    trading_permission: "Stocks: China (Stock Connect northbound)"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -3, end_offset_minutes: 0}
@@ -344,11 +533,23 @@ venues:
       settlement:
         origin: "China A shares: securities T+0, cash T+1 (SSE rules); secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XSHE:
     name: "Shenzhen Stock Ex."
     region: Asia
     timezone: Asia/Shanghai
     settlement_sessions: 1
+    currencies: [CNY]
+    trading_permission: "Stocks: China (Stock Connect northbound)"
+    board_lot: null
     phase_windows:
       - {phase: opening_auction, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -3, end_offset_minutes: 0}
@@ -363,11 +564,23 @@ venues:
       settlement:
         origin: "China A shares: securities T+0, cash T+1 (SZSE rules); secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XBOM:
     name: "BSE India"
     region: Asia
     timezone: Asia/Kolkata
     settlement_sessions: 1
+    currencies: [INR]
+    trading_permission: "Stocks: India"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 30}
@@ -382,11 +595,23 @@ venues:
       settlement:
         origin: "SEBI circular of 2021-09-07: T+1 phased in by 2023-01-27"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XNSE:
     name: "NSE India"
     region: Asia
     timezone: Asia/Kolkata
     settlement_sessions: 1
+    currencies: [INR]
+    trading_permission: "Stocks: India"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -15, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 30}
@@ -401,11 +626,23 @@ venues:
       settlement:
         origin: "SEBI circular of 2021-09-07: T+1 phased in by 2023-01-27"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XKRX:
     name: "Korea Ex."
     region: Asia
     timezone: Asia/Seoul
     settlement_sessions: 2
+    currencies: [KRW]
+    trading_permission: "Stocks: Korea"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
@@ -420,11 +657,52 @@ venues:
       settlement:
         origin: "KRX equities settle T+2; secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
+  XTAE:
+    name: "Tel Aviv Stock Ex."
+    region: Asia
+    timezone: Asia/Tel_Aviv
+    settlement_sessions: null
+    currencies: [ILS]
+    trading_permission: "Stocks: Israel"
+    board_lot: null
+    phase_windows: []
+    incident_source: {type: manual, scope: market_wide}
+    sources:
+      calendar:
+        origin: "exchange_calendars 4.13.2 calendar XTAE (Monday to Friday sessions through 2027-10-21 as read 2026-10-22); the universe's two TASE funds are data only"
+        verify_live: true
+      phases:
+        origin: "none modelled: no source for TASE auction windows"
+        verify_live: true
+      settlement:
+        origin: "not sourced: nothing is bought on TASE, so no sale is planned there and the planner refuses one (settlement_sessions null)"
+        verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XTAI:
     name: "Taiwan Stock Ex."
     region: Asia
     timezone: Asia/Taipei
     settlement_sessions: 2
+    currencies: [TWD]
+    trading_permission: "Stocks: Taiwan"
+    board_lot: null
     phase_windows:
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -5, end_offset_minutes: 0}
     incident_source: {type: manual, scope: market_wide}
@@ -438,11 +716,23 @@ venues:
       settlement:
         origin: "TWSE equities settle T+2; secondary sources read 2026-10-21"
         verify_live: true
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XSES:
     name: "Singapore Ex."
     region: Asia
     timezone: Asia/Singapore
     settlement_sessions: 2
+    currencies: [SGD, USD]
+    trading_permission: "Stocks: Singapore"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -30, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 6}
@@ -458,11 +748,23 @@ venues:
       settlement:
         origin: "SGX: T+2 since 2018-12-10"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency, and SGX's USD-quoted lines"
+        verify_live: true
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XASX:
     name: "Australian Securities Ex."
     region: Oceania
     timezone: Australia/Sydney
     settlement_sessions: 2
+    currencies: [AUD]
+    trading_permission: "Stocks: Australia"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -180, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 11}
@@ -478,11 +780,23 @@ venues:
       settlement:
         origin: "ASX Settlement Operating Rules: T+2 since 2016-03-07"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   CHIA:
     name: "Cboe Australia"
     region: Oceania
     timezone: Australia/Sydney
     settlement_sessions: 2
+    currencies: [AUD]
+    trading_permission: "Stocks: Australia"
+    board_lot: null
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -495,11 +809,23 @@ venues:
       settlement:
         origin: "Cboe Australia trades settle through ASX Settlement (CHESS): T+2"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XNZE:
     name: "New Zealand"
     region: Oceania
     timezone: Pacific/Auckland
     settlement_sessions: 2
+    currencies: [NZD]
+    trading_permission: "Stocks: New Zealand"
+    board_lot: null
     phase_windows:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -90, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 15}
@@ -514,11 +840,23 @@ venues:
       settlement:
         origin: "NZX Clearing: T+2 since 2016-03-07"
         verify_live: false
+      currencies:
+        origin: "the venue's local currency"
+        verify_live: false
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XSPX:
     name: "South Pacific Stock Ex."
     region: Oceania
     timezone: Pacific/Fiji
     settlement_sessions: 2
+    currencies: [USD]
+    trading_permission: "Stocks: South Pacific"
+    board_lot: null
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -531,11 +869,23 @@ venues:
       settlement:
         origin: "South Pacific Stock Exchange: T+2 assumed; no primary source read"
         verify_live: true
+      currencies:
+        origin: "SPX quotes its listings in US dollars (market-pulse-bot config/exchanges.yaml @900dbf4); not re-read here"
+        verify_live: true
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "not sourced; an order's size follows IBKR's contract rules (size increment) at order time"
+        verify_live: false
   XEUR:
     name: "Eurex"
     region: Europe
     timezone: Europe/Berlin
     settlement_sessions: 1
+    currencies: [EUR, USD]
+    trading_permission: "Options: Germany (Eurex)"
+    board_lot: null
     phase_windows: []
     incident_source: {type: manual, scope: market_wide}
     sources:
@@ -547,6 +897,15 @@ venues:
         verify_live: true
       settlement:
         origin: "Eurex Clearing: an option's premium is settled on the exchange day after the trade; secondary sources read 2026-10-21"
+        verify_live: true
+      currencies:
+        origin: "Eurex lists its contracts mostly in EUR and some in USD (the MSCI index futures in IBKR's contract search [MCP ✓ 2026-10-22])"
+        verify_live: true
+      permission:
+        origin: "IBKR's trading-permission settings, which group permissions by product and country; the name is this file's, and the account's grants are read in Session 9 (broker capabilities)"
+        verify_live: true
+      lots:
+        origin: "Eurex contracts have per-product sizes (the multiplier), not a share lot"
         verify_live: true
 
 # Venues the library lacks: fixed hours, a weekday set and a declared holiday list.
@@ -722,4 +1081,74 @@ ibkr_exchanges:
     venue: XASX
     source:
       origin: "docs/SESSION_PROMPTS.md Session 2: listing venue to venue profile"
+      verify_live: true
+  B3:
+    venue: BVMF
+    source:
+      origin: "IBKR's code for B3 on lite's universe rows (BOVA11, FIND11, MATB11) and in IBKR's contract search [MCP ✓ 2026-10-22]"
+      verify_live: true
+  BVME.ETF:
+    venue: XMIL
+    source:
+      origin: "IBKR's code for Borsa Italiana's ETF segment, lite universe.yaml (CSMIB) [CP 2026-09-14]"
+      verify_live: true
+  HKFE:
+    venue: XHKG
+    source:
+      origin: "IBKR's code for the Hong Kong Futures Exchange, lite universe.yaml (HSI, a data-only index); its index sessions assumed to follow the HKEX calendar"
+      verify_live: true
+  KRX:
+    venue: XKRX
+    source:
+      origin: "IBKR's code for KRX-listed funds and shares, lite universe.yaml (091170, 117680, 117700) and IBKR's contract search [MCP ✓ 2026-10-22]"
+      verify_live: true
+  KSE:
+    venue: XKRX
+    source:
+      origin: "IBKR's code for the Korea Exchange's index contracts, lite universe.yaml (K200, data only)"
+      verify_live: true
+  NSE:
+    venue: XNSE
+    source:
+      origin: "IBKR's code for the National Stock Exchange of India, lite universe.yaml (NIFTYBEES) and IBKR's contract search [MCP ✓ 2026-10-22]"
+      verify_live: true
+  OSE.JPN:
+    venue: XTKS
+    source:
+      origin: "IBKR's code for the Osaka Exchange, lite universe.yaml (N225, TOPIX: data-only indices); Osaka follows Japan's market holidays, its derivative hours are not the cash session's"
+      verify_live: true
+  SEHKNTL:
+    venue: XSHG
+    source:
+      origin: "IBKR's code for Shanghai-Hong Kong Stock Connect northbound, lite universe.yaml (510300); a northbound trade also needs Hong Kong open, which this map does not model"
+      verify_live: true
+  TASE:
+    venue: XTAE
+    source:
+      origin: "IBKR's code for the Tel Aviv Stock Exchange, lite universe.yaml (KSM.F59, KSM.F77) and IBKR's contract search [MCP ✓ 2026-10-22]"
+      verify_live: true
+  NYMEX:
+    venue: XNYS
+    source:
+      origin: "IBKR's code for NYMEX futures, lite universe.yaml futures_roots: curves are data, collected after the NYSE close; CME Globex hours differ from it"
+      verify_live: true
+  COMEX:
+    venue: XNYS
+    source:
+      origin: "IBKR's code for COMEX futures, lite universe.yaml futures_roots: curves are data, collected after the NYSE close; CME Globex hours differ from it"
+      verify_live: true
+  CBOT:
+    venue: XNYS
+    source:
+      origin: "IBKR's code for CBOT futures, lite universe.yaml futures_roots: curves are data, collected after the NYSE close; CME Globex hours differ from it"
+      verify_live: true
+  NYBOT:
+    venue: XNYS
+    source:
+      origin: "IBKR's code for ICE US softs futures, lite universe.yaml futures_roots: curves are data, collected after the NYSE close; ICE US hours differ from it"
+      verify_live: true
+  ICEEU:
+    venue: XLON
+    source:
+      origin: "IBKR's code for ICE Futures Europe, lite calendars.yaml and universe.yaml (TTF): a curve collected after the London close; ICE Endex hours differ from it"
       verify_live: true

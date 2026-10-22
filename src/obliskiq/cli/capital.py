@@ -34,13 +34,13 @@ from ..domain.capital import (
     ReservationState,
 )
 from ..errors import ObliskError
-from ..execution.instruments import ConfiguredDirectory
+from ..execution.instruments import UniverseDirectory
 from ..jurisdiction import TAX_POLICIES
 from ..store import capital as capital_repo
 from ..store import lots as lots_repo
 from ..store import open_store
 from ..store.worker import StoreWorker
-from ..tax.book import TaxBook
+from ..tax.book import TaxBook, universe_tax_facts
 from ..tax.report import annual_csv, year_bounds
 
 if TYPE_CHECKING:
@@ -423,13 +423,15 @@ def _tax_report(loaded: Loaded, out: TextIO) -> int:
     async def work(worker: StoreWorker) -> str:
         policy = TAX_POLICIES.resolve(loaded.profile, settings)
         book = TaxBook(
-            settings, policy, worker=worker, directory=ConfiguredDirectory.from_settings(settings)
+            settings, policy, worker=worker, directory=UniverseDirectory.from_settings(settings)
         )
         engine = await book.engine()
         realisations = await worker.run(lots_repo.realisations_between, since=first, until=last)
         settled = {s.tax_year: s for s in engine.ledger.settled()}
         summary = settled.get(year) or engine.ledger.provisional(year)
-        identities = {str(f.conid): f.isin for f in settings.eligibility.skeleton_tax_facts}
+        identities = {
+            str(conid): facts.isin for conid, facts in universe_tax_facts(settings.universe).items()
+        }
         return annual_csv(
             year,
             realisations=realisations,

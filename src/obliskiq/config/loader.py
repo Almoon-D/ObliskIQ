@@ -1,9 +1,10 @@
 """Loading the configuration: expert defaults, then the owner's panel, then the environment.
 
 ``config/defaults/*.yaml`` hold the expert defaults; each top-level section lives in exactly
-one of them. ``config/owner.yaml`` is the owner's panel and overrides any default, section by
-section and key by key (a list or a scalar replaces what it overrides; mappings merge). The
-environment may override the logging block for one process. The merged tree is validated
+one of them. ``config/universe.yaml`` holds the universe (its one section, ``universe``).
+``config/owner.yaml`` is the owner's panel and overrides any default, section by section and key
+by key (a list or a scalar replaces what it overrides; mappings merge). The environment may
+override the logging block for one process. The merged tree is validated
 into :class:`~obliskiq.config.schema.ObliskConfig`; every value remembers where it came from.
 
 Failure is loud and readable: every problem names the file, the dotted key and what is
@@ -27,6 +28,8 @@ from ..errors import ConfigError
 from .schema import ObliskConfig
 
 DEFAULTS_DIR = "defaults"
+UNIVERSE_FILE = "universe.yaml"
+UNIVERSE_SECTION = "universe"
 OWNER_FILE = "owner.yaml"
 YAML_GLOB = "*.yaml"
 
@@ -266,6 +269,8 @@ def load_config(
             section_home[section] = display
             merge_into(merged, {section: value}, display, sources)
 
+    problems += _merge_universe(config_dir, merged, sources, section_home, files)
+
     owner_display = display_path(config_dir / OWNER_FILE, config_dir)
     files.append(owner_display)
     try:
@@ -295,6 +300,41 @@ def load_config(
         config_dir=config_dir,
         files=tuple(files),
     )
+
+
+def _merge_universe(
+    config_dir: Path,
+    merged: dict[str, Any],
+    sources: dict[str, str],
+    section_home: dict[str, str],
+    files: list[str],
+) -> list[ConfigProblem]:
+    """Merge ``config/universe.yaml``, whose one top-level section is ``universe``."""
+    path = config_dir / UNIVERSE_FILE
+    display = display_path(path, config_dir)
+    files.append(display)
+    try:
+        data = read_yaml_mapping(path, display)
+    except ConfigInvalid as exc:
+        return list(exc.problems)
+    problems = [
+        ConfigProblem(
+            display, key, f"is not a section of the universe file; it holds only {UNIVERSE_SECTION}"
+        )
+        for key in sorted(set(data) - {UNIVERSE_SECTION})
+    ]
+    if UNIVERSE_SECTION in section_home:
+        problems.append(
+            ConfigProblem(
+                section_home[UNIVERSE_SECTION],
+                UNIVERSE_SECTION,
+                f"is defined in {display}; it cannot also be a default",
+            )
+        )
+    if problems:
+        return problems
+    merge_into(merged, data, display, sources)
+    return []
 
 
 def explain_validation_error(

@@ -10,15 +10,17 @@ from traded import ETF, EXPIRY, STOCK, instrument, option
 
 from obliskiq.config.schema_instruments import InstrumentsConfig
 from obliskiq.domain.enums import AssetClass
-from obliskiq.execution.instruments import ConfiguredDirectory, prohibited_reasons
+from obliskiq.execution.instruments import UniverseDirectory, prohibited_reasons
 
 
-def test_the_configured_directory_describes_the_allowlist(shipped_settings: Any) -> None:
-    directory = ConfiguredDirectory.from_settings(shipped_settings)
+def test_the_universe_directory_describes_its_pinned_instruments(shipped_settings: Any) -> None:
+    directory = UniverseDirectory.from_settings(shipped_settings)
     assert directory.describe(7089) is not None
     assert directory.describe(7089).symbol == "FCX"
     assert directory.describe(1) is None
-    assert directory.listing_exchanges() == ("AEB", "IBIS", "LSEETF", "NYSE")
+    assert {"AEB", "IBIS", "LSEETF", "NYSE"} <= set(directory.listing_exchanges())
+    on_fcx = option(800001, directory.describe(7089))
+    assert UniverseDirectory.from_settings(shipped_settings, options=[on_fcx]).describe(800001)
 
 
 def test_nothing_ordinary_is_prohibited(shipped_settings: Any) -> None:

@@ -11,6 +11,7 @@ import csv
 import io
 import shutil
 from collections.abc import AsyncIterator, Callable
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -22,7 +23,7 @@ from obliskiq.domain.orders import Fill, OrderSide
 from obliskiq.domain.tax import Realisation, SecurityKind, TaxLot
 from obliskiq.errors import TaxError
 from obliskiq.execution.account import CashLine, CashRead
-from obliskiq.execution.instruments import ConfiguredDirectory
+from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.jurisdiction import TAX_POLICIES, load_profile
 from obliskiq.store import fx as fx_repo
 from obliskiq.store import lots as lots_repo
@@ -30,7 +31,7 @@ from obliskiq.store import open_store
 from obliskiq.store import orders as repo
 from obliskiq.store.fx import FxRate
 from obliskiq.store.worker import StoreWorker
-from obliskiq.tax.book import TaxBook, identity_of, security_key
+from obliskiq.tax.book import TaxBook, identity_of, security_key, universe_tax_facts
 from obliskiq.tax.lots import LotEngine
 from obliskiq.tax.report import annual_csv, year_bounds
 
@@ -54,6 +55,18 @@ async def worker(shipped_settings: ObliskConfig, tmp_path: Path) -> AsyncIterato
     await made.aclose()
 
 
+def without_isin(settings: ObliskConfig, *conids: int) -> ObliskConfig:
+    """``settings`` whose universe declares no ISIN for ``conids`` (for none at all, by default)."""
+    instruments = [
+        item.model_copy(update={"attributes": item.attributes.model_copy(update={"isin": None})})
+        if not conids or item.conid in conids
+        else item
+        for item in settings.universe.instruments
+    ]
+    universe = settings.universe.model_copy(update={"instruments": instruments})
+    return settings.model_copy(update={"universe": universe})
+
+
 @pytest.fixture
 def clock() -> Clock:
     return Clock(datetime(2026, 12, 1, 12, 0, tzinfo=UTC))
@@ -70,7 +83,7 @@ def book_of(
         settings,
         policy,
         worker=worker,
-        directory=ConfiguredDirectory.from_settings(settings),
+        directory=UniverseDirectory.from_settings(settings),
         now=clock,
     )
 
@@ -313,25 +326,19 @@ async def test_saved_lots_that_no_tax_facts_describe_refuse_to_load(
     book = book_of(shipped_settings, worker, clock)
     await record(worker, fill(IBGM, BUY, "1", "100", date(2026, 3, 2)))
     await book.catch_up()
-    bare = shipped_settings.model_copy(
-        update={
-            "eligibility": shipped_settings.eligibility.model_copy(
-                update={"skeleton_tax_facts": []}
-            )
-        }
-    )
+    bare = without_isin(shipped_settings)
     with pytest.raises(TaxError, match="no tax facts describe"):
         await book_of(bare, worker, clock).engine()
 
 
 def test_an_instrument_without_tax_facts_has_no_identity(shipped_settings: ObliskConfig) -> None:
-    directory = ConfiguredDirectory.from_settings(shipped_settings)
-    facts = {f.conid: f for f in shipped_settings.eligibility.skeleton_tax_facts}
+    directory = UniverseDirectory.from_settings(shipped_settings)
+    facts = universe_tax_facts(shipped_settings.universe)
     identity = identity_of(IWDA, directory, facts)
     assert identity is not None
     assert identity.kind is SecurityKind.ETF
     assert identity_of(424242, directory, facts) is None
-    wrong = {IWDA: facts[IWDA].model_copy(update={"issuer": None})}
+    wrong = {IWDA: replace(facts[IWDA], issuer=None)}
     assert identity_of(IWDA, directory, wrong) is None  # an ETF names its issuer
 
 
@@ -491,12 +498,10 @@ async def test_a_conversion_on_a_pair_without_the_base_currency_is_incomplete(
 async def test_a_fill_of_an_instrument_without_tax_facts_is_incomplete(
     shipped_settings: ObliskConfig, worker: StoreWorker, clock: Clock
 ) -> None:
-    facts = [f for f in shipped_settings.eligibility.skeleton_tax_facts if f.conid != IBGM]
-    eligibility = shipped_settings.eligibility.model_copy(update={"skeleton_tax_facts": facts})
-    book = book_of(shipped_settings.model_copy(update={"eligibility": eligibility}), worker, clock)
+    book = book_of(without_isin(shipped_settings, IBGM), worker, clock)
     await record(worker, fill(IBGM, BUY, "1", "100", date(2026, 6, 1)))
     (why,) = (await book.catch_up()).incomplete
-    assert "has no tax facts (eligibility.skeleton_tax_facts)" in why
+    assert "has no tax facts (an ISIN in its universe attributes)" in why
 
 
 async def test_saved_lots_under_a_key_no_security_has_refuse_to_load(

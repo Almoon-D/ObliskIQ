@@ -42,7 +42,7 @@ from obliskiq.domain.orders import (
 )
 from obliskiq.errors import TaxError
 from obliskiq.execution.executor import RETRY_NEXT_WINDOW
-from obliskiq.execution.instruments import ConfiguredDirectory
+from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.store import capital as capital_repo
 from obliskiq.store import orders as repo
 
@@ -228,9 +228,9 @@ async def test_a_role_whose_venue_is_closed_waits(rig: Any) -> None:
 
 
 async def test_a_role_whose_listing_maps_to_no_venue_waits(rig: Any) -> None:
-    directory = ConfiguredDirectory(
+    directory = UniverseDirectory(
         i.model_copy(update={"listing_exchange": "NOWHERE"}) if i.conid == IBGM else i
-        for i in rig.settings.eligibility.skeleton_allowlist
+        for i in UniverseDirectory.from_settings(rig.settings).instruments()
     )
     roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
     assert roles["euro_govt_bonds"].action == "skip"
@@ -271,8 +271,8 @@ async def test_a_role_without_a_price_or_an_instrument_is_skipped(rig: Any) -> N
     del rig.broker.quotes[EMIM]
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
     assert (roles["em_equity"].action, roles["em_equity"].reason) == ("skip", "no price")
-    directory = ConfiguredDirectory(
-        i for i in rig.settings.eligibility.skeleton_allowlist if i.conid != IBGM
+    directory = UniverseDirectory(
+        i for i in UniverseDirectory.from_settings(rig.settings).instruments() if i.conid != IBGM
     )
     roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
     assert roles["euro_govt_bonds"].reason == "no instrument describes the conid"
@@ -354,8 +354,10 @@ async def test_an_open_buy_that_cannot_be_valued_stops_the_plan(rig: Any) -> Non
     await survey.apply(await survey.survey(ExecutionMode.SHADOW))
     narrow = rebalancer(
         rig,
-        directory=ConfiguredDirectory(
-            i for i in rig.settings.eligibility.skeleton_allowlist if i.conid != IWDA
+        directory=UniverseDirectory(
+            i
+            for i in UniverseDirectory.from_settings(rig.settings).instruments()
+            if i.conid != IWDA
         ),
     )
     plan = await narrow.survey(ExecutionMode.SHADOW)
@@ -412,7 +414,7 @@ async def test_a_trade_that_cannot_be_priced_is_left_for_the_next_cycle(rig: Any
     rig.broker.rules_by_conid[IBGM] = {"orderTypes": ["limit"], "incrementRules": []}
     made = await survey.apply(plan)
     assert [i.conid for i in made] == [IWDA]
-    assert await rebalancer(rig, directory=ConfiguredDirectory(())).apply(plan) == []
+    assert await rebalancer(rig, directory=UniverseDirectory(())).apply(plan) == []
 
 
 async def test_a_trade_whose_rules_cannot_be_read_is_left(rig: Any) -> None:
@@ -426,7 +428,7 @@ async def test_a_trade_whose_rules_cannot_be_read_is_left(rig: Any) -> None:
 
 
 async def test_each_target_is_confirmed_through_the_contract_search(rig: Any) -> None:
-    directory = ConfiguredDirectory.from_settings(rig.settings)
+    directory = UniverseDirectory.from_settings(rig.settings)
     assert await confirm_targets(rig.settings, directory, rig.ibkr.secdef) == {}
     rig.broker.contracts[IWDA] = ("IWDA", "LSEETF", "USD")
     rig.broker.contracts[1] = ("EMIM", "AEB", "EUR")
@@ -435,7 +437,7 @@ async def test_each_target_is_confirmed_through_the_contract_search(rig: Any) ->
     refused = await confirm_targets(rig.settings, directory, rig.ibkr.secdef)
     assert refused[EMIM] == "IBKR resolves EMIM on AEB to conid 1, not the pinned 153454120"
     assert refused[IBGM].startswith("its identity cannot be confirmed")
-    empty = ConfiguredDirectory(())
+    empty = UniverseDirectory(())
     assert set((await confirm_targets(rig.settings, empty, rig.ibkr.secdef)).values()) == {
         "no instrument describes it"
     }

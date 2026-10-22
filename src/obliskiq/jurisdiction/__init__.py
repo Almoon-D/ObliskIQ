@@ -4,12 +4,9 @@ the policies a profile selects: what may be bought and held, and how gains are t
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from .eligibility import (
-    ELIGIBILITY_POLICIES,
-    EligibilityPolicy,
-    EligibilityVerdict,
-    SkeletonEligibility,
-)
+from .eligibility import EligibilityPolicy, EligibilityProfile, EligibilityVerdict
+from .eligibility_eu_priips import EuPriipsEligibility
+from .eligibility_policies import ELIGIBILITY_POLICIES
 from .profile import JurisdictionProfile, load_profile
 from .registry import PolicyRegistry, check_declared_policies
 from .shipped import SHIPPED_POLICY_KINDS
@@ -21,10 +18,11 @@ __all__ = [
     "SHIPPED_POLICY_KINDS",
     "TAX_POLICIES",
     "EligibilityPolicy",
+    "EligibilityProfile",
     "EligibilityVerdict",
+    "EuPriipsEligibility",
     "JurisdictionProfile",
     "PolicyRegistry",
-    "SkeletonEligibility",
     "TaxPolicy",
     "check_declared_policies",
     "load_profile",

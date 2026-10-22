@@ -324,7 +324,7 @@ def upsert_chain_rows(store: Store, rows: Sequence[ChainRow]) -> int:
         return 0
     with store.transaction():
         store.executemany(
-            f"INSERT INTO chain_snapshots ({CHAIN_COLUMNS}) VALUES ({_placeholders(22)}) "
+            f"INSERT INTO chain_snapshots ({CHAIN_COLUMNS}) VALUES ({_placeholders(23)}) "
             'ON CONFLICT (snapshot_date, underlying_conid, expiry, strike, "right") DO UPDATE SET '
             "option_conid = excluded.option_conid, option_symbol = excluded.option_symbol, "
             "option_exchange = excluded.option_exchange, bid = excluded.bid, ask = excluded.ask, "
@@ -334,7 +334,8 @@ def upsert_chain_rows(store: Store, rows: Sequence[ChainRow]) -> int:
             "source = excluded.source, collected_at = excluded.collected_at, "
             "market_data_status = excluded.market_data_status, "
             "market_data_raw = excluded.market_data_raw, "
-            "quote_delay_seconds = excluded.quote_delay_seconds",
+            "quote_delay_seconds = excluded.quote_delay_seconds, "
+            "multiplier = excluded.multiplier",
             [chain_params(row) for row in rows],
         )
     return len(rows)

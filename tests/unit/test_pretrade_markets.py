@@ -251,13 +251,7 @@ async def test_a_disagreement_blocks_an_option_near_its_last_session_not_a_stock
     assert await codes(rig, far) == ()  # far from its last session: not date-critical either
     near = rig.directory.instruments[OPTION].model_copy(update={"expiry": date(2026, 10, 16)})
     rig.directory.instruments[OPTION] = near
-    allowlist = [
-        near if i.conid == OPTION else i for i in rig.settings.eligibility.skeleton_allowlist
-    ]
-    eligibility = rig.settings.eligibility.model_copy(update={"skeleton_allowlist": allowlist})
-    rig.make_gate(
-        calendars=calendars, settings=rig.settings.model_copy(update={"eligibility": eligibility})
-    )
+    rig.make_gate(calendars=calendars)
     answer = await rig.gate.clear(far.intent)
     assert isinstance(answer, PretradeRefusal)
     assert set(answer.codes) == {"venue_not_tradable"}

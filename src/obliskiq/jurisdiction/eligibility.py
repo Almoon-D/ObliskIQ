@@ -7,28 +7,26 @@ expiry). The pre-trade gate asks it about every order that adds risk; an order t
 waives buy-side eligibility (I3). Reading any instrument as data is always allowed and never
 asks.
 
-The one policy this build registers is the **skeleton**: only the instruments in
-``eligibility.skeleton_allowlist`` are eligible. It is labelled as a skeleton wherever it answers
-and is removed in Session 8, when the universe and the ``eu_priips`` policy exist.
+A profile selects its policy under ``policies.eligibility`` and states the values the policy
+applies under ``eligibility`` (:class:`EligibilityProfile`); the policies ObliskIQ ships are
+registered in :mod:`obliskiq.jurisdiction.eligibility_policies`.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Final, Literal, Protocol, Self
 
-from ..config.schema import ObliskConfig
+from pydantic import Field, model_validator
+
+from ..config.base import FrozenModel
+from ..domain.base import NonEmptyText
 from ..domain.enums import AssetClass
 from ..domain.instrument import TradedInstrument
-from .profile import JurisdictionProfile
-from .registry import PolicyRegistry
+from ..errors import PolicyError
 
 #: The policy kind a profile selects under ``policies``.
 ELIGIBILITY_KIND: Final = "eligibility"
-
-#: The skeleton policy's id (``config/jurisdictions/es.yaml`` selects it until Session 8).
-SKELETON_POLICY_ID: Final = "skeleton"
 
 #: Exchange-traded products: an option on one the policy refuses is held under the mandatory close.
 EXCHANGE_TRADED_PRODUCTS: Final = frozenset({AssetClass.ETF, AssetClass.ETC})
@@ -41,7 +39,6 @@ class EligibilityVerdict:
     eligible: bool
     reason: str
     policy: str
-    skeleton: bool
     mandatory_close: bool = False
 
 
@@ -51,11 +48,6 @@ class EligibilityPolicy(Protocol):
     @property
     def policy_id(self) -> str: ...
 
-    @property
-    def skeleton(self) -> bool:
-        """Whether this is a stand-in policy, to be replaced (it says so in every verdict)."""
-        ...
-
     def assess(
         self, instrument: TradedInstrument, *, underlying: TradedInstrument | None
     ) -> EligibilityVerdict:
@@ -63,64 +55,38 @@ class EligibilityPolicy(Protocol):
         ...
 
 
-class SkeletonEligibility:
-    """Eligible: exactly the instruments in ``eligibility.skeleton_allowlist``. A skeleton."""
+class EligibilityProfile(FrozenModel):
+    """The values a profile's eligibility policy applies (``config/jurisdictions/<id>.yaml``)."""
 
-    def __init__(self, allowlist: Iterable[TradedInstrument]) -> None:
-        self._allowed = {instrument.conid: instrument for instrument in allowlist}
+    #: Asset classes bought only when a key information document is available.
+    kid_required: list[AssetClass] = Field(min_length=1)
+    #: Asset classes bought only in the UCITS form.
+    ucits_required: list[AssetClass]
+    government_bonds: bool
+    corporate_bonds: bool
+    #: A listed option on an ETP the policy refuses: held under the mandatory close, or refused.
+    options_on_ineligible_etps: Literal["mandatory_close", "refused"]
+    source: NonEmptyText
 
-    @property
-    def policy_id(self) -> str:
-        return SKELETON_POLICY_ID
+    @model_validator(mode="after")
+    def _known_classes(self) -> Self:
+        if len(set(self.kid_required)) != len(self.kid_required) or len(
+            set(self.ucits_required)
+        ) != len(self.ucits_required):
+            raise ValueError("an asset class is listed twice")
+        if not set(self.ucits_required) <= set(self.kid_required):
+            raise ValueError("a class that must be UCITS is a packaged product and needs a KID")
+        return self
 
-    @property
-    def skeleton(self) -> bool:
-        return True
 
-    def _verdict(
-        self, eligible: bool, reason: str, *, mandatory_close: bool = False
-    ) -> EligibilityVerdict:
-        return EligibilityVerdict(
-            eligible=eligible,
-            reason=f"{reason} (skeleton policy)",
-            policy=self.policy_id,
-            skeleton=True,
-            mandatory_close=mandatory_close,
+def require_eligibility_profile(
+    profile_id: str, section: EligibilityProfile | None
+) -> EligibilityProfile:
+    """The profile's ``eligibility`` section; a policy that applies it refuses to build without
+    one."""
+    if section is None:
+        raise PolicyError(
+            f"jurisdiction profile '{profile_id}' selects an eligibility policy but carries no "
+            "eligibility section"
         )
-
-    def assess(
-        self, instrument: TradedInstrument, *, underlying: TradedInstrument | None
-    ) -> EligibilityVerdict:
-        listed = self._allowed.get(instrument.conid)
-        if listed is None:
-            return self._verdict(False, f"conid {instrument.conid} is not in the allowlist")
-        if listed != instrument:
-            return self._verdict(
-                False, f"conid {instrument.conid} is described otherwise than the allowlist does"
-            )
-        if instrument.asset_class is not AssetClass.OPTION:
-            return self._verdict(True, f"{instrument.symbol} is in the allowlist")
-        if underlying is None or underlying.conid != instrument.underlying_conid:
-            return self._verdict(False, f"the underlying of {instrument.symbol} is not described")
-        if underlying.conid in self._allowed:
-            return self._verdict(True, f"{instrument.symbol} and its underlying are allowed")
-        if underlying.asset_class in EXCHANGE_TRADED_PRODUCTS:
-            return self._verdict(
-                True,
-                f"{instrument.symbol} is an option on {underlying.symbol}, an ETP the policy "
-                "does not allow: held only if closed before expiry",
-                mandatory_close=True,
-            )
-        return self._verdict(
-            False, f"the underlying {underlying.symbol} of {instrument.symbol} is not allowed"
-        )
-
-
-def _skeleton(_profile: JurisdictionProfile, settings: ObliskConfig) -> EligibilityPolicy:
-    return SkeletonEligibility(settings.eligibility.skeleton_allowlist)
-
-
-#: The eligibility policies ObliskIQ ships, by id.
-ELIGIBILITY_POLICIES: Final = PolicyRegistry[EligibilityPolicy](
-    ELIGIBILITY_KIND, [(SKELETON_POLICY_ID, _skeleton)]
-)
+    return section

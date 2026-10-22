@@ -14,7 +14,7 @@ import pytest
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_runtime import CoreConfig, MinTradeConfig, RuntimeConfig
-from obliskiq.execution.instruments import ConfiguredDirectory
+from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.execution.runtime import schedule_references
 
 
@@ -39,10 +39,10 @@ def test_an_anchor_on_an_undeclared_venue_is_refused(shipped_settings: ObliskCon
     assert "runtime.cycles.asia.venue: XYYY" in str(caught.value)
 
 
-def test_a_target_outside_the_allowlist_is_refused(shipped_settings: ObliskConfig) -> None:
+def test_a_target_outside_the_universe_is_refused(shipped_settings: ObliskConfig) -> None:
     data = _data(shipped_settings)
     data["core"]["skeleton_targets"][0]["conid"] = 1
-    with pytest.raises(ValueError, match="world_equity: conid 1 is not in eligibility"):
+    with pytest.raises(ValueError, match="world_equity: 1 is not pinned by a universe instrument"):
         ObliskConfig.model_validate(data)
 
 
@@ -79,6 +79,6 @@ def test_the_schedule_references_skip_an_unmapped_listing(shipped_settings: Obli
     calendars = Calendars.from_settings(
         shipped_settings, reference=date(2026, 10, 9), venues=("XAMS", "XNYS")
     )
-    directory = ConfiguredDirectory.from_settings(shipped_settings)
+    directory = UniverseDirectory.from_settings(shipped_settings)
     references = schedule_references(calendars, directory)
     assert set(references) == {"XAMS", "XNYS"}  # XETR and XLON are not built: skipped

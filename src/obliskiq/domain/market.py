@@ -79,7 +79,8 @@ class Snapshot(_QuotedRow):
 
 
 class ChainRow(_QuotedRow):
-    """One strike of one expiry on one session."""
+    """One strike of one expiry on one session. ``multiplier`` is what one contract delivers per
+    unit of its price, as IBKR's contract details state it (``None`` when they did not)."""
 
     snapshot_date: date
     underlying_conid: Conid
@@ -98,6 +99,7 @@ class ChainRow(_QuotedRow):
     volume: NonNegativeInt | None
     sigma_used: NonNegativeFloat | None
     sigma_source: NonEmptyText | None
+    multiplier: PositiveFloat | None
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:

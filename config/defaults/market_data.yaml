@@ -1,0 +1,74 @@
+# IBKR market-data subscriptions (MASTER_PLAN §5.13). Each feed streams real-time quotes for the
+# venues and asset classes it lists; a venue and asset class no feed of the plan
+# (config/owner.yaml: market_data.plan) covers is read delayed. Prices are IBKR Ireland's
+# non-professional ones, per month, read 2026-10-07; whether each streams through the Web API to the
+# shared paper session is VERIFY-LIVE (docs/ROADMAP.md, the snapshot round of Session 8's live
+# steps).
+market_data:
+  feeds:
+    - id: us_complimentary
+      name: "US stocks and ETFs, streaming from Cboe One and IEX"
+      venues: [XNYS, XNAS]
+      asset_classes: [stock, etf]
+      monthly_cost: {amount: "0", currency: USD}
+      waiver: null
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13): complimentary"
+        verify_live: true
+    - id: opra_l1
+      name: "OPRA, US options L1"
+      venues: [XNYS, XNAS]
+      asset_classes: [option]
+      monthly_cost: {amount: "1.50", currency: USD}
+      waiver: "waived at USD 20 of monthly commissions"
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13)"
+        verify_live: true
+    - id: eurex_core_l1
+      name: "Eurex Core L1"
+      venues: [XEUR]
+      asset_classes: [option]
+      monthly_cost: {amount: "0", currency: EUR}
+      waiver: "waived"
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13)"
+        verify_live: true
+    - id: lse_l1
+      name: "London Stock Exchange L1"
+      venues: [XLON]
+      asset_classes: [stock, etf, etc]
+      monthly_cost: {amount: "1.00", currency: GBP}
+      waiver: null
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13)"
+        verify_live: true
+    - id: bme_plus_l1
+      name: "Bolsa de Madrid Plus L1"
+      venues: [XMAD]
+      asset_classes: [stock, etf]
+      monthly_cost: {amount: "7.00", currency: EUR}
+      waiver: null
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13)"
+        verify_live: true
+    - id: xetra_l1
+      name: "Xetra L1"
+      venues: [XETR]
+      asset_classes: [stock, etf, etc]
+      monthly_cost: {amount: "16.25", currency: EUR}
+      waiver: null
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13)"
+        verify_live: true
+    - id: euronext_cash_l1
+      name: "Euronext Cash L1"
+      venues: [XPAR, XAMS]
+      asset_classes: [stock, etf, etc]
+      monthly_cost: {amount: "89.10", currency: EUR}
+      waiver: null
+      source:
+        origin: "IBKR Ireland non-professional market-data prices, read 2026-10-07 (MASTER_PLAN §5.13); the Euronext venues it covers beyond Paris and Amsterdam are not listed here"
+        verify_live: true
+  # The subscriptions the owner holds (MASTER_PLAN §5.13's initial plan); config/owner.yaml states
+  # the owner's own.
+  plan: [opra_l1, eurex_core_l1, us_complimentary]

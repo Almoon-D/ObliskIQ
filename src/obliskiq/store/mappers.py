@@ -45,7 +45,7 @@ CHAIN_COLUMNS = (
     'snapshot_date, underlying_conid, expiry, strike, "right", option_conid, option_symbol, '
     "option_exchange, bid, ask, last, iv, delta, open_interest, volume, sigma_used, "
     "sigma_source, source, collected_at, market_data_status, market_data_raw, "
-    "quote_delay_seconds"
+    "quote_delay_seconds, multiplier"
 )
 CURVE_COLUMNS = (
     "snapshot_date, root, expiry, price, annualised_roll, conid, exchange, currency, source, "
@@ -285,6 +285,7 @@ def chain_params(row: ChainRow) -> tuple[object, ...]:
         row.sigma_used,
         row.sigma_source,
         *_quote_params(row),
+        row.multiplier,
     )
 
 
@@ -315,6 +316,7 @@ def chain_row_from_row(row: sqlite3.Row) -> ChainRow:
             market_data_status=_status(row["market_data_status"]),
             market_data_raw=row["market_data_raw"],
             quote_delay_seconds=row["quote_delay_seconds"],
+            multiplier=row["multiplier"],
         ),
     )
 
