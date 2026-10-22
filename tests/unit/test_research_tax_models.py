@@ -98,10 +98,13 @@ def test_the_shared_rules_describe_themselves_without_a_policys_own(repo_root):
 
 def test_a_profile_without_a_tax_policy_still_validates(config_dir):
     (config_dir / "jurisdictions" / "es.yaml").write_text(
-        "id: es\nname: Spain\npolicies:\n  eligibility: skeleton\n", encoding="utf-8"
+        "id: es\nname: Spain\npolicies:\n  eligibility: eu_priips\neligibility:\n"
+        "  kid_required: [etf]\n  ucits_required: [etf]\n  government_bonds: false\n"
+        "  corporate_bonds: false\n  options_on_ineligible_etps: refused\n  source: a test\n",
+        encoding="utf-8",
     )
     out, err = io.StringIO(), io.StringIO()
     status = run(["--config-dir", str(config_dir), "config", "validate"], env_file=None,
                  stdout=out, stderr=err)  # fmt: skip
     assert status == EXIT_OK, err.getvalue()
-    assert "policies       eligibility: skeleton" in out.getvalue()
+    assert "policies       eligibility: eu_priips" in out.getvalue()

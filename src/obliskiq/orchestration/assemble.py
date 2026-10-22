@@ -17,6 +17,8 @@ from pathlib import Path
 from pydantic import SecretStr
 
 from ..config.schema import ObliskConfig
+from ..data.market.daily import MarketCollector
+from ..data.market.targets import collection_venues
 from ..decision.rebalance_basic import BasicRebalancer
 from ..env import Environment
 from ..execution.runtime import OrderPath, calendar_venues, open_order_path
@@ -32,13 +34,36 @@ from .clock import Clock
 from .jobs import Jobs
 from .nav import NavCollector
 from .parts import build_capital
+from .schedule import CollectPlan
 from .service import AlertHooks, Service
 
 
+def collect_plan(settings: ObliskConfig) -> CollectPlan:
+    """Where and when the service collects market data (``collectors.schedule``)."""
+    venues = collection_venues(settings)
+    schedule = settings.collectors.schedule
+    return CollectPlan(
+        venues=venues,
+        after_close_minutes=schedule.after_close_minutes,
+        fallback_venue=schedule.fallback_venue,
+        other_venues=tuple(sorted(set(settings.venues) - {*venues, schedule.fallback_venue})),
+    )
+
+
 def anchor_venues(settings: ObliskConfig) -> tuple[str, ...]:
-    """The venues the service's jobs are anchored to."""
+    """The venues the service's decision cycles and digest are anchored to."""
     runtime = settings.runtime
     return tuple(sorted({cycle.venue for cycle in runtime.cycles} | {runtime.digest.venue}))
+
+
+def calendar_extras(settings: ObliskConfig) -> tuple[str, ...]:
+    """The venues the service's calendars cover beyond the order path's: the jobs' anchors and,
+    when the service collects, every venue it collects on."""
+    extras = set(anchor_venues(settings))
+    if settings.collectors.schedule.enabled:
+        plan = collect_plan(settings)
+        extras |= {plan.fallback_venue, *plan.venues}
+    return tuple(sorted(extras))
 
 
 def build_notifier(settings: ObliskConfig, env: Environment) -> Notifier:
@@ -103,6 +128,18 @@ def build_service(
         now=clock.now,
         ping_url=ping_url,
     )
+    collector = (
+        MarketCollector(
+            settings,
+            client=path.client,
+            worker=path.worker,
+            calendars=path.calendars,
+            now=clock.now,
+            sleep=path.client.session.clock.sleep,
+        )
+        if settings.collectors.schedule.enabled
+        else None
+    )
     return Service(
         settings,
         path=path,
@@ -111,6 +148,8 @@ def build_service(
         reporter=reporter,
         hooks=hooks,
         clock=clock,
+        collector=collector,
+        collect=collect_plan(settings),
     )
 
 
@@ -138,7 +177,7 @@ async def open_service(
         alert=hooks.order,
         session_alert=hooks.session,
         calendar_alert=hooks.calendar,
-        extra_venues=anchor_venues(settings),
+        extra_venues=calendar_extras(settings),
         cross_check=True,
     ) as path:
         yield build_service(

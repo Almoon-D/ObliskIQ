@@ -25,6 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import ast
+import functools
 from pathlib import Path
 
 import yaml
@@ -39,12 +40,22 @@ PROFILE_PREFIX = "profile"
 #: Sections read wholesale and keyed at runtime, with the reason. Their children are data.
 RUNTIME_KEYED = {
     "profile.policies": "policy kind -> policy id, keyed by the registry resolving that kind",
+    "collectors.step_deadline_seconds": "step -> budget, read by the step that runs",
+    "collectors.candidates.sectors": "an issuer's sector name -> a grid sector, by the line's",
+    "collectors.candidates.locations": "an issuer's location -> a country, by the line's",
+    "collectors.candidates.exchanges": "an issuer's exchange name -> an IBKR code, by the line's",
+    "research.data.yahoo.suffixes": "IBKR exchange -> Yahoo suffix, by the listing's exchange",
+    "research.data.yahoo.digits": "IBKR exchange -> Yahoo's code width, by the listing's",
 }
 
 #: Profile sections the code holds by their own name (a typed model passed to a policy), with
 #: the reason: ``profile.tax.payment.day`` is read as ``tax.payment.day``.
 PROFILE_SECTIONS_HELD_BY_NAME = {
     "tax": "a tax policy is built from the profile's tax section and reads it as `tax`",
+    "eligibility": (
+        "an eligibility policy is built from the profile's eligibility section and reads it as "
+        "`eligibility`"
+    ),
 }
 
 #: Sections keyed by data, with the package that must read the fields beneath each key.
@@ -157,6 +168,19 @@ def _package_chains(package: str) -> list[list[str]]:
     return chains
 
 
+@functools.cache
+def _dotted_keys() -> dict[str, tuple[str, ...]]:
+    """The runtime keys of each keyed section that hold a dot themselves (IBKR's BVME.ETF)."""
+    keys: dict[str, set[str]] = {}
+    for path in [*sorted((CONFIG_DIR / "defaults").glob("*.yaml")), CONFIG_DIR / "owner.yaml"]:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for section in KEYED_MAPPINGS:
+            keys.setdefault(section, set()).update(
+                str(k) for k in (data.get(section) or {}) if "." in str(k)
+            )
+    return {section: tuple(sorted(found)) for section, found in keys.items()}
+
+
 def _keyed_chains() -> dict[str, list[list[str]]]:
     return {package: _package_chains(package) for package in set(KEYED_MAPPINGS.values())}
 
@@ -171,7 +195,10 @@ def unread_keys(
     for key in sorted(leaves):
         head = key.split(".")[0]
         if head in KEYED_MAPPINGS:
-            fields = key.split(".")[2:]  # strip the section and the runtime key
+            # Strip the section and the runtime key, which may itself hold a dot (BVME.ETF).
+            dotted = [k for k in _dotted_keys().get(head, ()) if key.startswith(f"{head}.{k}.")]
+            cut = 1 + (dotted[0].count(".") + 1 if dotted else 1)
+            fields = key.split(".")[cut:]
             pool = keyed_chains.get(KEYED_MAPPINGS[head], [])
             if not any(_contains(chain, fields or [head]) for chain in pool):
                 orphans.append(key)
@@ -253,7 +280,9 @@ def test_a_runtime_keyed_section_covers_its_children_only_when_read():
 
 def test_every_runtime_keyed_section_has_a_reason():
     for section, reason in RUNTIME_KEYED.items():
-        assert section.split(".")[0] == PROFILE_PREFIX or section in config_leaves(), section
+        leaves = config_leaves()
+        held = section in leaves or any(key.startswith(f"{section}.") for key in leaves)
+        assert section.split(".")[0] == PROFILE_PREFIX or held, section
         assert reason
 
 

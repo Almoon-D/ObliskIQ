@@ -16,3 +16,10 @@ account:
 # Where you are tax-resident. It selects config/jurisdictions/<id>.yaml, which decides what
 # may be bought and how gains are taxed. `es` is Spain.
 jurisdiction: es
+
+market_data:
+  # The IBKR market-data subscriptions on your main username, shared with its paper account (the
+  # feeds are listed in config/defaults/market_data.yaml with their prices). With OPRA L1, Eurex
+  # Core L1 and the complimentary US feed the options sleeve starts on US-listed options; every
+  # other venue is read delayed.
+  plan: [opra_l1, eurex_core_l1, us_complimentary]

@@ -229,7 +229,8 @@ ibkr:
     history_period: 1m
     history_bar: 1d
     # `obliskiq preflight --paper-order-test`: one buy of the minimum quantity per instrument, at a
-    # limit that cannot fill, then a cancel. Each conid must be in eligibility.skeleton_allowlist.
+    # limit that cannot fill, then a cancel. Each conid must be a described tradable candidate of
+    # config/universe.yaml.
     paper_order:
       conids: [89005163, 7089]
       # The buy limit sits this fraction below the bid, rounded down to the contract's tick.
@@ -240,7 +241,8 @@ ibkr:
     # account, run by the owner on the machine (SESSION_PROMPTS §A.5). It converts a little of the
     # base currency into the instrument's, buys the contract's size increment at the touch,
     # protects it with a stop-limit, and on --finish (a new process) sells it and cancels the
-    # stop. The conid must be in eligibility.skeleton_allowlist: a liquid US stock.
+    # stop. The conid must be a described tradable candidate of config/universe.yaml: a liquid US
+    # stock.
     execution_test:
       conid: 7089
       # The conversion, in the base currency. QUOTED.

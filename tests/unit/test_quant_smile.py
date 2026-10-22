@@ -71,6 +71,7 @@ def chain_row(
         "market_data_status": None,
         "market_data_raw": None,
         "quote_delay_seconds": None,
+        "multiplier": None,
     }
     fields.update(overrides)
     return ChainRow(**fields)

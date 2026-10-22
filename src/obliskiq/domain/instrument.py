@@ -8,6 +8,7 @@ matched against and, for an option, its underlying and expiry.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
 from typing import Annotated, Self
@@ -89,3 +90,13 @@ class TradedInstrument(DomainModel):
         if self.underlying_conid == self.conid:
             raise ValueError("an option cannot be its own underlying")
         return self
+
+
+def leveraged_inverse_marker(description: str, markers: Iterable[str]) -> str | None:
+    """The first of ``markers`` found in ``description``, ignoring case; ``None`` when none is.
+
+    Leveraged and inverse products are recognised by their resolved description, never their
+    ticker (``BULL`` is a substring of plenty of innocent names).
+    """
+    folded = description.casefold()
+    return next((marker for marker in markers if marker.casefold() in folded), None)

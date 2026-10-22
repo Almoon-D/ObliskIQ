@@ -229,3 +229,24 @@ def test_the_run_log_reads_are_listed_and_the_nav_series_is_bounded() -> None:
     nav_reads = {name: f for name, f in public_functions(nav).items() if name != "record_nav"}
     assert set(nav_reads) == {"nav_series"}
     assert unbounded_reads(nav_reads) == []
+
+
+# ── the universe's records (Session 8) ──
+
+#: A candidate's resolution is the system's own state: the latest answer, read whole.
+UNIVERSE_STATE_READS = {"candidate_resolutions"}
+UNIVERSE_WRITE_PREFIXES = ("record_", "save_")
+
+
+def test_every_universe_read_is_bounded_or_a_listed_state_read() -> None:
+    from obliskiq.store import universe
+
+    functions = public_functions(universe)
+    reads = {
+        name: function
+        for name, function in functions.items()
+        if not name.startswith(UNIVERSE_WRITE_PREFIXES) and name not in UNIVERSE_STATE_READS
+    }
+    assert {"holdings_of", "candidate_holdings", "scanner_rows", "rejections"} <= set(reads)
+    assert unbounded_reads(reads) == []
+    assert set(functions) >= UNIVERSE_STATE_READS

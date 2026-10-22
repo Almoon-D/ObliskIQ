@@ -5,6 +5,50 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.13.0] - 2026-10-22
+
+Session 8, the universe and the market-data collectors: a global universe in which any instrument
+can be data and only eligible ones can be bought, stock candidates for every grid cell, venue
+profiles, the `eu_priips` eligibility policy and the collectors, scheduled per venue after its
+close. No IBKR call from the session; the holdings files and the research history were loaded live.
+
+### Added
+
+- `config/universe.yaml` (DECISIONS D112): lite's universe ported whole, with roles, attributes
+  (domicile, UCITS, KID, share class and hedge, fee, lot, inception, ISIN, issuer, replication) and
+  exposures (core roles, grid cell, macro board), IWDA, EMIM and IBGM, and the sixteen iShares US
+  country funds; the loader merges it and the schema refuses an incomplete grid or macro board.
+- `jurisdiction/eligibility_eu_priips.py` (`eu_priips`, D113), selected by `es.yaml` and read by
+  pre-trade: eligibility computed from the attributes, options on ineligible ETPs with the
+  mandatory close, a `ContangoCheck` that fails closed until Session 12, corporate bonds off;
+  leveraged and inverse products rejected at ingestion (`universe_rejections`).
+- Venue profiles (D114): listing currencies, trading permission and board lot per venue with
+  sources; venue XTAE and ten IBKR codes; `market_data.feeds` and `owner.yaml: market_data.plan`.
+- `data/market/` (D115, D116): the universe sync, the daily-bar backfill, underlying snapshots
+  judged against the plan, the option-chain collector (surfaces stored forward) and the curve
+  collector, with per-target retry, step deadlines and run records; the service's collection job
+  per venue after its close (`collectors.schedule`, `collectors.step_deadline_seconds`).
+- `data/candidates.py` (D117): stock candidates per grid cell from iShares holdings files and IBKR
+  scanner runs, matched across listings, point in time, with every cell covered or its gap
+  declared; resolved and pinned on demand.
+- Migration `009_universe.sql`: rejections, holdings files and lines, scanner rows, candidate
+  resolutions, and the chain row's `multiplier`.
+- `obliskiq collect <universe|candidates|backfill|snapshots|chains|curves|daily>`,
+  `obliskiq universe validate|pin` and `obliskiq research data load-universe` (D118).
+
+### Changed
+
+- `UniverseDirectory` replaces `ConfiguredDirectory`; tax facts come from the universe's
+  attributes; `EligibilityVerdict` loses its skeleton field; `config validate` builds the
+  eligibility policy as it does the tax policy.
+- `tenor.entry_dte_min` and `entry_dte_max` (lite's 90 and 200); `venues.<MIC>.settlement_sessions`
+  may be unknown.
+
+### Removed
+
+- `config/defaults/eligibility.yaml` (the skeleton allowlist), `SkeletonEligibility` and
+  `ConfiguredDirectory`.
+
 ## [0.12.1] - 2026-10-21
 
 T1's second day on the deployment machine, recorded. No source change; one comment in

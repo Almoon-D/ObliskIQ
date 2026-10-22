@@ -40,8 +40,18 @@ def _venue(**overrides: Any) -> dict[str, Any]:
         "timezone": "Europe/Madrid",
         "phase_windows": [],
         "settlement_sessions": 2,
+        "currencies": ["EUR"],
+        "trading_permission": "Stocks: Testland",
+        "board_lot": None,
         "incident_source": {"type": "manual", "scope": "market_wide"},
-        "sources": {"calendar": NOTE, "phases": NOTE, "settlement": NOTE},
+        "sources": {
+            "calendar": NOTE,
+            "phases": NOTE,
+            "settlement": NOTE,
+            "currencies": NOTE,
+            "permission": NOTE,
+            "lots": NOTE,
+        },
     }
     fields.update(overrides)
     return fields
@@ -59,10 +69,12 @@ def _window(phase: str, anchor: str, start: int, end: int) -> dict[str, Any]:
 # ── the shipped table ──
 
 
-def test_the_shipped_table_has_the_pulse_roster_plus_eurex(shipped_settings: ObliskConfig) -> None:
+def test_the_shipped_table_has_the_pulse_roster_plus_eurex_and_tel_aviv(
+    shipped_settings: ObliskConfig,
+) -> None:
     venues = shipped_settings.venues
-    assert len(venues) == 27
-    assert "XEUR" in venues
+    assert len(venues) == 28
+    assert {"XEUR", "XTAE"} <= set(venues)
     assert set(shipped_settings.synthetic_calendars) == {"CHIA", "XNSE", "XSHE", "XSPX"}
 
 
@@ -81,7 +93,8 @@ def test_the_roster_keeps_its_order_and_display_names(shipped_settings: ObliskCo
     ]  # fmt: skip
     assert by_region["Asia"] == [
         "Tokyo Stock Ex.", "Hong Kong Ex.", "Shanghai Stock Ex.", "Shenzhen Stock Ex.",
-        "BSE India", "NSE India", "Korea Ex.", "Taiwan Stock Ex.", "Singapore Ex.",
+        "BSE India", "NSE India", "Korea Ex.", "Tel Aviv Stock Ex.", "Taiwan Stock Ex.",
+        "Singapore Ex.",
     ]  # fmt: skip
     assert by_region["Oceania"] == [
         "Australian Securities Ex.", "Cboe Australia", "New Zealand", "South Pacific Stock Ex.",

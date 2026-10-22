@@ -26,7 +26,7 @@ SHAPE = {
         "option_exchange:TEXT, bid:REAL, ask:REAL, last:REAL, iv:REAL, delta:REAL, "
         "open_interest:INTEGER, volume:INTEGER, sigma_used:REAL, sigma_source:TEXT, "
         "source:TEXT!, collected_at:TEXT!, market_data_status:TEXT, "
-        "market_data_raw:TEXT, quote_delay_seconds:INTEGER"
+        "market_data_raw:TEXT, quote_delay_seconds:INTEGER, multiplier:REAL"
     ),
     "curves": (
         "snapshot_date:TEXT!*, root:TEXT!*, expiry:TEXT!*, price:REAL, "
@@ -181,6 +181,29 @@ SHAPE = {
     "fx_rates": (
         "currency:TEXT!*, on_date:TEXT!*, rate_to_base:TEXT!, source:TEXT!, observed_at:TEXT!"
     ),
+    # 009_universe
+    "universe_rejections": (
+        "rejected_at:TEXT!*, symbol:TEXT!*, origin:TEXT!*, listing_exchange:TEXT, "
+        "conid:INTEGER, description:TEXT, reason:TEXT!"
+    ),
+    "holdings_files": (
+        "fund_symbol:TEXT!*, as_of:TEXT!*, issuer:TEXT!, url:TEXT!, downloaded_at:TEXT!, "
+        "content_sha256:TEXT!, rows:INTEGER!"
+    ),
+    "holdings": (
+        "fund_symbol:TEXT!*, as_of:TEXT!*, line:INTEGER!*, ticker:TEXT!, name:TEXT!, "
+        "asset_class:TEXT!, issuer_sector:TEXT, sector:TEXT, location:TEXT, country:TEXT, "
+        "exchange:TEXT, ibkr_exchange:TEXT, currency:TEXT, weight:REAL, candidate_key:TEXT"
+    ),
+    "scanner_rows": (
+        "scanned_on:TEXT!*, location:TEXT!*, scan_type:TEXT!*, rank:INTEGER!*, market:TEXT!, "
+        "conid:INTEGER!, symbol:TEXT, listing_exchange:TEXT, company_name:TEXT, "
+        "candidate_key:TEXT!, scanned_at:TEXT!"
+    ),
+    "candidate_resolutions": (
+        "candidate_key:TEXT!*, resolved_at:TEXT!, conid:INTEGER, symbol:TEXT, "
+        "listing_exchange:TEXT, currency:TEXT, pinned:INTEGER!, pinned_for:TEXT, failure:TEXT"
+    ),
 }
 
 INDEXES = {
@@ -224,6 +247,8 @@ INDEXES = {
     "ux_external_positions_key",
     "ix_external_positions_updated",
     "ix_tax_realisations_disposed",
+    # 009_universe
+    "ix_holdings_candidate",
 }
 
 STAMP = "2026-10-09T22:30:00Z"

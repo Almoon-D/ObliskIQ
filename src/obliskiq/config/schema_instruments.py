@@ -1,5 +1,5 @@
 """The shape of what may be traded: lite's ``instruments`` and ``tenor`` keys the pre-trade gate
-reads, and the skeleton eligibility allowlist.
+and the chain collector read, and lite's ``positions`` keys.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -9,9 +9,7 @@ from typing import Annotated, Final, Literal, Self, get_args
 
 from pydantic import Field, PositiveInt, model_validator
 
-from ..domain.base import Conid, NonEmptyText
-from ..domain.instrument import TradedInstrument
-from ..domain.tax import Isin
+from ..domain.base import NonEmptyText
 from .base import FrozenModel
 
 type ProhibitedCategory = Literal[
@@ -45,39 +43,17 @@ class InstrumentsConfig(FrozenModel):
 
 
 class TenorConfig(FrozenModel):
-    """lite's ``tenor`` key the pre-trade gate reads (Session 12 ports the rest)."""
+    """lite's ``tenor`` keys: the entry window the chain collector photographs and the mandatory
+    close the pre-trade gate reads (Session 12 ports the rest)."""
 
+    entry_dte_min: PositiveInt
+    entry_dte_max: PositiveInt
     mandatory_close_trading_days: PositiveInt
 
-
-class TaxFacts(FrozenModel):
-    """What the tax rules need to know of one listed instrument: its ISIN and, for a fund, its
-    issuer and the index it tracks (homogeneity and swap partners)."""
-
-    conid: Conid
-    isin: Isin
-    issuer: NonEmptyText | None
-    tracked_index: NonEmptyText | None
-
-
-class EligibilityConfig(FrozenModel):
-    """The skeleton eligibility policy's allowlist and its instruments' tax facts (removed with
-    them in Session 8)."""
-
-    skeleton_allowlist: list[TradedInstrument]
-    skeleton_tax_facts: list[TaxFacts]
-
     @model_validator(mode="after")
-    def _distinct(self) -> Self:
-        conids = [instrument.conid for instrument in self.skeleton_allowlist]
-        if len(conids) != len(set(conids)):
-            raise ValueError("each conid is listed once")
-        facts = [entry.conid for entry in self.skeleton_tax_facts]
-        if len(facts) != len(set(facts)):
-            raise ValueError("each conid's tax facts are listed once")
-        unknown = sorted(set(facts) - set(conids))
-        if unknown:
-            raise ValueError(f"skeleton_tax_facts name conids the allowlist does not: {unknown}")
+    def _window(self) -> Self:
+        if self.entry_dte_min >= self.entry_dte_max:
+            raise ValueError("entry_dte_min must be below entry_dte_max")
         return self
 
 

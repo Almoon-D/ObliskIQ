@@ -15,7 +15,7 @@ from obliskiq.capital.strategy import DefaultStrategyValue, StrategyValue
 from obliskiq.capital.valuation import Valuer
 from obliskiq.config import ObliskConfig
 from obliskiq.decision.rebalance_basic import BasicRebalancer
-from obliskiq.execution.instruments import ConfiguredDirectory, InstrumentDirectory
+from obliskiq.execution.instruments import InstrumentDirectory, UniverseDirectory
 from obliskiq.execution.intent_maker import IntentMaker
 from obliskiq.execution.pricing import Pricer
 from obliskiq.jurisdiction import TAX_POLICIES, load_profile
@@ -36,7 +36,7 @@ def capital_parts(
     config_dir: Path | None = None,
 ) -> CapitalParts:
     chosen = settings if settings is not None else rig.settings
-    described = directory if directory is not None else ConfiguredDirectory.from_settings(chosen)
+    described = directory if directory is not None else UniverseDirectory.from_settings(chosen)
     valuer = Valuer(chosen, reader=rig.reader, directory=described)
     capital = CapitalReader(
         chosen,
@@ -83,7 +83,7 @@ def capital_parts(
 
 def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> BasicRebalancer:
     chosen = settings if settings is not None else rig.settings
-    directory = kw.pop("directory", ConfiguredDirectory.from_settings(chosen))
+    directory = kw.pop("directory", UniverseDirectory.from_settings(chosen))
     parts = capital_parts(rig, chosen, directory=directory)
     return BasicRebalancer(
         chosen,

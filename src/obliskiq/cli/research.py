@@ -1,6 +1,8 @@
 """``obliskiq research``: the research harness from the command line.
 
-``research data load <dataset>...`` downloads datasets into the research store;
+``research data load <dataset>...`` downloads datasets into the research store; ``research data
+load-universe`` the universe's tradable candidates from Yahoo (``--candidates N``: and the N
+largest stock candidates of each grid cell), each with its first and last close;
 ``research data coverage`` reports, by year, the share of a universe without a price and who
 enters late or ends early; ``research power <prereg>`` states a pre-registration's power to
 detect theta and the effect detectable at its target power, before any data; ``research run
@@ -13,19 +15,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import argparse
 import asyncio
+from collections.abc import Mapping
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 import httpx
 
+from ..config.schema import ObliskConfig
 from ..config.schema_research import Dataset
+from ..data.candidates import Candidate, Quoted, candidate_cells
 from ..domain.research import TrialStage
-from ..errors import ObliskError
+from ..errors import DataSourceError, ObliskError
 from ..research import cross_section_report
 from ..research.cross_section import CrossSectionResult, CrossSectionRunner, sample_months
 from ..research.cross_section import declared_se as cross_section_se
 from ..research.data import (
+    Listing,
     Sources,
     coverage_by_year,
     derive_dataset,
@@ -34,6 +40,8 @@ from ..research.data import (
     load_dataset,
     store_loaded,
     survivorship,
+    universe_datasets,
+    universe_listings,
     yfinance_history,
 )
 from ..research.prereg import CrossSectionPrereg, Prereg, load_any
@@ -41,7 +49,8 @@ from ..research.registry import Git, TrialRegistry, verify_lock, write_lock
 from ..research.report import write_report
 from ..research.stats import detectable_effect, effective_n, power
 from ..research.study import StudyResult, StudyRunner, declared_se
-from ..store import open_research_store
+from ..store import open_research_store, open_store
+from ..store import universe as universe_repo
 from ..util.http import RetryPolicy
 from ..util.timeutil import utc_now
 
@@ -51,6 +60,9 @@ if TYPE_CHECKING:
 EXIT_OK = 0
 EXIT_INVALID = 1
 ONE_DAY = timedelta(days=1)
+#: Dataset ids of the universe's own listings and of stock candidates.
+UNIVERSE_PREFIX = "universe"
+CANDIDATE_PREFIX = "candidate"
 
 
 def _datasets(loaded: Loaded, out: TextIO) -> list[Dataset] | None:
@@ -109,6 +121,96 @@ def _data_load(loaded: Loaded, out: TextIO) -> int:
             failed = True
             print(f"  {dataset_id}: FAILED: {outcome}", file=out)
     return EXIT_INVALID if failed else EXIT_OK
+
+
+def _home_listing(settings: ObliskConfig, candidate: Candidate) -> Quoted | None:
+    """The candidate's listing on its home market's venue (the venue whose local currency is its
+    country's grid market currency), else its first listing on a configured venue."""
+    listings = candidate.venue_listings()
+    home = next(
+        (
+            m.currency
+            for m in settings.universe.grid.markets.values()
+            if m.country == candidate.country
+        ),
+        None,
+    )
+    for listing in listings:
+        entry = settings.ibkr_exchanges.get(listing.exchange or "")
+        if entry is not None and settings.venues[entry.venue].currencies[0] == home:
+            return listing
+    return listings[0] if listings else None
+
+
+def _candidate_listings(loaded: Loaded, top: int) -> list[Listing]:
+    """The ``top`` largest candidates of each grid cell, as of today, from the store."""
+    settings = loaded.config.settings
+    today = utc_now().date()
+    with open_store(settings, loaded.env.require_data_dir()) as store:
+        holdings = universe_repo.candidate_holdings(store, as_of=today)
+        scanned = universe_repo.scanner_rows(store, as_of=today)
+    chosen: dict[str, Listing] = {}
+    for cell in candidate_cells(settings, holdings, scanned):
+        for candidate in cell.candidates[:top]:
+            listing = _home_listing(settings, candidate)
+            if listing is None or listing.exchange is None or listing.currency is None:
+                continue
+            chosen.setdefault(
+                candidate.key,
+                Listing(
+                    key=candidate.key,
+                    symbol=listing.ticker,
+                    exchange=listing.exchange,
+                    currency=listing.currency,
+                    inception=None,
+                    note=f"A stock candidate of {cell.market} ({candidate.name}), from "
+                    f"{', '.join(candidate.sources)}.",
+                ),
+            )
+    return list(chosen.values())
+
+
+def _data_load_universe(loaded: Loaded, out: TextIO) -> int:
+    """The tradable candidates' research history, and the top stock candidates' on request."""
+    settings = loaded.config.settings
+    datasets, skipped = universe_datasets(
+        settings, universe_listings(settings), prefix=UNIVERSE_PREFIX
+    )
+    if loaded.args.candidates:
+        more, not_listed = universe_datasets(
+            settings, _candidate_listings(loaded, loaded.args.candidates), prefix=CANDIDATE_PREFIX
+        )
+        datasets += more
+        skipped += not_listed
+
+    async def load() -> list[tuple[str, str]]:
+        done: list[tuple[str, str]] = []
+        sources = Sources(fetch=_no_fetch, yahoo=yfinance_history, fred_api_key=None)
+        with open_research_store(settings, loaded.env.require_data_dir()) as store:
+            for dataset in datasets:
+                try:
+                    series = await load_dataset(dataset, settings, sources, now=utc_now())
+                except ObliskError as exc:
+                    done.append((dataset.id, f"FAILED: {exc}"))
+                    continue
+                store_loaded(store, series)
+                closes = next(s for s in series if s.series.field == "close").observations
+                first, last = closes[0].observed_on, closes[-1].observed_on
+                done.append((dataset.id, f"{len(closes)} closes, {first} to {last}"))
+        return done
+
+    results = asyncio.run(load())
+    for dataset_id, outcome in results:
+        print(f"  {dataset_id}: {outcome}", file=out)
+    for reason in skipped:
+        print(f"  skipped {reason}", file=out)
+    failed = sum(1 for _, outcome in results if outcome.startswith("FAILED"))
+    print(f"loaded {len(results) - failed} of {len(results)} listings", file=out)
+    return EXIT_INVALID if failed else EXIT_OK
+
+
+async def _no_fetch(url: str, _params: Mapping[str, str] | None) -> bytes:
+    raise DataSourceError(f"{url}: the universe's history is read from Yahoo alone")
 
 
 def _universe(loaded: Loaded) -> tuple[list[str], date, date]:
@@ -328,6 +430,13 @@ def add_research_commands(commands: argparse._SubParsersAction[argparse.Argument
     load.add_argument("datasets", nargs="*", help="dataset ids from research.datasets")
     load.add_argument("--all", action="store_true", help="every configured dataset")
     load.set_defaults(handler=_data_load)
+    universe = data_actions.add_parser(
+        "load-universe", help="the tradable candidates' history (and the top stock candidates')"
+    )
+    universe.add_argument(
+        "--candidates", type=int, default=0, help="also the N largest stock candidates per cell"
+    )
+    universe.set_defaults(handler=_data_load_universe)
     coverage = data_actions.add_parser(
         "coverage", help="the share of a universe without a price, by year, and its survivorship"
     )

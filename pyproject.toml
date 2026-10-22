@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.12.1"
+version = "0.13.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -209,6 +209,12 @@ name = "Research never reaches execution or the broker"
 type = "forbidden"
 source_modules = ["obliskiq.research"]
 forbidden_modules = ["obliskiq.execution", "obliskiq.ibkr"]
+
+[[tool.importlinter.contracts]]
+name = "The collectors read the market; they never reach decisions or orders"
+type = "forbidden"
+source_modules = ["obliskiq.data"]
+forbidden_modules = ["obliskiq.decision", "obliskiq.execution", "obliskiq.llm"]
 
 [[tool.importlinter.contracts]]
 name = "Calendars never reach the broker, the network or execution"

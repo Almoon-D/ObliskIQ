@@ -46,6 +46,7 @@ from ..execution.state import IntentBook
 from ..ibkr.preflight import run_read_only
 from ..ibkr.transport import missing_credentials, transport_refusal
 from ..jurisdiction import (
+    ELIGIBILITY_POLICIES,
     SHIPPED_POLICY_KINDS,
     TAX_POLICIES,
     JurisdictionProfile,
@@ -59,6 +60,7 @@ from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .capital import add_capital_commands
+from .collect import add_collect_commands
 from .research import add_research_commands
 from .service import add_service_commands
 
@@ -94,8 +96,10 @@ def load_all(config_dir: Path, env: Environment) -> Loaded:
     configure_logging(settings.logging.level, settings.logging.format)
     profile = load_profile(config_dir, settings.jurisdiction)
     check_declared_policies(profile, SHIPPED_POLICY_KINDS)
-    if TAX_POLICIES.kind in profile.policies:
-        TAX_POLICIES.resolve(profile, settings)  # the tax data must build its policy
+    # Each declared policy's data must build it.
+    for kind in (ELIGIBILITY_POLICIES, TAX_POLICIES):
+        if kind.kind in profile.policies:
+            kind.resolve(profile, settings)
     return Loaded(config=loaded, profile=profile, env=env)
 
 
@@ -550,6 +554,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_service_commands(commands)
     add_capital_commands(commands)
     add_research_commands(commands)
+    add_collect_commands(commands)
     return parser
 
 

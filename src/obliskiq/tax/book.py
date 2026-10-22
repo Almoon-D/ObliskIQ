@@ -33,7 +33,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from ..config.schema import ObliskConfig
-from ..config.schema_instruments import TaxFacts
+from ..config.schema_universe import UniverseConfig
 from ..domain.enums import AssetClass
 from ..domain.orders import Fill, OrderSide
 from ..domain.tax import (
@@ -76,6 +76,31 @@ _KINDS = {
 
 #: The earliest stamp: every fill is after it.
 _EPOCH = datetime.min.replace(tzinfo=UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class TaxFacts:
+    """What the tax rules need to know of one listed instrument: its ISIN and, for a fund, its
+    issuer and the index it tracks (homogeneity and swap partners)."""
+
+    conid: int
+    isin: str
+    issuer: str | None
+    tracked_index: str | None
+
+
+def universe_tax_facts(universe: UniverseConfig) -> dict[int, TaxFacts]:
+    """The tax facts of every pinned universe instrument that declares its ISIN, by conid."""
+    return {
+        declared.conid: TaxFacts(
+            conid=declared.conid,
+            isin=declared.attributes.isin,
+            issuer=declared.attributes.issuer,
+            tracked_index=declared.attributes.tracked_index,
+        )
+        for declared in universe.instruments
+        if declared.conid is not None and declared.attributes.isin is not None
+    }
 
 
 def security_key(conid: int) -> str:
@@ -206,7 +231,7 @@ class TaxBook:
         self._now = now
         self._base = settings.account.base_currency
         self._pairs = tuple(settings.execution.currency.pairs)
-        self._facts = {entry.conid: entry for entry in settings.eligibility.skeleton_tax_facts}
+        self._facts = universe_tax_facts(settings.universe)
 
     @property
     def policy(self) -> TaxPolicy:
@@ -368,7 +393,9 @@ class TaxBook:
         assert instrument is not None  # _rate refused an undescribed conid already
         identity = identity_of(fill.conid, self._directory, self._facts)
         if identity is None:
-            raise TaxError(f"conid {fill.conid} has no tax facts (eligibility.skeleton_tax_facts)")
+            raise TaxError(
+                f"conid {fill.conid} has no tax facts (an ISIN in its universe attributes)"
+            )
         engine.register(identity)
         key = identity.key
         value = fill.quantity * fill.price * instrument.multiplier

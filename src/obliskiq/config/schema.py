@@ -8,7 +8,6 @@ with its first consumer.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-import re
 from pathlib import PurePosixPath
 from typing import Annotated, Literal, Self
 
@@ -16,7 +15,7 @@ from pydantic import AfterValidator, PositiveInt, model_validator
 
 from ..domain.base import CurrencyCode
 from ..domain.calendar import Mic
-from .base import FrozenModel
+from .base import FrozenModel, Identifier
 from .schema_calendars import (
     CalendarsConfig,
     IbkrExchangeCode,
@@ -26,15 +25,16 @@ from .schema_calendars import (
     SyntheticCalendarConfig,
     VenueConfig,
 )
+from .schema_collectors import CollectorsConfig
 from .schema_costs import CostsConfig
 from .schema_execution import DisciplineConfig, ExecutionConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
 from .schema_instruments import (
-    EligibilityConfig,
     InstrumentsConfig,
     PositionsConfig,
     TenorConfig,
 )
+from .schema_market_data import MarketDataConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 from .schema_research import ResearchConfig
 from .schema_runtime import (
@@ -44,16 +44,7 @@ from .schema_runtime import (
     RuntimeConfig,
     TradingConfig,
 )
-
-_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
-
-
-def check_identifier(value: str) -> str:
-    if not _IDENTIFIER_RE.fullmatch(value):
-        raise ValueError(
-            "must be a lower-case identifier (letters, digits, underscores), such as es"
-        )
-    return value
+from .schema_universe import UniverseConfig
 
 
 def _file_name_in_data_dir(value: str) -> str:
@@ -71,7 +62,6 @@ def _file_name_in_data_dir(value: str) -> str:
     return value
 
 
-type Identifier = Annotated[str, AfterValidator(check_identifier)]
 type DataFileName = Annotated[str, AfterValidator(_file_name_in_data_dir)]
 
 
@@ -133,13 +123,15 @@ class ObliskConfig(FrozenModel):
     instruments: InstrumentsConfig
     tenor: TenorConfig
     positions: PositionsConfig
-    eligibility: EligibilityConfig
     research: ResearchConfig
     runtime: RuntimeConfig
     capital: CapitalConfig
     core: CoreConfig
     trading: TradingConfig
     reporting: ReportingConfig
+    market_data: MarketDataConfig
+    collectors: CollectorsConfig
+    universe: UniverseConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -171,18 +163,77 @@ class ObliskConfig(FrozenModel):
         ]
         anchors = [
             (f"runtime.cycles.{cycle.name}", cycle.venue) for cycle in self.runtime.cycles
-        ] + [("runtime.digest", self.runtime.digest.venue)]
+        ] + [
+            ("runtime.digest", self.runtime.digest.venue),
+            ("collectors.schedule.fallback", self.collectors.schedule.fallback_venue),
+        ]
         problems += [
             f"{where}.venue: {mic} is not a venue declared in venues"
             for where, mic in anchors
             if mic not in known
         ]
+        problems += [
+            f"market_data.feeds.{feed.id}: {mic} is not a venue declared in venues"
+            for feed in self.market_data.feeds
+            for mic in feed.venues
+            if mic not in known
+        ]
+        problems += [
+            f"collectors.candidates.exchanges: {code} is not in ibkr_exchanges"
+            for code in sorted(set(self.collectors.candidates.exchanges.values()))
+            if code not in self.ibkr_exchanges
+        ]
+        problems += [
+            f"research.data.yahoo.{field}.{code}: not in ibkr_exchanges"
+            for field, codes in (
+                ("suffixes", self.research.data.yahoo.suffixes),
+                ("digits", self.research.data.yahoo.digits),
+            )
+            for code in sorted(codes)
+            if code not in self.ibkr_exchanges
+        ]
+        problems += [
+            f"collectors.candidates.sectors: {sector} is not a sector of the grid"
+            for sector in sorted(set(self.collectors.candidates.sectors.values()))
+            if sector not in self.universe.grid.sectors
+        ]
+        problems += self._universe_problems()
         problems += self._paper_order_problems()
         problems += self._currency_problems()
         problems += self._skeleton_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def _universe_problems(self) -> list[str]:
+        """Every exchange code the universe sends maps to a venue, and every instrument lists in
+        one of its venue's currencies."""
+        exchanges = self.ibkr_exchanges
+        problems: list[str] = []
+        for instrument in self.universe.instruments:
+            for field, code in (
+                ("listing_exchange", instrument.listing_exchange),
+                ("history_exchange", instrument.history_exchange),
+                ("option_exchange", instrument.option_exchange),
+            ):
+                if code is not None and code not in exchanges:
+                    problems.append(
+                        f"universe {instrument.symbol}.{field}: {code} is not in ibkr_exchanges"
+                    )
+            entry = exchanges.get(instrument.listing_exchange)
+            if entry is None or entry.venue not in self.venues:
+                continue
+            if instrument.currency not in self.venues[entry.venue].currencies:
+                problems.append(
+                    f"universe {instrument.symbol}: {instrument.currency} is not one of "
+                    f"venues.{entry.venue}.currencies"
+                )
+        problems += [
+            f"universe futures root {root.root}.exchange: {root.exchange} is not in ibkr_exchanges"
+            for root in self.universe.futures_roots
+            if root.exchange not in exchanges
+        ]
+        return problems
 
     def _currency_problems(self) -> list[str]:
         base = self.account.base_currency
@@ -212,26 +263,41 @@ class ObliskConfig(FrozenModel):
             )
         return self
 
+    def _tradable(self, conid: int) -> str | None:
+        """Why ``conid`` cannot be traded as configured: it must be a universe instrument pinned to
+        it, a tradable candidate, with its resolved description. ``None`` when it can."""
+        declared = self.universe.pinned(conid)
+        if declared is None:
+            return f"{conid} is not pinned by a universe instrument"
+        if not declared.tradable:
+            return f"{conid} ({declared.symbol}) is not a tradable candidate of the universe"
+        if declared.description is None:
+            return f"{conid} ({declared.symbol}) has no resolved description in the universe"
+        return None
+
     def _skeleton_problems(self) -> list[str]:
-        allowed = {instrument.conid for instrument in self.eligibility.skeleton_allowlist}
-        return [
-            f"core.skeleton_targets.{target.role}: conid {target.conid} is not in "
-            "eligibility.skeleton_allowlist"
-            for target in self.core.skeleton_targets
-            if target.conid not in allowed
-        ]
+        problems: list[str] = []
+        for target in self.core.skeleton_targets:
+            why = self._tradable(target.conid)
+            if why is not None:
+                problems.append(f"core.skeleton_targets.{target.role}: {why}")
+                continue
+            declared = self.universe.pinned(target.conid)
+            if declared is not None and target.role not in declared.exposures.core_roles:
+                problems.append(
+                    f"core.skeleton_targets.{target.role}: {declared.symbol} does not declare the "
+                    "role in its exposures.core_roles"
+                )
+        return problems
 
     def _paper_order_problems(self) -> list[str]:
-        allowed = {instrument.conid for instrument in self.eligibility.skeleton_allowlist}
         preflight = self.ibkr.preflight
-        problems = [
-            f"ibkr.preflight.paper_order.conids: {conid} is not in eligibility.skeleton_allowlist"
-            for conid in preflight.paper_order.conids
-            if conid not in allowed
+        checked = [
+            ("ibkr.preflight.paper_order.conids", conid) for conid in preflight.paper_order.conids
         ]
-        if preflight.execution_test.conid not in allowed:
-            problems.append(
-                f"ibkr.preflight.execution_test.conid: {preflight.execution_test.conid} is not in "
-                "eligibility.skeleton_allowlist"
-            )
-        return problems
+        checked.append(("ibkr.preflight.execution_test.conid", preflight.execution_test.conid))
+        return [
+            f"{where}: {why}"
+            for where, conid in checked
+            if (why := self._tradable(conid)) is not None
+        ]

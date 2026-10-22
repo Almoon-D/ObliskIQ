@@ -31,7 +31,7 @@ from obliskiq.domain.orders import (
     OrderSide,
     Sleeve,
 )
-from obliskiq.execution.instruments import ConfiguredDirectory
+from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.store import capital as capital_repo
 from obliskiq.store import orders as repo
 
@@ -209,8 +209,8 @@ async def test_a_book_fill_nobody_describes_or_foreign_cash_without_a_rate_stops
     rig: Any,
 ) -> None:
     await bought(rig, IBGM, "1", "170", mode=PAPER)
-    narrow = ConfiguredDirectory(
-        i for i in rig.settings.eligibility.skeleton_allowlist if i.conid != IBGM
+    narrow = UniverseDirectory(
+        i for i in UniverseDirectory.from_settings(rig.settings).instruments() if i.conid != IBGM
     )
     assert "a held position has no price" in str(await read(rig, directory=narrow))
     rig.broker.positions.pop(IBGM)

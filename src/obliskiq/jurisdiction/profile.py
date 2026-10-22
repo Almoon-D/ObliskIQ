@@ -15,7 +15,7 @@ from typing import Annotated, Any
 
 from pydantic import AfterValidator, BeforeValidator, Field, PlainSerializer, ValidationError
 
-from ..config.base import FrozenModel
+from ..config.base import FrozenModel, Identifier
 from ..config.loader import (
     ConfigInvalid,
     ConfigProblem,
@@ -24,8 +24,8 @@ from ..config.loader import (
     flatten,
     read_yaml_mapping,
 )
-from ..config.schema import Identifier
 from ..domain.base import NonEmptyText
+from .eligibility import EligibilityProfile
 from .tax_profile import TaxProfile
 
 JURISDICTIONS_DIR = "jurisdictions"
@@ -64,7 +64,8 @@ class JurisdictionProfile(FrozenModel):
     ``policies`` maps a policy kind to the id of the registered policy the profile uses for
     it, read-only once loaded. A profile that declares none has nothing to resolve; asking
     it for a policy fails. ``tax`` holds the values the tax policy applies; a profile without
-    it cannot resolve a tax policy.
+    it cannot resolve a tax policy; ``eligibility`` holds the values the eligibility policy
+    applies.
     """
 
     id: Identifier
@@ -76,6 +77,7 @@ class JurisdictionProfile(FrozenModel):
         PlainSerializer(dict, return_type=dict[str, str]),
     ] = Field(default_factory=dict, validate_default=True)
     tax: TaxProfile | None = None
+    eligibility: EligibilityProfile | None = None
 
 
 def available_profiles(config_dir: Path) -> tuple[str, ...]:

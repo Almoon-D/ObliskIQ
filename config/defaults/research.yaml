@@ -68,6 +68,41 @@ research:
       bias_notes:
         - Yahoo closes are split-adjusted backwards and not point in time; a split after the date changes the level.
         - The listing's history only; a fund that closed before the download is absent (survivorship).
+      # The universe's research history (`obliskiq research data load-universe`): the tradable
+      # candidates and, on request, the stock candidates, read from Yahoo from this date or the
+      # instrument's inception, whichever is later. A judgement: two decades of daily closes.
+      universe_start: 2006-01-01
+      # Yahoo's symbol suffix for each IBKR listing exchange (legacy/old global_vehicles.py
+      # EXCHANGE_SUFFIX_MAP, re-keyed by IBKR code); a US venue has none. An exchange missing
+      # here has no Yahoo symbol, and its instrument no research history.
+      suffixes:
+        NYSE: ""
+        NASDAQ: ""
+        ARCA: ""
+        BATS: ""
+        AMEX: ""
+        TSEJ: ".T"
+        LSE: ".L"
+        LSEETF: ".L"
+        IBIS: ".DE"
+        SBF: ".PA"
+        AEB: ".AS"
+        BVME: ".MI"
+        BVME.ETF: ".MI"
+        BM: ".MC"
+        EBS: ".SW"
+        SEHK: ".HK"
+        KSE: ".KS"
+        NSE: ".NS"
+        TASE: ".TA"
+        ASX: ".AX"
+        TSE: ".TO"
+        B3: ".SA"
+        SEHKNTL: ".SS"
+      # Venues whose numeric codes Yahoo pads with zeros to this width (Hong Kong's 700 is
+      # 0700.HK; read on Yahoo 2026-10-22).
+      digits:
+        SEHK: 4
     msci:
       # MSCI's public end-of-day index levels (the endpoint behind its index pages).
       url: https://app2.msci.com/products/service/index/indexmaster/getLevelDataForGraph

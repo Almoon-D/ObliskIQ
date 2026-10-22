@@ -20,7 +20,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation | done (live steps a command list for the owner; attached orders not adopted, D99) | v0.10.0 |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | done (the live paper cycle a command list for the owner, docs/RUNBOOK.md) | v0.11.0 |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | done (IBKR's cash-activity shapes not observed: no paper login from the cloud) | v0.12.0 |
-| 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | planned | |
+| 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | done (collectors built against fixtures: no IBKR call from the cloud; holdings and research history loaded live) | v0.13.0 |
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | planned | |
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
@@ -38,6 +38,73 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Session 8 — Universe and market-data collectors (2026-10-22, v0.13.0)
+
+**Landed.**
+- `config/universe.yaml` (D112): lite's universe ported whole and regrouped into roles,
+  attributes and exposures, plus IWDA, EMIM and IBGM with their UK facts and the sixteen iShares
+  US country funds: 97 instruments (26 tradable candidates, 37 option underlyings), the grid's
+  16 markets × 12 sectors complete (measured or unmapped with a reason), the macro board's 17
+  regions × 9 asset classes, 16 futures roots, 12 commodity proxies, holdings sources and the
+  candidates' scanners and gaps. The loader merges it as one section and the schema refuses an
+  incomplete matrix, an unresolved reference or an exchange code nothing maps.
+- `jurisdiction/eligibility_eu_priips.py` (`eu_priips`, D113), selected by `es.yaml` and wired
+  into pre-trade; a `ContangoCheck` that fails closed until Session 12; leveraged and inverse
+  products rejected at ingestion and recorded (`universe_rejections`). The skeleton allowlist, its
+  config key and `ConfiguredDirectory` are gone; `UniverseDirectory` replaces them; tax facts come
+  from the universe.
+- Venue profiles (D114): currencies, trading permission and board lot per venue with sources;
+  `settlement_sessions` may be unknown; XTAE and ten IBKR codes added; `market_data.feeds` and
+  `owner.yaml: market_data.plan` (OPRA L1, Eurex Core L1, the complimentary US feed).
+- `data/market/` (D115, D116): the universe sync (seed, pin report, supersede, reject), the
+  backfill (watermark and overlap, venue-dated bars), snapshots judged against the plan, the chain
+  collector (strike band, sigma ladder, declared venue, multiplier per row, surfaces stored forward)
+  and the curve collector; per-target retry and pacing, step deadlines, run records; one
+  collection job per venue after its close, the uncovered folded into New York's
+  (`collectors.schedule`). Migration `009_universe.sql`: rejections, holdings files and lines,
+  scanner rows, candidate resolutions, the chain row's multiplier.
+- `data/candidates.py` (D117): iShares holdings (both sites' forms) and scanner runs, listings
+  matched across files, credited per cell, point in time, every cell covered or its gap declared,
+  refreshed every `refresh_days`, resolved and pinned on demand.
+- Research history (D118): `research data load-universe` through `research/data.py`.
+- CLI: `obliskiq collect <universe|candidates|backfill|snapshots|chains|curves|daily>` and
+  `obliskiq universe validate|pin`.
+
+**Tests.** Ported from lite: idempotence (a rerun replaces its session), run continuity (every
+step recorded, the run's row and verdict), sequence isolation (a broken step and a step past its
+budget do not stop the next), outage (every step error, nothing written), the strike band and the
+tenor window, realised volatility and the sigma ladder, the European chain (the declared venue sent
+when the search omits it; zero rows fail and write neither half), universe seeding and
+supersession, the backfill's watermark. Also: eligibility for every asset class and the US
+ETFs' reasons, the store's point-in-time reads of holdings and scans, crediting and coverage on
+real files, the refresh cadence, resolution on demand, the schedule across daylight saving and the
+fallback, the service's collection job, the CLI's output and refusals, every refusal of the
+universe's schema, and every universe key's reader. `make check` green: 4,124 tests, coverage
+99.63 %.
+
+**Acceptance.** The universe validates. Every grid cell has candidates or a declared reason:
+182 of 192 cells hold candidates and the other 10 are the declared gaps, on the live iShares files
+of 2026-10-20 (UK funds) and 2026-10-21 (US funds), 3,954 companies, read 2026-10-22.
+Eligibility explains each US-domiciled ETF's refusal (`obliskiq universe validate`: "SPY is an etf
+domiciled in US, UCITS False, with its PRIIPs KID unavailable: …"). Research history is loaded for
+the 23 tradable candidates (2026-10-22): EXH1, EXV7, EXH4, EXV5, EXH3, EXV4, EXV1, EXV3, EXV2,
+EXH9, EXI5 from 2008-01-02 (4,775–4,776 closes); FCX, ALB, CCJ, MOS, BG from 2006-01-03 (5,233);
+NTR from 2018-01-02 (2,213); ASML, SAN, TTE from 2006-01-02 (5,318–5,328); IWDA from 2009-09-25
+(4,314); EMIM from 2014-06-02 (3,171); IBGM from 2008-01-02 (4,812); and for the largest
+candidate of each cell, 181 of 181. The chain collector stores surfaces with date, source and
+venue per row (fixtures; the live run is the VERIFY-LIVE item below).
+
+**Deferred.** No IBKR call from this session: the paper Gateway login does not complete from a
+cloud container (AGENTS.md) and the deployed bot holds the brokerage session. The collectors' live
+round (snapshots, history, the chain walk, futures, the scanner, pins for TOPIX, BARN, LISN and
+JDEP, descriptions for the 47 pinned instruments without one) is in the queue below.
+
+**Live findings.** iShares' holdings files and Yahoo's histories are reachable from the cloud
+container (docs/knowledge/research-sources.md); Yahoo's symbol forms for Hong Kong, class shares and
+iShares' `NG.` were found by the first load of the candidates and are configuration now. Lite's
+"ISF is UK-domiciled, not UCITS" was wrong (D112). Pins were read through the owner's IBKR
+connector (contract search, read-only) [MCP ✓ 2026-10-22].
+
 
 ### T1, second day (owner, 2026-10-21, v0.12.1)
 
@@ -1310,19 +1377,19 @@ settles it.
 
 | Item | Added | Settled by |
 |---|---|---|
-| IBKR exchange codes → venues (23 codes in `ibkr_exchanges`, including `FTA`, `CDE`, `AMEX`, `BATS`, `LSEETF`) | 2 | 8 (conids) |
+| IBKR exchange codes → venues (37 codes in `ibkr_exchanges`; Session 8 pinned 27 universe conids with their listing exchanges through the owner's IBKR connector [MCP ✓ 2026-10-22]; the ten codes it added are unverified) | 2 | the collectors' live round |
 | Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | T1 or the first command list after it |
 | SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | T1 or the first command list after it |
 | B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | T1 or the first command list after it |
 | XEUR session hours versus single-stock option hours (options use `common_windows`) | 2 | T1 or the first command list after it |
 | IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | T1 or the first command list after it |
 | Order window 30 min after the open and 15 before the close | 2 | 18 (TCA) |
-| Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced) | 2 | 8 |
-| Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`); no instrument trades there, so they read closed past it (D96) | 2 | 8 (if the universe admits one of them) |
+| Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced; XNSE holds data only) | 2 | 19a |
+| Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`); the universe holds data only there (510300 on XSHG), collected in New York's job past that date (D96, D116) | 2 | 19a (a tradable candidate there) |
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | T1 or the first command list after it |
 | US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
-| Transaction taxes: FR, IT rates against official texts; GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21) | 2 | 8 |
+| Transaction taxes: FR, IT rates against official texts; GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21) | 2 | 9 (the vehicle selector costs them) |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
 | Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | T1 or the first command list after it |
 | One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | T1 or the first command list after it |
@@ -1373,6 +1440,10 @@ settles it.
 | The DGT's rulings on currency balances (V2422-20, V0463-21, V1613-25, V0152-26) in their official text | 7 | the monthly tax-source check (§5.16) |
 | The ledger's per-currency `exchangerate` as the trade date's rate for tax (recorded by the NAV step and the heartbeat) against the rate IBKR reports on a foreign fill | 7 | Session 6's live paper cycle |
 | The skeleton's tax facts (ISIN, issuer, tracked index) against `/iserver/contract/{conid}/info` | 7 | Session 6's live paper cycle |
+| The collectors' live round (`obliskiq collect daily`, read-only): the underlying snapshot field set on every venue and its availability against the plan (`market_data.feeds`, their prices and their sharing with the paper session); the daily bar's `t` stamp per venue (bars are dated in the venue's zone); the chain walk (`secdef/search` OPT months and venues against the pinned conid, `secdef/strikes`, `secdef/info` per strike with `maturityDate`, `multiplier`, `local_symbol`; the declared venues FTA, MEFFRV, MONEP, EUREX); `/trsrv/futures` for the 16 roots on their native exchanges; one scanner run (`STK.US.MAJOR`) | 8 | the first command list after T1's order test |
+| Pins for TOPIX, BARN, LISN and JDEP (`obliskiq universe pin`), and resolved descriptions for the 47 pinned instruments without one (an instrument without one is never ordered) | 8 | the collectors' live round |
+| Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`) | 8 | 9 (broker capabilities) |
+| A stock candidate's holdings ticker and exchange name to IBKR's symbol and code, per venue (`collectors.candidates.exchanges`; resolution on demand) | 8 | the first candidate a thesis pins |
 
 ## Follow-ups
 
@@ -1387,8 +1458,10 @@ settles it.
     Almoon-D/ObliskIQ#5 is the same update). Parse the DH parameter file without
     `load_pem_parameters`, whose finite-field DH is deprecated (`oauth.py`); the exchange is
     already `pow`.
-  - Session 8: a venue the universe admits is covered through `calendars.horizon_years`, by
-    the library or a `synthetic_calendars` entry (XSHG, XBOM and XSES end 2026-12-31).
+  - Every venue of a tradable candidate or option underlying is covered through
+    `calendars.horizon_years` (a test); XSHG holds data only (510300), and past 2026-12-31 its
+    collection folds into New York's job. A tradable candidate on XSHG, XBOM or XSES needs a
+    calendar first.
   - The Gateway's Java list, and 2027-07-01 at the latest: Java 21 and 25 each passed one day
     (2026-10-21); a second day of side runs adds them, newest first (D96). Temurin builds Java 11 to
     at least October 2027.
@@ -1463,9 +1536,6 @@ settles it.
   L1's shadow days need it.
 - A later session: IBKR's attached orders (D99). A whatif of an entry with a child stop-limit
   first (read-only), then the package's clearance (I1, I5), then the paper probe.
-- Session 8: the universe replaces `ConfiguredDirectory` (the skeleton allowlist's instrument
-  facts) with a directory that describes every instrument, ineligible ones included, so an option
-  on an ineligible ETP and its underlying can both be described; then `eligibility.yaml` goes.
 - Session 12: `tenor.mandatory_close_trading_days` lives in `config/defaults/instruments.yaml`;
   the rest of lite's `tenor` block joins it. `allow_futures_options` stays false until the
   never-exercise rule exists.
@@ -1478,16 +1548,18 @@ settles it.
   (SESSION_PROMPTS §A.5, T1 and Session 6's live paper cycle in docs/RUNBOOK.md); sessions build
   against fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
   and a daily manual login (D68).
-- Session 8: the route tag for `source` columns (lite refused unknown routes) belongs to the
-  collectors that write rows; the history walk gains its store watermark there.
 - Session 19: the deployment image's base is the OS D96 chose (Ubuntu 26.04), with the Java
   versions `ibkr.gateway.java_major_versions` lists after T1 and
   `playwright install --with-deps chromium` for the locked Playwright.
 - Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
   stamped with a period-end reference date, and the whole batch rolls back; relax or split it
   with the first live macro route.
-- Session 8: pin the IBKR codes with contracts; source holiday lists for the four synthetic
-  venues; port lite's realised-volatility estimators (`collect/vol.py`).
+- Session 11: lite's range-based volatility estimators (Parkinson, Garman-Klass and the restated
+  open share, `collect/vol.py`) and their tests, with the indicators that read them; Session 8
+  ported the close-to-close estimator and the sigma ladder.
+- Session 19a: holiday lists for the synthetic venues (XSHE, XNSE, CHIA, XSPX). XNSE holds data
+  only (NIFTYBEES): its collection runs on the synthetic weekday calendar, and a quote on an
+  unlisted holiday carries the route's own status.
 - Session 10: feeds enter through `Calendars.accept_incidents(origin, incidents)`, which
   replaces one origin wholesale; a single-stock halt uses instrument scope.
 - Session 12: lite's `mandatory_close_trading_days` (10) is `tenor.mandatory_close_trading_days`
@@ -1497,9 +1569,20 @@ settles it.
   now the last tradable session itself, so N sessions including it is `session_before(..., sessions=N-1)`.
 - Dependabot keeps `exchange-calendars` current; its holiday lists lapse every year, and a
   library upgrade that changes a session fails the golden snapshot for review.
-- Session 8: `history_exchange` NULL means "send none" (`domain/instrument.py`), so the loader
-  sets it explicitly; decide where the `tradable`/`untradeable_reason` invariant and the unique
-  grid cell live now that the universe is configuration.
+- Research history (D118): during a session Yahoo's last row is that session at its price so far,
+  stored as observed on its day; drop a row whose session has not closed when it is loaded
+  (`research/data.py`), so a read as of that day never sees a close that was not one.
+- Session 12: the options the chain collector records join the order path's directory
+  (`UniverseDirectory.from_settings(options=…)`, each with its multiplier) when the options sleeve
+  orders one; Session 8 stores them.
+- Session 15: a pinned stock candidate is seeded and collected, but it is not in
+  `config/universe.yaml`, so the order path neither describes it nor judges it eligible (both
+  refuse, fail closed); its attributes (a share, its venue's lot) join the directory and the
+  policy when the satellite first orders one.
+- Session 9: positions held outside the universe (lite's portfolio union) are not collected; the
+  vehicle selector, or Session 11's views, decide whether a held instrument joins the universe.
+- Session 9: lite's ADR map (legacy/old global_vehicles.py `ADR_MAP`): a candidate's US
+  depositary line as another listing, where the vehicle selector prefers it.
 - Session 11: add a column-targeted writer for the solved implied volatility (snapshot upserts
   replace the whole row); add a date-leading index on `bars` if a cross-sectional read needs it.
 - A migration is forward-only: a later session that changes a table adds `002_*.sql`; it never

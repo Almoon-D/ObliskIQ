@@ -1,0 +1,20 @@
+iShares MSCI Japan ETF
+Fund Holdings as of,"Oct 20, 2026"
+Inception Date,"Mar 12, 1996"
+Shares Outstanding,"247,350,000.00"
+Stock,"-"
+Bond,"-"
+Cash,"-"
+Other,"-"
+
+Ticker,Name,Sector,Asset Class,Market Value,Weight (%),Notional Value,Quantity,Price,Location,Exchange,Currency,FX Rate,Market Currency,Accrual Date
+"8306","MITSUBISHI UFJ FINANCIAL GROUP","Financials","Equity","1,021,059,129.43","4.35","1,021,059,129.43","48,132,380.00","21.21","Japan","Tokyo Stock Exchange","USD","157.97","JPY","-"
+"7203","TOYOTA MOTOR","Consumer Discretionary","Equity","839,459,542.30","3.58","839,459,542.30","42,748,300.00","19.64","Japan","Tokyo Stock Exchange","USD","157.97","JPY","-"
+"6501","HITACHI","Industrials","Equity","732,865,856.36","3.12","732,865,856.36","19,925,500.00","36.78","Japan","Tokyo Stock Exchange","USD","157.97","JPY","-"
+"6758","SONY GROUP","Consumer Discretionary","Equity","657,041,876.37","2.80","657,041,876.37","26,209,500.00","25.07","Japan","Tokyo Stock Exchange","USD","157.97","JPY","-"
+"1605","INPEX","Energy","Equity","96,423,869.84","0.41","96,423,869.84","3,984,200.00","24.20","Japan","Tokyo Stock Exchange","USD","157.97","JPY","-"
+"UBFUT","CASH COLLATERAL JPY UBFUT","Cash and/or Derivatives","Cash Collateral and Margins","11,654,075.27","0.05","11,654,075.27","1,840,936,000.00","0.63","Japan","-","USD","157.97","JPY","Oct 15, 2015"
+"XTSLA","BLK CSH FND TREASURY SL AGENCY","Cash and/or Derivatives","Money Market","3,925,606.09","0.02","3,925,606.09","3,925,606.00","1.00","United States","-","USD","1.00","USD","-"
+"TPZ6","TOPIX INDEX DEC 26","Cash and/or Derivatives","Futures","0.00","0.00","207,155,066.00","813.00","25.48","-","Osaka Securities Exchange","USD","157.97","JPY","-"
+"USD","USD CASH","Cash and/or Derivatives","Cash","-5,557,268.99","-0.02","-5,557,268.99","-5,557,269.00","100.00","United States","-","USD","1.00","USD","-"
+

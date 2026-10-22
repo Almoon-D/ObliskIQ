@@ -22,13 +22,14 @@ from typing import Annotated, Literal, Self
 from pydantic import (
     AfterValidator,
     BeforeValidator,
+    Field,
     NonNegativeInt,
     PositiveInt,
     StringConstraints,
     model_validator,
 )
 
-from ..domain.base import NonEmptyText
+from ..domain.base import CurrencyCode, NonEmptyText
 from ..domain.calendar import Mic, Region, TimeZoneName
 from .base import FrozenModel
 
@@ -53,7 +54,8 @@ def _clock_time(value: str) -> str:
 
 
 type ClockTime = Annotated[str, BeforeValidator(_quoted_clock_time), AfterValidator(_clock_time)]
-type IbkrExchangeCode = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9]{2,12}$")]
+#: IBKR's exchange codes are capitals and digits, some with a dot (``OSE.JPN``, ``BVME.ETF``).
+type IbkrExchangeCode = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9.]{1,15}$")]
 type Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 type WindowPhase = Literal["pre_market", "opening_auction", "closing_auction", "post_market"]
 type WindowAnchor = Literal["session_open", "session_close"]
@@ -111,14 +113,25 @@ class VenueSources(FrozenModel):
     calendar: Provenance
     phases: Provenance
     settlement: Provenance
+    currencies: Provenance
+    permission: Provenance
+    lots: Provenance
 
 
 class VenueConfig(FrozenModel):
     name: NonEmptyText
     region: Region
     timezone: TimeZoneName
-    #: The venue's sessions after a trade on which its cash settles (T+n).
-    settlement_sessions: NonNegativeInt
+    #: The venue's sessions after a trade on which its cash settles (T+n); ``None``: not sourced,
+    #: and no sale is planned there.
+    settlement_sessions: NonNegativeInt | None
+    #: The currencies the venue's listings trade in, its local currency first.
+    currencies: list[CurrencyCode] = Field(min_length=1)
+    #: The IBKR trading permission an order on the venue needs.
+    trading_permission: NonEmptyText
+    #: The standard trading unit of the venue's shares; ``None`` where it varies by stock or is
+    #: not sourced.
+    board_lot: PositiveInt | None
     phase_windows: list[PhaseWindowConfig]
     incident_source: IncidentSourceConfig
     sources: VenueSources

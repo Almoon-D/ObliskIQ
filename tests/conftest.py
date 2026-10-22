@@ -265,6 +265,7 @@ def make_chain_row() -> Callable[..., ChainRow]:
             "market_data_status": MarketDataStatus.REALTIME,
             "market_data_raw": "REALTIME",
             "quote_delay_seconds": None,
+            "multiplier": None,
         }
         fields.update(overrides)
         return ChainRow(**fields)
@@ -431,14 +432,14 @@ async def order_rig(
     tmp_path: Path,
 ) -> Any:
     """The order path over the fake broker (``tests/support``), in paper mode, with the pre-trade
-    gate over the test instruments (``order_rig.gate_settings``)."""
+    gate over the test instruments (``order_rig.ALLOWED`` eligible)."""
     from fake_broker import FakeBroker
-    from order_rig import build_rig, gate_settings
+    from order_rig import build_rig
 
     with respx.mock(assert_all_called=False) as router:
         broker = FakeBroker(router)
         rig = await build_rig(
-            settings=gate_settings(shipped_settings),
+            settings=shipped_settings,
             session=make_session(),
             broker=broker,
             tmp_path=tmp_path,

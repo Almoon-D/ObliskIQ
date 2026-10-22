@@ -242,6 +242,15 @@ def latest_bar_date(store: Store, conid: int, *, as_of: date) -> date | None:
     return None if row[0] is None else read_date(row[0], "bars", "session_date")
 
 
+def earliest_bar_date(store: Store, conid: int, *, as_of: date) -> date | None:
+    """The oldest session with a bar on or before ``as_of``: where held history begins."""
+    row = store.execute(
+        "SELECT MIN(session_date) FROM bars WHERE conid = ? AND session_date <= ?",
+        (conid, date_text(as_of)),
+    ).fetchone()
+    return None if row[0] is None else read_date(row[0], "bars", "session_date")
+
+
 def bar_count(store: Store, conid: int, *, as_of: date) -> int:
     return _count(
         store,
@@ -324,7 +333,7 @@ def upsert_chain_rows(store: Store, rows: Sequence[ChainRow]) -> int:
         return 0
     with store.transaction():
         store.executemany(
-            f"INSERT INTO chain_snapshots ({CHAIN_COLUMNS}) VALUES ({_placeholders(22)}) "
+            f"INSERT INTO chain_snapshots ({CHAIN_COLUMNS}) VALUES ({_placeholders(23)}) "
             'ON CONFLICT (snapshot_date, underlying_conid, expiry, strike, "right") DO UPDATE SET '
             "option_conid = excluded.option_conid, option_symbol = excluded.option_symbol, "
             "option_exchange = excluded.option_exchange, bid = excluded.bid, ask = excluded.ask, "
@@ -334,7 +343,8 @@ def upsert_chain_rows(store: Store, rows: Sequence[ChainRow]) -> int:
             "source = excluded.source, collected_at = excluded.collected_at, "
             "market_data_status = excluded.market_data_status, "
             "market_data_raw = excluded.market_data_raw, "
-            "quote_delay_seconds = excluded.quote_delay_seconds",
+            "quote_delay_seconds = excluded.quote_delay_seconds, "
+            "multiplier = excluded.multiplier",
             [chain_params(row) for row in rows],
         )
     return len(rows)

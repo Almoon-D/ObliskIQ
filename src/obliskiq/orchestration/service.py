@@ -32,6 +32,7 @@ import asyncio
 import contextlib
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from ..calendars.status import Disagreement
 from ..config.schema import ObliskConfig
@@ -57,7 +58,10 @@ from .clock import Clock
 from .health import write_heartbeat
 from .jobs import Jobs
 from .runlog import ERROR, PARTIAL, SKIPPED, RunRecord, StepOutcome
-from .schedule import CYCLE, Job, jobs_between, next_job
+from .schedule import COLLECT, CYCLE, CollectPlan, Job, jobs_between, next_job
+
+if TYPE_CHECKING:
+    from ..data.market.daily import MarketCollector
 
 log = get_logger("orchestration.service")
 
@@ -124,10 +128,14 @@ class Service:
         reporter: Reporter,
         hooks: AlertHooks,
         clock: Clock,
+        collector: MarketCollector | None = None,
+        collect: CollectPlan | None = None,
     ) -> None:
         self._settings = settings
         self._path = path
         self._jobs = jobs
+        self._collector = collector
+        self._collect = collect if collector is not None else None
         self._rebalancer = rebalancer
         self._reporter = reporter
         self._hooks = hooks
@@ -226,7 +234,9 @@ class Service:
     async def _catch_up(self, now: datetime) -> None:
         """Run the jobs the last day missed, if they are still fresh; record the stale ones."""
         late = timedelta(minutes=self._runtime.catch_up_minutes)
-        for job in jobs_between(self._path.calendars, self._runtime, now - LOOKBACK, now):
+        for job in jobs_between(
+            self._path.calendars, self._runtime, now - LOOKBACK, now, self._collect
+        ):
             if await self._finished(job):
                 continue
             if now - job.at <= late:
@@ -265,7 +275,7 @@ class Service:
         last = self._clock.now()
         beat = last
         while not stop.is_set():
-            job = next_job(self._path.calendars, self._runtime, last)
+            job = next_job(self._path.calendars, self._runtime, last, self._collect)
             wake = beat if job is None else min(beat, job.at)
             if until is not None and wake > until:
                 return
@@ -274,7 +284,7 @@ class Service:
                 return
             now = self._clock.now()
             # Every job due since the last pass, two at the same moment included.
-            for due in jobs_between(self._path.calendars, self._runtime, last, now):
+            for due in jobs_between(self._path.calendars, self._runtime, last, now, self._collect):
                 if not await self._finished(due):
                     await self._run_job(due)
             last = max(last, now)
@@ -306,12 +316,21 @@ class Service:
             if job.kind == CYCLE:
                 result = await self._jobs.cycle(job.name, job.session_date)
                 await self._after_cycle(result.status)
+            elif job.kind == COLLECT:
+                await self._collect_job(job)
             else:
                 await self._jobs.digest(job.session_date)
         except Exception:  # a job that breaks never stops the service
             log.exception("a job failed", extra={"job": job.command})
         finally:
             self._hooks.source = None
+
+    async def _collect_job(self, job: Job) -> None:
+        """One venue's collection after its close (``data/market/daily.py``)."""
+        if self._collector is None or self._collect is None:  # pragma: no cover - never scheduled
+            return
+        venues = self._collect.venues_of(self._path.calendars, job)
+        await self._collector.run(job.command, job.session_date, venues=venues)
 
     async def _after_cycle(self, status: str) -> None:
         self._failures = self._failures + 1 if status in (ERROR, PARTIAL) else 0

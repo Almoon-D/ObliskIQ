@@ -14,7 +14,7 @@ from fake_broker import ACCOUNT, FakeBroker
 from obliskiq.domain.orders import ExecutionMode
 from obliskiq.env import Environment
 from obliskiq.errors import ExecutionError
-from obliskiq.execution.instruments import ConfiguredDirectory
+from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.execution.runtime import calendar_venues, open_order_path
 from obliskiq.ibkr.errors import AccountGuardError
 from obliskiq.jurisdiction import load_profile
@@ -37,8 +37,11 @@ def environment(monkeypatch: pytest.MonkeyPatch, **values: str) -> Environment:
 
 
 def test_the_calendars_cover_the_directorys_venues(shipped_settings: Any) -> None:
-    directory = ConfiguredDirectory.from_settings(shipped_settings)
-    assert calendar_venues(shipped_settings, directory) == ("XAMS", "XETR", "XLON", "XNYS")
+    directory = UniverseDirectory.from_settings(shipped_settings)
+    venues = calendar_venues(shipped_settings, directory)
+    assert {"XAMS", "XETR", "XLON", "XNYS"} <= set(venues)  # the skeleton's and the test's
+    assert set(venues) <= set(shipped_settings.venues)
+    assert list(venues) == sorted(venues)
 
 
 async def test_the_order_path_opens_over_the_broker_and_closes(

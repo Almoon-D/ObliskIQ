@@ -16,7 +16,8 @@ from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
 from typing import Protocol
 
-from ..config.schema import ObliskConfig, check_identifier
+from ..config.base import check_identifier
+from ..config.schema import ObliskConfig
 from ..errors import PolicyError
 from .profile import JURISDICTIONS_DIR, JurisdictionProfile
 
