@@ -142,7 +142,7 @@ async def test_an_empty_book_buys_every_role_largest_shortfall_first(rig: Any) -
     assert [(roles[r].action, roles[r].quantity) for r in roles] == [
         ("buy", Decimal(1)),  # world_equity: 171 of target, one IWDA is 126.03 in euros
         ("buy", Decimal(2)),  # em_equity: 133, two EMIM are 92.84
-        ("buy", Decimal(3)),  # euro_govt_bonds: 646, three IBGM are 532.50
+        ("buy", Decimal(3)),  # euro_govt_intermediate: 646, three IBGM are 532.50
     ]
     assert roles["world_equity"].notional == Decimal("126.0330")
     assert "world_equity" in plan.render()
@@ -153,8 +153,8 @@ async def test_buys_stop_at_what_the_book_may_spend(rig: Any) -> None:
     rig.broker.cash = {"EUR": (Decimal(200), None)}  # 175 to spend above the floor of 25
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
     # The largest shortfall first: IBGM (680 short) cannot buy one unit of 177.50.
-    assert roles["euro_govt_bonds"].action == "skip"
-    assert "no cash for one unit" in roles["euro_govt_bonds"].reason
+    assert roles["euro_govt_intermediate"].action == "skip"
+    assert "no cash for one unit" in roles["euro_govt_intermediate"].reason
     # Then IWDA (180 short): one unit of 126.03 at the pair's rate.
     assert (roles["world_equity"].action, roles["world_equity"].quantity) == ("buy", 1)
     # 49 are left: one EMIM of 46.42 is below the minimum trade of 50.
@@ -171,10 +171,13 @@ async def test_a_book_inside_its_bands_holds_and_an_overweight_sells(rig: Any) -
     assert roles["world_equity"].action == "skip"
     assert "less than one whole unit" in roles["world_equity"].reason
     # 30 over is less than one IBGM: nothing to sell.
-    assert roles["euro_govt_bonds"].action == "skip"
+    assert roles["euro_govt_intermediate"].action == "skip"
     await hold(rig, IBGM, "5", "EUR")  # 887.50: 207.50 over, one unit to sell
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
-    assert (roles["euro_govt_bonds"].action, roles["euro_govt_bonds"].quantity) == ("sell", 1)
+    assert (roles["euro_govt_intermediate"].action, roles["euro_govt_intermediate"].quantity) == (
+        "sell",
+        1,
+    )
 
 
 async def test_a_holding_the_targets_no_longer_name_is_sold(rig: Any) -> None:
@@ -233,8 +236,8 @@ async def test_a_role_whose_listing_maps_to_no_venue_waits(rig: Any) -> None:
         for i in UniverseDirectory.from_settings(rig.settings).instruments()
     )
     roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
-    assert roles["euro_govt_bonds"].action == "skip"
-    assert "NOWHERE" in roles["euro_govt_bonds"].reason
+    assert roles["euro_govt_intermediate"].action == "skip"
+    assert "NOWHERE" in roles["euro_govt_intermediate"].reason
     assert roles["em_equity"].action == "buy"
 
 
@@ -275,8 +278,8 @@ async def test_a_role_without_a_price_or_an_instrument_is_skipped(rig: Any) -> N
         i for i in UniverseDirectory.from_settings(rig.settings).instruments() if i.conid != IBGM
     )
     roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
-    assert roles["euro_govt_bonds"].reason == "no instrument describes the conid"
-    assert roles["euro_govt_bonds"].symbol == "?"
+    assert roles["euro_govt_intermediate"].reason == "no instrument describes the conid"
+    assert roles["euro_govt_intermediate"].symbol == "?"
 
 
 async def test_a_role_not_confirmed_by_ibkr_is_skipped(rig: Any) -> None:

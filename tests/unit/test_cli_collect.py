@@ -51,7 +51,7 @@ def _run(*argv: str) -> tuple[int, str]:
 def test_universe_validate_explains_the_grid_eligibility_venues_and_plan(data_dir: Path) -> None:
     status, out = _run("universe", "validate")
     assert status == EXIT_OK, out
-    assert out.startswith("universe is valid: 97 instruments")
+    assert out.startswith("universe is valid: 127 instruments")
     assert "  japan: broad N225, energy 1618" in out
     assert "eligibility: policy eu_priips (Regulation (EU) No 1286/2014" in out
     spy = next(line for line in out.splitlines() if line.startswith("  SPY:"))
@@ -159,7 +159,8 @@ def test_load_universe_reads_every_tradable_candidate_from_yahoo(
     assert status == EXIT_INVALID  # SAN failed, and says so
     assert "  universe_iwda: 3 closes, 2026-10-19 to 2026-10-21" in out
     assert "  universe_san: FAILED: Yahoo has no SAN.MC" in out
-    assert "loaded 22 of 23 listings" in out
+    assert "loaded 52 of 53 listings" in out
+    assert ("XDWD.DE", date(2014, 7, 22)) in asked  # Xetra's ETF segment, IBIS2
     assert ("IWDA.L", date(2009, 9, 25)) in asked  # from its inception, after the configured start
     assert ("EXV1.DE", date(2006, 1, 1)) in asked
     settings = load_config(config_dir).settings
@@ -249,7 +250,7 @@ def test_collect_runs_a_step_and_the_whole_job_as_run_records(
     today = date.today()
 
     def arrange(market: Any) -> None:
-        _declare(market, settings, "EMIM", "IBGM", "ASML")
+        _declare(market, settings, "EMIM", "IBGM", "ASML", "IEMA", "TPSA")
         market.contracts[555001] = ("JDEP", "AEB", "EUR")
         # A week back, so every bar is of a completed session whatever the hour.
         last = today - timedelta(days=7)

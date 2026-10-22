@@ -31,6 +31,8 @@ from ..research import cross_section_report
 from ..research.cross_section import CrossSectionResult, CrossSectionRunner, sample_months
 from ..research.cross_section import declared_se as cross_section_se
 from ..research.data import (
+    CANDIDATE_PREFIX,
+    UNIVERSE_PREFIX,
     Listing,
     Sources,
     coverage_by_year,
@@ -60,9 +62,6 @@ if TYPE_CHECKING:
 EXIT_OK = 0
 EXIT_INVALID = 1
 ONE_DAY = timedelta(days=1)
-#: Dataset ids of the universe's own listings and of stock candidates.
-UNIVERSE_PREFIX = "universe"
-CANDIDATE_PREFIX = "candidate"
 
 
 def _datasets(loaded: Loaded, out: TextIO) -> list[Dataset] | None:

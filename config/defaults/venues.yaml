@@ -1092,6 +1092,11 @@ ibkr_exchanges:
     source:
       origin: "IBKR's code for Borsa Italiana's ETF segment, lite universe.yaml (CSMIB) [CP 2026-09-14]"
       verify_live: true
+  IBIS2:
+    venue: XETR
+    source:
+      origin: "IBKR's code for Xetra's ETF segment: the Xetra listings of Xtrackers, SPDR, Vanguard and iShares Irish funds in IBKR's contract search [MCP ✓ 2026-10-22] (German-domiciled iShares funds list on IBIS)"
+      verify_live: true
   HKFE:
     venue: XHKG
     source:

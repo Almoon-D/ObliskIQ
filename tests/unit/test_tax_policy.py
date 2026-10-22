@@ -212,25 +212,37 @@ def test_a_fund_switch_is_deferred_only_when_the_profile_says_the_broker_support
     assert not supported.switch_deferral(fund("F"), etf("A"))
 
 
-def test_a_swap_partner_differs_in_issuer_and_index(es, tax_profile):
+def test_a_swap_partner_differs_in_issuer_and_the_index_as_the_profile_says(es, tax_profile):
+    """The shipped es profile requires another issuer (RIRPF art. 8); another index is the
+    owner's prudential default, applied by the vehicle selector (DECISIONS D122)."""
     held = etf("A")
+    assert not tax_profile.swap_partner.differ_in_index
     assert es.swap_partner_allowed(held, etf("X", issuer="Xtrackers", index="FTSE Developed"))
-    assert not es.swap_partner_allowed(held, etf("B", issuer="Xtrackers"))
+    # Another issuer on the same index is allowed by the law: it is not homogeneous.
+    assert es.swap_partner_allowed(held, etf("B", issuer="Xtrackers"))
     assert not es.swap_partner_allowed(held, etf("C", index="FTSE Developed"))
     assert not es.swap_partner_allowed(held, held)
-    loose = tax_profile.model_copy(
+    strict = tax_profile.model_copy(
         update={
-            "swap_partner": tax_profile.swap_partner.model_copy(update={"differ_in_index": False})
+            "swap_partner": tax_profile.swap_partner.model_copy(update={"differ_in_index": True})
         }
     )
-    relaxed = EsIrpfTaxPolicy(loose)
-    # Another issuer on the same index is now allowed: it is not homogeneous either.
-    assert relaxed.swap_partner_allowed(held, etf("B", issuer="Xtrackers"))
+    stricter = EsIrpfTaxPolicy(strict)
+    # A profile that also requires another index refuses another issuer on the same one.
+    assert not stricter.swap_partner_allowed(held, etf("B", issuer="Xtrackers"))
+    assert stricter.swap_partner_allowed(held, etf("X", issuer="Xtrackers", index="FTSE"))
     # A held security without an issuer cannot be shown to differ from anything.
     anonymous = share("ANON", "Anon")
     assert not es.swap_partner_allowed(
         anonymous.model_copy(update={"issuer": None}), share("OTHER", "Other")
     )
+
+
+def test_retained_income_is_deferred_under_es(es, tax_profile):
+    """LIRPF art. 94.1: a fund's distributions are imputed when paid, the gain when sold."""
+    assert es.retained_income_deferred
+    assert "94.1" in tax_profile.retained_income.source
+    assert "retained income taxed only on sale: True" in "\n".join(es.describe())
 
 
 def test_the_lot_method_and_offsets_come_from_the_profile(es):
@@ -347,7 +359,7 @@ def test_a_policy_describes_its_rules_with_their_sources(es, tax_profile):
     joined = "\n".join(lines)
     for fragment in ("LIRPF art. 49", "Ley 7/2024", "Orden HAC/277/2026", "LIRPF art. 80",
                      "withholding at source US 0.15 (official", "2 months (listed)",
-                     "supported: False", "in tracked index: True"):  # fmt: skip
+                     "supported: False", "in tracked index: False"):  # fmt: skip
         assert fragment in joined
     generic = GenericTaxPolicy("generic", tax_profile).describe()
     assert generic[-1] == "no wash-sale rule; every switch is a sale"

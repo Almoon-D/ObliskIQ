@@ -15,6 +15,7 @@ from pydantic import AfterValidator, PositiveInt, model_validator
 
 from ..domain.base import CurrencyCode
 from ..domain.calendar import Mic
+from ..domain.enums import AssetClass
 from .base import FrozenModel, Identifier
 from .schema_calendars import (
     CalendarsConfig,
@@ -45,6 +46,7 @@ from .schema_runtime import (
     TradingConfig,
 )
 from .schema_universe import UniverseConfig
+from .schema_vehicles import BrokerCapabilitiesConfig, VehiclesConfig
 
 
 def _file_name_in_data_dir(value: str) -> str:
@@ -132,6 +134,8 @@ class ObliskConfig(FrozenModel):
     market_data: MarketDataConfig
     collectors: CollectorsConfig
     universe: UniverseConfig
+    vehicles: VehiclesConfig
+    broker_capabilities: BrokerCapabilitiesConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -198,6 +202,8 @@ class ObliskConfig(FrozenModel):
             if sector not in self.universe.grid.sectors
         ]
         problems += self._universe_problems()
+        problems += self._role_problems()
+        problems += self._capability_problems()
         problems += self._paper_order_problems()
         problems += self._currency_problems()
         problems += self._skeleton_problems()
@@ -233,6 +239,61 @@ class ObliskConfig(FrozenModel):
             for root in self.universe.futures_roots
             if root.exchange not in exchanges
         ]
+        return problems
+
+    def _role_problems(self) -> list[str]:
+        """Every core role an instrument fills is declared, and every role's exposure series is
+        a dataset the research store loads."""
+        roles = self.core.roles
+        problems = [
+            f"universe {instrument.symbol}.exposures.core_roles: {role} is not in core.roles"
+            for instrument in self.universe.instruments
+            for role in instrument.exposures.core_roles
+            if role not in roles
+        ]
+        datasets = {dataset.id for dataset in self.research.datasets}
+        fx = self.research.dataset(self.vehicles.correlation.fx_dataset)
+        if fx is None or fx.vendor != "ecb":
+            problems.append(
+                f"vehicles.correlation.fx_dataset: {self.vehicles.correlation.fx_dataset} is not "
+                "an ecb dataset of research.datasets"
+            )
+        problems += [
+            f"core.roles.{name}.exposure_series: {role.exposure_dataset} is not a dataset of "
+            "research.datasets"
+            for name, role in sorted(roles.items())
+            if role.exposure_dataset not in datasets
+        ]
+        return problems
+
+    def _capability_problems(self) -> list[str]:
+        """Each capability check names a configured venue, and its probe is a universe instrument
+        of its asset class there (for options, an option underlying whose chain is asked there)."""
+        problems: list[str] = []
+        for check in self.broker_capabilities.checks:
+            where = f"broker_capabilities.checks {check.asset_class.value}@{check.venue}"
+            if check.venue not in self.venues:
+                problems.append(f"{where}: {check.venue} is not a venue declared in venues")
+            if check.probe is None:
+                continue
+            declared = self.universe.instrument(check.probe)
+            if declared is None:
+                problems.append(f"{where}: probe {check.probe} is not a universe instrument")
+                continue
+            if check.asset_class is AssetClass.OPTION:
+                code = declared.option_exchange or declared.listing_exchange
+                fits = declared.collects_chain
+            else:
+                code = declared.listing_exchange
+                fits = declared.asset_class is check.asset_class
+            entry = self.ibkr_exchanges.get(code)
+            if not fits or entry is None or entry.venue != check.venue:
+                what = (
+                    "an option chain"
+                    if check.asset_class is AssetClass.OPTION
+                    else f"an instrument of class {check.asset_class.value}"
+                )
+                problems.append(f"{where}: probe {check.probe} is not {what} on {check.venue}")
         return problems
 
     def _currency_problems(self) -> list[str]:

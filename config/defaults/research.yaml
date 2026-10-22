@@ -85,6 +85,7 @@ research:
         LSE: ".L"
         LSEETF: ".L"
         IBIS: ".DE"
+        IBIS2: ".DE"
         SBF: ".PA"
         AEB: ".AS"
         BVME: ".MI"

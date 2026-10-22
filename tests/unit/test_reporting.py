@@ -263,7 +263,7 @@ async def test_telegram_over_a_given_client(shipped_settings: ObliskConfig) -> N
 
 def _decision(action: str, **kw: Any) -> RoleDecision:
     fields: dict[str, Any] = {
-        "role": "euro_govt_bonds",
+        "role": "euro_govt_intermediate",
         "conid": 43614383,
         "symbol": "IBGM",
         "weight": Decimal("0.68"),
@@ -322,7 +322,7 @@ def test_a_cycle_summary_counts_and_lists_what_it_did() -> None:
     assert subject == "ObliskIQ europe cycle (paper): no new trades"
     assert "🟢 BUY 3 IBGM" in body
     assert "🔴 SELL 3 EMIM" in body
-    assert "held back IWDA (euro_govt_bonds): XLON is not tradable now" in body
+    assert "held back IWDA (euro_govt_intermediate): XLON is not tradable now" in body
     assert "placed: order 1001" in body
     assert "quiet" not in body
     assert "conversion into USD (187): filled" in body

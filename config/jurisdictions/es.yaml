@@ -85,10 +85,20 @@ tax:
   # Tax-free switches between funds (art. 94.1.a) are not assumed available at IBKR until
   # verified; ETF switches are always sales.
   fund_switch_deferral_at_broker: false
-  # A swap partner differs from what it replaces in issuer and in tracked index.
+  # A member of a collective investment (an EU UCITS registered with the CNMV, art. 94.2.a) imputes
+  # the results the fund distributes, when they are distributed, and the gain or loss when the
+  # units are sold (art. 94.1.a and b): income an accumulating class retains is taxed only as part
+  # of that gain, so it is deferred until the sale.
+  retained_income:
+    deferred: true
+    source: LIRPF art. 94.1.a and b, 94.2.a (BOE-A-2006-20764, consolidated text read 2026-10-22)
+  # What a swap partner must differ in from what it replaces, under the law: its issuer, since
+  # securities are homogeneous when they come from the same issuer with substantially the same
+  # rights (RIRPF art. 8). A different tracked index is the owner's prudential default, not a rule
+  # of this profile (vehicles.swap_partners.same_index, DECISIONS D7, D122).
   swap_partner:
     differ_in_issuer: true
-    differ_in_index: true
+    differ_in_index: false
   # Gains and losses on foreign-currency balances (DECISIONS D69, D110). A difference on a balance
   # in a foreign currency is a gain or loss of the savings base (arts. 33.1 and 46.b), imputed when
   # the currency is collected or paid out (art. 14.2.e): each currency is kept as lots, acquired at
