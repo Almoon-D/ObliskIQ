@@ -78,8 +78,9 @@ when the search omits it; zero rows fail and write neither half), universe seedi
 supersession, the backfill's watermark. Also: eligibility for every asset class and the US
 ETFs' reasons, the store's point-in-time reads of holdings and scans, crediting and coverage on
 real files, the refresh cadence, resolution on demand, the schedule across daylight saving and the
-fallback, the service's collection job, the CLI's output and refusals, and every universe key's
-reader. `make check` green: see the PR.
+fallback, the service's collection job, the CLI's output and refusals, every refusal of the
+universe's schema, and every universe key's reader. `make check` green: 4,124 tests, coverage
+99.63 %.
 
 **Acceptance.** The universe validates. Every grid cell has candidates or a declared reason:
 182 of 192 cells hold candidates and the other 10 are the declared gaps, on the live iShares files

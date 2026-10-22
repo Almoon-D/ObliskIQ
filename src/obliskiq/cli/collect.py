@@ -62,8 +62,6 @@ EXIT_OK = 0
 EXIT_INVALID = 1
 CANDIDATES = "candidates"
 DAILY = "daily"
-#: How many candidates a covered cell's line names.
-SHOWN = 3
 
 
 def _with_collection_path[T](loaded: Loaded, run: Callable[[OrderPath], Awaitable[T]]) -> T:
@@ -166,7 +164,11 @@ def _collect_candidates(loaded: Loaded, out: TextIO) -> int:
     env = loaded.env
     reachable = transport_refusal(env) is None and not missing_credentials(env)
     if env.ibkr_profile is not None and reachable:
-        collection = _with_collection_path(loaded, refresh)
+        try:
+            collection = _with_collection_path(loaded, refresh)
+        except ObliskError as exc:
+            print(f"collect stopped: {exc}", file=out)
+            return EXIT_INVALID
     else:
         print("no IBKR credentials: the holdings files alone are refreshed", file=out)
         collection = asyncio.run(refresh(None))
