@@ -121,6 +121,14 @@ class CurrencyGainsRule(FrozenModel):
     source: NonEmptyText
 
 
+class RetainedIncomeRule(FrozenModel):
+    """Whether income a fund retains (an accumulating class) is taxed only when its units are sold,
+    as part of the gain, while a distribution is taxed when it is paid."""
+
+    deferred: bool
+    source: NonEmptyText
+
+
 class SwapPartnerRule(FrozenModel):
     """What a swap partner must differ in from the security it replaces."""
 
@@ -140,6 +148,7 @@ class TaxProfile(FrozenModel):
     foreign_tax_credit: ForeignTaxCreditRule
     withholding_at_source: list[WithholdingRow]
     fund_switch_deferral_at_broker: bool
+    retained_income: RetainedIncomeRule
     swap_partner: SwapPartnerRule
     currency_gains: CurrencyGainsRule
 

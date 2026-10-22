@@ -1,5 +1,22 @@
 # The core (MASTER_PLAN §5.4).
 core:
+  # The core's roles: the nine Session 4c registered (research/preregistrations/core-allocation.md,
+  # its codes in brackets). Each names the research series the role was priced on there
+  # (<dataset>.<field> of research.datasets), the exposure a vehicle's tracking is measured against
+  # (decision/vehicle_selector.py). A universe instrument fills a role by listing it in its
+  # exposures.core_roles; the vehicle selector ranks them (`obliskiq universe vehicles <role>`).
+  roles:
+    world_equity: {name: "Global developed equity (WORLD)", exposure_series: msci_world_eur.level}
+    em_equity: {name: "Emerging-market equity (EM)", exposure_series: msci_em_eur.level}
+    euro_govt_intermediate:
+      name: "Euro government bonds, intermediate (EGB_INT)"
+      exposure_series: bund_zero_05y.level
+    euro_govt_long: {name: "Euro government bonds, long (EGB_LONG)", exposure_series: bund_zero_17y.level}
+    inflation_linked: {name: "Inflation-linked government bonds (IL)", exposure_series: tip.adj_close}
+    us_treasuries: {name: "US Treasuries (UST)", exposure_series: ief.adj_close}
+    gold: {name: "Gold (GOLD)", exposure_series: gld.close}
+    broad_commodities: {name: "Broad commodities (COMMOD)", exposure_series: crsox.adj_close}
+    cash: {name: "Cash (CASH)", exposure_series: euro_cash.level}
   # SKELETON (Session 6's walking skeleton; removed in Session 13, which builds the variant the
   # owner chose): a static book the basic rebalancer (decision/rebalance_basic.py) trades toward.
   # Three roles of variant A, the static risk balance the owner's point selects (DECISIONS D91),
@@ -17,4 +34,4 @@ core:
     # Euro government bonds: iShares € Govt Bond 7-10yr UCITS ETF on Euronext Amsterdam (A's
     # intermediate role holds 3-7 years; this was the euro government line IBKR's search
     # confirmed).
-    - {role: euro_govt_bonds, weight: "0.68", conid: 43614383}
+    - {role: euro_govt_intermediate, weight: "0.68", conid: 43614383}

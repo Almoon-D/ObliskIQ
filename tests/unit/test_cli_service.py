@@ -96,7 +96,7 @@ def test_a_dry_run_on_fixtures_prints_a_sensible_plan_and_writes_nothing(
     assert status == EXIT_OK, out + err
     assert "rebalance plan (shadow)" in out
     assert "managed capital 1000.00 (cap: a book of 1000.00 (started at 1000))" in out
-    for role in ("world_equity", "em_equity", "euro_govt_bonds"):
+    for role in ("world_equity", "em_equity", "euro_govt_intermediate"):
         assert role in out
     assert "NAV: 100000" in out
     assert "dry run: nothing was written or sent" in out

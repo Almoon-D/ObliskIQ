@@ -48,12 +48,21 @@ def test_a_target_outside_the_universe_is_refused(shipped_settings: ObliskConfig
 
 def test_the_skeleton_names_each_role_once_and_fills_at_most_the_book() -> None:
     target = {"role": "a", "weight": "0.5", "conid": 1}
+    role = {"name": "A role", "exposure_series": "x.level"}
+    roles = {"a": role, "b": role}
     with pytest.raises(ValueError, match="each role and each conid is listed once"):
-        CoreConfig.model_validate({"skeleton_targets": [target, {**target, "conid": 2}]})
+        CoreConfig.model_validate(
+            {"roles": roles, "skeleton_targets": [target, {**target, "conid": 2}]}
+        )
     with pytest.raises(ValueError, match="more than the whole book"):
         CoreConfig.model_validate(
-            {"skeleton_targets": [target, {"role": "b", "weight": "0.6", "conid": 2}]}
+            {
+                "roles": roles,
+                "skeleton_targets": [target, {"role": "b", "weight": "0.6", "conid": 2}],
+            }
         )
+    with pytest.raises(ValueError, match=r"core\.roles does not declare"):
+        CoreConfig.model_validate({"roles": {"b": role}, "skeleton_targets": [target]})
 
 
 def test_a_minimum_trade_needs_a_part_and_cycles_their_own_names(

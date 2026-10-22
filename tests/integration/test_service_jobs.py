@@ -41,7 +41,7 @@ async def test_the_daily_digest_is_sent_after_the_last_cycle(make: Any) -> None:
     (digest,) = [body for subject, body in s.notifier.sent if "daily digest" in subject]
     assert "Mode shadow" in digest
     assert "NAV: 100,000.00 EUR" in digest
-    assert "euro_govt_bonds IBGM: held 3" in digest
+    assert "euro_govt_intermediate IBGM: held 3" in digest
     assert "Fills today (3)" in digest
     assert "XAMS" in digest
     assert "last heartbeat" in digest

@@ -1,0 +1,63 @@
+# The vehicle selector (MASTER_PLAN §5.8; decision/vehicle_selector.py): an exposure (a core role,
+# a grid cell) to its eligible vehicles, ranked with reasons, and the swap-partner groups
+# (decision/swap_partners.py). docs/DECISIONS.md says why each value is what it is (D119-D122).
+vehicles:
+  # Whether a currency-hedged share class may fill an exposure: the owner's ruling (MASTER_PLAN
+  # §5.4, §11; DECISIONS D69). undecided | allowed | refused. Until allowed, a hedged class is
+  # ranked as its own vehicle and refused, with this as the reason.
+  hedged_share_classes: undecided
+
+  ranking:
+    # Each criterion scores 0 to 1 and a vehicle's score is the weighted sum: cost first (the
+    # fee and the trading costs compound), then how closely it tracks the exposure, then whether
+    # it can be traded at size. Judgements (D120). QUOTED; they add up to 1.
+    weights:
+      cost: "0.35"
+      tracking: "0.25"
+      liquidity: "0.15"
+      tax: "0.10"
+      currency: "0.05"
+      trading_window: "0.05"
+      market_data: "0.05"
+    # One order's size, and the position it builds, in the base currency: commissions with a
+    # minimum, conversions and market data are costed at it. A judgement: about what a core role
+    # receives at a small account's monthly rebalance. QUOTED.
+    reference_amount_base: "5000"
+    # Years a round trip and its two conversions are spread over beside the fund's yearly fee.
+    # A judgement: a core vehicle is held for years, and a shorter horizon only weighs trading
+    # costs more. QUOTED.
+    holding_years: "5"
+    # An all-in cost of 1 % a year or more scores 0; no cost scores 1. QUOTED.
+    cost_ceiling: "0.01"
+    # Liquidity scores log10(average daily traded value / reference amount) over this many
+    # decades, capped at 1: an order of 1/10,000 of a day's value scores 1. QUOTED.
+    liquidity_decades: "4"
+    # Stored daily sessions the average daily traded value is read over: about a quarter.
+    liquidity_sessions: 60
+    # A tracking correlation at or below this scores 0, a perfect one 1. QUOTED.
+    tracking_floor: "0.8"
+
+  # How a correlation is measured on research history (src/obliskiq/research/tracking.py): log
+  # returns of each calendar month in the base currency, over the five years before the date it
+  # is read as of; fewer than three years of common months is no measurement. Monthly, not weekly:
+  # a European listing closes hours before the index or US fund its exposure is priced on, and a
+  # week's last day then carries news one series has and the other has not (XMME against MSCI EM
+  # read 0.70 weekly over three years and 0.98 monthly over five; DECISIONS D121).
+  correlation:
+    period: month
+    lookback_days: 1826
+    min_returns: 36
+    # The ECB reference rates (research.datasets) a series in another currency is converted with,
+    # a rate no older than research.data.max_fx_age_days.
+    fx_dataset: ecb_fx
+
+  swap_partners:
+    # The owner's switch (MASTER_PLAN §4, DECISIONS D7): a partner on the same tracked index from
+    # another issuer. Off: a partner tracks a different, highly correlated index, which leaves no
+    # argument under the general anti-avoidance rule. The jurisdiction's own rule (es: another
+    # issuer, RIRPF art. 8) applies either way.
+    same_index: false
+    # A partner's returns, measured as above, correlate with the vehicle it replaces at least this
+    # much (MSCI World and FTSE Developed listings read 0.99, MSCI EM and FTSE Emerging 0.93 to
+    # 0.94: docs/knowledge/universe-sources.md). A judgement. QUOTED.
+    min_correlation: "0.95"

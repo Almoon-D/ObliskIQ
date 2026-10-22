@@ -4848,7 +4848,7 @@ universe:
     exposures:
       grid: null
       macro_board: []
-      core_roles: [euro_govt_bonds]
+      core_roles: [euro_govt_intermediate]
       country: null
       commodity_bucket: null
     holdings:
@@ -5591,6 +5591,1217 @@ universe:
       url: https://www.ishares.com/us/products/239664/fund/latest-holdings.csv
       format: ishares_csv
       candidates_for: italy
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  # ── Added in Session 9 ──
+  # The core's role candidates (MASTER_PLAN §5.4, §5.8): for each of the nine roles of Session 4c's
+  # pre-registration (core.roles), UCITS funds and ETCs from several issuers, accumulating classes
+  # preferred, and the currency-hedged share class of a fund beside its unhedged one, ranked as a
+  # distinct vehicle (DECISIONS D69). Each listing is the one IBKR's contract search returns for the
+  # fund's ISIN [MCP ✓ 2026-10-22]; its currency is the listing's in justETF's table. Every
+  # identifier is read on two sources, the issuer's site and justETF (docs/knowledge/
+  # universe-sources.md). VERIFY-LIVE(universe conids on CP): `obliskiq universe pin` confirms each
+  # through /iserver/contract/{conid}/info. Lite's ADR map is not ported: no core role is filled by
+  # a depositary receipt (DECISIONS D121).
+
+  - symbol: XDWD
+    conid: 163606916
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X MSCI WORLD 1C
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0012"
+      lot_size: null
+      inception: 2014-07-22
+      isin: IE00BJ0KDQ92
+      issuer: Xtrackers
+      tracked_index: MSCI World
+      replication: sampled
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/IE00BJ0KDQ92/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BJ0KDQ92), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [world_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: SPPW
+    conid: 355720826
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: SS SPDR MSCI WORLD UC-USD AC
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0012"
+      lot_size: null
+      inception: 2019-02-28
+      isin: IE00BFY0GT14
+      issuer: State Street SPDR
+      tracked_index: MSCI World
+      replication: sampled
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        State Street SPDR product page (ssga.com/ie, SPPW GY): ISIN, TER 0.12 %, inception 28 Feb 2019, benchmark MSCI World Index, UCITS, domicile Ireland, optimised replication, no distribution, and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BFY0GT14), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [world_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: VHVE
+    conid: 399364016
+    listing_exchange: BVME.ETF
+    history_exchange: BVME.ETF
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: VANG FTSE DW USDA
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0012"
+      lot_size: null
+      inception: 2019-09-24
+      isin: IE00BK5BQV03
+      issuer: Vanguard
+      tracked_index: FTSE Developed
+      replication: physical
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Vanguard UK product page 9675 (FTSE Developed World UCITS ETF (USD) Accumulating): ISIN and a KID among its documents, read 2026-10-22; FTSE Developed Index, 0.12 %, inception 24 Sep 2019 per Vanguard's page as found by search the same day; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BK5BQV03), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [world_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: IWLE
+    conid: 393119102
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES CORE MSCI WLD-EUR HD
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: distributing
+      hedged: true
+      hedge_currency: EUR
+      fee: "0.003"
+      lot_size: null
+      inception: 2019-06-05
+      isin: IE00BKBF6H24
+      issuer: iShares
+      tracked_index: MSCI World
+      replication: sampled
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        iShares product page 309035 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; the EUR-hedged distributing share class of the iShares Core MSCI World UCITS ETF (the fund IWDA belongs to); confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BKBF6H24), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [world_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: XMME
+    conid: 280737629
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X MSCI EM 1C
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0018"
+      lot_size: null
+      inception: 2017-06-21
+      isin: IE00BTJRMP35
+      issuer: Xtrackers
+      tracked_index: MSCI Emerging Markets
+      replication: sampled
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/IE00BTJRMP35/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BTJRMP35), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [em_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: IEMA
+    conid: 100292766
+    listing_exchange: AEB
+    history_exchange: AEB
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES MSCI EM ACC
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0018"
+      lot_size: null
+      inception: 2009-09-25
+      isin: IE00B4L5YC18
+      issuer: iShares
+      tracked_index: MSCI Emerging Markets
+      replication: physical
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        iShares product page 251858 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B4L5YC18), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [em_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: VFEA
+    conid: 385047109
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: VANG FTSE EM USDA
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0017"
+      lot_size: null
+      inception: 2019-09-24
+      isin: IE00BK5BR733
+      issuer: Vanguard
+      tracked_index: FTSE Emerging
+      replication: physical
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Vanguard UK product page 9678 (FTSE Emerging Markets UCITS ETF (USD) Accumulating): ISIN and a KID among its documents, read 2026-10-22; FTSE Emerging Index, 0.17 %, inception 24 Sep 2019 per Vanguard's page as found by search the same day; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BK5BR733), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [em_equity]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: CSBGE7
+    conid: 79000241
+    listing_exchange: EBS
+    history_exchange: null
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES EUR GOVT 3-7Y ACC
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0015"
+      lot_size: null
+      inception: 2009-06-02
+      isin: IE00B3VTML14
+      issuer: iShares
+      tracked_index: Bloomberg Euro Government Bond 3-7 Year Term
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        iShares product page 253458 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B3VTML14), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [euro_govt_intermediate]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: DBXQ
+    conid: 53507356
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X EURZ GOVT BOND 3-5 1C
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0015"
+      lot_size: null
+      inception: 2007-05-25
+      isin: LU0290356954
+      issuer: Xtrackers
+      tracked_index: iBoxx EUR Eurozone (DE ES FR IT NL) 3-5
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/LU0290356954/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU0290356954), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [euro_govt_intermediate]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: X57E
+    conid: 53507360
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X EURZ GOVT BOND 5-7 1C
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0015"
+      lot_size: null
+      inception: 2007-05-30
+      isin: LU0290357176
+      issuer: Xtrackers
+      tracked_index: iBoxx EUR Eurozone (DE ES FR IT NL) 5-7
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/LU0290357176/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU0290357176), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [euro_govt_intermediate]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: MTB
+    conid: 297475417
+    listing_exchange: SBF
+    history_exchange: null
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: AM EURO GOV BOND 3-5Y-ETF A
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0015"
+      lot_size: null
+      inception: 2004-01-28
+      isin: LU1650488494
+      issuer: Amundi
+      tracked_index: Bloomberg Euro Treasury 50bn 3-5 Year Bond
+      replication: physical
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Amundi product page and factsheet (amundietf.fr, LU1650488494, 30/09/2026): Luxembourg UCITS, accumulating, EUR, physical, Bloomberg Euro Treasury 50bn 3-5 Year Bond Index, fee 0.15 %; its PRIIPs KID (amundietf.de/pdfDocuments/kid-priips/LU1650488494) downloaded 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU1650488494), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [euro_govt_intermediate]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: IBCL
+    conid: 43614368
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES EURO GOVT 15-30YR
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: distributing
+      hedged: false
+      hedge_currency: null
+      fee: "0.0015"
+      lot_size: null
+      inception: 2006-12-08
+      isin: IE00B1FZS913
+      issuer: iShares
+      tracked_index: Bloomberg Euro Government Bond 30 Year Term
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        iShares product page 251735 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B1FZS913), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [euro_govt_long]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: DBXG
+    conid: 48701963
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X EURZ GOVT BOND 25+ 1C
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0015"
+      lot_size: null
+      inception: 2007-06-05
+      isin: LU0290357846
+      issuer: Xtrackers
+      tracked_index: iBoxx EUR Eurozone (DE ES FR IT NL) 25+
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/LU0290357846/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU0290357846), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [euro_govt_long]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: TPSA
+    conid: 100292445
+    listing_exchange: AEB
+    history_exchange: AEB
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES USD TIPS
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.001"
+      lot_size: null
+      inception: 2006-12-08
+      isin: IE00B1FZSC47
+      issuer: iShares
+      tracked_index: Bloomberg US Government Inflation-Linked Bond
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        iShares product page 251714 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B1FZSC47), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [inflation_linked]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: IBC5
+    conid: 309787188
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES USD TIPS EUR-H ACC
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: true
+      hedge_currency: EUR
+      fee: "0.0012"
+      lot_size: null
+      inception: 2018-03-05
+      isin: IE00BDZVH966
+      issuer: iShares
+      tracked_index: Bloomberg US Government Inflation-Linked Bond
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        iShares product page 295696 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; the EUR-hedged accumulating share class of the iShares $ TIPS UCITS ETF (the fund TPSA belongs to); confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BDZVH966), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [inflation_linked]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: TIUP
+    conid: 255605037
+    listing_exchange: IBIS
+    history_exchange: IBIS
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: AMUNDI US TIPS UCITS ETF
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: distributing
+      hedged: false
+      hedge_currency: null
+      fee: "0.0009"
+      lot_size: null
+      inception: 2016-07-29
+      isin: LU1452600270
+      issuer: Amundi
+      tracked_index: Bloomberg US Government Inflation-Linked Bond
+      replication: physical
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Amundi product page and factsheet (amundietf.fr, LU1452600270, 31/08/2026): Luxembourg UCITS, distributing, physical, Bloomberg US Govt Inflation-Linked All Maturities, ongoing charge 0.09 %, share class created 29/07/2016; its PRIIPs KID (amundietf.de/pdfDocuments/kid-priips/LU1452600270) downloaded 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU1452600270), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [inflation_linked]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: TIP1D
+    conid: 255179957
+    listing_exchange: BVME.ETF
+    history_exchange: BVME.ETF
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: UBS CR BBG TP 1-10 UCI-USD D
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: null
+      share_class: distributing
+      hedged: false
+      hedge_currency: null
+      fee: "0.0008"
+      lot_size: null
+      inception: 2016-09-30
+      isin: LU1459801434
+      issuer: UBS
+      tracked_index: Bloomberg US Government 1-10 Year Inflation-Linked Bond
+      replication: physical
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        UBS product page (ubs.com/fr, LU1459801434) and factsheet: UBS Core BBG TIPS 1-10 UCITS ETF USD dis, Luxembourg, Bloomberg US Government 1-10 Year Inflation-Linked Bond Index, TER 0.08 %, launched 30.09.2016, read through search 2026-10-22; the issuer's PRIIPs KID was not read (ubs.com refuses this container), so its KID is unknown; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU1459801434), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [inflation_linked]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: CSBGU0
+    conid: 79000139
+    listing_exchange: EBS
+    history_exchange: null
+    option_exchange: null
+    currency: USD
+    asset_class: etf
+    description: ISHARES USD TRES BOND 7-10Y
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0007"
+      lot_size: null
+      inception: 2009-06-03
+      isin: IE00B3VWN518
+      issuer: iShares
+      tracked_index: ICE US Treasury 7-10 Year
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        iShares product page 253745 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B3VWN518), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [us_treasuries]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: IBB1
+    conid: 394126588
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: ISHARES USD TRSRY 7-10YR GHD
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: distributing
+      hedged: true
+      hedge_currency: EUR
+      fee: "0.001"
+      lot_size: null
+      inception: 2019-02-25
+      isin: IE00BGPP6697
+      issuer: iShares
+      tracked_index: ICE US Treasury 7-10 Year
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        iShares product page 307495 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; the EUR-hedged distributing share class of the iShares $ Treasury Bond 7-10yr UCITS ETF (the fund CSBGU0 belongs to); confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BGPP6697), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [us_treasuries]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: VDTA
+    conid: 399364034
+    listing_exchange: BVME.ETF
+    history_exchange: BVME.ETF
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: VANGU USDTRBD USDA
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0005"
+      lot_size: null
+      inception: 2019-02-19
+      isin: IE00BGYWFS63
+      issuer: Vanguard
+      tracked_index: Bloomberg Global Aggregate US Treasury Float Adjusted
+      replication: physical
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Vanguard UK product page 9598 (USD Treasury Bond UCITS ETF (USD) Accumulating): ISIN and a KID among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BGYWFS63), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [us_treasuries]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: XUTD
+    conid: 220580484
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X US TREASURIES 1D
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: distributing
+      hedged: false
+      hedge_currency: null
+      fee: "0.0006"
+      lot_size: null
+      inception: 2009-07-07
+      isin: LU0429459356
+      issuer: Xtrackers
+      tracked_index: iBoxx USD Treasuries
+      replication: sampled
+      futures_root: null
+      bond_issuer: government
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/LU0429459356/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU0429459356), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [us_treasuries]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: IGLN
+    conid: 86656182
+    listing_exchange: LSEETF
+    history_exchange: LSEETF
+    option_exchange: null
+    currency: USD
+    asset_class: etc
+    description: ISHARES PHYSICAL GOLD ETC
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: false
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0012"
+      lot_size: null
+      inception: 2011-04-08
+      isin: IE00B4ND3602
+      issuer: iShares
+      tracked_index: LBMA Gold Price
+      replication: physical
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        iShares product page 258441 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; an ETC (secured debt securities of iShares Physical Metals plc), no income; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B4ND3602), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [gold]
+      country: null
+      commodity_bucket: precious_monetary
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: SGLD
+    conid: 175394979
+    listing_exchange: BVME.ETF
+    history_exchange: BVME.ETF
+    option_exchange: null
+    currency: EUR
+    asset_class: etc
+    description: INVESCO PHYSICAL GOLD ETC
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: false
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0012"
+      lot_size: null
+      inception: 2009-06-25
+      isin: IE00B579F325
+      issuer: Invesco
+      tracked_index: LBMA Gold Price
+      replication: physical
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Invesco factsheet and KID (invesco.com, IE00B579F325): an ETC of Invesco Physical Markets PLC (Ireland) secured by gold bullion, benchmark the LBMA Gold Price in USD, fixed fee 0.12 %, listed in EUR on Borsa Italiana and Xetra, read through search 2026-10-22; no income; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B579F325), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [gold]
+      country: null
+      commodity_bucket: precious_monetary
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: 4GLD
+    conid: 50784405
+    listing_exchange: IBIS
+    history_exchange: IBIS
+    option_exchange: null
+    currency: EUR
+    asset_class: etc
+    description: XETRA-GOLD
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: DE
+      ucits: false
+      kid: null
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: null
+      lot_size: null
+      inception: 2007-11-27
+      isin: DE000A0S9GB0
+      issuer: Deutsche Boerse Commodities
+      tracked_index: null
+      replication: physical
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Deutsche Börse Commodities (xetra-gold.com, fact sheet and prospectus 2025): a bearer bond with a right to delivery of gold, no management fee, custody charged by the investor's depositary bank (Clearstream's 0.025 % a month, 0.30 % a year plus VAT, passed on at the bank's discretion), read 2026-10-22; the fee at IBKR and the KID were not read, so both are unknown; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=DE000A0S9GB0), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [gold]
+      country: null
+      commodity_bucket: precious_monetary
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: CMOD
+    conid: 262067279
+    listing_exchange: LSEETF
+    history_exchange: LSEETF
+    option_exchange: null
+    currency: USD
+    asset_class: etf
+    description: INVESCO BLOOMBERG COMMODITY
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0019"
+      lot_size: null
+      inception: 2017-01-09
+      isin: IE00BD6FTQ80
+      issuer: Invesco
+      tracked_index: Bloomberg Commodity
+      replication: synthetic
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Invesco factsheet and KID (invesco.com, IE00BD6FTQ80, 30/09/2026): Irish UCITS, synthetic (swaps) on the Bloomberg Commodity Index, ongoing charge 0.19 % plus a 0.15 % swap fee, launched 9 Jan 2017, CMOD LN, read through search 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BD6FTQ80), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [broad_commodities]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: ICOM
+    conid: 282849246
+    listing_exchange: LSEETF
+    history_exchange: LSEETF
+    option_exchange: null
+    currency: USD
+    asset_class: etf
+    description: ISH DIVERS COMMOD SWAP ETF
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0019"
+      lot_size: null
+      inception: 2017-07-18
+      isin: IE00BDFL4P12
+      issuer: iShares
+      tracked_index: Bloomberg Commodity
+      replication: synthetic
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        iShares product page 287254 (ishares.com/de), key facts (ISIN, ticker, use of profits, TER, domicile, UCITS, benchmark, launch date, methodology) and its PRIIPs KID (Basisinformationsblatt) among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00BDFL4P12), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [broad_commodities]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: UIQK
+    conid: 128562052
+    listing_exchange: IBIS
+    history_exchange: IBIS
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: UBS ETF CMCI COMPOS. H. CHF
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: IE
+      ucits: true
+      kid: null
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.0034"
+      lot_size: null
+      inception: 2010-12-20
+      isin: IE00B53H0131
+      issuer: UBS
+      tracked_index: UBS Bloomberg CMCI Composite
+      replication: synthetic
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        UBS product pages (ubs.com, IE00B53H0131): UBS CMCI Composite SF UCITS ETF (USD) A-acc, Irish, synthetic (total return swap) on the UBS Bloomberg CMCI Total Return index, flat fee 0.34 %, launched 20.12.2010, read through search 2026-10-22; the issuer's PRIIPs KID was not read (ubs.com refuses this container), so its KID is unknown; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=IE00B53H0131), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [broad_commodities]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: XEON
+    conid: 46041702
+    listing_exchange: IBIS2
+    history_exchange: IBIS2
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: X EUR OVERNIGHT RATE SWAP 1C
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.001"
+      lot_size: null
+      inception: 2007-05-25
+      isin: LU0290358497
+      issuer: Xtrackers
+      tracked_index: Solactive €STR +8.5 Daily
+      replication: synthetic
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Xtrackers product page (etf.dws.com/en-gb/LU0290358497/), fund key facts (ISIN, income treatment, all-in fee, share class currency and launch date, replication, portfolio structure, index) and its Key Information Document among its documents, read 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU0290358497), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [cash]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: CSH2
+    conid: 185829298
+    listing_exchange: SBF
+    history_exchange: null
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: AMND SMT OVRNGT RTR ETF-UEAE
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: LU
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.001"
+      lot_size: null
+      inception: 2015-03-02
+      isin: LU1190417599
+      issuer: Amundi
+      tracked_index: €STR Compounded
+      replication: synthetic
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Amundi product page (amundietf.de, LU1190417599, 15/10/2026): Luxembourg UCITS (Multi Units Luxembourg), tracks the €STR, ongoing charge 0.10 %, accumulating; its PRIIPs KID (amundietf.de/pdfDocuments/kid-priips/LU1190417599) downloaded 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=LU1190417599), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [cash]
+      country: null
+      commodity_bucket: null
+    holdings: null
+    coverage_note: null
+    collect_bars: true
+    bars_off_reason: null
+    options_unavailable_reason: null
+
+  - symbol: CSH1
+    conid: 46501995
+    listing_exchange: SBF
+    history_exchange: null
+    option_exchange: null
+    currency: EUR
+    asset_class: etf
+    description: AMUND EURO OVERNIGHT RETURN
+    roles: [tradable_candidate, data]
+    data_only_reason: null
+    attributes:
+      domicile: FR
+      ucits: true
+      kid: available
+      share_class: accumulating
+      hedged: false
+      hedge_currency: null
+      fee: "0.001"
+      lot_size: null
+      inception: 2007-09-13
+      isin: FR0010510800
+      issuer: Amundi
+      tracked_index: Solactive Euro Overnight Return
+      replication: synthetic
+      futures_root: null
+      bond_issuer: null
+      source: >-
+        Amundi product page and factsheet (amundietf.fr, FR0010510800, 31/08/2026): French UCITS (Multi Units France), synthetic, Solactive Euro Overnight Return Index (€STR plus 0.085 %), management fee 0.10 %, accumulating, CSH FP on Euronext Paris (IBKR's symbol CSH1); its PRIIPs KID (amundietf.de/pdfDocuments/kid-priips/FR0010510800) downloaded 2026-10-22; confirmed against the justETF profile (justetf.com/en/etf-profile.html?isin=FR0010510800), read 2026-10-22
+    exposures:
+      grid: null
+      macro_board: []
+      core_roles: [cash]
+      country: null
+      commodity_bucket: null
+    holdings: null
     coverage_note: null
     collect_bars: true
     bars_off_reason: null

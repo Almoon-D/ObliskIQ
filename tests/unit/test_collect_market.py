@@ -40,6 +40,8 @@ SESSION = date(2026, 10, 21)
 XAMS = {"XAMS"}
 #: The universe's one unpinned instrument on XAMS, and the conid the fake search resolves it to.
 JDEP = 555001
+#: The other Amsterdam listings the universe pins: core candidates (Session 9).
+IEMA, TPSA = 100292766, 100292445
 
 
 @pytest.fixture
@@ -90,24 +92,25 @@ def target(rig: MarketRig, conid: int) -> Any:
 async def test_pinned_instruments_are_confirmed_and_seeded_and_a_rerun_changes_nothing(
     rig: MarketRig,
 ) -> None:
-    declare(rig, EMIM, IBGM, ASML)
+    declare(rig, EMIM, IBGM, ASML, IEMA, TPSA)
     collection = await rig.collector.universe.run(XAMS)
     outcomes = {o.target: o for o in collection.outcomes}
-    assert set(outcomes) == {"EMIM", "IBGM", "ASML", "JDEP"}
-    assert all(outcomes[s].ok and not outcomes[s].degraded for s in ("EMIM", "IBGM", "ASML"))
+    assert set(outcomes) == {"EMIM", "IBGM", "ASML", "IEMA", "TPSA", "JDEP"}
+    pinned = ("EMIM", "IBGM", "ASML", "IEMA", "TPSA")
+    assert all(outcomes[s].ok and not outcomes[s].degraded for s in pinned)
     assert outcomes["JDEP"].degraded  # resolved, not pinned
     assert collection.status == DEGRADED
     stored = await rig.store(repos.list_instruments, as_of=SESSION, include_superseded=False)
-    assert {i.conid for i in stored} == {EMIM, IBGM, ASML}
+    assert {i.conid for i in stored} == {EMIM, IBGM, ASML, IEMA, TPSA}
     emim = next(i for i in stored if i.conid == EMIM)
     assert (emim.ucits, emim.domicile, emim.listing_exchange) == (True, "IE", "AEB")
     again = await rig.collector.universe.run(XAMS)
     assert again.notes["superseded"] == []
-    assert len(await rig.store(repos.list_instruments, as_of=SESSION, include_superseded=True)) == 3
+    assert len(await rig.store(repos.list_instruments, as_of=SESSION, include_superseded=True)) == 5
 
 
 async def test_a_pin_that_does_not_confirm_is_not_seeded_and_not_collected(rig: MarketRig) -> None:
-    declare(rig, EMIM, IBGM)
+    declare(rig, EMIM, IBGM, IEMA, TPSA)
     del rig.market.contracts[JDEP]  # and the unpinned one resolves to nothing
     rig.market.contracts[ASML] = ("ASML", "AEB", "USD")  # IBKR says another currency
     collection = await rig.collector.universe.run(XAMS)
@@ -441,7 +444,7 @@ async def test_an_unpriced_ladder_is_degraded_and_an_empty_one_fails(rig: Market
 async def test_a_job_records_every_step_and_a_broken_step_does_not_stop_the_next(
     rig: MarketRig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    declare(rig, EMIM, IBGM, ASML)
+    declare(rig, EMIM, IBGM, ASML, IEMA, TPSA)
     rig.market.bars(EMIM, [46.0] * 40, last=SESSION)
     rig.market.bars(IBGM, [170.0] * 40, last=SESSION)
     rig.market.quote(EMIM)

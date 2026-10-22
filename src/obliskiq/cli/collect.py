@@ -54,6 +54,7 @@ from ..store import universe as universe_repo
 from ..store.worker import StoreWorker
 from ..util.http import RetryPolicy
 from ..util.timeutil import utc_now
+from .vehicles import add_vehicle_commands
 
 if TYPE_CHECKING:
     from .app import Loaded
@@ -384,3 +385,4 @@ def add_collect_commands(commands: argparse._SubParsersAction[argparse.ArgumentP
     pin.add_argument("--candidate", help="a stock candidate's key (country:name)")
     pin.add_argument("--thesis", help="the thesis that needs the candidate")
     pin.set_defaults(handler=_universe_pin)
+    add_vehicle_commands(actions)

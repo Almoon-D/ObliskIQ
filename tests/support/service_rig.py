@@ -32,7 +32,7 @@ from obliskiq.reporting.reporter import Reporter
 #: The skeleton's vehicles (config/defaults/core.yaml, config/universe.yaml).
 IWDA, EMIM, IBGM = 78999785, 153454120, 43614383
 #: The venues the service's calendars cover: the universe directory's and the jobs' anchors.
-SERVICE_VENUES = ("XAMS", "XETR", "XLON", "XNAS", "XNYS", "XTKS", "XTSE")
+SERVICE_VENUES = ("XAMS", "XETR", "XLON", "XMIL", "XNAS", "XNYS", "XPAR", "XSWX", "XTKS", "XTSE")
 
 
 class SimClock:

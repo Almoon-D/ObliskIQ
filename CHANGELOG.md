@@ -5,6 +5,46 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.14.0] - 2026-10-22
+
+Session 9, broker capabilities and the vehicle selector: what the Web API can do per asset class
+and venue, recorded as configuration and read by a gate; two to five confirmed UCITS candidates
+(ETCs for gold) for each of the core's nine roles; the selector that turns an exposure into ranked
+eligible vehicles with reasons; swap-partner groups. No IBKR call from the session: the readings
+are the owner's paper run and lite's, and the probe is a command for the deployment machine.
+
+### Added
+
+- `config/defaults/capabilities.yaml` and `decision/capabilities.py` (DECISIONS D119): search,
+  quote, order (whatif), order types and algos per asset class and venue, each verified only on
+  the Client Portal route; the selector refuses a vehicle whose search, quote or order is not
+  verified; trading permissions held where a preview was accepted.
+- `execution/capability_probe.py` and `obliskiq universe capabilities [--probe]`: the readings,
+  and on the deployment machine a whatif-only probe of every check that prints what to record.
+- `core.roles` (D121): the nine roles of Session 4c's variants with the research series each is
+  measured on; 30 more universe instruments, among them the EUR-hedged classes IWLE, IBC5 and
+  IBB1 as distinct vehicles, confirmed on the issuers' pages and justETF, conids pinned by ISIN;
+  Xetra's ETF segment `IBIS2`.
+- `decision/vehicle_selector.py` (D120): gates (tradable, mandate, eligibility, qualification
+  rules for further types, hedged classes, capability) and a ranking on all-in cost, tracking,
+  liquidity, tax, currency, trading window and market data, weighted by `vehicles.ranking`.
+- `decision/swap_partners.py` (D122): partners from another issuer, on another index unless the
+  owner enables `vehicles.swap_partners.same_index`, above `min_correlation`.
+- `quant/tracking.py` and `research/tracking.py`: monthly return correlations in the base currency,
+  point in time, over `vehicles.correlation`.
+- `obliskiq universe vehicles <exposure> [--primary SYMBOL]`.
+- `es.yaml: retained_income` (LIRPF art. 94): an accumulating class defers the tax on what it
+  retains; the tax policy describes it.
+- `docs/knowledge/ibkr-capabilities.md` and `docs/knowledge/universe-sources.md`.
+
+### Changed
+
+- `es.yaml: swap_partner.differ_in_index` is false: the law requires another issuer (RIRPF art.
+  8); a different index is the owner's default in `vehicles.swap_partners.same_index` (D122).
+- The skeleton's role `euro_govt_bonds` is `euro_govt_intermediate`; IBGM fills it.
+- An ETC is taxed as a debt security (`SecurityKind.BOND`).
+- Italy's transaction-tax note cites Legge 199/2025's official text; the rate stays unentered.
+
 ## [0.13.0] - 2026-10-22
 
 Session 8, the universe and the market-data collectors: a global universe in which any instrument

@@ -1,0 +1,346 @@
+# What the broker can do through the Web API (MASTER_PLAN §5.3, §5.12), per asset class and venue:
+# whether a contract is found by IBKR's contract search (search), quoted by a snapshot (quote) and an
+# order on it accepted by a preview (order: whatif, nothing placed), and what its contract rules
+# list (order types, algos). An accepted preview also shows the account holds the venue's trading
+# permission (venues.yaml: trading_permission). docs/knowledge/ibkr-capabilities.md keeps every
+# reading with its date.
+#
+# A check is `verified` (or `refused`) only as read on the Client Portal route (CP), with the date;
+# a reading through IBKR's connector (MCP) is evidence and leaves it `unverified`. An asset class
+# and venue without a check here is unverified. The vehicle selector never proposes a vehicle
+# whose search, quote and order are not all verified (decision/vehicle_selector.py).
+# `obliskiq universe capabilities --probe` reads them on the paper account (whatif only; run on
+# the deployment machine, SESSION_PROMPTS §A.5); its report says what to record here.
+broker_capabilities:
+  checks:
+    # ── shares ──
+    - asset_class: stock
+      venue: XNYS
+      probe: FCX
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's paper order test: FCX resolved to conid 7089 on the NYSE (also 2026-10-20)"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's paper order test: a bid was read (limit 65.14 set below it); availability unreported"
+      order:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's paper order test: a limit buy previewed, commission 1.00 USD, no warning"
+      order_types:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "the contract rules were read but the order types not recorded; LMT was previewed"
+      algos:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "the algos were read but not recorded by name"
+    - asset_class: stock
+      venue: XASX
+      probe: null
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's dry run from a config copy: BHP resolved to conid 4036812 on ASX in AUD"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1: BHP quote delayed (flag ZB frozen at 22:40 UTC, delayed inside the window)"
+      order:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1: a limit buy of BHP previewed, commission 6 AUD, with IBKR's warning 4 (text not recorded)"
+      order_types:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "BHP's contract rules listed 9 order types (2026-10-21); their names were not recorded"
+      algos:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "BHP's algos were reported as SPY's; not recorded by name"
+    - asset_class: stock
+      venue: XAMS
+      probe: ASML
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite (live account, OAuth): ASML 117589399 on AEB, its option sections EUREX and FTA"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite: ASML's snapshot read with availability DPB"
+      order:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no order or preview on Euronext Amsterdam yet"
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: stock
+      venue: XMAD
+      probe: SAN
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite (live account, OAuth): SAN 30314144 on BM, its option sections EUREX and MEFFRV"
+      quote:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no snapshot of SAN itself is recorded"
+      order:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no order or preview on the Bolsa de Madrid yet"
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: stock
+      venue: XPAR
+      probe: TTE
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite (live account, OAuth): TTE 29612193 on SBF, its option sections EUREX and MONEP"
+      quote:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no snapshot of TTE itself is recorded"
+      order:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no order or preview on Euronext Paris yet"
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+
+    # ── ETFs (UCITS) ──
+    - asset_class: etf
+      venue: XETR
+      probe: XDWD
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's paper order test: EXV1 resolved to conid 89005163 on IBIS (also 2026-10-20); IBIS2, Xetra's ETF segment, not yet read on CP"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1: EXV1 quote frozen (after Xetra's close), limit 36.960 set below the bid"
+      order:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1: a limit buy of EXV1 previewed, commission 3 EUR, no warning"
+      order_types:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "EXV1's contract rules were read but not recorded; LMT was previewed"
+      algos:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "EXV1's algos were read but not recorded by name"
+    - asset_class: etf
+      venue: XNYS
+      probe: SPY
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's read-only preflight: SPY on ARCA, conid 756733"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-10-21
+        evidence: "T1's read-only preflight: SPY delayed, flag DP, 1200 s"
+      order:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "SPY was not previewed (a US-domiciled ETF is not eligible under es: data and an option underlying)"
+      order_types:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "SPY's contract rules listed 12 order types (2026-10-21); their names were not recorded"
+      algos:
+        status: unverified
+        route: null
+        observed_on: null
+        values: []
+        evidence: "SPY's contract offered 10 algos (2026-10-21); their names were not recorded"
+    - asset_class: etf
+      venue: XLON
+      probe: IWDA
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists IWDA 78999785 on LSEETF; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: etf
+      venue: XAMS
+      probe: EMIM
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists EMIM 153454120 on AEB; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: etf
+      venue: XMIL
+      probe: VHVE
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists VHVE 399364016 on BVME.ETF; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: etf
+      venue: XSWX
+      probe: CSBGE7
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists CSBGE7 79000241 on EBS; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: etf
+      venue: XPAR
+      probe: MTB
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists MTB 297475417 on SBF; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+
+    # ── ETCs ──
+    - asset_class: etc
+      venue: XLON
+      probe: IGLN
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists IGLN 86656182 on LSEETF; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: etc
+      venue: XMIL
+      probe: SGLD
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists SGLD 175394979 on BVME.ETF; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: etc
+      venue: XETR
+      probe: 4GLD
+      search:
+        status: unverified
+        route: MCP
+        observed_on: 2026-10-22
+        evidence: "IBKR's connector lists 4GLD 50784405 on IBIS; not read on CP"
+      quote: {status: unverified, route: null, observed_on: null, evidence: "not read on CP"}
+      order: {status: unverified, route: null, observed_on: null, evidence: "not previewed"}
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+
+    # ── options (long only) ──
+    - asset_class: option
+      venue: XNYS
+      probe: SPY
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite (live account, OAuth): SPY's search as a JSON body answered 3 matches and 6 sections, the option months and venues among them"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite: US option quotes read through the day and after the close (87 % priced at 21:08 UTC, flag ZBd)"
+      order:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no option order or preview yet"
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+    - asset_class: option
+      venue: XEUR
+      probe: SAN
+      search:
+        status: verified
+        route: CP
+        observed_on: 2026-09-10
+        evidence: "lite (live account, OAuth): the European shares' option sections on EUREX, FTA, MEFFRV and MONEP; strikes served on EUREX"
+      quote:
+        status: verified
+        route: CP
+        observed_on: 2026-09-14
+        evidence: "lite: European option chains priced while their venue was open and stepping down at its close (SAN 8 of 8)"
+      order:
+        status: unverified
+        route: null
+        observed_on: null
+        evidence: "no option order or preview yet"
+      order_types: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+      algos: {status: unverified, route: null, observed_on: null, values: [], evidence: "not read"}
+
+  probe:
+    # The previewed buy's limit sits this far below the bid, rounded down to the contract's tick,
+    # as the paper order test's does; a preview never reaches the market. QUOTED.
+    limit_offset_fraction: "0.05"
+    # IBKR's snapshot field for whether the account may trade the contract (IBKR's field table,
+    # docs/knowledge/ibkr.md). VERIFY-LIVE(the permission field's values).
+    permission_field_id: "7768"

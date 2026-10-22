@@ -2700,3 +2700,100 @@ the IBKR symbol in Yahoo's form (the suffix by IBKR exchange, from legacy global
 `EXCHANGE_SUFFIX_MAP`; a share class's dot as a dash; Hong Kong padded to four digits); a fund's
 ongoing charge is in its bias notes, since its closes are net of it. Loaded 2026-10-22: 23 of 23
 tradable candidates and 181 of 181 top candidates (ROADMAP, Session 8's log).
+
+## Session 9 — Broker capabilities and vehicle selector (2026-10-22)
+
+### D119 · Broker capabilities are configuration, verified only through the Web API (§5.3, §5.12)
+
+- **Where they live.** `config/defaults/capabilities.yaml` (`broker_capabilities`) holds one check
+  per asset class and venue, with a probe instrument from the universe and five readings: search,
+  quote, order (a whatif preview), order types and algos. Each reading has a status (verified,
+  refused, unverified), the route and date it was read on and its evidence. Only a CP reading
+  verifies: what IBKR's MCP connector returns is evidence, kept unverified, because the connector
+  is another API with its own pacing and answers. Validation refuses a venue that is not declared
+  and a probe that is not a universe instrument of the check's class on that venue.
+- **The gate.** The selector proposes a vehicle only when search, quote and order are verified
+  for its class on its venue (`decision/capabilities.py: REQUIRED_CHECKS`). Order types and algos
+  are recorded but do not gate: every order is a limit, and a preview of one is the order
+  reading. A venue's trading permission is held where an order there has been previewed and
+  accepted; no other reading of the account's permissions is trusted yet.
+- **The probe.** `obliskiq universe capabilities --probe` runs on the deployment machine in paper.
+  Per check it searches the probe, resolves an option for an option check, reads a snapshot with
+  the availability (6509) and permission (7768) fields, the contract rules and the algos, and
+  previews a limit buy of one size increment, `probe.limit_offset_fraction` below the bid. Nothing is
+  placed (the preview endpoint, under the paper guard). It prints the readings to record and
+  writes nothing: a capability widens what the bot may buy, so it enters the configuration by a
+  reviewed change. The readings shipped are the owner's paper run of 2026-10-21 (T1) and lite's
+  of 2026-09-10; the cloud container cannot log in to the Gateway (`docs/knowledge/ibkr.md`).
+
+Rejected: the probe writing its readings into the store or the configuration (an unreviewed
+reading would widen the mandate's reach); MCP readings counting as verified; inferring an ETF's
+capability on a venue from a share's.
+
+### D120 · The vehicle selector: gates, then a weighted ranking with reasons (§5.8)
+
+- **Candidates and gates.** An exposure is a core role (`core.roles`) or a grid cell; its
+  candidates are the universe's instruments whose exposures name it. Each passes, in order: a
+  tradable candidate, pinned and described, not prohibited by the mandate, eligible under the
+  jurisdiction's policy, a qualification rule for its type (shares, ETFs and ETCs qualify through their quote
+  policy; bonds, funds and baskets join through rules Session 19a adds), a hedged class only
+  where `vehicles.hedged_share_classes` allows it, and a verified capability (D119). A rejection
+  names its gate and the reason in the policy's own words.
+- **Ranking.** Seven criteria, each scored 0 to 1, weighted by `vehicles.ranking.weights` (they
+  sum to 1): the all-in yearly cost at the reference amount (the fee, plus a round trip through
+  the cost book — commission, spread, slippage, transaction tax — and its two conversions spread
+  over `holding_years`, plus market data where the quote policy needs real time the plan lacks),
+  against `cost_ceiling`; tracking, `(ρ − floor) / (1 − floor)`; liquidity, decades of average
+  daily traded value over the reference amount; tax, whether the policy defers the income an
+  accumulating class retains; currency; the share of the day's cycles inside the venue's order
+  window; real-time data on the plan. An input that is missing scores 0 and says why; every
+  ranked vehicle lists every criterion with its score, weight and reason.
+- **Research is passed in.** Correlations are computed in research (`research/tracking.py`) and
+  handed to the selector by its caller: the CLI now, the rebalancer later. The decision path
+  never reads research (D64's import contract).
+- **Known limits.** The cost book prices an ETF of unknown market capitalisation at its illiquid
+  friction tier (2.12 % a round trip, an assumption), so today the cost criterion separates
+  European ETFs mostly by fee; a friction tier for ETFs by traded value is a follow-up. The
+  withholding a fund suffers by its domicile is not scored: every equity candidate is Irish, and
+  a fund's closes are net of it, so tracking already measures it.
+
+Rejected: ranking by fee alone (it ignores tracking and liquidity); weights in code; the selector
+reading the research store.
+
+### D121 · Core roles and their candidates (§5.3, §5.4)
+
+- **Roles.** `core.roles` declares the nine roles of Session 4c's variants with the research
+  series each is measured on (4c's pre-registration's series); the skeleton's `euro_govt_bonds` is
+  renamed `euro_govt_intermediate` (4c's EGB_INT). The universe may name only declared roles.
+- **Candidates.** 33 vehicles, two to five per role (`docs/knowledge/universe-sources.md`): other
+  issuers and indexes where they exist, accumulating classes first, the Xetra line in EUR where
+  IBKR's search returns one. Identifiers were confirmed on the issuer's page and justETF, conids
+  read by ISIN through IBKR's connector [MCP ✓ 2026-10-22], VERIFY-LIVE on CP. Xetra's ETF segment
+  is `IBIS2` at IBKR, added to `ibkr_exchanges` as XETR.
+- **Gold is held through ETCs.** The prompt asks for UCITS vehicles, but a UCITS fund must
+  diversify and cannot hold one metal; Session 4c registered GOLD as an ETC, and the candidates
+  follow it (eligible under `es` with a KID).
+- **Tracking is measured monthly.** Log returns of each calendar month in the base currency at
+  the ECB's rates, over five years, at least 36 of them (`vehicles.correlation`). Weekly returns
+  understate tracking where closes are hours apart (XMME against MSCI EM: 0.70 weekly over three
+  years, 0.98 monthly over five) and amplify an isolated bad tick.
+- **Not ported:** lite's ADR map (`global_vehicles.ADR_MAP`). It chooses a company's US
+  depositary line, a stock-candidate concern; it moves to the satellite's first stock order
+  (Session 15).
+
+### D122 · Swap partners, hedged classes and ETCs under `es` (§4, §5.8, §5.16, D7, D69)
+
+- **What the law requires and what the owner chooses are separate.** `es.yaml: swap_partner`
+  states the law: a partner differs in issuer (RIRPF art. 8 makes securities homogeneous by
+  issuer), not necessarily in index. `vehicles.swap_partners.same_index: false` keeps D7's
+  default, a different index too; turning it on admits a same-index partner from another issuer.
+  A partner is a ranked vehicle of the same exposure whose monthly returns correlate with the
+  primary's at least `min_correlation`; each refusal says which rule refused it.
+- **Hedged classes** are ranked as their own vehicles and refused while
+  `vehicles.hedged_share_classes` is `undecided`, the owner's open question (MASTER_PLAN §11).
+- **An ETC is a debt security for tax** (`SecurityKind.BOND`, as 4c's pre-registration taxed
+  GOLD): homogeneous only with its own ISIN or its issuer's same index, never with a fund. Whether
+  Spain reads its result as a gain or as capital income (LIRPF art. 25.2) is queued for an official
+  source (`docs/knowledge/tax-es.md`).
+- **Retained income.** `es.yaml: retained_income.deferred: true` (LIRPF art. 94): an accumulating
+  class defers the tax on what it retains, the selector's tax criterion.

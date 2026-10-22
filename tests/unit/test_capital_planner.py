@@ -529,11 +529,11 @@ async def test_the_rebalancer_does_not_sell_while_a_reservation_is_uncovered(rig
     await bought(rig, IBGM, "5", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
     rebalancer = make_rebalancer(rig)
     before = {d.role: d for d in (await rebalancer.survey(PAPER)).decisions}
-    assert before["euro_govt_bonds"].action == "sell"  # 887.50 against a target of 646
+    assert before["euro_govt_intermediate"].action == "sell"  # 887.50 against a target of 646
     await reserve(rig, "400", NOW.date() + timedelta(days=14))
     after = {d.role: d for d in (await rebalancer.survey(PAPER)).decisions}
-    assert after["euro_govt_bonds"].action == "skip"
-    assert "reservation planner" in after["euro_govt_bonds"].reason
+    assert after["euro_govt_intermediate"].action == "skip"
+    assert "reservation planner" in after["euro_govt_intermediate"].reason
 
 
 async def test_the_rebalancer_never_buys_back_a_loss_inside_the_two_month_window(rig: Any) -> None:
@@ -564,8 +564,8 @@ async def test_the_rebalancer_never_buys_back_a_loss_inside_the_two_month_window
     parts = capital_parts(rig)
     await parts.tax.catch_up()
     roles = {d.role: d for d in (await make_rebalancer(rig).survey(PAPER)).decisions}
-    assert roles["euro_govt_bonds"].action == "skip"
-    assert "two-month rule" in roles["euro_govt_bonds"].reason
+    assert roles["euro_govt_intermediate"].action == "skip"
+    assert "two-month rule" in roles["euro_govt_intermediate"].reason
     assert roles["em_equity"].action == "buy"
 
 

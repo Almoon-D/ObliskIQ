@@ -1051,8 +1051,20 @@ def universe_listings(settings: ObliskConfig) -> tuple[Listing, ...]:
     return tuple(listings)
 
 
+#: Dataset ids of the universe's own listings and of stock candidates.
+UNIVERSE_PREFIX: Final = "universe"
+CANDIDATE_PREFIX: Final = "candidate"
+#: The field of a Yahoo dataset whose returns include distributions.
+ADJUSTED_CLOSE: Final = "adj_close"
+
+
 def _dataset_id(prefix: str, key: str) -> str:
     return f"{prefix}_{re.sub(r'[^a-z0-9]+', '_', key.lower()).strip('_')}"
+
+
+def universe_series_id(symbol: str, field: str = ADJUSTED_CLOSE) -> str:
+    """The research series of a universe listing's history (``load-universe``)."""
+    return f"{_dataset_id(UNIVERSE_PREFIX, symbol)}.{field}"
 
 
 def universe_datasets(

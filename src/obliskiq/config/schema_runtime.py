@@ -17,7 +17,8 @@ from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from ..domain.base import Conid, NonEmptyText
 from ..domain.calendar import Mic
-from .base import FrozenModel
+from .base import FrozenModel, Identifier
+from .schema_vehicles import CoreRoleConfig
 
 type Anchor = Literal["open", "close"]
 type QuotedFraction = Annotated[Decimal, Field(gt=0, le=1, allow_inf_nan=False)]
@@ -183,6 +184,9 @@ class SkeletonTarget(FrozenModel):
 
 
 class CoreConfig(FrozenModel):
+    #: The core's roles (MASTER_PLAN §5.4), by id: what ``exposures.core_roles`` and the skeleton
+    #: name.
+    roles: dict[Identifier, CoreRoleConfig] = Field(min_length=1)
     skeleton_targets: list[SkeletonTarget] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -191,6 +195,9 @@ class CoreConfig(FrozenModel):
         conids = [target.conid for target in self.skeleton_targets]
         if len(set(roles)) != len(roles) or len(set(conids)) != len(conids):
             raise ValueError("each role and each conid is listed once")
+        unknown = sorted(set(roles) - set(self.roles))
+        if unknown:
+            raise ValueError(f"skeleton_targets name roles core.roles does not declare: {unknown}")
         if sum((target.weight for target in self.skeleton_targets), Decimal(0)) > 1:
             raise ValueError("the skeleton's weights add up to more than the whole book")
         return self

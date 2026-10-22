@@ -21,7 +21,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine | done (the live paper cycle a command list for the owner, docs/RUNBOOK.md) | v0.11.0 |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | done (IBKR's cash-activity shapes not observed: no paper login from the cloud) | v0.12.0 |
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | done (collectors built against fixtures: no IBKR call from the cloud; holdings and research history loaded live) | v0.13.0 |
-| 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | planned | |
+| 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | done (capabilities from the owner's paper run and lite; the probe on paper is a command for the owner) | v0.14.0 |
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
@@ -38,6 +38,60 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Session 9 — Broker capabilities and vehicle selector (2026-10-22, v0.14.0)
+
+**Landed.**
+- Broker capabilities (D119): `config/defaults/capabilities.yaml` holds 17 checks (shares on the
+  NYSE, ASX, Euronext Amsterdam and Paris and Madrid; UCITS ETFs on Xetra, the LSE, Amsterdam,
+  Milan, SIX and Paris, and US ETFs in New York; ETCs on the LSE, Milan and Xetra; US and Eurex
+  options), each reading verified only on the Client Portal route. `decision/capabilities.py`
+  gates the selector on search, quote and order and lists the permissions held.
+  `execution/capability_probe.py` and `obliskiq universe capabilities --probe` read them on the
+  paper account, whatif only (`docs/RUNBOOK.md`).
+- Core roles and candidates (D121): `core.roles` with the nine roles of 4c's variants and their
+  series; 30 more instruments (33 candidates, two to five per role, among them the hedged classes
+  IWLE, IBC5 and IBB1), each confirmed on its issuer's page and justETF, conids pinned by ISIN
+  through IBKR's connector; `IBIS2` (Xetra's ETF segment) in `ibkr_exchanges`
+  (`docs/knowledge/universe-sources.md`).
+- `decision/vehicle_selector.py` (D120): gates with reasons, then the seven weighted criteria;
+  `decision/swap_partners.py` (D122); `quant/tracking.py` and `research/tracking.py` (monthly
+  correlations in EUR, point in time); `obliskiq universe vehicles <exposure> [--primary]`.
+- `es.yaml`: `retained_income` (LIRPF art. 94) and the swap rule the law sets (another issuer);
+  an ETC is taxed as a debt security (D122).
+
+**Tests.** The named ones: a hedged and an unhedged class of one fund ranked as distinct vehicles;
+a same-index partner refused while the switch is off; no vehicle proposed whose capability is
+unverified (every role, every candidate); every ranked vehicle's seven criteria with a reason, and
+every rejection with its gate. Also: each gate's reason, qualification rules for further types,
+the all-in cost and each way it cannot be priced, real-time data costed, every criterion's score,
+the window on a holiday, the role and series validation, the capability schema and verdicts, the
+probe's every step on the order rig (options included), the correlation by hand, point in time and
+across ISO years, and the CLI's output and refusals. `make check` green: 4,192 tests, coverage
+99.65 %.
+
+**Acceptance.** Every core role has at least two candidates whose identifiers two sources
+confirmed. From fixtures (every candidate's venue verified) the selector returns an eligible
+vehicle for each of the nine roles and gives each rejection its gate and reason. With today's
+capabilities and the research history loaded (as of 2026-10-22), seven roles have a proposable
+vehicle on Xetra (world SPPW and XDWD; EM XMME and VFEA; euro government 3–7 years DBXQ and X57E;
+long DBXG and IBCL; inflation-linked TIUP; Treasuries XUTD; cash XEON); gold and broad commodities
+have none until the probe verifies the LSE and Milan, and their Xetra lines (4GLD, UIQK) wait on
+a KID. Capabilities are recorded from the owner's paper run (T1, 2026-10-21) and lite (2026-09-10),
+the rest queued.
+
+**Deferred.** No IBKR call from this session (AGENTS.md: the paper login does not complete from a
+cloud container, and the deployed bot holds the brokerage session): the probe, IBIS2 and the conids
+on CP are in the queue below. Lite's ADR map moves to Session 15 and positions outside the
+universe to Session 11 (Follow-ups).
+
+**Live findings.** IBKR's contract search through the connector [MCP ✓ 2026-10-22]: Xetra's ETF
+segment is `IBIS2`; the search returns no Xetra line of EUNL, IS3N, SXRP, IUST, SXRM, PPFB or VGVF;
+Euronext's `CSH` is IBKR's `CSH1`; UBS's USD class of the CMCI fund is described "H. CHF". Tracking
+read monthly over five years: 0.92 to 0.99 for unhedged classes; hedged classes 0.39 to 0.91 against
+an unhedged series in EUR; weekly returns understate tracking (XMME 0.70 weekly, 0.98 monthly).
+Legge 199/2025 raised Italy's standard transaction-tax rate to 0.4 % from 2026-01-01 [Normattiva
+✓ 2026-10-22]; Légifrance and ubs.com refuse the container.
+
 ### Session 8 — Universe and market-data collectors (2026-10-22, v0.13.0)
 
 **Landed.**
@@ -1377,7 +1431,7 @@ settles it.
 
 | Item | Added | Settled by |
 |---|---|---|
-| IBKR exchange codes → venues (37 codes in `ibkr_exchanges`; Session 8 pinned 27 universe conids with their listing exchanges through the owner's IBKR connector [MCP ✓ 2026-10-22]; the ten codes it added are unverified) | 2 | the collectors' live round |
+| IBKR exchange codes → venues (38 codes in `ibkr_exchanges`; Sessions 8 and 9 pinned 57 universe conids with their listing exchanges through the owner's IBKR connector [MCP ✓ 2026-10-22]; the ten codes Session 8 added and Session 9's `IBIS2` are unverified on CP) | 2 | the collectors' live round |
 | Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | T1 or the first command list after it |
 | SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | T1 or the first command list after it |
 | B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | T1 or the first command list after it |
@@ -1389,7 +1443,7 @@ settles it.
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | T1 or the first command list after it |
 | US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
-| Transaction taxes: FR, IT rates against official texts; GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21) | 2 | 9 (the vehicle selector costs them) |
+| Transaction taxes: FR's rate against CGI art. 235 ter ZD (Légifrance refused the container, 2026-10-22); IT's regulated-market rate and paying side in Legge 228/2012 art. 1 c. 491 and 494 (Legge 199/2025's 0.4 % standard rate read on Normattiva, 2026-10-22); GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21). The core's ETFs and ETCs pay none of them | 2 | 15 (the first French or Italian share a thesis orders) |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
 | Snapshot availability and delay: a US stock (Cboe One/IEX), a European UCITS ETF, a US option (OPRA), a Eurex option (Eurex Core), each with the owner logged in live elsewhere and not | 3 | T1 or the first command list after it |
 | One market-scanner run (`/iserver/scanner/params`, `/run`) | 3 | T1 or the first command list after it |
@@ -1442,8 +1496,15 @@ settles it.
 | The skeleton's tax facts (ISIN, issuer, tracked index) against `/iserver/contract/{conid}/info` | 7 | Session 6's live paper cycle |
 | The collectors' live round (`obliskiq collect daily`, read-only): the underlying snapshot field set on every venue and its availability against the plan (`market_data.feeds`, their prices and their sharing with the paper session); the daily bar's `t` stamp per venue (bars are dated in the venue's zone); the chain walk (`secdef/search` OPT months and venues against the pinned conid, `secdef/strikes`, `secdef/info` per strike with `maturityDate`, `multiplier`, `local_symbol`; the declared venues FTA, MEFFRV, MONEP, EUREX); `/trsrv/futures` for the 16 roots on their native exchanges; one scanner run (`STK.US.MAJOR`) | 8 | the first command list after T1's order test |
 | Pins for TOPIX, BARN, LISN and JDEP (`obliskiq universe pin`), and resolved descriptions for the 47 pinned instruments without one (an instrument without one is never ordered) | 8 | the collectors' live round |
-| Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`) | 8 | 9 (broker capabilities) |
+| Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`); Stocks: United States, Australia and Germany were held on the paper account by accepted previews [CP ✓ 2026-10-21] (`docs/knowledge/ibkr-capabilities.md`) | 8 | the capability probe (below), then each venue's first order |
 | A stock candidate's holdings ticker and exchange name to IBKR's symbol and code, per venue (`collectors.candidates.exchanges`; resolution on demand) | 8 | the first candidate a thesis pins |
+| The capability probe on the paper account (`obliskiq universe capabilities --probe`, whatif only): search, quote, contract rules, algos and a preview per check, on every venue `capabilities.yaml` lists, US and Eurex options included; then the readings recorded in `capabilities.yaml` and `docs/knowledge/ibkr-capabilities.md` by a reviewed change | 9 | the first command list after T1's order test |
+| Order types and algos per asset class, by name (T1 counted 12 types and 10 algos for SPY, 9 types for BHP, without names) | 9 | the capability probe |
+| The trading-permission field 7768's values on a snapshot (IBKR's field table) | 9 | the capability probe |
+| Xetra's `IBIS2` segment on CP, and the core candidates' conids, currencies and classes through `/iserver/contract/{conid}/info` (read through IBKR's connector) | 9 | the capability probe |
+| UIQK's currency and share class (IBKR describes conid 128562052 as "H. CHF"; its ISIN is the USD A-acc class) | 9 | the capability probe |
+| The PRIIPs KIDs of TIP1D, UIQK and Xetra-Gold, and Xetra-Gold's custody fee at IBKR (ubs.com refused the container; ineligible until read) | 9 | the next universe review |
+| The DGT's reading of a bullion-backed ETC's result (a gain, or capital income under LIRPF art. 25.2) in an official text | 9 | the monthly tax-source check (§5.16) |
 
 ## Follow-ups
 
@@ -1579,10 +1640,28 @@ settles it.
   `config/universe.yaml`, so the order path neither describes it nor judges it eligible (both
   refuse, fail closed); its attributes (a share, its venue's lot) join the directory and the
   policy when the satellite first orders one.
-- Session 9: positions held outside the universe (lite's portfolio union) are not collected; the
-  vehicle selector, or Session 11's views, decide whether a held instrument joins the universe.
-- Session 9: lite's ADR map (legacy/old global_vehicles.py `ADR_MAP`): a candidate's US
-  depositary line as another listing, where the vehicle selector prefers it.
+- Session 11: positions held outside the universe (lite's portfolio union) are not collected. The
+  vehicle selector ranks universe instruments only (D120), so a held instrument joins the universe
+  by a reviewed entry; Session 11's views decide which ones to propose.
+- Session 15: lite's ADR map (legacy/old global_vehicles.py `ADR_MAP`): a company's US depositary
+  line as another listing of a stock candidate, chosen when a thesis first orders it (D121).
+- Session 13: the rebalancer chooses each role's vehicle through the selector, passing it the
+  tracking correlations (`research/tracking.py`), the market inputs and the trading windows as
+  `obliskiq universe vehicles` does (`cli/vehicles.py`), and swaps through `SwapPartners`.
+- Session 18: the cost book prices an ETF of unknown market capitalisation at the illiquid friction
+  tier (2.12 % a round trip, an assumption), so the selector separates European ETFs mostly by fee;
+  a friction tier for ETFs by average daily traded value, from TCA (D120).
+- The selector does not score the withholding a fund suffers by its domicile (MASTER_PLAN §5.8):
+  every equity candidate is Irish and a fund's closes are net of it (D120). It joins when a
+  candidate of another domicile competes for an equity role.
+- Swap partners exist today for euro_govt_long only (DBXG ↔ IBCL, 0.996): the other roles' partners
+  list on venues whose capabilities are unverified (VHVE on XMIL, EMIM and TPSA on XAMS, MTB on
+  XPAR, VDTA on XMIL) and appear when the probe verifies them. MSCI EM and FTSE Emerging read
+  0.93 to 0.94, below `min_correlation`; EMIM (MSCI EM IMI) reads 0.993 against XMME.
+- The cash role's second and third candidates are unmeasured: Yahoo has no `CSH1.PA`, and CSH2's
+  history starts on 2025-03-17 (36 monthly returns from 2028-03).
+- **Owner:** rule on currency-hedged share classes (`vehicles.hedged_share_classes`, MASTER_PLAN
+  §11) and, if wanted, the same-index swap partner (`vehicles.swap_partners.same_index`, D122).
 - Session 11: add a column-targeted writer for the solved implied volatility (snapshot upserts
   replace the whole row); add a date-leading index on `bars` if a cross-sectional read needs it.
 - A migration is forward-only: a later session that changes a table adds `002_*.sql`; it never

@@ -46,6 +46,7 @@ RUNTIME_KEYED = {
     "collectors.candidates.exchanges": "an issuer's exchange name -> an IBKR code, by the line's",
     "research.data.yahoo.suffixes": "IBKR exchange -> Yahoo suffix, by the listing's exchange",
     "research.data.yahoo.digits": "IBKR exchange -> Yahoo's code width, by the listing's",
+    "core.roles": "role id -> its name and exposure series, by the exposure asked for",
 }
 
 #: Profile sections the code holds by their own name (a typed model passed to a policy), with

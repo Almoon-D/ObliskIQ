@@ -235,9 +235,9 @@ costs:
       needs_issuer_list: true
       provision: Legge 24 dicembre 2012, n. 228, article 1 commas 491-500 (financial transaction tax on shares of Italian issuers)
       confirmation: none
-      note: Sources disagree. 0.1 % on regulated markets and 0.2 % elsewhere was the rate until 2025; one secondary source reports 0.2 % and 0.4 % from 2026-01-01 under Legge 30 dicembre 2025, n. 199 comma 29. Not confirmed against the official text, so no rate is entered.
+      note: Legge 30 dicembre 2025, n. 199, art. 1 comma 29 replaces the rate of comma 491's first sentence, 0.2 %, with 0.4 % (and comma 495's 0.02 % with 0.04 %) for transfers from 2026-01-01 (comma 31). The rate on regulated markets and multilateral trading facilities and the side that owes the tax are set in Legge 228/2012's own text, which was not read, so no rate is entered.
       source:
-        origin: Il Sole 24 Ore summary of Legge 199/2025; no official text read, 2026-10-09
+        origin: Legge 199/2025 art. 1 commi 29 and 31, official text on Normattiva read 2026-10-22; Legge 228/2012 art. 1 commi 491 and 494 not served by Normattiva that day; Il Sole 24 Ore summary read 2026-10-09
         verify_live: true
 
   # The legacy friction tiers, kept as labelled ASSUMPTIONS: none is measured, and transaction-cost

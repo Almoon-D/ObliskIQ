@@ -542,3 +542,17 @@ async def test_a_profile_that_keeps_no_currency_lots_counts_no_currency_result(
     engine = await book.engine()
     assert [lot.security for lot in engine.lots()] == [str(IWDA)]
     assert engine.ledger.provisional(2026).gains == 0
+
+
+def test_an_etc_is_a_debt_security_for_tax(shipped_settings: ObliskConfig) -> None:
+    """An ETC is secured notes, not a share of a fund: the tax book reads it as a bond, as Session
+    4c's pre-registration taxed the gold ETC."""
+    directory = UniverseDirectory.from_settings(shipped_settings)
+    facts = universe_tax_facts(shipped_settings.universe)
+    igln = shipped_settings.universe.instrument("IGLN")
+    assert igln is not None
+    assert igln.conid is not None
+    identity = identity_of(igln.conid, directory, facts)
+    assert identity is not None
+    assert identity.kind is SecurityKind.BOND
+    assert identity.isin == "IE00B4ND3602"

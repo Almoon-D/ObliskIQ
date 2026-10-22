@@ -69,6 +69,9 @@ ZERO = Decimal(0)
 _KINDS = {
     AssetClass.STOCK: SecurityKind.SHARE,
     AssetClass.ETF: SecurityKind.ETF,
+    # An ETC is a debt security (secured notes), not a share of a fund: Session 4c's
+    # pre-registration taxed it as one (research/preregistrations/core-allocation.md, GOLD).
+    AssetClass.ETC: SecurityKind.BOND,
     AssetClass.FUND: SecurityKind.FUND,
     AssetClass.BOND: SecurityKind.BOND,
     AssetClass.OPTION: SecurityKind.OPTION,

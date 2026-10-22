@@ -105,6 +105,12 @@ class TaxPolicy(Protocol):
         """Whether selling ``sold`` to buy ``bought`` keeps the gain deferred."""
         ...
 
+    @property
+    def retained_income_deferred(self) -> bool:
+        """Whether a fund's retained income (an accumulating class) is taxed only on sale, while
+        a distribution is taxed when paid."""
+        ...
+
     def swap_partner_allowed(self, held: SecurityIdentity, candidate: SecurityIdentity) -> bool:
         """Whether ``candidate`` may replace ``held`` without its purchase deferring a loss."""
         ...
@@ -157,6 +163,10 @@ class ProfileTaxRules:
     @property
     def currency_lots(self) -> bool:
         return self._tax.currency_gains.kept_as_lots
+
+    @property
+    def retained_income_deferred(self) -> bool:
+        return self._tax.retained_income.deferred
 
     def _currency_window(self) -> WashSaleWindow | None:
         """The currency rule's window: a buy-back after a loss disposal only."""
@@ -222,6 +232,8 @@ class ProfileTaxRules:
             f"tax {self.payment_label()}",
             f"foreign-tax credit at the average effective rate ({tax.foreign_tax_credit.source})",
             self._currency_rule(),
+            f"a fund's retained income taxed only on sale: {tax.retained_income.deferred} "
+            f"({tax.retained_income.source})",
             *(
                 f"withholding at source {row.country} {row.rate} ({row.confirmation}: {row.source})"
                 for row in tax.withholding_at_source
