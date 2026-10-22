@@ -14,9 +14,12 @@ collectors:
 
   # When the service collects: one job per venue the universe collects on, after that venue's
   # regular close through the calendars (so daylight saving and half-days follow the venue). A
-  # venue the calendars do not cover that day collects in fallback_venue's job instead. Judgements:
-  # after the closing auction has printed, and New York as the last close of the day.
+  # venue the calendars do not cover that day, and any venue outside the universe a pinned stock
+  # candidate lists on, collects in fallback_venue's job instead. `enabled: false` stops the
+  # service's collection jobs; `obliskiq collect` still runs them by hand. Judgements: after the
+  # closing auction has printed, and New York as the last close of the day.
   schedule:
+    enabled: true
     after_close_minutes: 30
     fallback_venue: XNYS
 

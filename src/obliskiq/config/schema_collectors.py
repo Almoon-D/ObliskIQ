@@ -38,6 +38,7 @@ class RetryConfig(FrozenModel):
 
 
 class CollectScheduleConfig(FrozenModel):
+    enabled: bool
     after_close_minutes: NonNegativeInt
     fallback_venue: Mic
 

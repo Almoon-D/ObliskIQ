@@ -56,3 +56,23 @@ class MarketDataConfig(FrozenModel):
         if unknown:
             raise ValueError(f"market_data.plan names feeds that are not offered: {unknown}")
         return self
+
+    def planned(self) -> tuple[MarketDataFeed, ...]:
+        """The feeds of the plan, in the plan's order."""
+        by_id = {feed.id: feed for feed in self.feeds}
+        return tuple(by_id[feed_id] for feed_id in self.plan)
+
+    def planned_feed(self, venue: str, asset_class: AssetClass) -> MarketDataFeed | None:
+        """The plan's feed that streams ``asset_class`` on ``venue`` in real time, if any."""
+        return next(
+            (f for f in self.planned() if venue in f.venues and asset_class in f.asset_classes),
+            None,
+        )
+
+    def plan_cost(self) -> dict[str, Decimal]:
+        """What the plan costs a month before any waiver, by billing currency."""
+        cost: dict[str, Decimal] = {}
+        for feed in self.planned():
+            currency = feed.monthly_cost.currency
+            cost[currency] = cost.get(currency, Decimal(0)) + feed.monthly_cost.amount
+        return cost

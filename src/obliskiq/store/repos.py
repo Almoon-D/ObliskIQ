@@ -242,6 +242,15 @@ def latest_bar_date(store: Store, conid: int, *, as_of: date) -> date | None:
     return None if row[0] is None else read_date(row[0], "bars", "session_date")
 
 
+def earliest_bar_date(store: Store, conid: int, *, as_of: date) -> date | None:
+    """The oldest session with a bar on or before ``as_of``: where held history begins."""
+    row = store.execute(
+        "SELECT MIN(session_date) FROM bars WHERE conid = ? AND session_date <= ?",
+        (conid, date_text(as_of)),
+    ).fetchone()
+    return None if row[0] is None else read_date(row[0], "bars", "session_date")
+
+
 def bar_count(store: Store, conid: int, *, as_of: date) -> int:
     return _count(
         store,

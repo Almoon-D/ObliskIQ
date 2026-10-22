@@ -137,8 +137,14 @@ def build_service_rig(
     *,
     keep_session: bool = False,
     notifier: RecordingNotifier | None = None,
+    collect: bool = False,
 ) -> ServiceRig:
-    """The service over ``rig``'s client and store, with ``settings`` and ``calendars``."""
+    """The service over ``rig``'s client and store, with ``settings`` and ``calendars``. Its
+    collection jobs are off unless ``collect``: the fake broker serves no market history."""
+    if not collect:
+        schedule = settings.collectors.schedule.model_copy(update={"enabled": False})
+        collectors = settings.collectors.model_copy(update={"schedule": schedule})
+        settings = settings.model_copy(update={"collectors": collectors})
     clock = SimClock(rig.clock)
     notifier = notifier if notifier is not None else RecordingNotifier()
     reporter = Reporter(notifier, AlertBook(rig.data_dir / settings.paths.alert_state))
