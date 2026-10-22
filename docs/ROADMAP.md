@@ -1575,6 +1575,10 @@ settles it.
 - Session 12: the options the chain collector records join the order path's directory
   (`UniverseDirectory.from_settings(options=…)`, each with its multiplier) when the options sleeve
   orders one; Session 8 stores them.
+- Session 15: a pinned stock candidate is seeded and collected, but it is not in
+  `config/universe.yaml`, so the order path neither describes it nor judges it eligible (both
+  refuse, fail closed); its attributes (a share, its venue's lot) join the directory and the
+  policy when the satellite first orders one.
 - Session 9: positions held outside the universe (lite's portfolio union) are not collected; the
   vehicle selector, or Session 11's views, decide whether a held instrument joins the universe.
 - Session 9: lite's ADR map (legacy/old global_vehicles.py `ADR_MAP`): a candidate's US
