@@ -13,6 +13,9 @@
 #   unknown             no defensible date: the row is stored without one and never feeds a backtest
 # Observed behaviour of each source, with dates, is docs/knowledge/macro-sources.md.
 sources:
+  # Sent with every request to a source but SEC EDGAR (which takes SEC_USER_AGENT): the CFTC's
+  # archive refuses httpx's default agent with HTTP 403 (2026-10-23).
+  user_agent: "ObliskIQ (https://github.com/Almoon-D/ObliskIQ)"
   # What a source may name as its consumer: `hypothesis:<id>` (resolved against the research
   # registry by a test), `component:<name>`, `view:<name>` or `safety:<name>`.
   consumers:

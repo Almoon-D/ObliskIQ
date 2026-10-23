@@ -399,6 +399,7 @@ class CatalystsConfig(FrozenModel):
 class SourcesConfig(FrozenModel):
     """Every source besides IBKR, and what it serves."""
 
+    user_agent: NonEmptyText
     consumers: ConsumersConfig
     providers: dict[Identifier, ProviderConfig] = Field(min_length=1)
     macro: MacroConfig
