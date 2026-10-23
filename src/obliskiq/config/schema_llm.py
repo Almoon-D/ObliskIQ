@@ -9,7 +9,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from typing import Literal, Self
 
-from pydantic import Field, NonNegativeFloat, NonNegativeInt, PositiveInt, model_validator
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    model_validator,
+)
 
 from ..domain.base import NonEmptyText
 from .base import FrozenModel, Identifier
@@ -35,6 +42,7 @@ class LlmModelConfig(FrozenModel):
 
 class LlmBudgetConfig(FrozenModel):
     monthly_usd: NonNegativeFloat
+    chars_per_token_estimate: PositiveFloat
 
 
 class ExtractorConfig(FrozenModel):
@@ -46,6 +54,7 @@ class ExtractorConfig(FrozenModel):
     max_item_chars: PositiveInt
     request_timeout_seconds: PositiveInt
     retries_on_invalid: NonNegativeInt
+    max_call_failures: PositiveInt
 
 
 class LlmConfig(FrozenModel):
@@ -53,6 +62,12 @@ class LlmConfig(FrozenModel):
     models: dict[Identifier, LlmModelConfig] = Field(min_length=1)
     budget: LlmBudgetConfig
     extractor: ExtractorConfig
+
+    def extractor_model(self) -> LlmModelConfig:
+        return self.models[self.extractor.model]
+
+    def extractor_provider(self) -> LlmProviderConfig:
+        return self.providers[self.extractor_model().provider]
 
     @model_validator(mode="after")
     def _references_resolve(self) -> Self:

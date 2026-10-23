@@ -26,7 +26,7 @@ from ..config.schema import ObliskConfig
 from ..config.schema_research import Dataset
 from ..data.candidates import Candidate, Quoted, candidate_cells
 from ..domain.research import TrialStage
-from ..errors import DataSourceError, ObliskError
+from ..errors import DataSourceError, ObliskError, PreregistrationError
 from ..research import cross_section_report
 from ..research.cross_section import CrossSectionResult, CrossSectionRunner, sample_months
 from ..research.cross_section import declared_se as cross_section_se
@@ -46,7 +46,7 @@ from ..research.data import (
     universe_listings,
     yfinance_history,
 )
-from ..research.prereg import CrossSectionPrereg, Prereg, load_any
+from ..research.prereg import CrossSectionPrereg, ForwardTestPrereg, Prereg, load_any
 from ..research.registry import Git, TrialRegistry, verify_lock, write_lock
 from ..research.report import write_report
 from ..research.stats import detectable_effect, effective_n, power
@@ -62,6 +62,11 @@ if TYPE_CHECKING:
 EXIT_OK = 0
 EXIT_INVALID = 1
 ONE_DAY = timedelta(days=1)
+#: A forward test's outputs are produced live; these commands read research history.
+FORWARD_REFUSAL = (
+    "a forward test is scored on the outputs produced live, not on research history; this "
+    "command does not run it"
+)
 
 
 def _datasets(loaded: Loaded, out: TextIO) -> list[Dataset] | None:
@@ -216,6 +221,8 @@ def _universe(loaded: Loaded) -> tuple[list[str], date, date]:
     args = loaded.args
     if args.prereg is not None:
         prereg = load_any(args.prereg)
+        if isinstance(prereg, ForwardTestPrereg):
+            raise PreregistrationError(FORWARD_REFUSAL)
         if isinstance(prereg, CrossSectionPrereg):
             members = prereg.spec.study
             ids = [m.price_series for m in members.served() if m.price_series is not None]
@@ -260,10 +267,14 @@ def _data_coverage(loaded: Loaded, out: TextIO) -> int:
 
 def _prereg(loaded: Loaded, out: TextIO) -> Prereg | CrossSectionPrereg | None:
     try:
-        return load_any(loaded.args.prereg)
+        prereg = load_any(loaded.args.prereg)
     except ObliskError as exc:
         print(f"refused: {exc}", file=out)
         return None
+    if isinstance(prereg, ForwardTestPrereg):
+        print(f"refused: {FORWARD_REFUSAL}", file=out)
+        return None
+    return prereg
 
 
 def _power(loaded: Loaded, out: TextIO) -> int:

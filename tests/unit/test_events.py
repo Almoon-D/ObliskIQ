@@ -33,7 +33,14 @@ from obliskiq.data.events.markets import (
     yes_probability,
 )
 from obliskiq.data.events.readings import Welford, event_reading, pulse_reading
-from obliskiq.data.events.rss import NewsCollector, item_id, parse_feed, plain
+from obliskiq.data.events.rss import (
+    NewsCollector,
+    filing_text,
+    item_id,
+    parse_feed,
+    plain,
+    submission_url,
+)
 from obliskiq.data.events.tone import FallbackTone
 from obliskiq.data.market.plumbing import Pacer
 from obliskiq.domain.sources import EventSnapshot, GdeltDay
@@ -275,7 +282,7 @@ async def test_kalshi_pages_each_series_up_to_its_cap_and_a_dry_run_writes_nothi
         seen.append(params)
         if params["series_ticker"] == "KXFED":
             return httpx.Response(503, text="busy")
-        if params["series_ticker"] == "RECSSNBER":
+        if params["series_ticker"] == "KXRECSSNBER":
             return httpx.Response(200, json={"markets": [], "cursor": ""})
         return httpx.Response(200, json=second if params.get("cursor") == "next" else first)
 
@@ -300,7 +307,7 @@ async def test_kalshi_pages_each_series_up_to_its_cap_and_a_dry_run_writes_nothi
     assert outcomes["series:KXFEDDECISION"].rows == 3
     assert [p.get("limit") for p in seen[:2]] == ["60", "58"]
     assert not outcomes["series:KXFED"].ok
-    assert outcomes["series:RECSSNBER"].degraded
+    assert outcomes["series:KXRECSSNBER"].degraded
     assert {o.target: o.rows for o in short.outcomes}["series:KXFEDDECISION"] == 2
     held = source_repo.event_markets(store, as_of=NOW.date())
     assert [m.market_id for m in held] == ["KXFEDDECISION-28JAN-H25", "KXFEDDECISION-28JAN-H26"]
@@ -691,9 +698,19 @@ def test_the_fallback_tone_reads_the_financial_terms(shipped_settings: ObliskCon
     assert scorer.score("   ") is None
 
 
-def news_settings(settings: ObliskConfig, feeds: dict[str, FeedConfig]) -> ObliskConfig:
-    news = settings.sources.news.model_copy(update={"feeds": feeds})
+def news_settings(
+    settings: ObliskConfig, feeds: dict[str, FeedConfig], *, max_age: int = 60
+) -> ObliskConfig:
+    """The news section with ``feeds``, reading items up to ``max_age`` days old (the
+    fixtures were published days before ``NOW``)."""
+    news = settings.sources.news.model_copy(update={"feeds": feeds, "max_item_age_days": max_age})
     return with_sources(settings, news=news)
+
+
+FCX_FILING = (
+    "https://www.sec.gov/Archives/edgar/data/831259/000083125926000043/0000831259-26-000043"
+)
+FCX_OLDER = "https://www.sec.gov/Archives/edgar/data/831259/000083125926000038/0000831259-26-000038"
 
 
 def news_collector(
@@ -728,6 +745,12 @@ async def test_feeds_are_collected_deduplicated_and_sec_s_carry_its_agent(
 
     def sec(request: httpx.Request) -> httpx.Response:
         agents.append(request.headers["user-agent"])
+        if str(request.url) == f"{FCX_FILING}.txt":
+            return httpx.Response(
+                200, content=(FIXTURES / "edgar_fcx_8k_submission.txt").read_bytes()
+            )
+        if str(request.url) == f"{FCX_OLDER}.txt":
+            return httpx.Response(503, text="busy")
         return httpx.Response(200, content=(FIXTURES / "atom_fcx_filings.xml").read_bytes())
 
     fed_body = (FIXTURES / "rss_fed_press.xml").read_bytes()
@@ -737,6 +760,7 @@ async def test_feeds_are_collected_deduplicated_and_sec_s_carry_its_agent(
             router.get(fed_feed.url).mock(return_value=httpx.Response(200, content=fed_body))
             router.get(mirror.url).mock(return_value=httpx.Response(200, content=fed_body))
             router.get(feeds["fcx_filings"].url).mock(side_effect=sec)
+            router.get(url__startswith="https://www.sec.gov/Archives/").mock(side_effect=sec)
             router.get("https://empty.example/rss").mock(
                 return_value=httpx.Response(200, content=b"<rss><channel/></rss>")
             )
@@ -750,16 +774,84 @@ async def test_feeds_are_collected_deduplicated_and_sec_s_carry_its_agent(
     assert rows == {
         "fed_press": (3, 3),
         "fed_mirror": (0, 3),
-        "fcx_filings": (2, 2),
+        "fcx_filings": (1, 2),  # the older filing did not answer: asked again next run
         "empty": (0, 0),
     }
-    assert agents == ["Owner owner@example.com"] * 2
+    outcomes = {o.target: o for o in first.outcomes}
+    assert outcomes["fcx_filings"].degraded
+    assert "HTTP 503" in outcomes["fcx_filings"].reason
+    assert set(agents) == {"Owner owner@example.com"}  # feeds and filings alike
     assert first.status == "degraded"
     assert again.rows == 0
+    # Feed, both filings; then feed and the unanswered filing again (the held one is not read).
+    assert len(agents) == 5
     held = source_repo.news_items(store, as_of=NOW.date())
-    assert len(held) == 5
+    assert len(held) == 4
     assert {i.feed for i in held} == {"fed_press", "fcx_filings"}
+    (filing,) = [i for i in held if i.feed == "fcx_filings"]
+    assert filing.summary is not None
+    assert "Freeport Provides Third-Quarter 2026 Operational Update" in filing.summary
+    assert "<" not in filing.summary
+    assert filing.fallback_tone is not None
     assert source_repo.news_items(store, as_of=NOW.date() - timedelta(days=1)) == ()
+
+
+def test_a_filing_s_press_release_is_its_first_ex_99_else_its_first_document() -> None:
+    submission = (FIXTURES / "edgar_fcx_8k_submission.txt").read_text(encoding="latin-1")
+    text = filing_text(submission, 200)
+    assert text is not None
+    assert "Third-Quarter 2026 Operational Update" in text
+    assert len(text) == 200
+    main_only = (
+        "<DOCUMENT>\n<TYPE>6-K\n<TEXT><p>Main <b>body</b></p><script>x()</script></TEXT>"
+        "\n</DOCUMENT>"
+    )
+    assert filing_text(main_only, 100) == "Main body"
+    assert filing_text("no documents", 100) is None
+    assert submission_url(f"{FCX_FILING}-index.htm") == f"{FCX_FILING}.txt"
+    assert submission_url("https://example.com/item") is None
+    assert submission_url(None) is None
+
+
+async def test_an_old_item_is_left_out_and_an_unreadable_filing_entry_waits(
+    shipped_settings: ObliskConfig, store_worker: StoreWorker, store: Store
+) -> None:
+    fed_feed = feed(shipped_settings, "fed_press")
+    issuer = feed(shipped_settings, "fcx_filings")
+    linkless = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>8-K</title>
+      <id>urn:x</id><updated>2026-10-23T12:00:00-04:00</updated></entry>
+      <entry><title>8-K too</title><link href="https://www.sec.gov/x-index.htm"/>
+      <id>urn:y</id><updated>2026-10-23T12:00:00-04:00</updated></entry>
+      <entry><title>8-K, large</title><link href="https://www.sec.gov/big-index.htm"/>
+      <id>urn:z</id><updated>2026-10-23T12:00:00-04:00</updated></entry></feed>"""
+    shipped = news_settings(shipped_settings, {"fed_press": fed_feed, "fcx": issuer}, max_age=3)
+    news = shipped.sources.news.model_copy(update={"max_body_bytes": 3000})
+    settings = with_sources(shipped, news=news)
+    async with httpx.AsyncClient() as client:
+        with respx.mock as router:
+            router.get(fed_feed.url).mock(
+                return_value=httpx.Response(
+                    200, content=(FIXTURES / "rss_fed_press.xml").read_bytes()
+                )
+            )
+            router.get(issuer.url).mock(return_value=httpx.Response(200, content=linkless))
+            router.get("https://www.sec.gov/x.txt").mock(
+                return_value=httpx.Response(200, text="no documents here")
+            )
+            router.get("https://www.sec.gov/big.txt").mock(
+                return_value=httpx.Response(200, text="<DOCUMENT>" + " " * 3500)
+            )
+            result = await news_collector(
+                settings, store_worker, client, {"SEC_USER_AGENT": "Owner owner@example.com"}
+            ).run()
+    outcomes = {o.target: o for o in result.outcomes}
+    assert outcomes["fed_press"].rows == 0  # published a week before: left out
+    assert outcomes["fed_press"].detail["old"] == 3
+    assert not outcomes["fed_press"].degraded
+    assert outcomes["fcx"].rows == 0
+    assert "links to no filing index" in outcomes["fcx"].reason
+    assert "holds no document" in outcomes["fcx"].reason
+    assert "over the 3000 bytes" in outcomes["fcx"].reason
 
 
 async def test_a_feed_without_its_agent_too_large_or_failing_fails_alone(

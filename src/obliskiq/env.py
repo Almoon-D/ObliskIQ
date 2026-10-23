@@ -17,11 +17,14 @@ declares. The OAuth realm and the Gateway's local address are configuration.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from dotenv import dotenv_values
+from pydantic import Field, PrivateAttr, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .errors import EnvVarError
@@ -125,6 +128,9 @@ class Environment(BaseSettings):
     log_level: LogLevelName | None = Field(default=None, validation_alias="OBLISK_LOG_LEVEL")
     log_format: LogFormatName | None = Field(default=None, validation_alias="OBLISK_LOG_FORMAT")
 
+    #: The env file this environment was loaded with, for :meth:`named_secret`.
+    _env_file: Path | None = PrivateAttr(default=None)
+
     @field_validator("*", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: Any) -> Any:
@@ -188,6 +194,17 @@ class Environment(BaseSettings):
             raise ValueError("must be a bare origin without a path, such as https://api.ibkr.com")
         return f"{parts.scheme}://{parts.netloc}"
 
+    def named_secret(self, name: str) -> SecretStr | None:
+        """A variable a configuration file names rather than this class (an LLM provider's
+        ``key_env``, MASTER_PLAN §5.10: adding a provider is a YAML entry), read as this class
+        reads its own: the process environment, then the env file it was loaded with. Blank is
+        unset."""
+        value = os.environ.get(name)
+        if (value is None or not value.strip()) and self._env_file is not None:
+            value = dotenv_values(self._env_file).get(name)
+        text = (value or "").strip()
+        return SecretStr(text) if text else None
+
     def resolved_config_dir(self) -> Path:
         """``OBLISK_CONFIG_DIR``, else ``config/`` of the source checkout."""
         if self.config_dir is not None:
@@ -219,6 +236,16 @@ class Environment(BaseSettings):
         return overrides
 
 
+def secret_reader(env: Environment) -> Callable[[str], str | None]:
+    """:meth:`Environment.named_secret` as the plain value a collector sends with a request."""
+
+    def read(name: str) -> str | None:
+        value = env.named_secret(name)
+        return None if value is None else value.get_secret_value()
+
+    return read
+
+
 def variable_names() -> frozenset[str]:
     """Every environment variable :class:`Environment` reads."""
     names: set[str] = set()
@@ -239,13 +266,15 @@ def load_environment(*, env_file: Path | None) -> Environment:
     if env_file is not None and (not env_file.exists() or env_file.is_dir()):
         raise EnvVarError(f"env file not found: {env_file}")
     try:
-        return Environment(_env_file=env_file)
+        env = Environment(_env_file=env_file)
     except ValidationError as exc:
         problems = [
             f"{'.'.join(str(part) for part in error['loc'])}: {_plain(error['msg'])}"
             for error in exc.errors(include_input=False, include_url=False)
         ]
         raise EnvVarError("invalid environment: " + "; ".join(problems)) from None
+    env._env_file = env_file
+    return env
 
 
 def _plain(message: str) -> str:

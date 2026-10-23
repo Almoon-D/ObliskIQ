@@ -23,6 +23,10 @@ llm:
     # Spend per calendar month (UTC), in the providers' price currency. A call whose worst-case
     # cost would pass it is not made.
     monthly_usd: 5.00
+    # A call's input tokens are estimated before it is made from its characters at this rate,
+    # low on purpose (fewer characters a token is more tokens): the check errs on the cautious
+    # side, and the cost recorded is the provider's own count.
+    chars_per_token_estimate: 3
   extractor:
     model: gemini_flash_lite
     # A change of model or prompt starts a new labelled segment of H7's series.
@@ -36,3 +40,6 @@ llm:
     request_timeout_seconds: 60
     # One retry with the validation error, then the item fails closed.
     retries_on_invalid: 1
+    # A call that fails (the provider down, a timeout) leaves its item queued; after this many
+    # failed calls the item waits no more.
+    max_call_failures: 3

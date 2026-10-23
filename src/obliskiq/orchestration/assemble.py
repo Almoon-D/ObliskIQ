@@ -3,38 +3,45 @@
 :func:`open_service` opens the order path the way every order command does
 (``execution.runtime.open_order_path``: the profile and transport refusal first, the paper guard,
 the account guard) with the service's alert hooks, the venues its jobs are anchored to and IBKR's
-trading schedule as the calendars' cross-check, and builds the :class:`Service` over it.
-:func:`build_service` does the building over a path that is already open; the tests drive it over
-the fake broker.
+trading schedule as the calendars' cross-check, opens the HTTP client the sources share, and
+builds the :class:`Service` over them. :func:`build_service` does the building over a path that
+is already open; the tests drive it over the fake broker. Without an HTTP client the service runs
+no source and reads no halt feed.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from pydantic import SecretStr
 
 from ..config.schema import ObliskConfig
+from ..data.events.earnings import EarningsSource, yfinance_earnings
+from ..data.halts import HaltFeed
 from ..data.market.daily import MarketCollector
 from ..data.market.targets import collection_venues
+from ..data.runner import HEARTBEAT_SOURCES, SourceRunner, client_for
 from ..decision.rebalance_basic import BasicRebalancer
-from ..env import Environment
+from ..env import Environment, secret_reader
 from ..execution.runtime import OrderPath, calendar_venues, open_order_path
 from ..ibkr.session import BrokerSession
 from ..ibkr.transport import Transport
 from ..ibkr.transport.gateway_login import LoginDriver
 from ..jurisdiction.profile import JurisdictionProfile
+from ..llm.extractor import EventExtractor
 from ..quant.costs import CostBook
 from ..reporting.alerts import AlertBook
 from ..reporting.notifier import LogNotifier, Notifier, TelegramNotifier
 from ..reporting.reporter import Reporter
+from ..util.http import RetryPolicy
 from .clock import Clock
 from .jobs import Jobs
 from .nav import NavCollector
 from .parts import build_capital
-from .schedule import CollectPlan
+from .schedule import CollectPlan, SourceMoment, SourcePlan
 from .service import AlertHooks, Service
 
 
@@ -50,6 +57,18 @@ def collect_plan(settings: ObliskConfig) -> CollectPlan:
     )
 
 
+def source_plan(settings: ObliskConfig) -> SourcePlan:
+    """Each built source's moments (``sources.providers.<id>.schedule``), named ``<id>.<n>``."""
+    return SourcePlan(
+        tuple(
+            SourceMoment(f"{name}.{n}", name, at.venue, at.anchor, at.offset_minutes)
+            for name, provider in settings.sources.built().items()
+            if name not in HEARTBEAT_SOURCES
+            for n, at in enumerate(provider.schedule, start=1)
+        )
+    )
+
+
 def anchor_venues(settings: ObliskConfig) -> tuple[str, ...]:
     """The venues the service's decision cycles and digest are anchored to."""
     runtime = settings.runtime
@@ -60,6 +79,9 @@ def calendar_extras(settings: ObliskConfig) -> tuple[str, ...]:
     """The venues the service's calendars cover beyond the order path's: the jobs' anchors and,
     when the service collects, every venue it collects on."""
     extras = set(anchor_venues(settings))
+    extras |= set(source_plan(settings).venues)
+    extras |= set(settings.sources.halts.nasdaq_trader.markets.values())
+    extras.add(settings.sources.halts.nasdaq_trader.time_venue)
     if settings.collectors.schedule.enabled:
         plan = collect_plan(settings)
         extras |= {plan.fallback_venue, *plan.venues}
@@ -91,6 +113,10 @@ def session_state(session: BrokerSession | None) -> str:
     return "authenticated" if session.authenticated else "lost (not authenticated)"
 
 
+def _no_secret(_name: str) -> str | None:
+    return None
+
+
 def build_service(
     settings: ObliskConfig,
     *,
@@ -99,8 +125,12 @@ def build_service(
     hooks: AlertHooks,
     clock: Clock,
     ping_url: SecretStr | None = None,
+    http: httpx.AsyncClient | None = None,
+    secrets: Callable[[str], str | None] | None = None,
+    earnings: EarningsSource = yfinance_earnings,
 ) -> Service:
-    """The service over an open order path."""
+    """The service over an open order path; with ``http``, it runs the sources and reads the
+    halt feed (``secrets`` resolves the credentials sources name)."""
     parts = build_capital(settings, path, now=clock.now)
     rebalancer = BasicRebalancer(
         settings,
@@ -140,6 +170,43 @@ def build_service(
         if settings.collectors.schedule.enabled
         else None
     )
+    sleep = path.client.session.clock.sleep
+    sources = (
+        SourceRunner(
+            settings,
+            client=http,
+            worker=path.worker,
+            secrets=secrets or _no_secret,
+            now=clock.now,
+            sleep=sleep,
+            earnings=earnings,
+        )
+        if http is not None
+        else None
+    )
+    extractor = (
+        EventExtractor(
+            settings,
+            client=http,
+            worker=path.worker,
+            key=(secrets or _no_secret)(settings.llm.extractor_provider().key_env),
+            now=clock.now,
+        )
+        if http is not None
+        else None
+    )
+    halts = (
+        HaltFeed(
+            settings,
+            calendars=path.calendars,
+            client=http,
+            policy=RetryPolicy.from_settings(settings.http),
+            worker=path.worker,
+            now=clock.now,
+        )
+        if http is not None
+        else None
+    )
     return Service(
         settings,
         path=path,
@@ -150,6 +217,10 @@ def build_service(
         clock=clock,
         collector=collector,
         collect=collect_plan(settings),
+        sources=sources,
+        source_plan=source_plan(settings),
+        halts=halts,
+        extractor=extractor,
     )
 
 
@@ -167,19 +238,22 @@ async def open_service(
 ) -> AsyncIterator[Service]:
     """The service over a freshly opened order path; the path closes when the block ends."""
     hooks = AlertHooks(reporter, now=clock.now)
-    async with open_order_path(
-        env,
-        settings,
-        profile,
-        data_dir=data_dir,
-        transport=transport,
-        login_driver=login_driver,
-        alert=hooks.order,
-        session_alert=hooks.session,
-        calendar_alert=hooks.calendar,
-        extra_venues=calendar_extras(settings),
-        cross_check=True,
-    ) as path:
+    async with (
+        open_order_path(
+            env,
+            settings,
+            profile,
+            data_dir=data_dir,
+            transport=transport,
+            login_driver=login_driver,
+            alert=hooks.order,
+            session_alert=hooks.session,
+            calendar_alert=hooks.calendar,
+            extra_venues=calendar_extras(settings),
+            cross_check=True,
+        ) as path,
+        client_for(settings) as http,
+    ):
         yield build_service(
             settings,
             path=path,
@@ -187,4 +261,6 @@ async def open_service(
             hooks=hooks,
             clock=clock,
             ping_url=env.health_ping_url,
+            http=http,
+            secrets=secret_reader(env),
         )

@@ -14,8 +14,9 @@ planner asks.
 already made, so reprices keep their pace, a staged intent goes out as its venue opens, a fill
 (one a restart's cOID lookup found included) is followed and its holding registered, the stops are
 checked and the broker is reconciled; then the tax book takes the new fills (``tax/book.py``);
-then stuck intents, venues blocked when they should trade, the broker session, the health file and
-the ping. Every condition it finds is alerted once while it holds (``reporting/alerts.py``).
+then stuck intents, venues blocked when they should trade, the broker session, the health file
+(with each source's health, ``data/runner.py``) and the ping. Every condition it finds is
+alerted once while it holds (``reporting/alerts.py``).
 
 **The digest** gathers and sends the day's report (``reporting/digest.py``).
 
@@ -33,6 +34,7 @@ from pydantic import SecretStr
 from .. import __version__
 from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.schema import ObliskConfig
+from ..data.runner import source_health
 from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
 from ..domain.capital import OwnerQuestion
 from ..domain.orders import (
@@ -51,6 +53,7 @@ from ..reporting.digest import gather_digest, render_digest, venue_line
 from ..reporting.reporter import Reporter
 from ..reporting.summary import CycleSummary, format_cycle
 from ..store import orders as repo
+from ..store import sources as source_repo
 from .health import ping, write_heartbeat
 from .nav import NavCollector, NavOutcome
 from .parts import CapitalParts
@@ -415,6 +418,14 @@ class Jobs:
             facts["reconciliation"] = f"unreadable ({type(exc).__name__})"
         else:
             facts["reconciliation"] = "none yet" if latest is None else latest.status.value
+        try:
+            runs = await self._path.worker.run(source_repo.source_runs)
+        except Exception as exc:
+            facts["sources"] = f"unreadable ({type(exc).__name__})"
+        else:
+            facts["sources"] = {
+                h.source: h.state.value for h in source_health(self._settings, runs, now=at)
+            }
         try:
             write_heartbeat(self._heartbeat_file, at, facts)
         except OSError:

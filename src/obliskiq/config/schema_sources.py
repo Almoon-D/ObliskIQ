@@ -349,11 +349,16 @@ class FeedConfig(FrozenModel):
     #: The environment variable whose value is sent as the User-Agent (SEC's feeds); ``None``
     #: sends ``sources.user_agent``.
     user_agent_env: EnvName | None
+    #: An EDGAR company feed lists filings, not their text: each new filing's press release (its
+    #: first EX-99 exhibit, else its main document) is read as the item's summary.
+    read_filing: bool
 
     @model_validator(mode="after")
     def _issuer_names_its_symbol(self) -> Self:
         if (self.kind == "issuer") != (self.symbol is not None):
             raise ValueError("an issuer's feed names its symbol; no other feed does")
+        if self.read_filing and self.kind != "issuer":
+            raise ValueError("only an issuer's filings feed reads its filings")
         return self
 
 
@@ -364,6 +369,7 @@ type Valence = Annotated[float, Field(ge=-4, le=4)]
 class NewsConfig(FrozenModel):
     max_body_bytes: PositiveInt
     max_summary_chars: PositiveInt
+    max_item_age_days: PositiveInt
     tone_lexicon: dict[Annotated[str, Field(pattern=r"^[a-z][a-z-]*$")], Valence]
     feeds: dict[Identifier, FeedConfig] = Field(min_length=1)
 

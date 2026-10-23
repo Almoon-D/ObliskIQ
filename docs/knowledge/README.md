@@ -50,6 +50,11 @@ the observation that settled it.
   (the ledger's rates, whatif amounts, position and live-order lag); live shapes join it with the
   paper order test.
 
+- `macro-sources.md` — the sources besides IBKR `config/sources.yaml` declares (FRED and ALFRED,
+  the ECB, EIA, ONS, StatCan, the BoJ, the BIS, the Fed's excess bond premium, the CFTC, SEC
+  EDGAR, Polymarket, Kalshi, GDELT, the news feeds, Nasdaq Trader's halts, Yahoo's earnings dates)
+  and the LLM provider: what each answered and how each is placed in time; condenses lite's macro
+  playbook.
 - `research-sources.md` — the formats the research loaders read from Yahoo (through `yfinance`),
   the Ken French and AQR libraries (daily developed markets and the *Century of Factor Premia*
   included), FRED and ALFRED, the ECB and its Data Portal, MSCI and the Bundesbank, and how each
@@ -62,5 +67,4 @@ the observation that settled it.
 - `tax-es.md` — Spain's rules on the savings base as the `es_irpf` policy applies them, each with
   its article and the official text it was read in (not tax advice).
 
-More files are added by the sessions that verify them (`macro-sources.md`, …); none is written
-ahead of the evidence.
+More files are added by the sessions that verify them; none is written ahead of the evidence.

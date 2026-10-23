@@ -17,6 +17,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fake_broker import EURUSD, FakeBroker
 from order_rig import WallClock, whatif_answer
 
@@ -138,9 +139,11 @@ def build_service_rig(
     keep_session: bool = False,
     notifier: RecordingNotifier | None = None,
     collect: bool = False,
+    http: httpx.AsyncClient | None = None,
 ) -> ServiceRig:
     """The service over ``rig``'s client and store, with ``settings`` and ``calendars``. Its
-    collection jobs are off unless ``collect``: the fake broker serves no market history."""
+    collection jobs are off unless ``collect``: the fake broker serves no market history. With
+    ``http`` it runs the sources and reads the halt feed through it (and reads no earnings)."""
     if not collect:
         schedule = settings.collectors.schedule.model_copy(update={"enabled": False})
         collectors = settings.collectors.model_copy(update={"schedule": schedule})
@@ -169,5 +172,13 @@ def build_service_rig(
     )
     if not keep_session:
         path = dataclasses.replace(path, session=None)
-    service = build_service(settings, path=path, reporter=reporter, hooks=hooks, clock=clock)
+    service = build_service(
+        settings,
+        path=path,
+        reporter=reporter,
+        hooks=hooks,
+        clock=clock,
+        http=http,
+        earnings=lambda _symbol, _limit: [],
+    )
     return ServiceRig(rig, path, service, notifier, reporter, hooks, clock)

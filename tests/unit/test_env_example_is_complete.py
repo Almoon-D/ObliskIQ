@@ -1,4 +1,5 @@
-"""``.env.example`` names exactly the environment variables the code reads.
+"""``.env.example`` names exactly the environment variables the code reads: the environment's own
+and those config names (an LLM provider's ``key_env``, a built source's credential).
 
 Adapted from ObliskIQ-lite-MCP's tests/test_env_template_is_complete.py. A variable the
 code reads that the template never mentions leaves the operator provisioning a machine from
@@ -12,10 +13,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import re
 from pathlib import Path
 
+from obliskiq.config.loader import load_config
 from obliskiq.env import variable_names
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = ROOT / ".env.example"
+
+
+def read_names() -> set[str]:
+    """Every variable read: the environment's fields and the ones config names."""
+    settings = load_config(ROOT / "config").settings
+    named = {provider.key_env for provider in settings.llm.providers.values()}
+    named |= {p.credential for p in settings.sources.built().values() if p.credential}
+    return set(variable_names()) | named
+
 
 _ASSIGNMENT_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
 
@@ -34,12 +45,12 @@ def variables_declared(text: str) -> set[str]:
 
 
 def test_the_template_names_every_variable_the_code_reads():
-    missing = variable_names() - variables_declared(TEMPLATE.read_text(encoding="utf-8"))
+    missing = read_names() - variables_declared(TEMPLATE.read_text(encoding="utf-8"))
     assert not missing, f".env.example does not name: {sorted(missing)}"
 
 
 def test_the_template_names_nothing_the_code_does_not_read():
-    extra = variables_declared(TEMPLATE.read_text(encoding="utf-8")) - variable_names()
+    extra = variables_declared(TEMPLATE.read_text(encoding="utf-8")) - read_names()
     assert not extra, f".env.example names variables nothing reads: {sorted(extra)}"
 
 
@@ -48,3 +59,7 @@ def test_the_scan_catches_a_missing_variable():
     declared = variables_declared("FRED_API_KEY=\n# EIA_API_KEY=\nnot an assignment\n")
     assert declared == {"FRED_API_KEY", "EIA_API_KEY"}
     assert "SEC_USER_AGENT" in variable_names() - declared
+
+
+def test_the_llm_key_is_named_by_config_not_by_the_environment():
+    assert "GEMINI_API_KEY" in read_names() - variable_names()

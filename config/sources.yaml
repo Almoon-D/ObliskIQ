@@ -81,10 +81,11 @@ sources:
       credential: EIA_API_KEY
       consumers: [view:equity_grid]
       activation: null
-      # Week ending Friday, published the Wednesday after (Thursday in a holiday week): six days
-      # is the later of the two. Lite's three days dated each week before its release.
+      # Week ending Friday, published the Wednesday after, the Thursday after a Monday holiday,
+      # and over Christmas 2025 the Monday ten days after (EIA's release schedule, read
+      # 2026-10-23): ten days is the latest of them. Lite's three dated each week before release.
       release_date_policy: reference_plus_lag
-      release_lag_days: 6
+      release_lag_days: 10
       schedule: [{venue: XNYS, anchor: close, offset_minutes: 60}]
       stale_after_hours: 200
       bias_notes:
@@ -834,7 +835,7 @@ sources:
     kalshi:
       api_url: https://api.elections.kalshi.com/trade-api/v2
       # Curated series, read 2026-10-23: Fed decision, upper bound of the funds rate, recession.
-      curated_series: [KXFEDDECISION, KXFED, RECSSNBER]
+      curated_series: [KXFEDDECISION, KXFED, KXRECSSNBER]
       max_markets_per_series: 60
       # The probability read is the midpoint of the Yes bid and ask, or the last trade when the
       # spread is wider than this (the rule Polymarket's displayed price follows).
@@ -866,6 +867,9 @@ sources:
     # A body larger than this is refused (a feed is a few hundred kilobytes).
     max_body_bytes: 5000000
     max_summary_chars: 4000
+    # An item published longer ago than this when first read is left out: a first run does not
+    # load a feed's backlog (nor read its filings), and its moment has passed.
+    max_item_age_days: 3
     # Financial terms added to VADER's lexicon for the offline fallback tone (from the old
     # ObliskIQ's lexicon, single words only: VADER scores tokens, so a phrase never matches).
     tone_lexicon:
@@ -939,41 +943,43 @@ sources:
       scandal: -2.0
     feeds:
       fed_press: {url: "https://www.federalreserve.gov/feeds/press_all.xml", kind: central_bank,
-                  region: us, symbol: null, user_agent_env: null}
+                  region: us, symbol: null, user_agent_env: null, read_filing: false}
       ecb_press: {url: "https://www.ecb.europa.eu/rss/press.html", kind: central_bank,
-                  region: eurozone, symbol: null, user_agent_env: null}
+                  region: eurozone, symbol: null, user_agent_env: null, read_filing: false}
       boe_news: {url: "https://www.bankofengland.co.uk/rss/news", kind: central_bank, region: uk,
-                 symbol: null, user_agent_env: null}
+                 symbol: null, user_agent_env: null, read_filing: false}
       boj_whatsnew: {url: "https://www.boj.or.jp/en/rss/whatsnew.xml", kind: central_bank,
-                     region: japan, symbol: null, user_agent_env: null}
+                     region: japan, symbol: null, user_agent_env: null, read_filing: false}
       snb_press: {url: "https://www.snb.ch/public/en/rss/pressrel", kind: central_bank,
-                  region: null, symbol: null, user_agent_env: null}
+                  region: null, symbol: null, user_agent_env: null, read_filing: false}
       boc_press: {url: "https://www.bankofcanada.ca/content_type/press-releases/feed/",
-                  kind: central_bank, region: canada, symbol: null, user_agent_env: null}
+                  kind: central_bank, region: canada, symbol: null, user_agent_env: null, read_filing: false}
       rba_media: {url: "https://www.rba.gov.au/rss/rss-cb-media-releases.xml",
-                  kind: central_bank, region: australia, symbol: null, user_agent_env: null}
+                  kind: central_bank, region: australia, symbol: null, user_agent_env: null, read_filing: false}
       sec_press: {url: "https://www.sec.gov/news/pressreleases.rss", kind: regulator, region: us,
-                  symbol: null, user_agent_env: SEC_USER_AGENT}
+                  symbol: null, user_agent_env: SEC_USER_AGENT, read_filing: false}
       # Issuers' filings through EDGAR's company feeds (8-K, and 6-K for foreign issuers): the
-      # issuer feed that reads the same way for every listed name.
+      # issuer feed that reads the same way for every listed name. Its entries carry no text, so
+      # each new filing's press release is read from the filing itself (`read_filing`); the
+      # issuers' own investor-relations pages refuse or lack an RSS feed (2026-10-23).
       fcx_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000831259&type=8-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: us, symbol: FCX, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: us, symbol: FCX, user_agent_env: SEC_USER_AGENT, read_filing: true}
       alb_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000915913&type=8-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: us, symbol: ALB, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: us, symbol: ALB, user_agent_env: SEC_USER_AGENT, read_filing: true}
       mos_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001285785&type=8-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: us, symbol: MOS, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: us, symbol: MOS, user_agent_env: SEC_USER_AGENT, read_filing: true}
       bg_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001996862&type=8-K&owner=include&count=40&output=atom",
-                   kind: issuer, region: us, symbol: BG, user_agent_env: SEC_USER_AGENT}
+                   kind: issuer, region: us, symbol: BG, user_agent_env: SEC_USER_AGENT, read_filing: true}
       ccj_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001009001&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: canada, symbol: CCJ, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: canada, symbol: CCJ, user_agent_env: SEC_USER_AGENT, read_filing: true}
       ntr_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001725964&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: canada, symbol: NTR, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: canada, symbol: NTR, user_agent_env: SEC_USER_AGENT, read_filing: true}
       asml_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000937966&type=6-K&owner=include&count=40&output=atom",
-                     kind: issuer, region: null, symbol: ASML, user_agent_env: SEC_USER_AGENT}
+                     kind: issuer, region: null, symbol: ASML, user_agent_env: SEC_USER_AGENT, read_filing: true}
       san_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000891478&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: spain, symbol: SAN, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: spain, symbol: SAN, user_agent_env: SEC_USER_AGENT, read_filing: true}
       tte_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000879764&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: france, symbol: TTE, user_agent_env: SEC_USER_AGENT}
+                    kind: issuer, region: france, symbol: TTE, user_agent_env: SEC_USER_AGENT, read_filing: true}
 
   # ── halts ──
   halts:

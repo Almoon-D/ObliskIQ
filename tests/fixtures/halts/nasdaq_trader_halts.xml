@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
+  <channel>
+    <title>NASDAQTrader.com</title>
+    <link>http://www.nasdaqtrader.com</link>
+    <description>NASDAQ Trade Halts</description>
+    <copyright>Copyright 2026. All rights reserved.</copyright>
+    <pubDate>Fri, 23 Oct 2026 06:33:21 GMT</pubDate>
+    <ttl>1</ttl>
+    <ndaq:numItems>4</ndaq:numItems>
+    <item>
+      <title>NIVFW</title>
+      <pubDate>Thu, 22 Oct 2026 04:00:00 GMT</pubDate>
+      <ndaq:HaltDate>10/22/2026</ndaq:HaltDate>
+      <ndaq:HaltTime>19:50:00.000</ndaq:HaltTime>
+      <ndaq:IssueSymbol>NIVFW</ndaq:IssueSymbol>
+      <ndaq:IssueName>NewGenIvf Group Limited Wt</ndaq:IssueName>
+      <ndaq:Market>NASDAQ</ndaq:Market>
+      <ndaq:ReasonCode>T1</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:ResumptionDate />
+      <ndaq:ResumptionQuoteTime />
+      <ndaq:ResumptionTradeTime />
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Market</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">10/22/2026                    </td><td valign="top">19:50:00.000</td><td valign="top">NIVFW</td><td valign="top">NewGenIvf Group Limited Wt</td><td valign="top">NASDAQ</td><td valign="top">T1</td><td valign="top"></td><td valign="top"></td><td valign="top"></td><td valign="top"></td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>SABSW</title>
+      <pubDate>Thu, 22 Oct 2026 04:00:00 GMT</pubDate>
+      <ndaq:HaltDate>10/22/2026</ndaq:HaltDate>
+      <ndaq:HaltTime>16:00:10.000</ndaq:HaltTime>
+      <ndaq:IssueSymbol>SABSW</ndaq:IssueSymbol>
+      <ndaq:IssueName>SAB Biotherapeutics Wt</ndaq:IssueName>
+      <ndaq:Market>NASDAQ</ndaq:Market>
+      <ndaq:ReasonCode>T12</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:ResumptionDate />
+      <ndaq:ResumptionQuoteTime />
+      <ndaq:ResumptionTradeTime />
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Market</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">10/22/2026                    </td><td valign="top">16:00:10.000</td><td valign="top">SABSW</td><td valign="top">SAB Biotherapeutics Wt</td><td valign="top">NASDAQ</td><td valign="top">T12</td><td valign="top"></td><td valign="top"></td><td valign="top"></td><td valign="top"></td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>ZONE</title>
+      <pubDate>Mon, 19 Oct 2026 04:00:00 GMT</pubDate>
+      <ndaq:HaltDate>10/19/2026</ndaq:HaltDate>
+      <ndaq:HaltTime>01:47:35.541</ndaq:HaltTime>
+      <ndaq:IssueSymbol>ZONE</ndaq:IssueSymbol>
+      <ndaq:IssueName>Zone Frontier Inc.</ndaq:IssueName>
+      <ndaq:Market>AMEX</ndaq:Market>
+      <ndaq:ReasonCode>H11</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:ResumptionDate />
+      <ndaq:ResumptionQuoteTime />
+      <ndaq:ResumptionTradeTime />
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Market</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">10/19/2026                    </td><td valign="top">01:47:35.541</td><td valign="top">ZONE</td><td valign="top">Zone Frontier Inc.</td><td valign="top">AMEX</td><td valign="top">H11</td><td valign="top"></td><td valign="top"></td><td valign="top"></td><td valign="top"></td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>SVA</title>
+      <pubDate>Fri, 22 Feb 2019 05:00:00 GMT</pubDate>
+      <ndaq:HaltDate>02/22/2019</ndaq:HaltDate>
+      <ndaq:HaltTime>16:02:01</ndaq:HaltTime>
+      <ndaq:IssueSymbol>SVA</ndaq:IssueSymbol>
+      <ndaq:IssueName>Sinovac Biotech, Ltd Ord Shrs</ndaq:IssueName>
+      <ndaq:Market>NASDAQ</ndaq:Market>
+      <ndaq:ReasonCode>T12</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:ResumptionDate />
+      <ndaq:ResumptionQuoteTime />
+      <ndaq:ResumptionTradeTime />
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Market</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">02/22/2019                    </td><td valign="top">16:02:01</td><td valign="top">SVA</td><td valign="top">Sinovac Biotech, Ltd Ord Shrs</td><td valign="top">NASDAQ</td><td valign="top">T12</td><td valign="top"></td><td valign="top"></td><td valign="top"></td><td valign="top"></td></tr></table>]]></description>
+    </item>
+  </channel>
+</rss>

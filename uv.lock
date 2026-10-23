@@ -819,7 +819,7 @@ wheels = [
 
 [[package]]
 name = "obliskiq"
-version = "0.14.1"
+version = "0.15.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -829,6 +829,7 @@ dependencies = [
     { name = "playwright" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "vadersentiment" },
     { name = "yfinance" },
@@ -858,6 +859,7 @@ requires-dist = [
     { name = "playwright", specifier = ">=1.64,<2" },
     { name = "pydantic", specifier = ">=2.12,<3" },
     { name = "pydantic-settings", specifier = ">=2.11,<3" },
+    { name = "python-dotenv", specifier = ">=1.2.4,<2" },
     { name = "pyyaml", specifier = ">=6.0.3,<7" },
     { name = "vadersentiment", specifier = ">=3.3.2,<4" },
     { name = "yfinance", specifier = ">=1.7,<2" },

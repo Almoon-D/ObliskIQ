@@ -17,6 +17,7 @@ from obliskiq.env import (
     default_env_file,
     load_environment,
     repository_root,
+    secret_reader,
     variable_names,
 )
 from obliskiq.errors import ConfigError, EnvVarError
@@ -277,3 +278,19 @@ def test_an_oauth_key_path_is_not_looked_for_when_the_environment_loads(monkeypa
     monkeypatch.setenv("OBLISK_IBKR_SIGNATURE_KEY", str(absent))
     env = Environment(_env_file=None)
     assert env.ibkr_signature_key_path == absent
+
+
+def test_a_variable_config_names_is_read_from_the_process_then_the_env_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("GEMINI_API_KEY=from-the-file\nOTHER_KEY=   \n", encoding="utf-8")
+    env = load_environment(env_file=env_file)
+    assert env.named_secret("GEMINI_API_KEY") is not None
+    assert secret_reader(env)("GEMINI_API_KEY") == "from-the-file"
+    monkeypatch.setenv("GEMINI_API_KEY", "  from-the-process ")
+    assert secret_reader(env)("GEMINI_API_KEY") == "from-the-process"
+    assert secret_reader(env)("OTHER_KEY") is None  # blank is unset
+    assert secret_reader(env)("ABSENT_KEY") is None
+    assert "from-the" not in repr(env.named_secret("GEMINI_API_KEY"))
+    assert secret_reader(load_environment(env_file=None))("OTHER_KEY") is None

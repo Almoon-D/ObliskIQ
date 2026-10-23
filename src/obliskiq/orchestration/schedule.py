@@ -1,5 +1,6 @@
-"""When the service's jobs run: four decision cycles and a digest a day, and a collection job per
-venue after its close, from the calendars.
+"""When the service's jobs run: four decision cycles and a digest a day, a collection job per
+venue after its close, and each source's runs (``sources.providers.<id>.schedule``), from the
+calendars.
 
 Each job is a moment of one venue's regular session (``runtime.cycles``, ``runtime.digest``,
 ``collectors.schedule``): its open or close moved by an offset, read through the calendars, so
@@ -21,6 +22,9 @@ from ..errors import CalendarError
 CYCLE = "cycle"
 DIGEST = "digest"
 COLLECT = "collect"
+SOURCE = "source"
+#: Kinds whose run-log command carries the job's name.
+NAMED_KINDS = frozenset({CYCLE, COLLECT, SOURCE})
 
 #: How many days around a moment are searched for the next job: a long weekend and a holiday
 #: on every anchor venue at once still find one.
@@ -39,8 +43,9 @@ class Job:
 
     @property
     def command(self) -> str:
-        """The run log's name for it: ``cycle:<name>``, ``collect:<MIC>`` or ``digest``."""
-        return f"{self.kind}:{self.name}" if self.kind in (CYCLE, COLLECT) else self.kind
+        """The run log's name for it: ``cycle:<name>``, ``collect:<MIC>``,
+        ``source:<source>.<n>`` or ``digest``."""
+        return f"{self.kind}:{self.name}" if self.kind in NAMED_KINDS else self.kind
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +67,31 @@ class CollectPlan:
             return (job.venue,)
         uncovered = [v for v in self.venues if not covered(calendars, v, job.session_date)]
         return tuple(sorted({job.venue, *uncovered, *self.other_venues}))
+
+
+@dataclass(frozen=True, slots=True)
+class SourceMoment:
+    """One scheduled run of a source: ``name`` is ``<source>.<n>``, its n-th moment a day."""
+
+    name: str
+    source: str
+    venue: str
+    anchor: Anchor
+    offset_minutes: int
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePlan:
+    """The sources the service runs, at their moments."""
+
+    moments: tuple[SourceMoment, ...]
+
+    def source_of(self, job: Job) -> str:
+        return next(m.source for m in self.moments if m.name == job.name)
+
+    @property
+    def venues(self) -> tuple[str, ...]:
+        return tuple(sorted({m.venue for m in self.moments}))
 
 
 def covered(calendars: Calendars, venue: str, day: date) -> bool:
@@ -86,7 +116,11 @@ def moment(
 
 
 def jobs_on(
-    calendars: Calendars, runtime: RuntimeConfig, day: date, collect: CollectPlan | None = None
+    calendars: Calendars,
+    runtime: RuntimeConfig,
+    day: date,
+    collect: CollectPlan | None = None,
+    sources: SourcePlan | None = None,
 ) -> list[Job]:
     """Every job of the sessions dated ``day``, in time order."""
     jobs = []
@@ -103,6 +137,10 @@ def jobs_on(
             at = moment(calendars, venue, "close", collect.after_close_minutes, day)
             if at is not None:
                 jobs.append(Job(at, COLLECT, venue, venue, day))
+    for planned in sources.moments if sources is not None else ():
+        at = moment(calendars, planned.venue, planned.anchor, planned.offset_minutes, day)
+        if at is not None:
+            jobs.append(Job(at, SOURCE, planned.name, planned.venue, day))
     return sorted(jobs)
 
 
@@ -112,12 +150,17 @@ def jobs_between(
     start: datetime,
     end: datetime,
     collect: CollectPlan | None = None,
+    sources: SourcePlan | None = None,
 ) -> list[Job]:
     """Every job whose moment is in ``(start, end]``, in time order."""
     found: list[Job] = []
     day = start.date() - timedelta(days=1)
     while day <= end.date() + timedelta(days=1):
-        found += [job for job in jobs_on(calendars, runtime, day, collect) if start < job.at <= end]
+        found += [
+            job
+            for job in jobs_on(calendars, runtime, day, collect, sources)
+            if start < job.at <= end
+        ]
         day += timedelta(days=1)
     return sorted(found)
 
@@ -127,7 +170,10 @@ def next_job(
     runtime: RuntimeConfig,
     after: datetime,
     collect: CollectPlan | None = None,
+    sources: SourcePlan | None = None,
 ) -> Job | None:
     """The first job strictly after ``after``; ``None`` when the calendars cover none soon."""
-    upcoming = jobs_between(calendars, runtime, after, after + timedelta(days=SEARCH_DAYS), collect)
+    upcoming = jobs_between(
+        calendars, runtime, after, after + timedelta(days=SEARCH_DAYS), collect, sources
+    )
     return upcoming[0] if upcoming else None

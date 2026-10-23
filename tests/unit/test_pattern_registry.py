@@ -53,3 +53,15 @@ def test_a_tested_entry_states_its_outcome(repo_root):
             assert outcome["decision"] in {"sufficient", "insufficient", "inconclusive"}
             low, high = (float(v) for v in outcome["interval"])
             assert low <= float(outcome["estimate_a_year"]) <= high
+
+
+def test_every_hypothesis_a_source_serves_is_registered(repo_root, shipped_settings):
+    """A source built for a hypothesis (DECISIONS D66) names one the registry holds."""
+    registered = {p["hypothesis"] for p in entries(repo_root) if "hypothesis" in p}
+    named = {
+        reference.split(":", 1)[1]
+        for reference, _ in shipped_settings.sources.references()
+        if reference.startswith("hypothesis:")
+    }
+    assert named
+    assert named <= registered, sorted(named - registered)

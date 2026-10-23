@@ -1547,8 +1547,8 @@ DELIVERABLES
 1. data/macro/: port FRED/ALFRED (output_type=4, vintage windows, value_vintage
    initial|latest), ECB SDMX, EIA v2, ONS, StatCan and the SDMX decoder; series declared
    in config/sources.yaml with units and release-date policy; known_at and units guards.
-2. Beyond lite: the BoJ Time-Series API (stat-search.boj.or.jp/api/v1 getDataCode: JGB yields,
-   USDJPY, monetary base), the BIS Data Portal (policy rates, credit-to-GDP gaps,
+2. Beyond lite: the BoJ Time-Series API (stat-search.boj.or.jp/api/v1 getDataCode: USDJPY,
+   monetary base; it holds no JGB yields, which the MOF publishes), the BIS Data Portal (policy rates, credit-to-GDP gaps,
    effective FX) and the Federal Reserve Board excess bond premium; release-date policy
    per series; anything without a defensible release date is unusable for backtests.
    The excess bond premium feeds H6 (Session 21). The other macro-board regions —

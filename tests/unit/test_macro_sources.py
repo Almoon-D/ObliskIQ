@@ -139,7 +139,7 @@ def test_the_catalog_takes_the_source_rule_unless_a_series_states_its_own(
     assert (estr.policy, estr.lag_days) == ("reference_plus_lag", 1)
     eia = catalog.spec("WCESTUS1")
     assert eia is not None
-    assert (eia.policy, eia.lag_days) == ("reference_plus_lag", 6)
+    assert (eia.policy, eia.lag_days) == ("reference_plus_lag", 10)
     assert catalog.spec("NOT_DECLARED") is None
     assert {s.id for s in catalog.of_source("frb")} == {"EBP", "GZ_SPREAD"}
     assert catalog.spec("DCOILWTICO").is_commodity_history  # type: ignore[union-attr]
@@ -1014,11 +1014,16 @@ async def test_both_dates_reach_the_store_and_a_missing_value_is_not_written(
 async def test_a_series_dated_by_its_own_rule_ignores_what_the_source_states(
     shipped_settings: ObliskConfig, worker: StoreWorker, store: Store
 ) -> None:
-    fetcher = StubFetcher([row(date(2026, 10, 16), 412517.0, units="MBBL")])
+    fetcher = StubFetcher(
+        [
+            row(date(2026, 10, 9), 412517.0, units="MBBL"),
+            row(date(2026, 10, 16), 410000.0, units="MBBL"),
+        ]
+    )
     await pull(shipped_settings, worker, {"eia": fetcher}).run("eia")
     eia = repos.macro_series(store, "WCESTUS1", as_of=TODAY, source="eia")
     assert eia.latest is not None
-    assert eia.latest.release_date == date(2026, 10, 22)
+    assert eia.latest.release_date == date(2026, 10, 19)  # the week of 16 October is not known yet
 
 
 async def test_a_changed_unit_fails_the_series_without_retrying_it(

@@ -629,6 +629,16 @@ def save_news_items(store: Store, items: Sequence[NewsItem]) -> int:
         return store.connection.total_changes - before
 
 
+def held_news_items(store: Store, item_ids: Sequence[str]) -> frozenset[str]:
+    """Which of ``item_ids`` are held already."""
+    held: set[str] = set()
+    for item_id in item_ids:
+        row = store.execute("SELECT 1 FROM news_items WHERE item_id = ?", (item_id,)).fetchone()
+        if row is not None:
+            held.add(item_id)
+    return frozenset(held)
+
+
 def news_items(store: Store, *, as_of: date, since: date | None = None) -> tuple[NewsItem, ...]:
     """The items collected by the end of ``as_of`` (from ``since`` on), oldest first."""
     sql = f"SELECT {_NEWS_COLUMNS} FROM news_items WHERE collected_at < ?"

@@ -10,11 +10,13 @@ sweep; and catches up from the run log: a cycle or digest of the last day whose 
 with no finished run runs now if it is at most ``runtime.catch_up_minutes`` late, and is recorded
 as missed otherwise.
 
-**Then** it sleeps until the next heartbeat or job (``orchestration/schedule.py``) and runs it,
-refreshing IBKR's schedule once a day and re-reading the owner's manual incident file each
-heartbeat, until ``stop`` is set (SIGTERM or SIGINT from the command line): the job in hand
-finishes, the keepalive and the sweep stop, the health file says so, and the queued alerts go
-out.
+**Then** it sleeps until the next heartbeat or job (``orchestration/schedule.py``: the cycles,
+the digest, the market collections and each source's runs) and runs it, refreshing IBKR's
+schedule once a day, re-reading the owner's manual incident file each heartbeat and the
+single-stock halt feed every ``halts.nasdaq_trader.refresh_minutes`` (``data/halts.py``; its last
+state is restored at the start), until ``stop`` is set (SIGTERM or SIGINT from the command
+line): the job in hand finishes, the keepalive and the sweep stop, the health file says so, and
+the queued alerts go out.
 
 **Alerts.** The order path, the broker session and the calendars report through synchronous
 hooks; :class:`AlertHooks` tags each with the job in hand (or ``session``, ``calendar``, ``sweep``
@@ -57,11 +59,23 @@ from ..store import runs as run_repo
 from .clock import Clock
 from .health import write_heartbeat
 from .jobs import Jobs
-from .runlog import ERROR, PARTIAL, SKIPPED, RunRecord, StepOutcome
-from .schedule import COLLECT, CYCLE, CollectPlan, Job, jobs_between, next_job
+from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcome
+from .schedule import (
+    COLLECT,
+    CYCLE,
+    SOURCE,
+    CollectPlan,
+    Job,
+    SourcePlan,
+    jobs_between,
+    next_job,
+)
 
 if TYPE_CHECKING:
+    from ..data.halts import HaltFeed
     from ..data.market.daily import MarketCollector
+    from ..data.runner import SourceRunner
+    from ..llm.extractor import EventExtractor, ExtractorRun
 
 log = get_logger("orchestration.service")
 
@@ -74,6 +88,27 @@ INTERRUPTED_DETAIL = (
 LOOKBACK = timedelta(days=1)
 #: Statuses that mean a job ran to a verdict (an interrupted one did not).
 _FINISHED = frozenset({"ok", "degraded", "partial", "error", "skipped"})
+#: The alert source of the halt feed's rounds.
+HALTS = "halts"
+#: The run log's name for an EventExtractor run.
+EXTRACT = "extract"
+#: Digits an extractor run's cost is recorded with (US dollars).
+COST_DIGITS = 6
+
+
+def _judge_extraction(result: ExtractorRun) -> StepOutcome:
+    """An extractor run's verdict: skipped without a key, degraded when the budget stopped it
+    or a call failed, ok otherwise."""
+    detail = {
+        "ok": result.ok,
+        "invalid": result.invalid,
+        "failed": result.failed,
+        "cost_usd": round(result.cost_usd, COST_DIGITS),
+    }
+    if result.state == "skipped":
+        return StepOutcome(EXTRACT, SKIPPED, result.reason, detail)
+    status = DEGRADED if result.state == "budget_spent" or result.failed else OK
+    return StepOutcome(EXTRACT, status, result.reason, detail)
 
 
 class AlertHooks:
@@ -130,12 +165,20 @@ class Service:
         clock: Clock,
         collector: MarketCollector | None = None,
         collect: CollectPlan | None = None,
+        sources: SourceRunner | None = None,
+        source_plan: SourcePlan | None = None,
+        halts: HaltFeed | None = None,
+        extractor: EventExtractor | None = None,
     ) -> None:
         self._settings = settings
         self._path = path
         self._jobs = jobs
         self._collector = collector
         self._collect = collect if collector is not None else None
+        self._sources = sources
+        self._source_plan = source_plan if sources is not None else None
+        self._halts = halts
+        self._extractor = extractor
         self._rebalancer = rebalancer
         self._reporter = reporter
         self._hooks = hooks
@@ -172,6 +215,9 @@ class Service:
                 log.info("resumed", extra={"intent": str(step.intent_id), "action": step.action})
         await self._confirm_targets()
         await self._refresh_schedule()
+        if self._halts is not None:
+            restored = await self._halts.restore()
+            log.info("restored the halt feed's last state", extra={"incidents": restored})
         await self._reporter.end_round("startup")
         self._hooks.source = None
 
@@ -235,7 +281,12 @@ class Service:
         """Run the jobs the last day missed, if they are still fresh; record the stale ones."""
         late = timedelta(minutes=self._runtime.catch_up_minutes)
         for job in jobs_between(
-            self._path.calendars, self._runtime, now - LOOKBACK, now, self._collect
+            self._path.calendars,
+            self._runtime,
+            now - LOOKBACK,
+            now,
+            self._collect,
+            self._source_plan,
         ):
             if await self._finished(job):
                 continue
@@ -275,7 +326,9 @@ class Service:
         last = self._clock.now()
         beat = last
         while not stop.is_set():
-            job = next_job(self._path.calendars, self._runtime, last, self._collect)
+            job = next_job(
+                self._path.calendars, self._runtime, last, self._collect, self._source_plan
+            )
             wake = beat if job is None else min(beat, job.at)
             if until is not None and wake > until:
                 return
@@ -284,7 +337,9 @@ class Service:
                 return
             now = self._clock.now()
             # Every job due since the last pass, two at the same moment included.
-            for due in jobs_between(self._path.calendars, self._runtime, last, now, self._collect):
+            for due in jobs_between(
+                self._path.calendars, self._runtime, last, now, self._collect, self._source_plan
+            ):
                 if not await self._finished(due):
                     await self._run_job(due)
             last = max(last, now)
@@ -301,6 +356,7 @@ class Service:
             self._path.calendars.reload_manual_incidents()
         except CalendarError as exc:  # built without a data directory: nothing to re-read
             log.debug("no manual incident file to re-read", extra={"error": str(exc)})
+        await self._read_halts()
         self._hooks.source = "heartbeat"
         try:
             await self._jobs.heartbeat()
@@ -308,6 +364,26 @@ class Service:
             log.exception("a heartbeat failed")
         finally:
             self._hooks.source = None
+
+    async def _read_halts(self) -> None:
+        """The halt feed, when its refresh is due; repeated failures alert until a good read."""
+        halts = self._halts
+        if halts is None or not halts.due(self._clock.now()):
+            return
+        result = await halts.refresh()
+        if result.alert:
+            self._reporter.push(
+                Alert(
+                    "halts.feed_failing",
+                    "halts.feed_failing",
+                    f"the single-stock halt feed failed {result.failures} times in a row "
+                    f"({result.error}); its last state, {result.incidents} halts, stays in force",
+                    Severity.WARNING,
+                    self._clock.now(),
+                ),
+                HALTS,
+            )
+        await self._reporter.end_round(HALTS)
 
     async def _run_job(self, job: Job) -> None:
         self.ran.append(job)
@@ -318,6 +394,8 @@ class Service:
                 await self._after_cycle(result.status)
             elif job.kind == COLLECT:
                 await self._collect_job(job)
+            elif job.kind == SOURCE:
+                await self._source_job(job)
             else:
                 await self._jobs.digest(job.session_date)
         except Exception:  # a job that breaks never stops the service
@@ -331,6 +409,26 @@ class Service:
             return
         venues = self._collect.venues_of(self._path.calendars, job)
         await self._collector.run(job.command, job.session_date, venues=venues)
+
+    async def _source_job(self, job: Job) -> None:
+        """One scheduled run of a source (``data/runner.py``); after a news source, the
+        EventExtractor reads what is queued (``llm/extractor.py``), as a run of its own."""
+        if self._sources is None or self._source_plan is None:  # pragma: no cover - never planned
+            return
+        source = self._source_plan.source_of(job)
+        await self._sources.run_job(job.command, job.session_date, source)
+        if self._extractor is None or self._settings.sources.provider(source).area != "news":
+            return
+        record = RunRecord(
+            self._path.worker,
+            command=EXTRACT,
+            session_date=job.session_date,
+            steps=(EXTRACT,),
+            now=self._clock.now,
+        )
+        await record.begin()
+        await record.step(EXTRACT, self._extractor.run, _judge_extraction)
+        await record.finish()
 
     async def _after_cycle(self, status: str) -> None:
         self._failures = self._failures + 1 if status in (ERROR, PARTIAL) else 0
