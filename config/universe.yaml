@@ -262,19 +262,11 @@ universe:
           curve: {series: [DGS10, DGS2], roots: [], label: 10y_minus_2y, unmapped: null}
           real_rate: {series: [DFF, CPIAUCSL], roots: [], label: policy_minus_cpi_index_yoy, unmapped: null}
           fx_vs_base: {series: [EURUSD], roots: [], label: null, unmapped: null}
-          credit:
-            series: []
-            roots: []
-            label: null
-            unmapped: >-
-              no credit series is declared for this region yet; Session 10 declares the sources a
-              registered hypothesis or component consumes (the excess bond premium is US-wide)
-          vol_index:
-            series: []
-            roots: []
-            label: null
-            unmapped: >-
-              no volatility index is declared for this region yet
+          # Moody's Baa yield less the ten-year Treasury (FRED BAA10Y).
+          credit: {series: [BAA10Y], roots: [], label: null, unmapped: null}
+          # The VIX and the three-month VIX: their term slope is short over long minus one, the
+          # statistic rv_term_slope computes, so a positive slope is an inverted curve.
+          vol_index: {series: [VIXCLS, VXVCLS], roots: [], label: short_over_long, unmapped: null}
           commodities:
             series: []
             roots: []

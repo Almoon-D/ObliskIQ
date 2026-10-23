@@ -8,6 +8,7 @@ from typing import Literal, Self
 
 from pydantic import NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
 
+from ..domain.base import CurrencyCode, NonEmptyText
 from .base import FrozenModel
 
 
@@ -32,6 +33,8 @@ class SolveConfig(FrozenModel):
     max_dte: PositiveInt
     moneyness_band: PositiveFloat
     max_non_converged_fraction: NonNegativeFloat
+    #: The discount rate's series by the underlying's currency (declared percent series).
+    risk_free_series: dict[CurrencyCode, NonEmptyText]
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
@@ -86,16 +89,38 @@ class NumericsConfig(FrozenModel):
         return self
 
 
+class TermStructureConfig(FrozenModel):
+    """Which expiry pair the implied term slope is read between, and how far a leg may stray."""
+
+    front_target_dte: PositiveInt
+    back_target_dte: PositiveInt
+    max_target_deviation_days: PositiveInt
+    min_separation_days: PositiveInt
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        if self.back_target_dte - self.front_target_dte < self.min_separation_days:
+            raise ValueError("the term-structure targets must be min_separation_days apart")
+        return self
+
+
 class SmileConfig(FrozenModel):
     min_abs_delta: PositiveFloat
     max_abs_delta: PositiveFloat
     butterfly_max_iv_deviation: PositiveFloat
     min_points: PositiveInt
+    skew_delta: PositiveFloat
+    term_structure: TermStructureConfig
 
     @model_validator(mode="after")
     def _delta_band_is_ordered(self) -> Self:
         if not self.min_abs_delta < self.max_abs_delta <= 1.0:
             raise ValueError("requires 0 < min_abs_delta < max_abs_delta <= 1")
+        if not self.min_abs_delta <= self.skew_delta <= self.max_abs_delta:
+            raise ValueError(
+                "skew_delta must sit inside the delta band: a target outside it names strikes "
+                "hygiene has already dropped"
+            )
         return self
 
 

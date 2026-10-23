@@ -1,0 +1,7 @@
+# The quartile boundaries behind "cheap" and "extended", applied to percentiles. Values are
+# ObliskIQ-lite-MCP's (config.yaml `screen`, @b1ebd49). The ranked views' conditions read them
+# (grid/rankings.py), and the candidate gates read the same two (Session 12), so "low" and "high"
+# mean one thing across the build.
+screen:
+  cheap_iv_percentile_max: 0.25
+  extended_iv_percentile_min: 0.75

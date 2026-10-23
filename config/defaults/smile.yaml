@@ -12,3 +12,17 @@ smile:
   butterfly_max_iv_deviation: 0.10
   # Below this many surviving strikes there is no smile, only points.
   min_points: 2
+  # The |delta| each leg of the grid's risk reversal is read at (lite smile.skew_delta): a delta,
+  # not a moneyness, so it travels between a 15-vol and a 90-vol name unchanged. The band has to
+  # bracket it on both sides or the leaf is n/a with the deltas it reached.
+  skew_delta: 0.25
+  # Which expiry pair defines the implied term slope (lite smile.term_structure). The chain
+  # collector buys only expiries inside tenor.entry_dte_min..entry_dte_max, so both targets sit
+  # inside that band (a test asserts it). Each leg is the nearest listed expiry to its target; a
+  # leg further than max_target_deviation_days from it is not a leg, and two legs closer than
+  # min_separation_days are not a term structure.
+  term_structure:
+    front_target_dte: 95
+    back_target_dte: 180
+    max_target_deviation_days: 35
+    min_separation_days: 45

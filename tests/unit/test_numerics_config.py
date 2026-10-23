@@ -18,6 +18,7 @@ def _solve(**overrides: Any) -> dict[str, Any]:
         "max_dte": 200,
         "moneyness_band": 0.15,
         "max_non_converged_fraction": 0.2,
+        "risk_free_series": {"USD": "DTB3"},
     }
     fields.update(overrides)
     return fields
@@ -29,6 +30,13 @@ def _smile(**overrides: Any) -> dict[str, Any]:
         "max_abs_delta": 0.95,
         "butterfly_max_iv_deviation": 0.1,
         "min_points": 2,
+        "skew_delta": 0.25,
+        "term_structure": {
+            "front_target_dte": 95,
+            "back_target_dte": 180,
+            "max_target_deviation_days": 35,
+            "min_separation_days": 45,
+        },
     }
     fields.update(overrides)
     return fields

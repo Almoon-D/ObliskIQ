@@ -48,6 +48,16 @@ numerics:
       moneyness_band: 0.15
       # Past this fraction of contracts that did not converge, a run reports degraded.
       max_non_converged_fraction: 0.20
+      # The discount rate by the underlying's currency (lite macro.risk_free_rate
+      # .series_by_currency), each a declared percent series read as known on the chain's own
+      # session. An underlying whose currency has none is left unsolved, never discounted at a
+      # rate nobody chose. EUR reads the ECB's own ESTR where lite read FRED's mirror of it; CAD's
+      # is monthly because FRED serves no daily Canadian short rate (lite, 2026-09-14).
+      risk_free_series:
+        EUR: ESTR
+        USD: DTB3
+        GBP: IUDSOIA
+        CAD: IRSTCI01CAM156N
 
   risk_budget:
     # Cyclical coordinate descent stops when no scaled weight moves by more than this fraction

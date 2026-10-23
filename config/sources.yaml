@@ -530,7 +530,7 @@ sources:
          release: null, value_vintage: initial,
          consumers: [view:macro_board, component:central_bank_surprise]}
       - {id: DTB3, source: fred, frequency: daily, units: "%", group: risk_free, key: null,
-         release: null, value_vintage: initial, consumers: [view:option_surface]}
+         release: null, value_vintage: initial, consumers: [view:option_surface, view:equity_grid]}
       - {id: DGS2, source: fred, frequency: daily, units: "%", group: us_core, key: null,
          release: null, value_vintage: initial,
          consumers: [view:macro_board, component:central_bank_surprise]}
@@ -591,7 +591,7 @@ sources:
       # FRED: short and policy rates outside the US and the euro area
       - {id: IUDSOIA, source: fred, frequency: daily, units: "%", group: policy_rate, key: null,
          release: null, value_vintage: initial,
-         consumers: [view:macro_board, view:option_surface]}
+         consumers: [view:macro_board, view:option_surface, view:equity_grid]}
       - {id: IRSTCI01JPM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
          key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
       - {id: IRSTCI01KRM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
@@ -602,7 +602,7 @@ sources:
          key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
       - {id: IRSTCI01CAM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
          key: null, release: null, value_vintage: initial,
-         consumers: [view:macro_board, view:option_surface]}
+         consumers: [view:macro_board, view:option_surface, view:equity_grid]}
       # FRED: commodity long history (commodity_history window)
       - {id: DCOILWTICO, source: fred, frequency: daily, units: "$ per Barrel",
          group: commodity_history, key: null, release: null, value_vintage: initial,
@@ -620,7 +620,7 @@ sources:
       # €STR is published at 08:00 CET on each TARGET day for the previous business day.
       - {id: ESTR, source: ecb, frequency: daily, units: "%", group: risk_free,
          key: EST/B.EU000A2X2A25.WT, release: {policy: reference_plus_lag, lag_days: 1},
-         value_vintage: null, consumers: [view:option_surface]}
+         value_vintage: null, consumers: [view:option_surface, view:equity_grid]}
       # A policy rate in force on a date was announced before it.
       - {id: ECB_DFR, source: ecb, frequency: daily, units: "%", group: policy_rate,
          key: FM/D.U2.EUR.4F.KR.DFR.LEV, release: {policy: same_as_reference, lag_days: 0},

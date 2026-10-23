@@ -1,0 +1,91 @@
+# The measurement store and its views (grid/, MASTER_PLAN §5.7): the equity grid, the macro board,
+# the ranked views, the cross-asset correlation matrix, the census, the session's implied-vol solve,
+# the realised-volatility forecast and the overnight-gap distributions. Values are
+# ObliskIQ-lite-MCP's (config.yaml `grid`, `census` and the `data` keys its grid read, @b1ebd49)
+# unless a comment says otherwise. The daily window is the collectors' (collectors.backfill
+# .window_years), the reference tenor and the annualisation basis are the strike band's
+# (collectors.vol), as in lite, so a cell and the band it sizes cannot disagree.
+grid:
+  # The global risk benchmark correlations are measured against, on its native index.
+  benchmark_market: us
+  # Flag a pair beyond this many standard deviations from its own norm; one global threshold
+  # would see only the always-correlated pairs.
+  correlation_shift_sd: 1.0
+  # The window the norm is measured over, capped by the daily history the backfill holds.
+  correlation_norm_window_years: 2
+  # The norm is built from non-overlapping correlations: below this many there is no
+  # dispersion to divide by, only the overlap's smoothness. Against two years that admits the
+  # 30- and 90-day shifts and refuses the 250-day one.
+  correlation_norm_min_independent: 4
+  # The same rule for the realised-vol percentiles (all three estimators): independent
+  # readings, stepped by the tenor. Sixty bars never contained a two-year percentile.
+  realised_vol_percentile_min_independent: 8
+  # Freshness is per input, not per cell: each family is measured against the store it reads.
+  # A monthly series is not stale at three weeks; it is monthly.
+  freshness_days:
+    daily_bars: 5
+    option_chain: 5
+    underlying_snapshot: 5
+    macro: 45
+  # Below this share of collectible leaves a build is degraded. The denominator excludes
+  # structurally inapplicable leaves, which no collector will ever fill.
+  min_coverage_pct: 0.20
+  # Below this many ranked cells a view is labelled with its own denominator, never suppressed.
+  min_cells_for_ranked_view: 5
+  # Refuse to compute rather than compute on too little.
+  min_observations:
+    returns: 2
+    correlation: 21
+    percentile: 26
+    turnover: 21
+  # Lite `data`: the weekly window the range families read (weekly closes are derived from the
+  # daily bars, and the window label states how many weeks the store held), the realised-vol
+  # term structure's tenors, the correlation windows and the turnover comparison.
+  weekly_window_years: 5
+  rv_tenors_days: [10, 30, 90]
+  correlation_windows_days: [30, 90, 250]
+  technical_window_days: 90
+  # Which implied vol family 7 reads when more than one exists for a session: vendor (the
+  # exchange-quoted figure wins over one inverted from a mid price), solved, or chain_first.
+  atm_iv_prefer: vendor
+  # The self-computed implied-vol percentile switches on at this many accumulated snapshots,
+  # over this window.
+  iv_self_source_min_sessions: 252
+  iv_percentile_window_weeks: 52
+  # Above this share of bars whose open is exactly the previous close, the open is a
+  # restatement and the Garman-Klass leaves refuse; Parkinson needs no open.
+  garman_klass_max_restated_open_share: 0.10
+  # Top two holdings as a share of a fund: above this, a cell measured on it is a two-stock read,
+  # not a sector or country read, and its coverage note says so.
+  etf_top2_concentration_flag: 0.40
+  # Rows per ranked view.
+  ranking_top_n: 20
+
+  # The macro board (region x asset class, axes in config/universe.yaml). Not in lite, which had
+  # no board: a series' change is read over these horizons, release-aligned at both ends, and
+  # its level ranked over this window (judgements, DECISIONS D131).
+  macro_board:
+    change_horizons_months: [3, 12]
+    percentile_window_years: 5
+
+  # The realised-volatility forecast (HAR-RV, Corsi 2009) on close-to-close squared returns, so
+  # it prices the overnight gap as an implied vol does. Not in lite (DECISIONS D132): the
+  # weekly and monthly components average this many sessions, the forecast is of the mean
+  # daily variance over each horizon, and a fit needs this many sessions of history.
+  har_rv:
+    weekly_sessions: 5
+    monthly_sessions: 22
+    horizons_days: [21, 63]
+    min_sessions: 252
+
+  # The overnight-gap distribution per instrument (DECISIONS D67, D133): the log move from one
+  # close to the next open, its quantiles over the daily window, apart across earnings dates.
+  overnight_gaps:
+    quantiles: [0.01, 0.05, 0.50, 0.95, 0.99]
+    min_gaps: 60
+
+# The weekly census of the option universe: below this many contracts clearing every gate it
+# reports so. Either the gates are miscalibrated or the sleeve is too small; neither is fixed
+# by relaxing a threshold.
+census:
+  min_viable_contracts: 3
