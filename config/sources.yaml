@@ -796,6 +796,12 @@ sources:
     archive_url: https://www.sec.gov/Archives
     tickers_url: https://www.sec.gov/files/company_tickers.json
     forms: ["4", "4/A"]
+    # The stock candidates whose filings are read: holdings lines of this country and the
+    # universe's shares listed on these venues.
+    country: US
+    venues: [XNYS, XNAS]
+    # EDGAR stamps an acceptance in its own local time.
+    timezone: America/New_York
     # SEC's fair-access limit is ten requests a second.
     request_spacing_seconds: 0.15
     # A first run, or one after a gap, reads at most this many days back.

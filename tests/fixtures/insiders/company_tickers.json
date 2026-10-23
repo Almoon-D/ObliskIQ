@@ -1,0 +1,37 @@
+{
+ "0": {
+  "cik_str": 320193,
+  "ticker": "AAPL",
+  "title": "Apple Inc."
+ },
+ "1": {
+  "cik_str": 1067983,
+  "ticker": "BRK-B",
+  "title": "BERKSHIRE HATHAWAY INC"
+ },
+ "2": {
+  "cik_str": 831259,
+  "ticker": "FCX",
+  "title": "FREEPORT-MCMORAN INC"
+ },
+ "3": {
+  "cik_str": 1996862,
+  "ticker": "BG",
+  "title": "Bunge Global SA"
+ },
+ "4": {
+  "cik_str": 915913,
+  "ticker": "ALB",
+  "title": "ALBEMARLE CORP"
+ },
+ "5": {
+  "cik_str": 1285785,
+  "ticker": "MOS",
+  "title": "MOSAIC CO"
+ },
+ "6": {
+  "cik_str": 801961,
+  "ticker": "MFM",
+  "title": "ABERDEEN MUNICIPAL INCOME FUND"
+ }
+}

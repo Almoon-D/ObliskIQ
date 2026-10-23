@@ -23,7 +23,7 @@ from pydantic import (
     model_validator,
 )
 
-from ..domain.base import NonEmptyText
+from ..domain.base import CountryCode, NonEmptyText
 from ..domain.calendar import Mic, TimeZoneName
 from .base import FrozenModel, Identifier
 from .schema_runtime import Anchor
@@ -294,6 +294,9 @@ class InsidersConfig(FrozenModel):
     archive_url: Url
     tickers_url: Url
     forms: list[NonEmptyText] = Field(min_length=1)
+    country: CountryCode
+    venues: list[Mic] = Field(min_length=1)
+    timezone: TimeZoneName
     request_spacing_seconds: NonNegativeFloat
     lookback_days: PositiveInt
     purchase_code: Annotated[str, Field(pattern=r"^[A-Z]$")]
