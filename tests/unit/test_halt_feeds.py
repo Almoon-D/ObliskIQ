@@ -300,3 +300,29 @@ async def test_a_venue_the_calendars_do_not_cover_is_not_mapped(
     assert result.incidents == 0
     assert result.read is not None
     assert result.read.left_out["market not followed"] == 4  # Nasdaq and NYSE American
+
+
+async def test_a_restored_state_keeps_only_mapped_venues_and_a_refused_one_restores_nothing(
+    shipped_settings: ObliskConfig,
+    build_calendars: Callable[..., Calendars],
+    store_worker: StoreWorker,
+    store: Store,
+) -> None:
+    settings = halt_settings(shipped_settings)
+    calendars = build_calendars(("XNYS", "XNAS"))
+    async with httpx.AsyncClient() as client:
+        with respx.mock as router:
+            router.get(FEED).mock(return_value=httpx.Response(200, content=FIXTURE.read_bytes()))
+            await halt_feed(settings, calendars, store_worker, client).refresh()
+        narrower = build_calendars(("XNYS",))  # XNAS no longer covered: its halts are left out
+        assert await halt_feed(settings, narrower, store_worker, client).restore() == 0
+        held = source_repo.halt_state(store, ORIGIN)
+        assert held is not None
+        foreign = held[1].replace(f'"origin": "{ORIGIN}"', '"origin": "another-feed"')
+        assert foreign != held[1]
+        source_repo.save_halt_state(store, ORIGIN, fetched_at=NOW, payload=foreign)
+        fresh = build_calendars(("XNYS", "XNAS"))
+        assert await halt_feed(settings, fresh, store_worker, client).restore() == 0  # refused
+    assert fresh.venue_status("XNAS", NOW.date(), conid=NIVFW).reason is not (
+        BlockReason.INCIDENT_OVERLAP
+    )

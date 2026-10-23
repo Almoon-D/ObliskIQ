@@ -143,3 +143,23 @@ async def test_the_heartbeat_file_reports_each_source_s_health_or_why_it_cannot(
     await s.service.jobs.heartbeat()
     _, facts = read_heartbeat(beat)
     assert facts["sources"] == "unreadable (RuntimeError)"
+
+
+async def test_a_halt_feed_that_breaks_never_stops_the_heartbeat(
+    make: Any, shipped_settings: ObliskConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    web = Web()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(web)) as http:
+        s = await make(settings=quiet(shipped_settings), http=http)
+        halts = s.service._halts
+        assert halts is not None
+
+        async def broken() -> Any:
+            raise RuntimeError("the store is locked")
+
+        monkeypatch.setattr(halts, "refresh", broken)
+        start = datetime(2026, 10, 26, 13, 50, tzinfo=UTC)
+        await run_until(s, start, start + timedelta(minutes=11))
+    last = s.service.jobs.last_heartbeat
+    assert last is not None
+    assert last >= start + timedelta(minutes=5)  # the heartbeats after the broken read ran

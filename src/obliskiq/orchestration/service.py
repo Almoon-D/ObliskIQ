@@ -356,7 +356,10 @@ class Service:
             self._path.calendars.reload_manual_incidents()
         except CalendarError as exc:  # built without a data directory: nothing to re-read
             log.debug("no manual incident file to re-read", extra={"error": str(exc)})
-        await self._read_halts()
+        try:
+            await self._read_halts()
+        except Exception:  # the halt feed never stops the heartbeat; its last state stays
+            log.exception("the halt feed could not be read")
         self._hooks.source = "heartbeat"
         try:
             await self._jobs.heartbeat()

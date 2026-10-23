@@ -31,7 +31,7 @@ from ..calendars.halt_feeds import (
 from ..calendars.service import Calendars
 from ..config.schema import ObliskConfig
 from ..domain.calendar import Incident
-from ..errors import UpstreamError
+from ..errors import CalendarError, UpstreamError
 from ..logging_setup import get_logger
 from ..store import sources as source_repo
 from ..store.worker import StoreWorker
@@ -105,16 +105,20 @@ class HaltFeed:
         return self._last_attempt is None or now - self._last_attempt >= every
 
     async def restore(self) -> int:
-        """Put the last accepted state back into the calendars; how many incidents it held. A
-        stored state that cannot be read restores nothing and is logged."""
+        """Put the last accepted state back into the calendars; how many incidents it restored.
+        An incident on a venue the feed no longer maps is left out; a stored state that cannot
+        be read, or that the calendars refuse, restores nothing and is logged (the start goes
+        on, and the next good read replaces it)."""
         held = await self._worker.run(source_repo.halt_state, self.origin)
         if held is None:
             return 0
         fetched_at, payload = held
+        mapped = set(self._markets.values())
         try:
-            incidents = _INCIDENTS.validate_json(payload)
-            self._calendars.accept_incidents(self.origin, self._current(incidents, self._now()))
-        except (ValidationError, ValueError) as exc:
+            stored = _INCIDENTS.validate_json(payload)
+            incidents = self._current(tuple(i for i in stored if i.venue in mapped), self._now())
+            self._calendars.accept_incidents(self.origin, incidents)
+        except (ValidationError, ValueError, CalendarError) as exc:
             log.error(
                 "the halt feed's stored state cannot be restored",
                 extra={"error": str(exc), "fetched_at": fetched_at.isoformat()},

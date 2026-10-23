@@ -1619,6 +1619,10 @@ settles it.
 - Session 16: the LLM layer builds on the extractor's stored series without breaking its segment
   (model `gemini-3.1-flash-lite`, prompt hash `5bed4ad9…ad77`); a change of either is a new segment
   and, for H7, a new pre-registration.
+- Source jobs run inline in the service loop, as the market collections do (D129): a throttled
+  GDELT run (two queries, three attempts each, spaced and backed off) can hold the heartbeat for
+  about seven minutes at 01:00 UTC, inside Tokyo's session. Run source jobs beside the loop before
+  an order on XTKS depends on the heartbeat's pace.
 - A declared source is built only when a consumer appears (D66): Eurostat's flash HICP dates,
   the BoE, the SNB and the rest of the regional list in `config/sources.yaml`.
 

@@ -2979,5 +2979,9 @@ Rejected:
   `obliskiq sources health` and the heartbeat file show it.
 - **Alerts.** Only the halt feed alerts: a scheduled source failing is reported, not alerted,
   since nothing trades on it yet.
+- **Inline jobs.** A source job runs in the service loop, as a market collection does, so a slow
+  one delays the next heartbeat. The slowest is a throttled GDELT run, bounded by its spacing,
+  backoffs and give-up rule (ROADMAP, Follow-ups). The heartbeat's halt-feed read never stops the
+  heartbeat.
 
 Rejected: an alert per failed source run, which GDELT's throttling alone would make noise.
