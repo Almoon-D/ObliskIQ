@@ -8,6 +8,7 @@ from datetime import date
 from typing import Any
 
 import pytest
+import yaml
 from vehicle_rig import REPO, attributes, select, with_checks, with_vehicles
 
 from obliskiq.config import ObliskConfig
@@ -37,27 +38,29 @@ def world(shipped_settings: ObliskConfig) -> ObliskConfig:
     return with_vehicles(settings, hedged_share_classes="allowed")
 
 
+def same_index(settings: ObliskConfig, allowed: bool) -> ObliskConfig:
+    switch = settings.vehicles.swap_partners.model_copy(update={"same_index": allowed})
+    return with_vehicles(settings, swap_partners=switch)
+
+
 def test_a_same_index_partner_is_refused_while_the_setting_is_off(world: ObliskConfig) -> None:
     correlations = {("XDWD", other): reading(0.999) for other in ("SPPW", "VHVE", "IWDA", "IWLE")}
-    found = group(world, "world_equity", "XDWD", correlations)
+    found = group(same_index(world, False), "world_equity", "XDWD", correlations)
     refused = {r.symbol: r.reason for r in found.refused}
     assert "same index as XDWD (MSCI World)" in refused["SPPW"]
     assert "vehicles.swap_partners.same_index" in refused["SPPW"]
     assert [p.symbol for p in found.partners] == ["VHVE"]
     # The owner's switch admits a same-index partner from another issuer.
-    on = world.model_copy(
-        update={
-            "vehicles": world.vehicles.model_copy(
-                update={
-                    "swap_partners": world.vehicles.swap_partners.model_copy(
-                        update={"same_index": True}
-                    )
-                }
-            )
-        }
-    )
-    partners = {p.symbol for p in group(on, "world_equity", "XDWD", correlations).partners}
-    assert {"SPPW", "VHVE"} <= partners
+    on = group(same_index(world, True), "world_equity", "XDWD", correlations)
+    assert {"SPPW", "VHVE"} <= {p.symbol for p in on.partners}
+
+
+def test_the_owner_allows_a_same_index_partner(shipped_settings: ObliskConfig) -> None:
+    """The owner's ruling of 2026-10-23 (config/owner.yaml, DECISIONS D123); the expert
+    default stays off."""
+    assert shipped_settings.vehicles.swap_partners.same_index
+    defaults = yaml.safe_load((REPO / "config/defaults/vehicles.yaml").read_text())
+    assert defaults["vehicles"]["swap_partners"]["same_index"] is False
 
 
 def test_another_issuer_on_another_index_correlated_enough_is_a_partner(
@@ -119,6 +122,10 @@ def test_an_unknown_index_with_the_switch_off_is_refused(world: ObliskConfig) ->
     index rule and is refused there."""
     gold = with_checks(world, (AssetClass.ETC, "XLON"), (AssetClass.ETC, "XMIL"))
     gold = attributes(gold, "SGLD", tracked_index=None)
-    found = group(gold, "gold", "IGLN", {("IGLN", "SGLD"): reading(0.99)})
+    correlations = {("IGLN", "SGLD"): reading(0.99)}
+    found = group(same_index(gold, False), "gold", "IGLN", correlations)
     reason = {r.symbol: r.reason for r in found.refused}["SGLD"]
     assert "tracked index is unknown" in reason
+    # With the switch on the index no longer matters: another issuer is enough.
+    on = group(same_index(gold, True), "gold", "IGLN", correlations)
+    assert [p.symbol for p in on.partners] == ["SGLD"]

@@ -119,13 +119,13 @@ securities backed by allocated bullion, eligible under `es` with a KID and taxed
 ## Partner pairs
 
 Correlation of the two vehicles' monthly returns in EUR, measured as above. A partner must come
-from another issuer (`es`, RIRPF art. 8; `tax-es.md`), and by default track another index
-(`vehicles.swap_partners`, D122); the floor is `min_correlation`.
+from another issuer (`es`, RIRPF art. 8; `tax-es.md`); the owner allows it to track the same index
+(`config/owner.yaml`, D123); the floor is `min_correlation`.
 
 | Role | Pair | ρ | Different issuer and index |
 |---|---|---|---|
 | world_equity | XDWD / VHVE, SPPW / VHVE, IWDA / VHVE | 0.996, 0.996, 0.992 | yes |
-| world_equity | XDWD / SPPW | 1.000 | issuer only (both MSCI World) |
+| world_equity | XDWD / SPPW | 1.000 | issuer only (both MSCI World): a partner since D123 |
 | em_equity | XMME / VFEA, IEMA / VFEA, EMIM / VFEA | 0.943, 0.939, 0.932 | yes |
 | em_equity | EMIM / XMME | 0.993 | yes |
 | euro_govt_intermediate | DBXQ / MTB, X57E / MTB, CSBGE7 / MTB, CSBGE7 / DBXQ | 0.997, 0.991, 0.990, 0.986 | yes |

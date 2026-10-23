@@ -5,6 +5,17 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.14.1] - 2026-10-23
+
+The owner's ruling on swap partners (DECISIONS D123).
+
+### Changed
+
+- `config/owner.yaml`: `vehicles.swap_partners.same_index: true`. A swap partner may track the
+  same index as the vehicle it replaces when it comes from another issuer; the expert default
+  stays off. World equity gains a partner (SPPW and XDWD).
+- MASTER_PLAN §11 records the ruling; §4, §5.4 and the glossary describe a partner accordingly.
+
 ## [0.14.0] - 2026-10-22
 
 Session 9, broker capabilities and the vehicle selector: what the Web API can do per asset class

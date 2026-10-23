@@ -94,8 +94,8 @@ tax:
     source: LIRPF art. 94.1.a and b, 94.2.a (BOE-A-2006-20764, consolidated text read 2026-10-22)
   # What a swap partner must differ in from what it replaces, under the law: its issuer, since
   # securities are homogeneous when they come from the same issuer with substantially the same
-  # rights (RIRPF art. 8). A different tracked index is the owner's prudential default, not a rule
-  # of this profile (vehicles.swap_partners.same_index, DECISIONS D7, D122).
+  # rights (RIRPF art. 8). A different tracked index is a prudential choice of the owner's, not a
+  # rule of this profile (vehicles.swap_partners.same_index, DECISIONS D7, D122, D123).
   swap_partner:
     differ_in_issuer: true
     differ_in_index: false

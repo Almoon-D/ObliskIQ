@@ -23,3 +23,9 @@ market_data:
   # Core L1 and the complimentary US feed the options sleeve starts on US-listed options; every
   # other venue is read delayed.
   plan: [opra_l1, eurex_core_l1, us_complimentary]
+
+vehicles:
+  swap_partners:
+    # A swap partner may track the same index as the vehicle it replaces, provided it comes from
+    # another issuer (Spain's rule, RIRPF art. 8). Your ruling of 2026-10-23 (DECISIONS D123).
+    same_index: true
