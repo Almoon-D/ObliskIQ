@@ -1,0 +1,55 @@
+[
+ {
+  "id": "410630",
+  "slug": "japan-recession-in-2026",
+  "title": "Japan recession in 2026?",
+  "active": true,
+  "closed": false,
+  "endDate": "2027-05-01T03:59:00Z",
+  "tags": [
+   {
+    "id": "100328",
+    "label": "Economy",
+    "slug": "economy"
+   },
+   {
+    "id": "370",
+    "label": "GDP",
+    "slug": "gdp"
+   },
+   {
+    "id": "102000",
+    "label": "Macro Indicators",
+    "slug": "macro-indicators"
+   },
+   {
+    "id": "100201",
+    "label": "recession",
+    "slug": "recession"
+   },
+   {
+    "id": "101522",
+    "label": "Japan",
+    "slug": "japan"
+   }
+  ],
+  "markets": [
+   {
+    "id": "2062005",
+    "slug": "japan-recession-in-2026",
+    "question": "Japan recession in 2026?",
+    "groupItemTitle": "",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.085\", \"0.915\"]",
+    "bestBid": 0.06,
+    "bestAsk": 0.11,
+    "lastTradePrice": 0.05,
+    "volumeNum": 4313.374048,
+    "liquidityNum": 828.9993,
+    "endDate": "2027-05-01T03:59:00Z",
+    "closed": false,
+    "active": true
+   }
+  ]
+ }
+]

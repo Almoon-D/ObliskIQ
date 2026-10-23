@@ -1,9 +1,9 @@
 """Incidents: halts and exceptional closures. An incident can block trading, never open it.
 
 Market-wide halts and closures are entered by hand in the manual incident file (no free
-market-wide feed is trustworthy for most venues); single-stock halt feeds arrive in a later
-session and replace their own entries wholesale. A feed may only raise incidents within the
-scope its venue declares.
+market-wide feed is trustworthy for most venues); a single-stock halt feed
+(:mod:`.halt_feeds`, read by ``data/halts.py``) replaces its own entries wholesale. A feed may
+only raise incidents within the scope its venue declares.
 
 An incident blocks ``[start, expected_end + grace]``, or from ``start`` onward when it has no
 expected end, until it is removed. That is a function of the record alone, so asking about a

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.14.1"
+version = "0.15.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -25,7 +25,9 @@ dependencies = [
     "playwright>=1.64,<2",
     "pydantic>=2.12,<3",
     "pydantic-settings>=2.11,<3",
+    "python-dotenv>=1.2.4,<2",
     "PyYAML>=6.0.3,<7",
+    "vadersentiment>=3.3.2,<4",
     "yfinance>=1.7,<2",
 ]
 
@@ -111,6 +113,12 @@ ignore_missing_imports = true
 # yfinance ships no type information; its use is confined to research/data.py, which reads its
 # history frame through iteration and hands out standard-library types.
 module = ["yfinance", "yfinance.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# vaderSentiment ships no type information; its use is confined to data/events/tone.py, which
+# returns the compound score as a float.
+module = ["vaderSentiment", "vaderSentiment.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

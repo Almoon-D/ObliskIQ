@@ -12,6 +12,7 @@ from obliskiq.util.timeutil import (
     epoch_ms_to_stamp,
     iso_date,
     parse_date,
+    parse_instant,
     parse_stamp,
     utc_now,
     utc_stamp,
@@ -81,3 +82,20 @@ def test_years_before_takes_the_year_length_from_the_caller():
     reference = date(2026, 10, 8)
     assert years_before(reference, 1, days_per_year=365) == date(2025, 10, 8)
     assert years_before(reference, 1, days_per_year=252) == reference - timedelta(days=252)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2026-12-10T04:59:00Z", datetime(2026, 12, 10, 4, 59, tzinfo=UTC)),
+        ("2026-10-14T14:00:00+11:00", datetime(2026, 10, 14, 3, 0, tzinfo=UTC)),
+        ("2025-10-02T21:53:09.691882Z", datetime(2025, 10, 2, 21, 53, 9, 691882, tzinfo=UTC)),
+    ],
+)
+def test_parse_instant_reads_an_offset_instant_as_utc(value, expected):
+    assert parse_instant(value) == expected
+
+
+@pytest.mark.parametrize("value", [None, "", "  ", "2026-12-10T04:59:00", "tomorrow", 1700000000])
+def test_an_instant_without_a_zone_or_unreadable_is_absent(value):
+    assert parse_instant(value) is None

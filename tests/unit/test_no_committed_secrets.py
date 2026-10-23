@@ -66,6 +66,7 @@ PLACEHOLDERS = {
     "U1234567": "a sequence account id in ObliskIQ-lite-MCP's client tests",
     "your_email@gmail.com": "the placeholder in Inversor-Inteligente's email notifier docs",
     "cpi@ons.gov.uk": "the ONS's published contact, inside a recorded ONS API response",
+    "webmaster@sec.gov": "the SEC's published contact, in the header of a recorded EDGAR index",
 }
 
 #: Domains that are never a person's address.

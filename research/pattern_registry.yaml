@@ -155,3 +155,26 @@ patterns:
       issuers sampled and 12.5 % in 2025), and point-in-time fundamentals before 2009 if the
       test is to start earlier (the SEC's XBRL data sets give them from 2009, every filer from
       mid-2011).
+  - id: core-risk-conditioning
+    hypothesis: H6
+    title: >-
+      Conditioning the core's risk on the variance risk premium, the excess bond premium and trend
+    status: idea
+    data_needed: >-
+      The VIX and realised volatility (FRED VIXCLS and daily closes), the excess bond premium
+      (Federal Reserve Board, collected from Session 10 with its declared publication lag) and
+      the core's trend series; batch 2 (Session 21) pre-registers the test.
+  - id: llm-event-tone
+    hypothesis: H7
+    title: The tone an LLM reads in issuers' press releases adds to the price signal
+    status: pre-registered
+    preregistration: research/preregistrations/llm-events.md
+    lock: research/preregistrations/llm-events.lock
+  - id: commodity-hedging-pressure
+    hypothesis: H9
+    title: Hedging pressure in the CFTC's positioning for commodity ETCs
+    status: idea
+    data_needed: >-
+      The weekly commercial and non-commercial positions of the commodity contracts (CFTC
+      Commitments of Traders from 2006, collected from Session 10 dated by release) and the
+      ETCs' daily closes; batch 2 (Session 21) pre-registers the test.

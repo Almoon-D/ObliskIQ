@@ -1,0 +1,44 @@
+[
+ {
+  "id": "261006020601F",
+  "market_and_exchange_names": "UST BOND - CHICAGO BOARD OF TRADE",
+  "report_date_as_yyyy_mm_dd": "2026-10-06T00:00:00.000",
+  "cftc_contract_market_code": "020601",
+  "open_interest_all": "1898067",
+  "noncomm_positions_long_all": "221234",
+  "noncomm_positions_short_all": "341046",
+  "comm_positions_long_all": "1422476",
+  "comm_positions_short_all": "1373770",
+  "nonrept_positions_long_all": "235041",
+  "nonrept_positions_short_all": "163935",
+  "commodity_name": "T-BONDS"
+ },
+ {
+  "id": "261006088691F",
+  "market_and_exchange_names": "GOLD - COMMODITY EXCHANGE INC.",
+  "report_date_as_yyyy_mm_dd": "2026-10-06T00:00:00.000",
+  "cftc_contract_market_code": "088691",
+  "open_interest_all": "396109",
+  "noncomm_positions_long_all": "245403",
+  "noncomm_positions_short_all": "35068",
+  "comm_positions_long_all": "55802",
+  "comm_positions_short_all": "300329",
+  "nonrept_positions_long_all": "50464",
+  "nonrept_positions_short_all": "16272",
+  "commodity_name": "GOLD"
+ },
+ {
+  "id": "26100613874AF",
+  "market_and_exchange_names": "E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE",
+  "report_date_as_yyyy_mm_dd": "2026-10-06T00:00:00.000",
+  "cftc_contract_market_code": "13874A",
+  "open_interest_all": "1932227",
+  "noncomm_positions_long_all": "212009",
+  "noncomm_positions_short_all": "366079",
+  "comm_positions_long_all": "1437320",
+  "comm_positions_short_all": "1394255",
+  "nonrept_positions_long_all": "248117",
+  "nonrept_positions_short_all": "137112",
+  "commodity_name": "S&P BROAD BASED STOCK INDICES"
+ }
+]

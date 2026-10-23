@@ -119,11 +119,13 @@ def test_americas_identities(shipped_settings: ObliskConfig) -> None:
     assert venues["XSGO"].timezone == "America/Santiago"
 
 
-def test_nasdaq_owns_the_structured_halt_feed(shipped_settings: ObliskConfig) -> None:
+def test_only_the_us_venues_take_the_single_stock_halt_feed(shipped_settings: ObliskConfig) -> None:
+    """Nasdaq Trader's halt feed reports single-stock halts on both US listing markets (D125);
+    every other venue's incidents stay manual, and no feed may close a venue."""
     venues = shipped_settings.venues
-    assert venues["XNAS"].incident_source.type == "structured_feed"
-    assert venues["XNAS"].incident_source.scope == "single_stock"
-    assert venues["XNYS"].incident_source.type == "manual"
+    fed = {mic for mic, venue in venues.items() if venue.incident_source.type == "structured_feed"}
+    assert fed == {"XNAS", "XNYS"}
+    assert {venues[mic].incident_source.scope for mic in fed} == {"single_stock"}
 
 
 def test_taiwan_models_no_pre_or_post_market(shipped_settings: ObliskConfig) -> None:

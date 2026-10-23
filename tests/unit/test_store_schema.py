@@ -1,4 +1,4 @@
-"""The shape of the migrations (``001_core.sql`` through ``008_capital.sql``) and the constraints
+"""The shape of the migrations (``001_core.sql`` through ``010_sources.sql``) and the constraints
 that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
@@ -204,6 +204,61 @@ SHAPE = {
         "candidate_key:TEXT!*, resolved_at:TEXT!, conid:INTEGER, symbol:TEXT, "
         "listing_exchange:TEXT, currency:TEXT, pinned:INTEGER!, pinned_for:TEXT, failure:TEXT"
     ),
+    # 010_sources
+    "cot_reports": (
+        "contract_code:TEXT!*, report_date:TEXT!*, release_date:TEXT!, market_name:TEXT!, "
+        "open_interest:INTEGER!, noncomm_long:INTEGER, noncomm_short:INTEGER, "
+        "comm_long:INTEGER, comm_short:INTEGER, nonrept_long:INTEGER, nonrept_short:INTEGER, "
+        "source:TEXT!, collected_at:TEXT!"
+    ),
+    "insider_filings": (
+        "accession:TEXT!*, form:TEXT!, issuer_cik:INTEGER!, issuer_symbol:TEXT, filed_on:TEXT!, "
+        "accepted_at:TEXT!, period_of_report:TEXT, collected_at:TEXT!"
+    ),
+    "insider_owners": (
+        "accession:TEXT!*, owner_cik:INTEGER!*, owner_name:TEXT!, is_director:INTEGER!, "
+        "is_officer:INTEGER!, is_ten_percent:INTEGER!, is_other:INTEGER!, officer_title:TEXT"
+    ),
+    "insider_transactions": (
+        "accession:TEXT!*, line:INTEGER!*, derivative:INTEGER!, security_title:TEXT!, "
+        "transaction_date:TEXT!, code:TEXT!, shares:REAL, price:REAL, acquired:INTEGER, "
+        "shares_after:REAL, direct:INTEGER"
+    ),
+    "event_markets": (
+        "venue:TEXT!*, market_id:TEXT!*, event_id:TEXT, question:TEXT!, outcome:TEXT!, "
+        "closes_at:TEXT, curated:INTEGER!, tags:TEXT!, first_seen_at:TEXT!, last_seen_at:TEXT!"
+    ),
+    "event_snapshots": (
+        "venue:TEXT!*, market_id:TEXT!*, observed_at:TEXT!*, probability:REAL!, bid:REAL, "
+        "ask:REAL, last_price:REAL, volume:REAL, liquidity:REAL"
+    ),
+    "gdelt_days": (
+        "query_id:TEXT!*, day:TEXT!*, articles:INTEGER!, monitored:INTEGER!, tone:REAL, "
+        "collected_at:TEXT!"
+    ),
+    "news_items": (
+        "item_id:TEXT!*, feed:TEXT!, kind:TEXT!, region:TEXT, symbol:TEXT, guid:TEXT, "
+        "link:TEXT, title:TEXT!, summary:TEXT, published_at:TEXT, collected_at:TEXT!, "
+        "raw:TEXT!, fallback_tone:REAL"
+    ),
+    "event_extractions": (
+        "extraction_id:INTEGER*, item_id:TEXT!, produced_at:TEXT!, provider:TEXT!, "
+        "model_id:TEXT!, prompt_version:INTEGER!, prompt_hash:TEXT!, status:TEXT!, "
+        "attempts:INTEGER!, output:TEXT, error:TEXT, input_tokens:INTEGER!, "
+        "output_tokens:INTEGER!, cost_usd:REAL!"
+    ),
+    "earnings_dates": (
+        "symbol:TEXT!*, collected_on:TEXT!*, report_at:TEXT!*, source:TEXT!, grade:TEXT!"
+    ),
+    "halt_feed_state": "origin:TEXT!*, fetched_at:TEXT!, incidents:TEXT!",
+    "source_health": (
+        "source:TEXT!*, last_attempt_at:TEXT!, last_success_at:TEXT, last_status:TEXT!, "
+        "last_rows:INTEGER!, consecutive_failures:INTEGER!, detail:TEXT"
+    ),
+    "source_targets": (
+        "source:TEXT!*, target:TEXT!*, last_attempt_at:TEXT!, last_success_at:TEXT, "
+        "last_ok:INTEGER!, last_rows:INTEGER!, detail:TEXT"
+    ),
 }
 
 INDEXES = {
@@ -249,6 +304,12 @@ INDEXES = {
     "ix_tax_realisations_disposed",
     # 009_universe
     "ix_holdings_candidate",
+    # 010_sources
+    "ix_cot_release",
+    "ix_insider_filings_issuer",
+    "ix_news_collected",
+    "ix_extractions_item",
+    "ix_extractions_produced",
 }
 
 STAMP = "2026-10-09T22:30:00Z"
@@ -584,7 +645,6 @@ def test_curve_points_are_unique_per_day_root_and_expiry(store: Store) -> None:
     "overrides",
     [
         {"value": None},
-        {"release_date": "2026-06-30"},  # published before the period it describes
         {"reference_date": "2026-07"},
         {"release_date": "12 August 2026"},
         {"series_id": ""},
@@ -594,6 +654,14 @@ def test_curve_points_are_unique_per_day_root_and_expiry(store: Store) -> None:
 )
 def test_a_bad_macro_row_is_refused(store: Store, overrides: dict[str, Any]) -> None:
     refuses(store, "macro", **overrides)
+
+
+def test_a_release_before_the_period_it_describes_is_held(store: Store) -> None:
+    """010_sources dropped 001's refusal: a flash estimate dated at its period's end, or a policy
+    rate announced before the day it applies, is public before its reference date."""
+    put(store, "macro", release_date="2026-06-30")
+    row = store.execute("SELECT reference_date, release_date FROM macro").fetchone()
+    assert tuple(row) == ("2026-07-01", "2026-06-30")
 
 
 def test_macro_holds_both_dates_and_may_lack_a_release_date(store: Store) -> None:

@@ -85,7 +85,8 @@ def _with_collection_path[T](loaded: Loaded, run: Callable[[OrderPath], Awaitabl
         return asyncio.run(go())
 
 
-def _report(collection: Collection, out: TextIO) -> None:
+def report_collection(collection: Collection, out: TextIO) -> None:
+    """A collection's verdict, rows, and each target that failed or fell back."""
     outcome = collection.judge()
     print(f"{collection.step}: {outcome.status} ({collection.rows} rows)", file=out)
     for target in collection.outcomes:
@@ -173,7 +174,7 @@ def _collect_candidates(loaded: Loaded, out: TextIO) -> int:
     else:
         print("no IBKR credentials: the holdings files alone are refreshed", file=out)
         collection = asyncio.run(refresh(None))
-    _report(collection, out)
+    report_collection(collection, out)
     return exit_code(collection.status)
 
 

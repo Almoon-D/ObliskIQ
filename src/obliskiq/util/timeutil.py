@@ -70,6 +70,18 @@ def parse_date(value: str | None) -> date | None:
     return None
 
 
+def parse_instant(value: object) -> datetime | None:
+    """An ISO 8601 instant that states its offset, in UTC. ``None`` when it is absent,
+    unparseable or naive: an instant without a zone is never given one."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    return None if parsed.tzinfo is None else parsed.astimezone(UTC)
+
+
 def epoch_ms_to_stamp(value: float) -> str:
     """IBKR bar timestamp (epoch ms) to a UTC stamp."""
     return utc_stamp(datetime.fromtimestamp(value / MILLISECONDS_PER_SECOND, tz=UTC))

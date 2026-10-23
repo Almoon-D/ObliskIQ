@@ -14,10 +14,12 @@ import argparse
 import asyncio
 import json
 import signal
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
+from ..data.runner import source_health
 from ..domain.orders import (
     TERMINAL_STATES,
     UNMANAGED,
@@ -27,6 +29,7 @@ from ..domain.orders import (
     IntentState,
     Sleeve,
 )
+from ..domain.sources import SourceState
 from ..errors import ObliskError
 from ..execution.killswitch import file_flag_on
 from ..orchestration.assemble import build_notifier, build_reporter, open_service
@@ -39,6 +42,7 @@ from ..store import nav as nav_repo
 from ..store import open_store
 from ..store import orders as repo
 from ..store import runs as run_repo
+from ..store import sources as source_repo
 from .capital import add_external_commands
 
 if TYPE_CHECKING:
@@ -174,6 +178,7 @@ def _status(loaded: Loaded, out: TextIO) -> int:
         series = nav_repo.nav_series(store, since=since, as_of=now.date())
         open_states = [state for state in IntentState if state not in TERMINAL_STATES]
         open_intents = repo.intents_in_states(store, open_states)
+        source_runs = source_repo.source_runs(store)
     mode = settings.execution.modes.initial if change is None else change.to_mode
     kill_on = file_flag_on(data_dir) or (kill is not None and kill.on)
     print(f"mode {mode.value} · kill switch {'ON' if kill_on else 'off'}", file=out)
@@ -202,6 +207,16 @@ def _status(loaded: Loaded, out: TextIO) -> int:
         file=out,
     )
     print(f"open intents: {len(open_intents)}", file=out)
+    health = source_health(settings, source_runs, now=now)
+    states = Counter(h.state for h in health)
+    print(
+        f"sources: {states[SourceState.OK]} ok, {states[SourceState.STALE]} stale, "
+        f"{states[SourceState.FAILING]} failing",
+        file=out,
+    )
+    for found in health:
+        if found.state is not SourceState.OK:
+            print(f"  {found.source} {found.state.value}: {found.reason}", file=out)
     alerts = _open_alerts(data_dir / settings.paths.alert_state)
     print(f"open alerts: {len(alerts)}", file=out)
     for key in alerts:

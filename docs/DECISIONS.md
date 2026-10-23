@@ -2816,3 +2816,172 @@ stands (not homogeneous, a ranked vehicle of the same exposure, correlation at l
   general anti-avoidance rule; a same-index partner from another issuer is not homogeneous under
   art. 8, but it leaves that argument open. With the switch on, an unknown tracked index no longer
   refuses a partner, since the index no longer decides.
+
+## Session 10 — Macro, positioning, insiders and events (2026-10-23)
+
+### D124 · Sources besides IBKR: declared with a consumer, dated by a release-date policy (§5.18, D66)
+
+- **One file.** `config/sources.yaml` declares every source with its area, its consumers
+  (`hypothesis:<id>` resolved against `research/pattern_registry.yaml` by a test,
+  `component:<name>`, `view:<name>` or `safety:<name>`), its credential's variable name, its
+  schedule and its bias notes. A `built` source names a consumer, a release-date policy and a
+  staleness window. A `declared` one names only the condition that would build it: Eurostat, the
+  BoE, the SNB, the Bundesbank, BoC Valet, the ABS, the RBA, BCB SGS, Norges Bank, MAS, Banxico,
+  CBRT EVDS, DBnomics and the MOF's JGB yields. Every macro series, CFTC contract, curated event
+  and feed is declared there too, with its consumers.
+- **Release-date policies.** Each series is dated by a release-date policy: `from_api` (ALFRED,
+  ONS, StatCan, EDGAR), `reference_plus_lag` (a published schedule), `same_as_reference` (only a
+  value public on the day it describes), `as_collected` (a reading taken when collected) or
+  `unknown`. A row of an `unknown` series is stored without a release date. A backtest read
+  refuses a series that is undeclared or `unknown` (`data/macro/catalog.py: backtest_series`):
+  no source without a defensible release date feeds a backtest.
+- **Lags changed from lite.** EIA's weekly stocks are dated 10 days after the week's Friday, not
+  lite's 3. They are published the Wednesday after, the Thursday after a Monday holiday, and over
+  Christmas 2025 the Monday ten days after (EIA's schedule), so 3 days dated every week before
+  its release, and 6 would have dated the Christmas week early. A lag dates late in an ordinary
+  week, which can delay knowledge and never advance it.
+- **Two vintages of FRED.** A FRED series reads its value from the initial release
+  (`value_vintage: initial`) or from the latest one (`latest`); its release date always comes from
+  the initial release. `latest` is for an index rebased mid-history: Eurostat's HICP, rebased to
+  2025 = 100 during 2026.
+- **The guards.** A series whose source reports units other than those declared fails
+  permanently (`UnitsChangedError`); its rows are not stored. A source is abandoned for the run
+  after `stop_after_consecutive_failures` failures in a row. A target succeeded within
+  `refetch_after_seconds` is not asked again.
+- **A prompt fact corrected.** The prompt names JGB yields among the BoJ series. The BoJ's
+  Time-Series database holds none (2026-10-23): the Ministry of Finance publishes them. The
+  macro board reads the monthly ten-year yield through FRED, and `mof_japan` is declared with its
+  condition.
+
+Rejected:
+
+- Lite's lag of three days for EIA, which dated each week before its release, and six, which
+  dated the Christmas week early.
+- Dating `unknown` series by their reference period, which fabricates a release date.
+- Building every listed regional source now, which adds collectors nothing consumes (D66).
+
+### D125 · A single-stock halt blocks its instrument, never its venue (§5.12 "Calendars and phases")
+
+- **The feed.** Nasdaq Trader's trade-halts feed is read every `refresh_minutes` by the service's
+  heartbeat (`data/halts.py`) through market-pulse-bot's structured-feed reader
+  (`calendars/halt_feeds.py`). Its `Market` code maps to a venue through `halts.markets`, and only
+  a venue whose `incident_source` is a single-stock structured feed may be mapped (config
+  validation). A halt of a universe instrument we hold a conid for becomes an instrument-scoped
+  feed incident. It runs from the halt to the resumption the feed shows, and is open-ended
+  without one. It reaches the calendars through `Calendars.accept_incidents`, which replaces the
+  feed's origin wholesale. The instrument cannot trade; its venue and the venue's other
+  instruments do.
+- **Market-wide halts.** Market-wide halts and exceptional closures stay manual entries: no
+  trustworthy free market-wide feed exists for most venues, and a feed is treated as market-wide
+  only once verified and declared in config.
+- **When the feed fails.** A failure keeps the last accepted state in force: a halt is never
+  lifted because the feed went quiet. That state is kept in the store and restored at the
+  service's start. `alert_after_failures` failures in a row raise an alert, and the next good read
+  clears it. A halt whose resumption plus the incident grace has passed is dropped.
+
+Rejected:
+
+- Blocking the venue on a single-stock halt, which stops every other instrument for one name.
+- Lifting halts on a failed read.
+- Mapping NYSE American (`AMEX`), which no universe instrument lists on.
+
+### D126 · Positioning and insiders, point in time (§5.5, §5.9)
+
+- **CFTC.** A COT report (legacy futures-only, by contract code) is public on its Tuesday plus 3
+  days, the Friday it is published. Positioning is the net non-commercial position as a share of
+  open interest. Its percentile is inclusive over the trailing `percentile_window_weeks` of
+  reports released by the day asked, after `percentile_min_weeks` of warm-up; its velocity is
+  measured over `velocity_weeks`.
+- **Collection and its gap.** History comes from the annual archives, each week from Socrata
+  (re-reading `incremental_weeks`, so a revised report replaces the one held). A government
+  shutdown delays releases (October–November 2025): the fixed lag then dates those reports early.
+  This is a follow-up (an exceptions list from the CFTC's notices).
+- **SEC Form 4.** Filings are collected forward from EDGAR's daily form index for the US stock
+  candidates. One network-free parser (`data/insiders/form4.py`) reads the full submission and
+  would be shared with any research loader. A filing is public on its filing date. Cluster inputs
+  (open-market purchases by officers and directors over `cluster_window_days`) count filings by
+  that date only. A day whose index is absent is a closed day, not a failure.
+
+Rejected:
+
+- Dating COT by its Tuesday, which is the position date and not the publication date.
+- Loading Form 4 history here: survivorship needs the research loader of H2 (D84).
+
+### D127 · Event sources: as collected, and only what a reading can stand on (§5.5)
+
+- **Prediction markets.** Polymarket (curated events by slug, and tag discovery above a liquidity
+  floor) and Kalshi (curated series) are stored as snapshots of the Yes probability, stamped when
+  read. Kalshi's probability is the midpoint when the quote is no wider than `max_mid_spread`,
+  else the last trade. A market without a Yes price is counted, never filled. Velocity is the
+  change against the newest snapshot at least `velocity_hours` older.
+- **GDELT.** Hourly volume and tone are summed into whole UTC days: after the span's first point
+  and before today, a day held keeping its first reading. GDELT leaves out the same hours in every
+  query (a gap in its data), and an omitted hour counts in neither total, so a day's share of
+  coverage is unbiased. The pulse is the newest day's Welford z-score against every earlier day
+  held, after `min_history_days`. Requests are spaced, a 429 waits the backoff, and after
+  `give_up_after_failed_queries` failures in a row the rest are not asked.
+- **News.** RSS 2.0, RSS 1.0 (RDF) and Atom feeds are refused unparsed when over
+  `max_body_bytes` or declaring a DTD or entity. Items are deduplicated by a hash of guid, else
+  link, else title and date, and stored raw. An item published more than `max_item_age_days`
+  before it was first read is left out.
+- **Issuers' feeds.** These are EDGAR company feeds: their entries carry no text, so each new
+  filing's press release (its first EX-99 exhibit, else its main document) is read as the item's
+  text. The issuers' investor-relations pages refused or lacked a feed (403 or 404, 2026-10-23).
+- **Tone without the LLM.** VADER, with config's financial terms, is only the offline fallback
+  tone.
+- **Earnings dates.** They come from Yahoo through yfinance and are research-grade: each read is
+  stored whole under its day. The catalyst calendar labels them `research` beside the official
+  central-bank and release dates config holds with their source pages.
+
+Rejected:
+
+- Polymarket's first leg as a stand-in for a missing Yes.
+- Requiring 24 hours for a GDELT day, which discarded half the days to GDELT's own gaps.
+- Scraping investor-relations pages.
+
+### D128 · The minimal EventExtractor (§5.10, D70)
+
+- **One provider.** One provider (`gemini`, OpenAI-compatible) and one model come from
+  `config/llm.yaml`. The key is read by the variable name config gives (`key_env`), from the
+  process environment or the env file (`Environment.named_secret`), never as a field of
+  `Environment`: adding a provider is a YAML entry. Without the key a run is skipped and the items
+  wait.
+- **The prompt.** The item enters through a template string whose interpolations are escaped
+  inside `<item>` delimiters it cannot close. The prompt's hash covers the instructions, the
+  template, the schema and the parameters; a change starts a new segment of H7.
+- **The answer.** It must validate as `ExtractedEvent` and cite the item's own source id. It is
+  asked once more with the validation error, then fails closed (`invalid`). A failed call stays
+  queued up to `max_call_failures`. An item too long for the context window fails without a call.
+- **The budget.** A call is made only if the month's spend plus its worst case (every attempt at
+  the estimated input and the full output allowance) stays within `monthly_usd`.
+- **The log.** Every call is appended (the table refuses updates and deletes) with its item, time
+  produced, provider, model, prompt version and hash, tokens and cost.
+- **Who runs it.** The service runs it after each news source's job, as a run of its own;
+  `obliskiq llm extract` runs it by hand. Nothing consumes its output.
+- **H7.** It is pre-registered as a `forward_test` (`research/preregistrations/llm-events.md`),
+  merged on its own before any live run and then locked. It tests whether the tone of issuers'
+  press releases adds to the price signal on outputs produced live.
+
+Rejected:
+
+- A field of `Environment` per provider key.
+- Retrying an invalid answer more than once.
+- Estimating a call's cost from its expected rather than its worst case.
+
+### D129 · Scheduled sources and their health (§5.12, §5.14)
+
+- **Scheduling.** Each built source runs at the moments its `schedule` names (a venue's open or
+  close moved by an offset, through the calendars) as a job `source:<id>.<n>`, a run record of
+  its own; the calendars of the service cover those venues. `obliskiq sources run` runs one by
+  hand. A run records its verdict, rows and reason as the source's health.
+- **Health.** A source is `failing` when its last run failed outright and `stale` when it has not
+  succeeded within `stale_after_hours` (or never has); otherwise it is `ok`. `obliskiq status`,
+  `obliskiq sources health` and the heartbeat file show it.
+- **Alerts.** Only the halt feed alerts: a scheduled source failing is reported, not alerted,
+  since nothing trades on it yet.
+- **Inline jobs.** A source job runs in the service loop, as a market collection does, so a slow
+  one delays the next heartbeat. The slowest is a throttled GDELT run, bounded by its spacing,
+  backoffs and give-up rule (ROADMAP, Follow-ups). The heartbeat's halt-feed read never stops the
+  heartbeat.
+
+Rejected: an alert per failed source run, which GDELT's throttling alone would make noise.

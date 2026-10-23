@@ -403,7 +403,7 @@ def test_an_incident_on_another_venue_does_not_touch_this_one(
 def test_a_feed_may_raise_only_what_its_venue_declares(
     build_calendars: Callable[..., Calendars],
 ) -> None:
-    calendars = build_calendars(("XNYS", "XNAS"))
+    calendars = build_calendars(("XNYS", "XNAS", "XLON"))
     feed = {"origin": "nasdaq-halts", "source": IncidentSource.FEED}
     single = halt(venue="XNAS", scope=IncidentScope.INSTRUMENT, conid=265598, **feed)
     calendars.accept_incidents("nasdaq-halts", [single])
@@ -411,6 +411,11 @@ def test_a_feed_may_raise_only_what_its_venue_declares(
         BlockReason.INCIDENT_OVERLAP
     )
     with pytest.raises(IncidentRejectedError, match="no incident feed"):
+        calendars.accept_incidents(
+            "lse-halts",
+            [halt(venue="XLON", scope=IncidentScope.VENUE, **feed | {"origin": "lse-halts"})],
+        )
+    with pytest.raises(IncidentRejectedError, match="instrument-scoped"):
         calendars.accept_incidents(
             "nyse-halts",
             [halt(venue="XNYS", scope=IncidentScope.VENUE, **feed | {"origin": "nyse-halts"})],

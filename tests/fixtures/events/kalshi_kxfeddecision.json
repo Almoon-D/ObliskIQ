@@ -1,0 +1,47 @@
+{
+ "cursor": "CgwIxej7xgYQkJD1yQISFktYRkVEREVDSVNJT04tMjhKQU4tSDA",
+ "markets": [
+  {
+   "ticker": "KXFEDDECISION-28JAN-H26",
+   "event_ticker": "KXFEDDECISION-28JAN",
+   "title": "Will the Federal Reserve Hike rates by >25bps at their January 2028 meeting?",
+   "yes_sub_title": "Hike >25bps",
+   "status": "active",
+   "close_time": "2028-01-26T18:59:00Z",
+   "yes_bid_dollars": "0.0800",
+   "yes_ask_dollars": "0.2100",
+   "last_price_dollars": "0.2200",
+   "volume_fp": "2458.31",
+   "open_interest_fp": "1225.31",
+   "market_type": "binary"
+  },
+  {
+   "ticker": "KXFEDDECISION-28JAN-H25",
+   "event_ticker": "KXFEDDECISION-28JAN",
+   "title": "Will the Federal Reserve Hike rates by 25bps at their January 2028 meeting?",
+   "yes_sub_title": "Hike 25bps",
+   "status": "active",
+   "close_time": "2028-01-26T18:59:00Z",
+   "yes_bid_dollars": "0.1300",
+   "yes_ask_dollars": "0.2300",
+   "last_price_dollars": "0.0400",
+   "volume_fp": "637.70",
+   "open_interest_fp": "147.00",
+   "market_type": "binary"
+  },
+  {
+   "ticker": "KXFEDDECISION-28JAN-H0",
+   "event_ticker": "KXFEDDECISION-28JAN",
+   "title": "Will the Federal Reserve Hike rates by 0bps at their January 2028 meeting?",
+   "yes_sub_title": "Fed maintains rate",
+   "status": "active",
+   "close_time": "2028-01-26T18:59:00Z",
+   "yes_bid_dollars": "0.5400",
+   "yes_ask_dollars": "0.6400",
+   "last_price_dollars": "0.6200",
+   "volume_fp": "1622.93",
+   "open_interest_fp": "420.45",
+   "market_type": "binary"
+  }
+ ]
+}

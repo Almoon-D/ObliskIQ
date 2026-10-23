@@ -35,6 +35,7 @@ from .schema_instruments import (
     PositionsConfig,
     TenorConfig,
 )
+from .schema_llm import LlmConfig
 from .schema_market_data import MarketDataConfig
 from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 from .schema_research import ResearchConfig
@@ -45,6 +46,7 @@ from .schema_runtime import (
     RuntimeConfig,
     TradingConfig,
 )
+from .schema_sources import SourcesConfig
 from .schema_universe import UniverseConfig
 from .schema_vehicles import BrokerCapabilitiesConfig, VehiclesConfig
 
@@ -136,6 +138,8 @@ class ObliskConfig(FrozenModel):
     universe: UniverseConfig
     vehicles: VehiclesConfig
     broker_capabilities: BrokerCapabilitiesConfig
+    sources: SourcesConfig
+    llm: LlmConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -207,6 +211,7 @@ class ObliskConfig(FrozenModel):
         problems += self._paper_order_problems()
         problems += self._currency_problems()
         problems += self._skeleton_problems()
+        problems += self._source_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
@@ -362,3 +367,66 @@ class ObliskConfig(FrozenModel):
             for where, conid in checked
             if (why := self._tradable(conid)) is not None
         ]
+
+    def _source_problems(self) -> list[str]:
+        """The sources' venues exist; the halt feed only reaches venues that accept a single-stock
+        feed; an issuer feed names a universe instrument; every series the universe names is
+        declared (a series the board or a commodity reads has a source and a release rule)."""
+        sources = self.sources
+        known = set(self.venues)
+        problems = [
+            f"sources.providers.{name}.schedule: {moment.venue} is not a venue declared in venues"
+            for name, provider in sorted(sources.providers.items())
+            for moment in provider.schedule
+            if moment.venue not in known
+        ]
+        halts = sources.halts.nasdaq_trader
+        for code, mic in sorted(halts.markets.items()):
+            venue = self.venues.get(mic)
+            if venue is None:
+                problems.append(f"sources.halts.nasdaq_trader.markets.{code}: {mic} is not a venue")
+            elif venue.incident_source.type != "structured_feed" or (
+                venue.incident_source.scope != "single_stock"
+            ):
+                problems.append(
+                    f"sources.halts.nasdaq_trader.markets.{code}: venues.{mic}.incident_source "
+                    "does not accept a single-stock feed"
+                )
+        if halts.time_venue not in known:
+            problems.append(
+                f"sources.halts.nasdaq_trader.time_venue: {halts.time_venue} is not a venue"
+            )
+        symbols = {instrument.symbol for instrument in self.universe.instruments}
+        problems += [
+            f"sources.news.feeds.{name}.symbol: {feed.symbol} is not a universe instrument"
+            for name, feed in sorted(sources.news.feeds.items())
+            if feed.symbol is not None and feed.symbol not in symbols
+        ]
+        declared = {series.id for series in sources.macro.series} | set(
+            sources.positioning.contracts
+        )
+        named: list[tuple[str, str]] = [
+            (f"universe.macro_board.{region}.{cell}", series)
+            for region, entry in self.universe.macro_board.regions.items()
+            for cell, config in entry.cells.items()
+            for series in config.series
+        ]
+        for root in self.universe.futures_roots:
+            for field, series in (
+                ("cot_series", root.cot_series),
+                ("inventory_series", root.inventory_series),
+                ("history_series", root.history_series),
+            ):
+                if series is not None:
+                    named.append((f"universe futures root {root.root}.{field}", series))
+        named += [
+            (f"universe commodity proxy {proxy.symbol}.reference", proxy.reference)
+            for proxy in self.universe.commodity_proxies
+            if proxy.reference_kind == "macro" and proxy.reference is not None
+        ]
+        problems += [
+            f"{where}: {series} is not declared in sources (macro.series or positioning.contracts)"
+            for where, series in named
+            if series not in declared
+        ]
+        return problems

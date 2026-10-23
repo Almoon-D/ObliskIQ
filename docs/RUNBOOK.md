@@ -15,7 +15,13 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
 - four **decision cycles** each trading day, each an hour after a venue's open (Tokyo, Xetra, New
   York) and one an hour before New York's close: the skeleton's targets are compared with the
   book and the gaps become orders;
-- the **daily digest** half an hour after New York's close.
+- the **daily digest** half an hour after New York's close;
+- each **data source** besides IBKR at the moments `config/sources.yaml` gives it (the macro
+  series, the CFTC's positioning, SEC Form 4 filings, prediction markets, GDELT, the news feeds,
+  earnings dates), each run recorded as the source's health; after each news run the
+  **EventExtractor** reads the new items, when `GEMINI_API_KEY` is set;
+- the **halt feed** (Nasdaq Trader) every 5 minutes, in the heartbeat: a halted instrument of the
+  universe is not traded until it resumes; its venue and the venue's other instruments are.
 
 Times follow each venue's own calendar, daylight saving and holidays included
 (`config/defaults/runtime.yaml`). The **skeleton** book is three UCITS funds of the core's variant
@@ -33,7 +39,11 @@ and `flatten` take a lock in the data directory; while the service runs, the oth
 2. `.env` at the checkout's root (from `.env.example`): `OBLISK_IBKR_PROFILE=paper`, the paper
    account id (`DU…`), `OBLISK_IBKR_TRANSPORT=gateway`, the paper username and password,
    `OBLISK_DATA_DIR`. Optional: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` (without them every
-   message goes to the log), `OBLISK_HEALTH_PING_URL` (a healthchecks.io check, say).
+   message goes to the log), `OBLISK_HEALTH_PING_URL` (a healthchecks.io check, say). The data
+   sources: `FRED_API_KEY`, `EIA_API_KEY` and `SEC_USER_AGENT` (a contact string SEC requires);
+   without one, the source or the feeds that need it report the missing variable as a failure. `GEMINI_API_KEY` starts the EventExtractor, and
+   with it the clock of hypothesis H7 (`research/preregistrations/llm-events.md`); without it the
+   news items wait.
 3. `config/owner.yaml`: how much the bot manages. The default is a capped book of 1,000 euros; a
    paper account holds about a million, so keep a cap there:
 
@@ -225,3 +235,20 @@ to 17:30 Madrid time); ASX's check reports no bid then and is read in its own se
 5. Paste the masked output into a short session: *"Record Session 9's capability probe per
    SESSION_PROMPTS §A.5."* The readings enter `config/defaults/capabilities.yaml` and
    `docs/knowledge/ibkr-capabilities.md` by a reviewed change; the probe writes nothing itself.
+
+## Session 10's sources (owner, on the machine)
+
+Reads the sources besides IBKR once by hand, so their first state is known before `serve` runs
+them on schedule. No broker session is opened; it can run beside the service.
+
+1. `uv run obliskiq sources list`: every source, its consumers, how its rows are dated, and the
+   condition a declared one waits for.
+2. `uv run obliskiq sources run all`: each built source once (a few minutes; GDELT paces itself).
+   Then `uv run obliskiq sources health`: every source `ok`, or the reason it is not.
+3. `uv run obliskiq sources catalysts`: the central-bank and release dates ahead, with the
+   earnings dates labelled research-grade.
+4. With `GEMINI_API_KEY` set: `uv run obliskiq llm extract` once, then `uv run obliskiq llm
+   status` (the items waiting, the month's spend against `config/llm.yaml`'s budget, the prompt
+   hash H7 is bound to).
+5. Paste the masked output of steps 2 and 4 into a short session: *"Record Session 10's source
+   runs per SESSION_PROMPTS §A.5."* GDELT and the first extraction close their VERIFY-LIVE rows.

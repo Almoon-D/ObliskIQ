@@ -171,7 +171,7 @@ def test_load_universe_reads_every_tradable_candidate_from_yahoo(
 
 
 def test_yahoo_symbols_follow_yahoo_s_own_forms(shipped_settings: Any) -> None:
-    from obliskiq.research.data import yahoo_symbol
+    from obliskiq.util.yahoo import yahoo_symbol
 
     yahoo = shipped_settings.research.data.yahoo
     assert yahoo_symbol("700", "SEHK", yahoo.suffixes, yahoo.digits) == "0700.HK"
@@ -180,6 +180,17 @@ def test_yahoo_symbols_follow_yahoo_s_own_forms(shipped_settings: Any) -> None:
     assert yahoo_symbol("BRK B", "NYSE", yahoo.suffixes, yahoo.digits) == "BRK-B"
     assert yahoo_symbol("7203", "TSEJ", yahoo.suffixes, yahoo.digits) == "7203.T"
     assert yahoo_symbol("X", "FTA", yahoo.suffixes, yahoo.digits) is None
+
+
+def test_a_listing_without_a_yahoo_suffix_is_skipped_and_said_so(shipped_settings: Any) -> None:
+    from obliskiq.research.data import Listing, universe_datasets
+
+    listing = Listing(
+        key="X", symbol="X", exchange="FTA", currency="EUR", inception=None, note="unpriced"
+    )
+    datasets, skipped = universe_datasets(shipped_settings, [listing], prefix="universe")
+    assert datasets == ()
+    assert skipped == ("X: no Yahoo suffix for FTA",)
 
 
 # ── the commands that read the broker, over the fake market ──

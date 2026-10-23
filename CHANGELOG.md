@@ -5,6 +5,53 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.15.0] - 2026-10-23
+
+Session 10, macro, positioning, insiders and events: every source besides IBKR declared with what
+consumes it and how its rows are dated, and the ones a hypothesis, a Hunter component, a view or a
+safety rule consumes collected point in time; the single-stock halt feed in the calendars; the
+catalyst calendar; source health and schedules; a minimal EventExtractor that starts H7's clock.
+H7 was pre-registered in its own pull request (#46) before any extractor run.
+
+### Added
+
+- `config/sources.yaml` (DECISIONS D124): providers with their consumers, activation condition,
+  release-date policy, schedule and staleness window; 74 macro series, 11 CFTC contracts, curated
+  prediction markets, GDELT queries, news feeds, the halt feed and the catalyst calendar. A
+  backtest read refuses a series without a defensible release date.
+- `data/macro/`: FRED and ALFRED (`output_type=4`, vintage windows, `value_vintage`), the ECB and
+  the SDMX decoder, EIA v2, ONS, StatCan, the BoJ, the BIS and the Fed's excess bond premium, with
+  units and frequency guards and per-target refetch windows.
+- `data/positioning/` (D126): the CFTC's annual archives and Socrata; net non-commercial share of
+  open interest, its percentile with warm-up and velocity, dated by release.
+- `data/insiders/` (D126): SEC Form 4 collected forward from EDGAR's daily index, one parser for
+  any research loader, cluster inputs by filing date.
+- `data/events/` (D127): Polymarket and Kalshi snapshots with velocity; GDELT's whole UTC days and
+  Welford pulse with warm-up; RSS, RDF and Atom feeds stored raw and deduplicated, an issuer
+  filing's press release read from EDGAR; VADER's fallback tone; Yahoo earnings dates
+  (research-grade); the catalyst calendar.
+- `calendars/halt_feeds.py` and `data/halts.py` (D125): Nasdaq Trader's trade halts as instrument
+  incidents through `Calendars.accept_incidents`, read by the heartbeat, the last state kept and
+  restored, repeated failures alerted.
+- `data/runner.py` (D129): any built source run by name, its run recorded as its health (ok,
+  stale, failing); source jobs `source:<id>.<n>` at each source's scheduled moments.
+- `llm/` (D128): the EventExtractor over one configured provider, the `ExtractedEvent` schema,
+  escaped template-string prompts and their hash, one retry then fail closed, the monthly budget,
+  every call stored append-only; run after each news source and by hand.
+- `research/preregistrations/llm-events.md` and its lock: H7 as a forward test (`kind:
+  forward_test`); H6, H7 and H9 in the pattern registry.
+- Commands: `obliskiq sources list|health|run|backfill|catalysts`, `obliskiq llm status|extract`;
+  `obliskiq status` and the heartbeat file report each source's health.
+- Migration `010_sources.sql`; `GEMINI_API_KEY` in `.env.example`, read by the name
+  `config/llm.yaml` gives (`Environment.named_secret`).
+
+### Changed
+
+- XNYS takes the single-stock halt feed beside XNAS (`venues.yaml`).
+- `util/yahoo.py` holds `yahoo_symbol`, shared by the research loader and the earnings collector.
+- The CFTC's archive needs a named user agent (`sources.user_agent`); EIA's weekly stocks are
+  dated ten days after the week, not lite's three.
+
 ## [0.14.1] - 2026-10-23
 
 The owner's ruling on swap partners (DECISIONS D123).

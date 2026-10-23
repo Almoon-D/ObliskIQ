@@ -37,6 +37,12 @@ portfolio with another as the Fama-MacBeth series of the candidate's monthly exc
 after costs and tax. Exploration runs on the development sample, the confirmation run on the
 later confirmation sample.
 
+A **forward test** (``kind: forward_test``, DECISIONS D70) tests a signal whose evidence can only
+be produced live, such as an LLM's reading of news: the outputs of one model and prompt
+(``segment``), stamped when produced, each scored on the excess return that followed its first
+close against the price signal (``controls``), up to an evaluation date fixed before any output
+existed. It has no development sample and no exploratory trial.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -956,6 +962,90 @@ class CrossSectionSpec(FrozenModel):
         return list(dict.fromkeys(name for pair in pairs for name in pair))
 
 
+class SegmentSpec(FrozenModel):
+    """The LLM outputs a forward test reads: one model and one prompt (DECISIONS D70)."""
+
+    provider: Key
+    model_id: NonEmptyText
+    prompt_version: PositiveInt
+    prompt_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class ForwardEventsSpec(FrozenModel):
+    """Which outputs are events: their feeds, the extraction status and the feature tested."""
+
+    feeds: list[Key] = Field(min_length=1)
+    status: Literal["ok"]
+    feature: Literal["tone"]
+    overlap: Literal["first_per_instrument_within_horizon"]
+
+
+class ForwardWindowSpec(FrozenModel):
+    """When the sample is read: from the segment's first output to the later of a date and a
+    span after that first output (fixed before any output exists)."""
+
+    not_before: date
+    months_after_first: PositiveInt
+
+
+class ForwardBootstrapSpec(FrozenModel):
+    n_boot: PositiveInt
+    block_event_dates: PositiveInt
+    seed: NonNegativeInt
+
+
+class ForwardAdequacySpec(FrozenModel):
+    min_events: PositiveInt
+    min_price_coverage: Annotated[Decimal, Field(gt=0, le=1)]
+
+
+class ForwardPowerSpec(FrozenModel):
+    """Power inputs stated before any output: the spread of the outcome and of the feature, and
+    the events expected."""
+
+    sd_outcome: Positive
+    sd_feature: Positive
+    events: PositiveInt
+
+
+class ForwardTestSpec(FrozenModel):
+    """A forward test (``kind: forward_test``) of a signal whose evidence can only be produced
+    live (DECISIONS D70): events stamped when produced, each scored on the returns that followed
+    its first close, against the price signal it is said to add to."""
+
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]
+    title: NonEmptyText
+    kind: Literal["forward_test"]
+    hypothesis: Annotated[str, Field(pattern=r"^H[0-9]+$")]
+    mechanism: NonEmptyText
+    citation: NonEmptyText
+    universe: NonEmptyText
+    data_status: NonEmptyText
+    segment: SegmentSpec
+    events: ForwardEventsSpec
+    entry: Literal["first_close_after_produced"]
+    horizon_sessions: PositiveInt
+    benchmark: Key
+    controls: list[Literal["reaction", "momentum"]] = Field(min_length=1)
+    momentum_sessions: PositiveInt
+    primary_metric: Literal["excess_log_return_slope"]
+    theta: Positive
+    theta_justification: NonEmptyText
+    alpha: Rate | None
+    target_power: Rate | None
+    tests_in_confirmation: Literal[1]
+    adjustment: NonEmptyText
+    trial_budget: Literal[0]
+    window: ForwardWindowSpec
+    bootstrap: ForwardBootstrapSpec
+    subperiods: Literal["halves"]
+    placebo: Literal["previous_event_feature"]
+    cost_uncertainty_multiplier: Positive
+    robustness: NonEmptyText
+    adequacy: ForwardAdequacySpec
+    power: ForwardPowerSpec
+
+
 @dataclass(frozen=True, slots=True)
 class Prereg:
     path: Path
@@ -969,6 +1059,14 @@ class CrossSectionPrereg:
     path: Path
     sha256: str
     spec: CrossSectionSpec
+    body: str
+
+
+@dataclass(frozen=True, slots=True)
+class ForwardTestPrereg:
+    path: Path
+    sha256: str
+    spec: ForwardTestSpec
     body: str
 
 
@@ -1015,12 +1113,15 @@ def load_prereg(path: Path) -> Prereg:
     return Prereg(path=path, sha256=file_sha256(path), spec=spec, body=body)
 
 
-def load_any(path: Path) -> Prereg | CrossSectionPrereg:
-    """Read and validate a pre-registration of either kind, chosen by its ``kind``."""
+def load_any(path: Path) -> Prereg | CrossSectionPrereg | ForwardTestPrereg:
+    """Read and validate a pre-registration of any kind, chosen by its ``kind``."""
     data, body = _read(path)
     if isinstance(data, dict) and data.get("kind") == "cross_section":
         spec = _validate(CrossSectionSpec, data, path)
         return CrossSectionPrereg(path=path, sha256=file_sha256(path), spec=spec, body=body)
+    if isinstance(data, dict) and data.get("kind") == "forward_test":
+        forward = _validate(ForwardTestSpec, data, path)
+        return ForwardTestPrereg(path=path, sha256=file_sha256(path), spec=forward, body=body)
     return Prereg(
         path=path, sha256=file_sha256(path), spec=_validate(PreregSpec, data, path), body=body
     )

@@ -22,7 +22,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR | done (IBKR's cash-activity shapes not observed: no paper login from the cloud) | v0.12.0 |
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | done (collectors built against fixtures: no IBKR call from the cloud; holdings and research history loaded live) | v0.13.0 |
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | done (capabilities from the owner's paper run and lite; the probe on paper is a command for the owner) | v0.14.0 |
-| 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | planned | |
+| 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | done (every built source but GDELT collected live from the cloud; the extractor waits on its key; H7 pre-registered, #46) | v0.15.0 |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | planned | |
@@ -38,6 +38,85 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Session 10 — Macro, positioning, insiders and events (2026-10-23, v0.15.0)
+
+**Landed.**
+- `config/sources.yaml` (D124): every source besides IBKR with its consumers, activation
+  condition, release-date policy, schedule and staleness window. Sixteen sources are built and
+  fourteen declared with the condition that would build them (Eurostat, BoE, SNB, Bundesbank, BoC
+  Valet, ABS, RBA, BCB SGS, Norges Bank, MAS, Banxico, CBRT EVDS, DBnomics, the MOF's JGB yields).
+  `data/macro/catalog.py: backtest_series` refuses a series without a defensible release date.
+- `data/macro/`: FRED and ALFRED (`output_type=4`, vintage windows clamped to ALFRED's vintages,
+  `value_vintage`), the ECB and the SDMX decoder, EIA v2, ONS, StatCan, the BoJ, the BIS and the
+  Fed's excess bond premium. 74 series with units, frequency and release rule, guarded on units
+  and frequency.
+- `data/positioning/` and `data/insiders/` (D126): CFTC archives and Socrata (net non-commercial
+  share of open interest, percentile with warm-up, velocity, by release date); SEC Form 4 forward
+  from EDGAR's daily index, cluster inputs by filing date.
+- `data/events/` (D127): Polymarket and Kalshi snapshots and velocity; GDELT's whole UTC days and
+  Welford pulse; the news feeds (RSS 2.0, RDF, Atom), deduplicated, stored raw, an issuer filing's
+  press release read from EDGAR; VADER's fallback tone; Yahoo earnings dates; the catalyst
+  calendar (`obliskiq sources catalysts`).
+- Halts (D125): `calendars/halt_feeds.py` (market-pulse-bot's structured-feed reader and the
+  Nasdaq Trader halts as instrument incidents) and `data/halts.py`. The heartbeat reads the feed
+  every five minutes through `Calendars.accept_incidents`; the last state is kept, restored at
+  the start and alerted after three failures. XNYS takes the single-stock feed beside XNAS.
+- `data/runner.py` and the schedule (D129): sources run by name (`obliskiq sources
+  run|health|list|backfill`) and as service jobs `source:<id>.<n>`. Each run's verdict is the
+  source's health (ok, stale, failing), shown by `obliskiq status` and the heartbeat file.
+- `llm/` (D128): the EventExtractor (`ExtractedEvent`, escaped template-string prompt and its
+  hash, one retry then fail closed, a context-window guard, the monthly budget, every call
+  appended), run after each news source and by `obliskiq llm extract|status`. Without
+  `GEMINI_API_KEY` it is skipped and the items wait.
+- H7 pre-registered as a forward test in its own PR (#46, merged 2fcc76e) before any extractor
+  run, and locked (`research/preregistrations/llm-events.lock`). `research/prereg.py` reads `kind:
+  forward_test`, and the history commands refuse it. H6, H7 and H9 are in the pattern registry; a
+  test resolves every `hypothesis:` consumer against it.
+
+**Tests.** As the acceptance names them:
+- every fetcher against fixtures captured live on 2026-10-23 (sidecar notes in each
+  `tests/fixtures/*/README.md`);
+- COT and Form 4 point in time (a report before its release, a filing before its filing date, are
+  absent);
+- no source without a release-date policy feeds a backtest;
+- the halt scope (an instrument blocked, its venue and the venue's other instruments not; a feed
+  refused a venue-scoped incident).
+
+Also tested:
+- failure branches of every collector (HTTP errors, non-JSON, a throttled GDELT, a missing SEC
+  agent, a body over its cap, a DTD, an unreadable filing);
+- the Welford z-score against the distribution before the observation;
+- the extractor's escaping, hash, retry, failing closed, failed call, budget and context window;
+- the service running source jobs, the extractor after the news feeds, and the halt feed's
+  failure, alert and restart.
+
+`make check` green (see the PR).
+
+**Acceptance.** Each fetcher has fixture tests and a live probe: every built source but GDELT
+collected live into a fresh store on 2026-10-23 (`docs/knowledge/macro-sources.md`, its status
+table). GDELT answered 429 to this egress, and its fixtures are live captures from the same day
+(VERIFY-LIVE below).
+
+**Deferred.** Nothing of the prompt. The extractor's first live run waits on `GEMINI_API_KEY` (the
+owner's). GDELT's collection is verified from the deployment machine. No IBKR call from the
+session.
+
+**Live findings** (`docs/knowledge/macro-sources.md`):
+- The BoJ's database holds no JGB yields (the MOF publishes them); `SESSION_PROMPTS.md` §10
+  deliverable 2 corrected to match.
+- EIA released the week ending 2025-12-19 ten days later, so the lag is 10, not lite's 3.
+- The CFTC's archive refuses httpx's default user agent (403).
+- A missing EDGAR index is a 403 with an XML `AccessDenied`. EDGAR's company feeds carry no text;
+  the press release is in the filing (an 8-K's EX-99.1).
+- The issuers' investor-relations pages and ESMA's feed refuse the container or lack a feed.
+- GDELT omits the same hours in every query and throttles the shared egress.
+- Kalshi's recession series is `KXRECSSNBER`.
+- Nasdaq Trader's halts listed NASDAQ and AMEX markets only.
+- `yfinance` returned no earnings dates for LISN and JDEP.
+
+**Prompt edit.** §10 deliverable 2 named JGB yields among the BoJ series; corrected to USDJPY and
+the monetary base, the yields being the MOF's (a fact, not scope).
+
 ### Same-index swap partners (owner request, 2026-10-23, v0.14.1)
 
 The owner allowed a swap partner on the same index from another issuer (D123):
@@ -1519,8 +1598,33 @@ settles it.
 | UIQK's currency and share class (IBKR describes conid 128562052 as "H. CHF"; its ISIN is the USD A-acc class) | 9 | the capability probe |
 | The PRIIPs KIDs of TIP1D, UIQK and Xetra-Gold, and Xetra-Gold's custody fee at IBKR (ubs.com refused the container; ineligible until read) | 9 | the next universe review |
 | The DGT's reading of a bullion-backed ETC's result (a gain, or capital income under LIRPF art. 25.2) in an official text | 9 | the monthly tax-source check (§5.16) |
+| GDELT's collection end to end from the deployment machine (the cloud session's shared egress met HTTP 429 on nearly every request, 2026-10-23; the fixtures are that day's live answers) | 10 | the first week of `serve` |
+| An NYSE-listed halt in Nasdaq Trader's feed and its `Market` code (only NASDAQ and AMEX were listed on 2026-10-23); until seen, XNYS's mapping can add blocks and never lift one | 10 | the first NYSE halt while `serve` runs |
+| A halt with its resumption as the feed shows it (`ResumptionDate`, `ResumptionTradeTime` formats; none was listed on 2026-10-23) | 10 | the first resumed halt while `serve` runs |
+| The EventExtractor's first call: Gemini's OpenAI-compatible reply, its `usage`, and the `json_schema` response format accepted (no key in the session) | 10 | the owner setting `GEMINI_API_KEY` |
+| The service's source jobs, the halt refresh and the extractor on the machine (built and tested over the fake broker and a mock web) | 10 | the first week of `serve` |
+| `yfinance`'s earnings dates from the deployment machine (worked from the cloud, 2026-10-23) | 10 | the first week of `serve` |
 
 ## Follow-ups
+
+- CFTC release exceptions: the 2025 government shutdown delayed the October–November reports,
+  which the fixed lag of three days dates early; an exceptions list from the CFTC's notices before
+  a backtest reads those weeks (D126).
+- A 6-K without an exhibit carries its release after the form's cover page (Santander's); the
+  cover's boilerplate opens the text the extractor reads. Skip the cover in
+  `data/events/rss.py: filing_text` when Session 16 measures extraction quality.
+- Session 15: the event components read `data/events/readings.py` (velocity, pulse),
+  `data/positioning/readings.py` and `data/insiders/clusters.py`; GDELT's asset map from the old
+  ObliskIQ's `gdelt_regions.json` is component logic and lands there.
+- Session 16: the LLM layer builds on the extractor's stored series without breaking its segment
+  (model `gemini-3.1-flash-lite`, prompt hash `5bed4ad9…ad77`); a change of either is a new segment
+  and, for H7, a new pre-registration.
+- Source jobs run inline in the service loop, as the market collections do (D129): a throttled
+  GDELT run (two queries, three attempts each, spaced and backed off) can hold the heartbeat for
+  about seven minutes at 01:00 UTC, inside Tokyo's session. Run source jobs beside the loop before
+  an order on XTKS depends on the heartbeat's pace.
+- A declared source is built only when a consumer appears (D66): Eurostat's flash HICP dates,
+  the BoE, the SNB and the rest of the regional list in `config/sources.yaml`.
 
 - Dependency currency (D96), each with its review date:
   - by 2026-11-30: Python 3.15. Widen `requires-python` to `<3.16`, try 3.15 in CI, then move
