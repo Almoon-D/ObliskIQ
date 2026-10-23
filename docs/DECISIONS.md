@@ -2797,3 +2797,22 @@ reading the research store.
   source (`docs/knowledge/tax-es.md`).
 - **Retained income.** `es.yaml: retained_income.deferred: true` (LIRPF art. 94): an accumulating
   class defers the tax on what it retains, the selector's tax criterion.
+
+## Owner decision (2026-10-23)
+
+### D123 · Swap partners on the same index (§4, §5.4, §11, D7, D122)
+
+The owner turned on `vehicles.swap_partners.same_index` in `config/owner.yaml`. A swap partner may
+now track the same index as the vehicle it replaces, provided it comes from another issuer: that
+is the rule Spain's law sets (RIRPF art. 8, `es.yaml: swap_partner`), and every other condition
+stands (not homogeneous, a ranked vehicle of the same exposure, correlation at least
+`min_correlation`). The expert default in `config/defaults/vehicles.yaml` stays off.
+
+- **What it changes today.** World equity gains a partner: SPPW and XDWD both track MSCI World
+  and read 1.000 monthly over five years (State Street and Xtrackers). The other roles are
+  unchanged: no other proposable pair from two issuers tracks one index. IGLN and SGLD (LBMA
+  Gold) and CMOD and ICOM (Bloomberg Commodity) will be, once the probe verifies the LSE and Milan.
+- **The risk the owner accepts.** D7 kept a different index to remove any argument under the
+  general anti-avoidance rule; a same-index partner from another issuer is not homogeneous under
+  art. 8, but it leaves that argument open. With the switch on, an unknown tracked index no longer
+  refuses a partner, since the index no longer decides.

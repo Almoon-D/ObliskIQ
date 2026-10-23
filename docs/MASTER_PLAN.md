@@ -177,7 +177,7 @@ with a real engine, built for what the evidence supports. Docs stay lean: this f
 | Adding to long options after the move confirms. | Rejected. Options are bought in one block when implied vol is cheap; exits are scaled. Pyramiding applies to shares only. | Adding later pays a higher premium for the same convexity. |
 | Kelly with probabilities shrunk toward 0.5. | Rejected. Probabilities shrink toward the **base rate** (market-implied or random-walk), and until a layer is calibrated it sizes by a fixed risk budget (§5.11). | A 3:1 target is rarely a coin flip; anchoring at 0.5 overstates the edge, while anchoring at the base rate with no evidence gives Kelly ≈ 0 and would freeze the satellite. |
 | A fixed account-size threshold for direct bonds. | Rejected in favour of a computed rule: a bond qualifies only when its minimum increment and per-order minimum commission fit the role's amount and it beats the best fund on all-in cost (§5.3). | The rule excludes bonds at small sizes and admits them as capital grows, without a magic number. |
-| Swap partners on the same index from another issuer. | Off by default; swap partners track a different, highly correlated index (S&P 500 ↔ MSCI USA, MSCI World ↔ FTSE Developed). | Different issuers are not homogeneous under art. 8 RIRPF, which requires "un mismo emisor"; a different index also removes any argument under the general anti-avoidance rule at negligible tracking cost. |
+| Swap partners on the same index from another issuer. | Off by default; swap partners track a different, highly correlated index (S&P 500 ↔ MSCI USA, MSCI World ↔ FTSE Developed). The owner has turned it on (§11, DECISIONS D123). | Different issuers are not homogeneous under art. 8 RIRPF, which requires "un mismo emisor"; a different index also removes any argument under the general anti-avoidance rule at negligible tracking cost. |
 | Free-threaded Python (3.14t) in production. | Standard CPython 3.14; parallel computation runs through a process pool (`compute.workers` in config); code kept thread-safe; 3.14t is reconsidered only if profiling shows CPU-bound parallel work that a process pool cannot serve. | Simultaneous calculation does not need 3.14t: numpy releases the GIL inside its kernels and a process pool parallelises Python-level loops today. 3.14t is slower single-threaded and not every scientific wheel ships a free-threaded build. |
 | Delayed quotes for everything. | Rejected for options (real-time quotes on the option and its underlying are required); accepted for stocks, ETFs, funds and bonds with safeguards (§5.13). | Option spreads are wide and stale mids misprice. |
 | One authentication route only. | Two transports behind one client: the Client Portal Gateway with automated login for paper, OAuth 1.0a for the live account where IBKR grants it (§5.12, DECISIONS D42). | IBKR told the owner (2026-10-08) that OAuth 1.0a is for institutional clients and retail accounts use the Gateway, although lite ran OAuth live on 2026-09-10. Paper logins have no second factor, so the Gateway can run unattended in paper. |
@@ -311,8 +311,9 @@ cycles. All of these live in config with a source per value.
 - **Tax-aware execution.** Realised losses are taken freely (they offset gains); a trend
   reduction that would realise a large gain is funded first from cash flows and other
   lines, and executed only when its pre-registered benefit exceeds the tax cost.
-  Re-entry after a loss sale uses a swap partner (a vehicle on a different, highly
-  correlated index from another issuer) so the two-month rule does not defer the loss.
+  Re-entry after a loss sale uses a swap partner (a highly correlated vehicle from another
+  issuer, on a different index unless the owner allows the same one, §11) so the two-month
+  rule does not defer the loss.
   Spanish rules are in §5.16.
 - **Rebalancing.** Monthly evaluation, daily drift check, wide inner/outer bands, minimum
   trade, integer shares, cash flows first, sells beyond the outer band only.
@@ -1021,6 +1022,7 @@ reuse its prompt.
 | 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count), the peak taken once a day at the last cycle's NAV: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Reached on at most 5 % of 20-year paths (D91), which resolves to A on Session 4c's frontier. |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient on the objective at the owner's point (D92); the static variants are the fallback and the benchmark. Total-risk scaling was tested first (Session 4e: none sufficient, D95); the other mechanisms are untested. |
+| 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
@@ -1039,8 +1041,8 @@ shortfall. **TWR** time-weighted return. **cOID** client order id. **LST** live 
 token. **PRIIPs** EU regulation requiring a key information document; blocks US ETFs for
 EU retail investors. **UCITS** EU fund regime. **Zombie** an option whose probability of
 reaching its target has collapsed. **Penalty balance** option-sleeve debt from losses,
-repaid by realised gains. **Swap partner** an equivalent vehicle from a different issuer
-on a different, highly correlated index. **Base rate** the market-implied or random-walk
+repaid by realised gains. **Swap partner** an equivalent, highly correlated vehicle from a
+different issuer, on a different index unless the owner allows the same one. **Base rate** the market-implied or random-walk
 probability of reaching a target. **Unmanaged** holdings the bot counts but never trades.
 **θ** the smallest net effect a pre-registered test must show to be worth having.
 **Sufficient, insufficient, inconclusive, not evaluable** the four outcomes of a test

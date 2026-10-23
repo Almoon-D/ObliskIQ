@@ -38,6 +38,20 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Same-index swap partners (owner request, 2026-10-23, v0.14.1)
+
+The owner allowed a swap partner on the same index from another issuer (D123):
+`config/owner.yaml` sets `vehicles.swap_partners.same_index: true`; the expert default stays off.
+
+- On Session 9's research history, world equity gains a partner: SPPW and XDWD (MSCI World, State
+  Street and Xtrackers, 1.000 monthly over five years). The other roles are unchanged.
+- MASTER_PLAN §11 records the ruling (item 19); §4, §5.4 and the glossary say a partner tracks a
+  different index unless the owner allows the same one.
+- The tests that judge the switch set it themselves; one checks the owner's file turns it on and
+  the default leaves it off.
+
+No IBKR call.
+
 ### Session 9 — Broker capabilities and vehicle selector (2026-10-22, v0.14.0)
 
 **Landed.**
@@ -1654,14 +1668,16 @@ settles it.
 - The selector does not score the withholding a fund suffers by its domicile (MASTER_PLAN §5.8):
   every equity candidate is Irish and a fund's closes are net of it (D120). It joins when a
   candidate of another domicile competes for an equity role.
-- Swap partners exist today for euro_govt_long only (DBXG ↔ IBCL, 0.996): the other roles' partners
-  list on venues whose capabilities are unverified (VHVE on XMIL, EMIM and TPSA on XAMS, MTB on
-  XPAR, VDTA on XMIL) and appear when the probe verifies them. MSCI EM and FTSE Emerging read
-  0.93 to 0.94, below `min_correlation`; EMIM (MSCI EM IMI) reads 0.993 against XMME.
+- Swap partners exist today for euro_govt_long (DBXG ↔ IBCL, 0.996) and, since D123, world_equity
+  (SPPW ↔ XDWD, 1.000): the other roles' partners list on venues whose capabilities are
+  unverified (VHVE on XMIL, EMIM and TPSA on XAMS, MTB on XPAR, VDTA on XMIL, the gold ETCs and
+  commodity ETFs on XLON and XMIL) and appear when the probe verifies them. MSCI EM and FTSE
+  Emerging read 0.93 to 0.94, below `min_correlation`; EMIM (MSCI EM IMI) reads 0.993 against
+  XMME.
 - The cash role's second and third candidates are unmeasured: Yahoo has no `CSH1.PA`, and CSH2's
   history starts on 2025-03-17 (36 monthly returns from 2028-03).
 - **Owner:** rule on currency-hedged share classes (`vehicles.hedged_share_classes`, MASTER_PLAN
-  §11) and, if wanted, the same-index swap partner (`vehicles.swap_partners.same_index`, D122).
+  §11).
 - Session 11: add a column-targeted writer for the solved implied volatility (snapshot upserts
   replace the whole row); add a date-leading index on `bars` if a cross-sectional read needs it.
 - A migration is forward-only: a later session that changes a table adds `002_*.sql`; it never

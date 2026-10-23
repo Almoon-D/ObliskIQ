@@ -120,8 +120,12 @@ def test_vehicles_ranks_a_role_and_explains_every_rejection(data_dir: Path) -> N
     assert "tracking 0.00 x 0.25: unmeasured: no research store" in out
     assert "IWDA [capability_unverified]" in out
     assert "IWLE [hedge_not_allowed]" in out
+    # The owner allows a same-index partner (config/owner.yaml): XDWD and SPPW both track MSCI
+    # World, so without a research store the pair is refused only for its unmeasured correlation.
     assert "swap partners of" in out
-    assert "tracks the same index" in out
+    assert "tracks the same index" not in out
+    assert "correlation with" in out
+    assert "unmeasured: no research store" in out
 
 
 def test_a_role_without_a_proposable_vehicle_says_so(data_dir: Path) -> None:
