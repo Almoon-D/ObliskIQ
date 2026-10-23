@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from collections.abc import Iterable
 from datetime import date, timedelta
 
+from ...config.schema_sources import InsidersConfig
 from ...domain.sources import ClusterInputs, InsiderFiling
 
 
@@ -21,11 +22,11 @@ def cluster_inputs(
     *,
     issuer_cik: int,
     as_of: date,
-    window_days: int,
-    purchase_code: str,
+    config: InsidersConfig,
 ) -> ClusterInputs:
-    """The cluster inputs of ``issuer_cik`` known on ``as_of``."""
-    first_day = as_of - timedelta(days=window_days - 1)
+    """The cluster inputs of ``issuer_cik`` known on ``as_of``, over ``cluster_window_days``."""
+    purchase_code = config.purchase_code
+    first_day = as_of - timedelta(days=config.cluster_window_days - 1)
     counted: list[date] = []
     buyers: set[int] = set()
     officers: set[int] = set()
@@ -56,7 +57,7 @@ def cluster_inputs(
     return ClusterInputs(
         issuer_cik=issuer_cik,
         as_of=as_of,
-        window_days=window_days,
+        window_days=config.cluster_window_days,
         filings=len(counted),
         buyers=len(buyers),
         officers=len(officers),

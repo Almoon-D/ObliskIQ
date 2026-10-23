@@ -21,7 +21,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import functools
-from collections.abc import Callable, Collection as Wanted, Mapping
+from collections.abc import Callable, Mapping
+from collections.abc import Collection as Wanted
 from datetime import date, datetime
 
 from ...config.schema import ObliskConfig
@@ -80,9 +81,8 @@ class MacroPull:
             spec for spec in self._catalog.of_source(source) if only is None or spec.id in only
         ]
         if not specs:
-            collection.empty_reason = (
-                f"no declared series of {source}"
-                + (f" among {sorted(only)}" if only is not None else "")
+            collection.empty_reason = f"no declared series of {source}" + (
+                f" among {sorted(only)}" if only is not None else ""
             )
             return collection
         fetcher = self._fetchers.get(source)
@@ -97,9 +97,7 @@ class MacroPull:
                 collection.succeeded(spec.id, 0, cached=True)
                 continue
             try:
-                rows = await self._pacer.retry(
-                    spec.id, functools.partial(self._one, fetcher, spec)
-                )
+                rows = await self._pacer.retry(spec.id, functools.partial(self._one, fetcher, spec))
             except Exception as exc:  # one series never stops the source
                 failures += 1
                 collection.failed(spec.id, failure_text(exc))
@@ -134,9 +132,7 @@ class MacroPull:
         return collection
 
     async def _fresh(self, spec: SeriesSpec) -> bool:
-        succeeded = await self._worker.run(
-            source_repo.target_succeeded_at, spec.source, spec.id
-        )
+        succeeded = await self._worker.run(source_repo.target_succeeded_at, spec.source, spec.id)
         if succeeded is None:
             return False
         age = (self._now() - succeeded).total_seconds()

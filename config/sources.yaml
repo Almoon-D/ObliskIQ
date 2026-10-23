@@ -836,6 +836,9 @@ sources:
       # Curated series, read 2026-10-23: Fed decision, upper bound of the funds rate, recession.
       curated_series: [KXFEDDECISION, KXFED, RECSSNBER]
       max_markets_per_series: 60
+      # The probability read is the midpoint of the Yes bid and ask, or the last trade when the
+      # spread is wider than this (the rule Polymarket's displayed price follows).
+      max_mid_spread: 0.10
     # Velocity: the probability change against the newest snapshot at least this old.
     velocity_hours: 24
     gdelt:
@@ -846,6 +849,9 @@ sources:
       request_spacing_seconds: 12
       rate_limited_backoff_seconds: 60
       rate_limited_retries: 2
+      # After this many queries in a row failed, the rest of the run is not asked (a throttled
+      # endpoint gets nothing from more requests); they are reported as not asked.
+      give_up_after_failed_queries: 2
       # A z-score needs this many prior days; before that the query is warming up.
       min_history_days: 20
       # Region and theme queries (the old ObliskIQ's gdelt_regions.json).
@@ -860,43 +866,114 @@ sources:
     # A body larger than this is refused (a feed is a few hundred kilobytes).
     max_body_bytes: 5000000
     max_summary_chars: 4000
+    # Financial terms added to VADER's lexicon for the offline fallback tone (from the old
+    # ObliskIQ's lexicon, single words only: VADER scores tokens, so a phrase never matches).
+    tone_lexicon:
+      bullish: 2.5
+      rally: 2.0
+      surge: 2.0
+      soar: 2.2
+      boom: 2.0
+      outperform: 1.8
+      upgrade: 2.0
+      upgraded: 2.0
+      beat: 1.5
+      beats: 1.5
+      gain: 1.0
+      gains: 1.0
+      rise: 1.0
+      rising: 1.0
+      recovery: 1.2
+      rebound: 1.2
+      upside: 1.0
+      profit: 1.5
+      profits: 1.5
+      profitable: 1.5
+      growth: 1.2
+      dividend: 1.0
+      buyback: 1.2
+      expansion: 1.0
+      breakthrough: 1.5
+      bearish: -2.5
+      crash: -3.0
+      collapse: -3.0
+      plunge: -2.8
+      capitulation: -3.0
+      panic: -2.5
+      selloff: -2.0
+      sell-off: -2.0
+      drop: -1.8
+      fall: -1.5
+      falling: -1.5
+      decline: -1.5
+      declining: -1.5
+      downgrade: -2.0
+      downgraded: -2.0
+      underperform: -1.8
+      miss: -1.5
+      misses: -1.5
+      missed: -1.5
+      loss: -1.2
+      losses: -1.2
+      weak: -1.0
+      weakness: -1.0
+      downside: -1.0
+      correction: -1.0
+      uncertainty: -1.0
+      volatility: -0.5
+      recession: -2.0
+      inflation: -1.0
+      stagflation: -2.0
+      default: -2.5
+      bankruptcy: -3.0
+      layoff: -1.5
+      layoffs: -1.5
+      debt: -0.8
+      dilution: -1.5
+      writedown: -1.5
+      impairment: -1.5
+      restructuring: -1.0
+      investigation: -1.5
+      lawsuit: -1.2
+      fraud: -2.5
+      scandal: -2.0
     feeds:
       fed_press: {url: "https://www.federalreserve.gov/feeds/press_all.xml", kind: central_bank,
-                  region: us, symbol: null}
+                  region: us, symbol: null, user_agent_env: null}
       ecb_press: {url: "https://www.ecb.europa.eu/rss/press.html", kind: central_bank,
-                  region: eurozone, symbol: null}
+                  region: eurozone, symbol: null, user_agent_env: null}
       boe_news: {url: "https://www.bankofengland.co.uk/rss/news", kind: central_bank, region: uk,
-                 symbol: null}
+                 symbol: null, user_agent_env: null}
       boj_whatsnew: {url: "https://www.boj.or.jp/en/rss/whatsnew.xml", kind: central_bank,
-                     region: japan, symbol: null}
+                     region: japan, symbol: null, user_agent_env: null}
       snb_press: {url: "https://www.snb.ch/public/en/rss/pressrel", kind: central_bank,
-                  region: null, symbol: null}
+                  region: null, symbol: null, user_agent_env: null}
       boc_press: {url: "https://www.bankofcanada.ca/content_type/press-releases/feed/",
-                  kind: central_bank, region: canada, symbol: null}
+                  kind: central_bank, region: canada, symbol: null, user_agent_env: null}
       rba_media: {url: "https://www.rba.gov.au/rss/rss-cb-media-releases.xml",
-                  kind: central_bank, region: australia, symbol: null}
+                  kind: central_bank, region: australia, symbol: null, user_agent_env: null}
       sec_press: {url: "https://www.sec.gov/news/pressreleases.rss", kind: regulator, region: us,
-                  symbol: null}
+                  symbol: null, user_agent_env: SEC_USER_AGENT}
       # Issuers' filings through EDGAR's company feeds (8-K, and 6-K for foreign issuers): the
       # issuer feed that reads the same way for every listed name.
       fcx_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000831259&type=8-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: us, symbol: FCX}
+                    kind: issuer, region: us, symbol: FCX, user_agent_env: SEC_USER_AGENT}
       alb_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000915913&type=8-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: us, symbol: ALB}
+                    kind: issuer, region: us, symbol: ALB, user_agent_env: SEC_USER_AGENT}
       mos_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001285785&type=8-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: us, symbol: MOS}
+                    kind: issuer, region: us, symbol: MOS, user_agent_env: SEC_USER_AGENT}
       bg_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001996862&type=8-K&owner=include&count=40&output=atom",
-                   kind: issuer, region: us, symbol: BG}
+                   kind: issuer, region: us, symbol: BG, user_agent_env: SEC_USER_AGENT}
       ccj_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001009001&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: canada, symbol: CCJ}
+                    kind: issuer, region: canada, symbol: CCJ, user_agent_env: SEC_USER_AGENT}
       ntr_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001725964&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: canada, symbol: NTR}
+                    kind: issuer, region: canada, symbol: NTR, user_agent_env: SEC_USER_AGENT}
       asml_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000937966&type=6-K&owner=include&count=40&output=atom",
-                     kind: issuer, region: null, symbol: ASML}
+                     kind: issuer, region: null, symbol: ASML, user_agent_env: SEC_USER_AGENT}
       san_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000891478&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: spain, symbol: SAN}
+                    kind: issuer, region: spain, symbol: SAN, user_agent_env: SEC_USER_AGENT}
       tte_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000879764&type=6-K&owner=include&count=40&output=atom",
-                    kind: issuer, region: france, symbol: TTE}
+                    kind: issuer, region: france, symbol: TTE, user_agent_env: SEC_USER_AGENT}
 
   # ── halts ──
   halts:
@@ -987,9 +1064,13 @@ sources:
       - {kind: us_payrolls, region: us, day: 2027-11-05, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
       - {kind: us_payrolls, region: us, day: 2027-12-03, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
     earnings:
+      # The label stored with each date; the dates are research-grade.
+      source: yahoo
       # The universe's stock instruments, read again once their newest dates are this old.
       refresh_days: 7
       # Dates further out than this are not kept (an estimate that far out is noise).
       horizon_days: 120
-      # How many past reports are read with the upcoming one.
+      # How many past reports are kept with the upcoming ones.
       past_reports: 8
+      # Rows asked of Yahoo per symbol (its upcoming dates first, then past ones).
+      request_limit: 16

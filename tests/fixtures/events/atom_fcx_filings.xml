@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <author>
+      <name>Webmaster</name>
+    </author>
+    <company-info>
+      <assigned-sic>1000</assigned-sic>
+      <assigned-sic-desc>METAL MINING</assigned-sic-desc>
+      <assigned-sic-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;SIC=1000&amp;owner=include&amp;count=40</assigned-sic-href>
+      <cik>0000831259</cik>
+      <cik-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000831259&amp;owner=include&amp;count=40</cik-href>
+      <conformed-name>FREEPORT-MCMORAN INC</conformed-name>
+      <fiscal-year-end>1231</fiscal-year-end>
+      <formerly-names count="1">
+        <names>
+          <date>2014-07-02</date>
+          <name>FREEPORT MCMORAN COPPER &amp;amp;amp; GOLD INC</name>
+        </names>
+      </formerly-names>
+      <state-location>AZ</state-location>
+      <state-location-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;State=AZ&amp;owner=include&amp;count=40</state-location-href>
+      <state-of-incorporation>DE</state-of-incorporation>
+    </company-info>
+    <entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="8-K" />
+      <content type="text/xml">
+        <accession-number>0000831259-26-000043</accession-number>
+        <act>34</act>
+        <file-number>001-11307-01</file-number>
+        <file-number-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;filenum=001-11307-01&amp;owner=include&amp;count=40</file-number-href>
+        <filing-date>2026-10-02</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/831259/000083125926000043/0000831259-26-000043-index.htm</filing-href>
+        <filing-type>8-K</filing-type>
+        <film-number>261433531</film-number>
+        <form-name>Current report</form-name>
+        <items-desc>items 2.02, 7.01and9.01</items-desc>
+        <size>1 MB</size>
+        <xbrl_href>https://www.sec.gov/cgi-bin/viewer?action=view&amp;cik=831259&amp;accession_number=0000831259-26-000043&amp;xbrl_type=v</xbrl_href>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0000831259-26-000043</id>
+      <link href="https://www.sec.gov/Archives/edgar/data/831259/000083125926000043/0000831259-26-000043-index.htm" rel="alternate" type="text/html" />
+      <summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-10-02 &lt;b&gt;AccNo:&lt;/b&gt; 0000831259-26-000043 &lt;b&gt;Size:&lt;/b&gt; 1 MB&lt;br&gt;Item 2.02: Results of Operations and Financial Condition&lt;br&gt;Item 7.01: Regulation FD Disclosure&lt;br&gt;Item 9.01: Financial Statements and Exhibits</summary>
+      <title>8-K  - Current report</title>
+      <updated>2026-10-02T08:35:06-04:00</updated>
+    </entry>
+<entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="8-K" />
+      <content type="text/xml">
+        <accession-number>0000831259-26-000038</accession-number>
+        <act>34</act>
+        <file-number>001-11307-01</file-number>
+        <file-number-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;filenum=001-11307-01&amp;owner=include&amp;count=40</file-number-href>
+        <filing-date>2026-09-08</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/831259/000083125926000038/0000831259-26-000038-index.htm</filing-href>
+        <filing-type>8-K</filing-type>
+        <film-number>261365889</film-number>
+        <form-name>Current report</form-name>
+        <items-desc>item 8.01</items-desc>
+        <size>143 KB</size>
+        <xbrl_href>https://www.sec.gov/cgi-bin/viewer?action=view&amp;cik=831259&amp;accession_number=0000831259-26-000038&amp;xbrl_type=v</xbrl_href>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0000831259-26-000038</id>
+      <link href="https://www.sec.gov/Archives/edgar/data/831259/000083125926000038/0000831259-26-000038-index.htm" rel="alternate" type="text/html" />
+      <summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-09-08 &lt;b&gt;AccNo:&lt;/b&gt; 0000831259-26-000038 &lt;b&gt;Size:&lt;/b&gt; 143 KB&lt;br&gt;Item 8.01: Other Events</summary>
+      <title>8-K  - Current report</title>
+      <updated>2026-09-08T17:18:34-04:00</updated>
+    </entry>
+    <id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000831259</id>
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000831259&amp;type=8-K&amp;owner=include&amp;start=0&amp;count=40" rel="alternate" type="text/html" />
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000831259&amp;type=8-K&amp;owner=include&amp;start=0&amp;count=40&amp;output=atom" rel="self" type="application/atom+xml" />
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000831259&amp;type=8-K%25&amp;datea=&amp;dateb=&amp;owner=include&amp;count=40&amp;output=atom&amp;start=40" rel="next" type="application/atom+xml" />
+    <title>FREEPORT-MCMORAN INC  (0000831259)</title>
+    <updated>2026-10-23T03:09:15-04:00</updated>
+  </feed>

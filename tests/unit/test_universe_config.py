@@ -416,7 +416,9 @@ def test_the_universe_file_holds_one_section_and_no_default_defines_it(config_di
     universe = config_dir / "universe.yaml"
     text = universe.read_text(encoding="utf-8")
     universe.write_text(text + "\nstray: 1\n", encoding="utf-8")
-    with pytest.raises(ConfigInvalid, match="is not a section of this file; it holds only universe"):
+    with pytest.raises(
+        ConfigInvalid, match="is not a section of this file; it holds only universe"
+    ):
         load_config(config_dir)
     universe.write_text(text, encoding="utf-8")
     extra = config_dir / "defaults" / "zz_universe.yaml"

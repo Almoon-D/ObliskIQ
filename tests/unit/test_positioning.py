@@ -112,9 +112,8 @@ def test_a_row_without_open_interest_or_a_date_is_not_a_report_and_blank_legs_st
     assert len(reports) == 2
     blank = reports[0]
     assert (blank.noncomm_long, blank.noncomm_short) == (None, None)
-    assert blank.net_noncommercial_share is None and blank.net_commercial_share == pytest.approx(
-        -1 / 454646
-    )
+    assert blank.net_noncommercial_share is None
+    assert blank.net_commercial_share == pytest.approx(-1 / 454646)
 
 
 @pytest.mark.parametrize(
@@ -142,7 +141,8 @@ def test_socrata_rows_are_read_into_the_same_shape() -> None:
         date(2026, 10, 6),
         date(2026, 10, 9),
     )
-    assert first.source == "cftc_socrata" and first.open_interest == 1898067
+    assert first.source == "cftc_socrata"
+    assert first.open_interest == 1898067
     with pytest.raises(UpstreamError, match="list of rows"):
         parse_socrata({"error": True}, lag_days=3, collected_at=NOW)
 
@@ -186,7 +186,8 @@ def test_the_percentile_waits_for_the_warm_up_and_says_so() -> None:
     reports = weekly([10, 20, 30])
     reading = positioning_reading("COT_GOLD", reports, as_of=date(2021, 1, 1), config=config())
     assert reading.status is PositioningStatus.WARMING_UP
-    assert reading.percentile is None and reading.window == 3
+    assert reading.percentile is None
+    assert reading.window == 3
     assert reading.reason == "warming up: 3/4 weekly reports"
     assert reading.velocity == pytest.approx((30 - 10) / 1000)
 
@@ -215,13 +216,16 @@ def test_a_report_not_yet_released_is_not_known() -> None:
         "COT_GOLD", reports, as_of=tuesday + timedelta(days=3), config=config()
     )
     assert thursday.report_date == tuesday - timedelta(weeks=1)
-    assert thursday.status is PositioningStatus.OK and thursday.share == pytest.approx(0.04)
-    assert friday.report_date == tuesday and friday.percentile == pytest.approx(1.0)
+    assert thursday.status is PositioningStatus.OK
+    assert thursday.share == pytest.approx(0.04)
+    assert friday.report_date == tuesday
+    assert friday.percentile == pytest.approx(1.0)
 
 
 def test_no_report_released_is_no_data_and_a_share_less_report_is_skipped() -> None:
     nothing = positioning_reading("COT_GOLD", [], as_of=date(2021, 1, 1), config=config())
-    assert nothing.status is PositioningStatus.NO_DATA and nothing.share is None
+    assert nothing.status is PositioningStatus.NO_DATA
+    assert nothing.share is None
     blank = report(date(2020, 1, 7), 0, noncomm_long=None)
     alone = positioning_reading("COT_GOLD", [blank], as_of=date(2021, 1, 1), config=config())
     assert alone.status is PositioningStatus.NO_DATA
@@ -281,7 +285,8 @@ async def test_each_contract_is_read_from_the_backfill_year_then_incrementally(
             router.get(SOCRATA).mock(side_effect=answer)
             first = await collector(shipped_settings, store_worker, client).run()
             again = await collector(shipped_settings, store_worker, client).run()
-    assert first.status == "ok" and len(first.outcomes) == len(contracts)
+    assert first.status == "ok"
+    assert len(first.outcomes) == len(contracts)
     assert all("'2006-01-01T00:00:00.000'" in w for w in wheres[: len(contracts)])
     eight_weeks_back = (date(2026, 10, 13) - timedelta(weeks=8)).isoformat()
     assert all(eight_weeks_back in w for w in wheres[len(contracts) :])
@@ -309,7 +314,8 @@ async def test_one_failing_contract_never_stops_the_others_and_a_dry_run_writes_
             result = await collector(shipped_settings, store_worker, client).run(dry_run=True)
     failed = {o.target: o.reason for o in result.outcomes if not o.ok}
     assert set(failed) == {"COT_GOLD", "COT_SILVER"}
-    assert "HTTP 500" in failed["COT_GOLD"] and "not JSON" in failed["COT_SILVER"]
+    assert "HTTP 500" in failed["COT_GOLD"]
+    assert "not JSON" in failed["COT_SILVER"]
     assert result.status == "partial"
     assert source_repo.newest_cot_report(store, "067651") is None
 
@@ -327,9 +333,12 @@ async def test_the_backfill_reads_each_year_and_says_which_were_missing(
             result = await collector(shipped_settings, store_worker, client).backfill(2024, 2026)
     outcomes = {o.target: o for o in result.outcomes}
     # The bond, the 10-year note, WTI, gold and the euro: three weeks each (13874+ is not ours).
-    assert outcomes["2024"].ok and outcomes["2024"].rows == 15
-    assert outcomes["2025"].degraded and outcomes["2025"].reason == "no archive for the year"
-    assert not outcomes["2026"].ok and "HTTP 403" in outcomes["2026"].reason
+    assert outcomes["2024"].ok
+    assert outcomes["2024"].rows == 15
+    assert outcomes["2025"].degraded
+    assert outcomes["2025"].reason == "no archive for the year"
+    assert not outcomes["2026"].ok
+    assert "HTTP 403" in outcomes["2026"].reason
     assert len(source_repo.cot_reports(store, "020601", as_of=date(2025, 1, 31))) == 3
     async with httpx.AsyncClient() as client:
         with respx.mock as router:

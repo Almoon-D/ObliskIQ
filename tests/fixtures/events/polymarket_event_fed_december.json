@@ -1,0 +1,87 @@
+[
+ {
+  "id": "770450",
+  "slug": "fed-decision-in-december-20260729232808632",
+  "title": "Fed Decision in December?",
+  "active": true,
+  "closed": false,
+  "endDate": "2026-12-10T04:59:00Z",
+  "tags": [
+   {
+    "id": "159",
+    "label": "Fed",
+    "slug": "fed"
+   },
+   {
+    "id": "100478",
+    "label": "fomc",
+    "slug": "fomc"
+   },
+   {
+    "id": "126",
+    "label": "Trump",
+    "slug": "trump"
+   },
+   {
+    "id": "100328",
+    "label": "Economy",
+    "slug": "economy"
+   },
+   {
+    "id": "100196",
+    "label": "Fed Rates",
+    "slug": "fed-rates"
+   }
+  ],
+  "markets": [
+   {
+    "id": "3215005",
+    "slug": "will-the-fed-decrease-interest-rates-by-50-bps-after-the-december-2026-meeting-20260729232808633",
+    "question": "Will the Fed decrease interest rates by 50+ bps after the December 2026 meeting?",
+    "groupItemTitle": "50+ bps decrease",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.0045\", \"0.9955\"]",
+    "bestBid": 0.004,
+    "bestAsk": 0.005,
+    "lastTradePrice": 0.004,
+    "volumeNum": 780827.0011779999,
+    "liquidityNum": 130247.87013,
+    "endDate": "2026-12-09T23:59:00Z",
+    "closed": false,
+    "active": true
+   },
+   {
+    "id": "3215006",
+    "slug": "will-the-fed-decrease-interest-rates-by-25-bps-after-the-december-2026-meeting-20260729232808634",
+    "question": "Will the Fed decrease interest rates by 25 bps after the December 2026 meeting?",
+    "groupItemTitle": "25 bps decrease",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.0065\", \"0.9935\"]",
+    "bestBid": 0.006,
+    "bestAsk": 0.007,
+    "lastTradePrice": 0.007,
+    "volumeNum": 989755.87269,
+    "liquidityNum": 246178.87324,
+    "endDate": "2026-12-09T23:59:00Z",
+    "closed": false,
+    "active": true
+   },
+   {
+    "id": "3215007",
+    "slug": "will-there-be-no-change-in-fed-interest-rates-after-the-december-2026-meeting-20260729232808635",
+    "question": "Will there be no change in Fed interest rates after the December 2026 meeting?",
+    "groupItemTitle": "No change",
+    "outcomes": "[\"Yes\", \"No\"]",
+    "outcomePrices": "[\"0.225\", \"0.775\"]",
+    "bestBid": 0.22,
+    "bestAsk": 0.23,
+    "lastTradePrice": 0.23,
+    "volumeNum": 1007149.5745549999,
+    "liquidityNum": 161035.4135,
+    "endDate": "2026-12-09T23:59:00Z",
+    "closed": false,
+    "active": true
+   }
+  ]
+ }
+]

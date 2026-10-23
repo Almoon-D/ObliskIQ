@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import json
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
@@ -88,8 +88,13 @@ async def no_sleep(_seconds: float) -> None:
 
 
 @pytest.fixture
-def client() -> Iterator[httpx.AsyncClient]:
-    yield httpx.AsyncClient()
+async def client() -> AsyncIterator[httpx.AsyncClient]:
+    async with httpx.AsyncClient() as http:
+        yield http
+
+
+def monthly_history(settings: ObliskConfig) -> Any:
+    return settings.sources.macro.commodity_history.model_copy(update={"frequency": "monthly"})
 
 
 def fred_routes(
@@ -130,9 +135,11 @@ def test_the_catalog_takes_the_source_rule_unless_a_series_states_its_own(
     catalog = MacroCatalog.from_settings(shipped_settings)
     assert catalog.spec("CPIAUCSL").policy == "from_api"  # type: ignore[union-attr]
     estr = catalog.spec("ESTR")
-    assert estr is not None and (estr.policy, estr.lag_days) == ("reference_plus_lag", 1)
+    assert estr is not None
+    assert (estr.policy, estr.lag_days) == ("reference_plus_lag", 1)
     eia = catalog.spec("WCESTUS1")
-    assert eia is not None and (eia.policy, eia.lag_days) == ("reference_plus_lag", 6)
+    assert eia is not None
+    assert (eia.policy, eia.lag_days) == ("reference_plus_lag", 6)
     assert catalog.spec("NOT_DECLARED") is None
     assert {s.id for s in catalog.of_source("frb")} == {"EBP", "GZ_SPREAD"}
     assert catalog.spec("DCOILWTICO").is_commodity_history  # type: ignore[union-attr]
@@ -493,7 +500,8 @@ async def test_a_rebased_index_is_valued_from_one_vintage_and_dated_from_the_fir
         )
     by_date = {row.reference_date: row for row in rows}
     dec, jan = by_date[date(2025, 12, 1)], by_date[date(2026, 1, 1)]
-    assert dec.value is not None and jan.value is not None
+    assert dec.value is not None
+    assert jan.value is not None
     assert abs(jan.value / dec.value - 1) < 0.05  # one base, no -22 %
     assert dec.release_date == date.fromisoformat(first_rows["2025-12-01"]["realtime_start"])
     assert {row.units for row in rows} == {"Index 2025=100"}
@@ -555,11 +563,7 @@ async def test_commodity_history_is_native_by_default_and_monthly_only_when_aske
                 "sources": shipped_settings.sources.model_copy(
                     update={
                         "macro": shipped_settings.sources.macro.model_copy(
-                            update={
-                                "commodity_history": shipped_settings.sources.macro.commodity_history.model_copy(
-                                    update={"frequency": "monthly"}
-                                )
-                            }
+                            update={"commodity_history": monthly_history(shipped_settings)}
                         )
                     }
                 )
@@ -577,7 +581,7 @@ async def test_a_series_fred_describes_without_metadata_has_no_units(
     with respx.mock as router:
         fred_routes(
             router,
-            lambda request: httpx.Response(
+            lambda _request: httpx.Response(
                 200,
                 json={
                     "observations": [
@@ -607,7 +611,8 @@ async def test_ecb_decodes_its_sdmx_json_and_states_no_release_date(
             Window(date(2026, 10, 15), TODAY),
         )
     assert route.calls.last.request.url.params["detail"] == "dataonly"
-    assert rows and all(r.release_date is None and r.units is None for r in rows)
+    assert rows
+    assert all(r.release_date is None and r.units is None for r in rows)
 
 
 async def test_eia_decodes_the_v2_envelope_with_its_units(
@@ -649,7 +654,8 @@ async def test_an_ons_release_date_is_the_london_day_not_the_utc_one(
         )
     july = next(r for r in rows if r.reference_date == date(2026, 7, 1))
     assert july.release_date == date(2026, 8, 19)  # 2026-08-18T23:00Z is London's 19th
-    assert july.value == 2.9 and july.units == "%"
+    assert july.value == 2.9
+    assert july.units == "%"
     assert min(r.reference_date for r in rows) == date(2026, 1, 1)
 
 
@@ -693,7 +699,8 @@ async def test_the_statcan_vector_is_read_with_its_release_time(
             spec(id="CA_CPI", source="statcan", key="v41690973"), Window(date(2025, 1, 1), TODAY)
         )
     sent = json.loads(route.calls.last.request.content)
-    assert sent[0]["vectorId"] == 41690973 and sent[0]["latestN"] > 12
+    assert sent[0]["vectorId"] == 41690973
+    assert sent[0]["latestN"] > 12
     august = next(r for r in rows if r.reference_date == date(2026, 8, 1))
     assert august.release_date == date(2026, 9, 14)
     assert august.units is None
@@ -817,7 +824,7 @@ async def test_the_boj_answer_continues_from_its_next_position(
     ]
     answers = iter(pages)
     with respx.mock as router:
-        route = router.get(BOJ).mock(side_effect=lambda r: httpx.Response(200, json=next(answers)))
+        route = router.get(BOJ).mock(side_effect=lambda _r: httpx.Response(200, json=next(answers)))
         rows = await BojFetcher(shipped_settings, client, no_retries(shipped_settings)).fetch(
             spec(id="X", source="boj", key="DB/X"), Window(date(2026, 10, 1), TODAY)
         )
@@ -917,7 +924,8 @@ async def test_the_excess_bond_premium_is_read_by_its_column(
             await fetcher.fetch(spec(id="X", source="frb", key="nope"), Window(TODAY, TODAY))
     assert [r.reference_date for r in ebp] == [date(2026, 7, 1), date(2026, 8, 1), date(2026, 9, 1)]
     assert ebp[-1].value == pytest.approx(-0.3919245963723856)
-    assert len(gz) == 4 and gz[0].value == pytest.approx(0.8622082734357994)
+    assert len(gz) == 4
+    assert gz[0].value == pytest.approx(0.8622082734357994)
 
 
 def test_every_built_macro_source_has_a_fetcher(
@@ -1009,7 +1017,8 @@ async def test_a_series_dated_by_its_own_rule_ignores_what_the_source_states(
     fetcher = StubFetcher([row(date(2026, 10, 16), 412517.0, units="MBBL")])
     await pull(shipped_settings, worker, {"eia": fetcher}).run("eia")
     eia = repos.macro_series(store, "WCESTUS1", as_of=TODAY, source="eia")
-    assert eia.latest is not None and eia.latest.release_date == date(2026, 10, 22)
+    assert eia.latest is not None
+    assert eia.latest.release_date == date(2026, 10, 22)
 
 
 async def test_a_changed_unit_fails_the_series_without_retrying_it(
@@ -1040,7 +1049,8 @@ async def test_a_repeat_inside_the_window_asks_nothing_and_force_asks_again(
     await collector.run("fred", only={"DGS2"})
     again = await collector.run("fred", only={"DGS2"})
     assert fetcher.calls == 1
-    assert again.outcomes[0].detail == {"cached": True} and again.status == "ok"
+    assert again.outcomes[0].detail == {"cached": True}
+    assert again.status == "ok"
     await collector.run("fred", only={"DGS2"}, force=True)
     assert fetcher.calls == 2
 
@@ -1096,9 +1106,11 @@ async def test_windows_follow_the_group_and_unknown_sources_say_so(
     starts = sorted(window.start for window in fetcher.windows)
     assert (TODAY - starts[0]).days > (TODAY - starts[1]).days  # twenty years against ten
     nothing = await collector.run("fred", only={"NOPE"})
-    assert nothing.status == "skipped" and "NOPE" in nothing.empty_reason
+    assert nothing.status == "skipped"
+    assert "NOPE" in nothing.empty_reason
     unbuilt = await pull(shipped_settings, worker, {}).run("ecb", only={"ECB_DFR"})
-    assert unbuilt.status == "error" and "no fetcher" in unbuilt.outcomes[0].reason
+    assert unbuilt.status == "error"
+    assert "no fetcher" in unbuilt.outcomes[0].reason
     assert collector.catalog.spec("DGS2") is not None
 
 
@@ -1114,9 +1126,7 @@ async def test_the_newest_rows_are_kept_above_the_cap_and_aggregation_is_labelle
                             "collection": shipped_settings.sources.macro.collection.model_copy(
                                 update={"max_observations_per_series": 2}
                             ),
-                            "commodity_history": shipped_settings.sources.macro.commodity_history.model_copy(
-                                update={"frequency": "monthly"}
-                            ),
+                            "commodity_history": monthly_history(shipped_settings),
                         }
                     )
                 }

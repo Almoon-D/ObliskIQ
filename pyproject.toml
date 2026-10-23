@@ -26,6 +26,7 @@ dependencies = [
     "pydantic>=2.12,<3",
     "pydantic-settings>=2.11,<3",
     "PyYAML>=6.0.3,<7",
+    "vadersentiment>=3.3.2,<4",
     "yfinance>=1.7,<2",
 ]
 
@@ -111,6 +112,12 @@ ignore_missing_imports = true
 # yfinance ships no type information; its use is confined to research/data.py, which reads its
 # history frame through iteration and hands out standard-library types.
 module = ["yfinance", "yfinance.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# vaderSentiment ships no type information; its use is confined to data/events/tone.py, which
+# returns the compound score as a float.
+module = ["vaderSentiment", "vaderSentiment.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

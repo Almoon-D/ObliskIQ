@@ -15,6 +15,7 @@ import pytest
 import respx
 
 from obliskiq.config import ObliskConfig
+from obliskiq.config.schema_sources import InsidersConfig
 from obliskiq.data.insiders.clusters import cluster_inputs
 from obliskiq.data.insiders.edgar import (
     Form4Collector,
@@ -49,6 +50,22 @@ def text(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
+#: The shipped insiders section with the window and code these tests are written for.
+INSIDERS = InsidersConfig(
+    daily_index_url_template="https://example.com/{year}/{quarter}/{day}",
+    archive_url="https://example.com",
+    tickers_url="https://example.com/t.json",
+    forms=["4"],
+    country="US",
+    venues=["XNYS"],
+    timezone="America/New_York",
+    request_spacing_seconds=0,
+    lookback_days=10,
+    purchase_code="P",
+    cluster_window_days=30,
+)
+
+
 def purchase() -> InsiderFiling:
     return parse_submission(text("form4_purchase_mfm.txt"), zone=NEW_YORK, collected_at=NOW)
 
@@ -80,7 +97,8 @@ def test_a_purchase_is_read_with_its_header_owner_and_line() -> None:
         True,
         False,
     )
-    assert line.direct is not None and line.shares_after is not None
+    assert line.direct is not None
+    assert line.shares_after is not None
 
 
 def test_an_award_accepted_after_the_close_keeps_its_filing_date() -> None:
@@ -150,8 +168,10 @@ def test_a_derivative_line_and_a_footnoted_price_are_read_as_such() -> None:
     )
     assert not any((filing.owners[1].is_officer, filing.owners[1].is_director))
     assert (line.derivative, line.price, line.acquired, line.direct) == (True, None, False, False)
-    assert filing.issuer_symbol is None and filing.period_of_report == date(2026, 9, 30)
-    assert filing.owners[0].officer_title == "CEO" and filing.owners[0].is_officer
+    assert filing.issuer_symbol is None
+    assert filing.period_of_report == date(2026, 9, 30)
+    assert filing.owners[0].officer_title == "CEO"
+    assert filing.owners[0].is_officer
 
 
 @pytest.mark.parametrize(
@@ -293,7 +313,7 @@ def test_cluster_inputs_count_open_market_purchases_by_officers_and_directors() 
             lines=(line(),),
         ),
     ]
-    inputs = cluster_inputs(filings, issuer_cik=7, as_of=as_of, window_days=30, purchase_code="P")
+    inputs = cluster_inputs(filings, issuer_cik=7, as_of=as_of, config=INSIDERS)
     assert (inputs.filings, inputs.buyers, inputs.officers, inputs.directors) == (3, 2, 1, 2)
     assert inputs.shares == pytest.approx(350.0)
     assert inputs.value == pytest.approx(100 * 10 + 50 * 4 + 100 * 10)
@@ -302,21 +322,16 @@ def test_cluster_inputs_count_open_market_purchases_by_officers_and_directors() 
 
 
 def test_no_purchase_in_the_window_is_an_empty_cluster_not_a_missing_one() -> None:
-    inputs = cluster_inputs(
-        [], issuer_cik=7, as_of=date(2026, 10, 1), window_days=30, purchase_code="P"
-    )
+    inputs = cluster_inputs([], issuer_cik=7, as_of=date(2026, 10, 1), config=INSIDERS)
     assert (inputs.filings, inputs.buyers, inputs.value) == (0, 0, 0.0)
-    assert inputs.first_filed is None and inputs.last_filed is None
+    assert inputs.first_filed is None
+    assert inputs.last_filed is None
 
 
 def test_the_real_purchase_counts_on_its_filing_date_and_not_before() -> None:
     real = purchase()
-    on = cluster_inputs(
-        [real], issuer_cik=801961, as_of=date(2026, 10, 1), window_days=30, purchase_code="P"
-    )
-    before = cluster_inputs(
-        [real], issuer_cik=801961, as_of=date(2026, 9, 30), window_days=30, purchase_code="P"
-    )
+    on = cluster_inputs([real], issuer_cik=801961, as_of=date(2026, 10, 1), config=INSIDERS)
+    before = cluster_inputs([real], issuer_cik=801961, as_of=date(2026, 9, 30), config=INSIDERS)
     assert (on.buyers, on.directors, on.value) == (1, 1, pytest.approx(300 * 4.8877))
     assert before.buyers == 0
 
@@ -373,9 +388,11 @@ def test_the_followed_names_are_the_country_candidates_and_the_us_listed_shares(
     shipped_settings: ObliskConfig,
 ) -> None:
     tickers = followed_tickers(shipped_settings, [holding("AAPL", "US"), holding("7203", "JP")])
-    assert "AAPL" in tickers and "7203" not in tickers
+    assert "AAPL" in tickers
+    assert "7203" not in tickers
     assert {"FCX", "ALB", "MOS", "BG"} <= tickers
-    assert "ASML" not in tickers and "SAN" not in tickers
+    assert "ASML" not in tickers
+    assert "SAN" not in tickers
 
 
 def test_absence_is_a_404_or_storage_denial_never_a_refused_client() -> None:
@@ -397,7 +414,7 @@ def collector(
     worker: StoreWorker,
     client: httpx.AsyncClient,
     *,
-    user_agent: str | None = "ObliskIQ tests test@example.invalid",
+    user_agent: str | None = "ObliskIQ tests test@example.com",
     now: datetime = NOW,
 ) -> Form4Collector:
     retry = settings.collectors.retry.model_copy(
@@ -463,7 +480,9 @@ async def test_the_new_filings_of_followed_issuers_are_stored_once(
             second = await collector(shipped_settings, store_worker, client).run()
     outcomes = {o.target: o for o in first.outcomes}
     thursday = outcomes["index:2026-10-01"]
-    assert thursday.rows == 1 and thursday.degraded and "0001214659-26-012435" in thursday.reason
+    assert thursday.rows == 1
+    assert thursday.degraded
+    assert "0001214659-26-012435" in thursday.reason
     assert "index:2026-10-02" not in outcomes  # not posted yet, asked again next time
     assert first.notes["issuers"] >= 4
     stored = source_repo.insider_filings(store, 831259, as_of=date(2026, 10, 1))
@@ -513,10 +532,8 @@ async def test_a_refusal_is_a_failure_and_a_missing_agent_asks_nothing(
             ).run()
     assert refused.status == "error"
     assert all("HTTP 403" in o.reason for o in refused.outcomes)
-    assert (
-        anonymous.outcomes[0].target == "issuers"
-        and "SEC_USER_AGENT" in anonymous.outcomes[0].reason
-    )
+    assert anonymous.outcomes[0].target == "issuers"
+    assert "SEC_USER_AGENT" in anonymous.outcomes[0].reason
 
 
 async def test_a_ticker_file_that_fails_or_maps_nothing_stops_the_run_with_its_reason(
@@ -529,8 +546,10 @@ async def test_a_ticker_file_that_fails_or_maps_nothing_stops_the_run_with_its_r
         with respx.mock as router:
             router.get(TICKERS).mock(return_value=httpx.Response(200, json={}))
             empty = await collector(shipped_settings, store_worker, client).run()
-    assert failed.status == "error" and "HTTP 503" in failed.outcomes[0].reason
-    assert empty.status == "skipped" and "maps to an SEC CIK" in empty.empty_reason
+    assert failed.status == "error"
+    assert "HTTP 503" in failed.outcomes[0].reason
+    assert empty.status == "skipped"
+    assert "maps to an SEC CIK" in empty.empty_reason
 
 
 async def test_a_dry_run_and_a_filing_about_another_issuer_store_nothing(
@@ -588,4 +607,5 @@ async def test_a_filing_that_answers_an_error_fails_alone(
             router.route().mock(side_effect=answer)
             result = await collector(shipped_settings, store_worker, client).run()
     thursday = next(o for o in result.outcomes if o.target == "index:2026-10-01")
-    assert thursday.degraded and "HTTP 410" in thursday.reason
+    assert thursday.degraded
+    assert "HTTP 410" in thursday.reason

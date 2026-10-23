@@ -315,6 +315,7 @@ class KalshiConfig(FrozenModel):
     api_url: Url
     curated_series: list[NonEmptyText]
     max_markets_per_series: PositiveInt
+    max_mid_spread: Annotated[float, Field(gt=0, le=1)]
 
 
 class GdeltQueryConfig(FrozenModel):
@@ -328,6 +329,7 @@ class GdeltConfig(FrozenModel):
     request_spacing_seconds: NonNegativeFloat
     rate_limited_backoff_seconds: PositiveFloat
     rate_limited_retries: NonNegativeInt
+    give_up_after_failed_queries: PositiveInt
     min_history_days: Annotated[int, Field(ge=2)]
     queries: dict[Identifier, GdeltQueryConfig] = Field(min_length=1)
 
@@ -344,6 +346,9 @@ class FeedConfig(FrozenModel):
     kind: FeedKind
     region: Identifier | None
     symbol: NonEmptyText | None
+    #: The environment variable whose value is sent as the User-Agent (SEC's feeds); ``None``
+    #: sends ``sources.user_agent``.
+    user_agent_env: EnvName | None
 
     @model_validator(mode="after")
     def _issuer_names_its_symbol(self) -> Self:
@@ -352,9 +357,14 @@ class FeedConfig(FrozenModel):
         return self
 
 
+#: A term's valence on VADER's scale.
+type Valence = Annotated[float, Field(ge=-4, le=4)]
+
+
 class NewsConfig(FrozenModel):
     max_body_bytes: PositiveInt
     max_summary_chars: PositiveInt
+    tone_lexicon: dict[Annotated[str, Field(pattern=r"^[a-z][a-z-]*$")], Valence]
     feeds: dict[Identifier, FeedConfig] = Field(min_length=1)
 
 
@@ -381,9 +391,11 @@ class CatalystConfig(FrozenModel):
 
 
 class EarningsConfig(FrozenModel):
+    source: NonEmptyText
     refresh_days: PositiveInt
     horizon_days: PositiveInt
     past_reports: NonNegativeInt
+    request_limit: PositiveInt
 
 
 class CatalystsConfig(FrozenModel):
@@ -441,6 +453,13 @@ class SourcesConfig(FrozenModel):
             if provider is None or provider.area != "macro":
                 problems.append(
                     f"macro.series {series.id}: {series.source} is no built macro source"
+                )
+        credential = built["rss"].credential if "rss" in built else None
+        for name, feed in self.news.feeds.items():
+            if feed.user_agent_env is not None and feed.user_agent_env != credential:
+                problems.append(
+                    f"news.feeds.{name} sends {feed.user_agent_env}, which providers.rss does not "
+                    "declare as its credential"
                 )
         for area, name in (
             ("positioning", "cftc"),
