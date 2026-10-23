@@ -1,0 +1,38 @@
+# The LLM layer (MASTER_PLAN §5.10; DECISIONS D70). Session 10 configures one provider and one
+# model for the minimal EventExtractor; Session 16 extends this file into the full registry
+# (ordered chains per role, evaluation, failover) without breaking the extractor's stored series.
+llm:
+  providers:
+    # Gemini's OpenAI-compatible endpoint: one transport covers it and the other compatible
+    # providers. The key's environment variable is named here; without it the extractor is
+    # skipped and its items wait (the clock starts when a key exists).
+    gemini:
+      protocol: openai_compatible
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai
+      key_env: GEMINI_API_KEY
+  models:
+    # Prices per million tokens in US dollars on the paid tier (ai.google.dev pricing, read
+    # 2026-10-23); the free tier charges nothing and the budget counts the paid price anyway.
+    gemini_flash_lite:
+      provider: gemini
+      model_id: gemini-3.1-flash-lite
+      context_window_tokens: 1000000
+      input_usd_per_million: 0.25
+      output_usd_per_million: 1.50
+  budget:
+    # Spend per calendar month (UTC), in the providers' price currency. A call whose worst-case
+    # cost would pass it is not made.
+    monthly_usd: 5.00
+  extractor:
+    model: gemini_flash_lite
+    # A change of model or prompt starts a new labelled segment of H7's series.
+    prompt_version: 1
+    temperature: 0
+    max_output_tokens: 1024
+    # Items per collector run, oldest waiting first.
+    max_items_per_run: 100
+    # An item's text is cut to this many characters before it is escaped into the prompt.
+    max_item_chars: 4000
+    request_timeout_seconds: 60
+    # One retry with the validation error, then the item fails closed.
+    retries_on_invalid: 1

@@ -55,7 +55,9 @@ venues:
       - {phase: pre_market, anchor: session_open, start_offset_minutes: -330, end_offset_minutes: 0}
       - {phase: closing_auction, anchor: session_close, start_offset_minutes: -10, end_offset_minutes: 0}
       - {phase: post_market, anchor: session_close, start_offset_minutes: 0, end_offset_minutes: 240}
-    incident_source: {type: manual, scope: market_wide}
+    # Nasdaq Trader's halt feed lists halts by listing market, NYSE among them (DECISIONS D125):
+    # single-stock halts block that instrument only; a market-wide halt stays a manual entry.
+    incident_source: {type: structured_feed, scope: single_stock}
     sources:
       calendar:
         origin: "exchange_calendars 4.13.2 calendar XNYS"

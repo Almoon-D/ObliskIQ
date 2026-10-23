@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import asyncio
 import os
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -35,6 +35,7 @@ from obliskiq.env import variable_names
 from obliskiq.ibkr.session import BrokerSession
 from obliskiq.ibkr.transport.base import TransportKind
 from obliskiq.store import Store, open_database
+from obliskiq.store.worker import StoreWorker
 from obliskiq.util.http import RetryPolicy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,6 +146,21 @@ def open_test_store(shipped_settings: ObliskConfig) -> Iterator[Callable[..., St
 def store(open_test_store: Callable[..., Store], tmp_path: Path) -> Store:
     """A migrated file database; the file is what makes write-ahead logging real."""
     return open_test_store(tmp_path / "store.db")
+
+
+@pytest.fixture
+async def store_worker(store: Store, shipped_settings: ObliskConfig) -> AsyncIterator[StoreWorker]:
+    """A store worker on its own connection to the test's store file (a store belongs to the
+    thread that opened it); the test reads through ``store``."""
+    worker = StoreWorker(
+        lambda: open_database(
+            store.path,
+            busy_timeout_ms=shipped_settings.store.busy_timeout_ms,
+            synchronous=shipped_settings.store.synchronous,
+        )
+    )
+    yield worker
+    await worker.aclose()
 
 
 @pytest.fixture

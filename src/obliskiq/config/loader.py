@@ -1,7 +1,8 @@
 """Loading the configuration: expert defaults, then the owner's panel, then the environment.
 
 ``config/defaults/*.yaml`` hold the expert defaults; each top-level section lives in exactly
-one of them. ``config/universe.yaml`` holds the universe (its one section, ``universe``).
+one of them. ``config/universe.yaml``, ``config/sources.yaml`` and ``config/llm.yaml`` each hold
+one section of their own: the universe, the data sources and the LLM layer.
 ``config/owner.yaml`` is the owner's panel and overrides any default, section by section and key
 by key (a list or a scalar replaces what it overrides; mappings merge). The environment may
 override the logging block for one process. The merged tree is validated
@@ -30,6 +31,8 @@ from .schema import ObliskConfig
 DEFAULTS_DIR = "defaults"
 UNIVERSE_FILE = "universe.yaml"
 UNIVERSE_SECTION = "universe"
+#: The files beside the defaults that hold one section each: file name -> its section.
+SECTION_FILES = {UNIVERSE_FILE: UNIVERSE_SECTION, "sources.yaml": "sources", "llm.yaml": "llm"}
 OWNER_FILE = "owner.yaml"
 YAML_GLOB = "*.yaml"
 
@@ -269,7 +272,10 @@ def load_config(
             section_home[section] = display
             merge_into(merged, {section: value}, display, sources)
 
-    problems += _merge_universe(config_dir, merged, sources, section_home, files)
+    for file_name, section in sorted(SECTION_FILES.items()):
+        problems += _merge_section_file(
+            config_dir, file_name, section, merged, sources, section_home, files
+        )
 
     owner_display = display_path(config_dir / OWNER_FILE, config_dir)
     files.append(owner_display)
@@ -302,15 +308,18 @@ def load_config(
     )
 
 
-def _merge_universe(
+def _merge_section_file(
     config_dir: Path,
+    file_name: str,
+    section: str,
     merged: dict[str, Any],
     sources: dict[str, str],
     section_home: dict[str, str],
     files: list[str],
 ) -> list[ConfigProblem]:
-    """Merge ``config/universe.yaml``, whose one top-level section is ``universe``."""
-    path = config_dir / UNIVERSE_FILE
+    """Merge a file whose one top-level key is ``section`` (``config/universe.yaml`` holds
+    ``universe``)."""
+    path = config_dir / file_name
     display = display_path(path, config_dir)
     files.append(display)
     try:
@@ -318,16 +327,14 @@ def _merge_universe(
     except ConfigInvalid as exc:
         return list(exc.problems)
     problems = [
-        ConfigProblem(
-            display, key, f"is not a section of the universe file; it holds only {UNIVERSE_SECTION}"
-        )
-        for key in sorted(set(data) - {UNIVERSE_SECTION})
+        ConfigProblem(display, key, f"is not a section of this file; it holds only {section}")
+        for key in sorted(set(data) - {section})
     ]
-    if UNIVERSE_SECTION in section_home:
+    if section in section_home:
         problems.append(
             ConfigProblem(
-                section_home[UNIVERSE_SECTION],
-                UNIVERSE_SECTION,
+                section_home[section],
+                section,
                 f"is defined in {display}; it cannot also be a default",
             )
         )

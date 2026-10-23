@@ -1,0 +1,986 @@
+# The data sources ObliskIQ reads besides IBKR (MASTER_PLAN §5.18; DECISIONS D66, D124).
+#
+# A source is declared here with what consumes it. One runs (`status: built`) only when a
+# registered hypothesis (an id in research/pattern_registry.yaml), a Hunter component
+# (MASTER_PLAN §5.5), a view (§5.7) or a safety rule consumes it; a source nothing consumes yet is
+# `declared`, with the condition that would activate it, and has no fetcher. Every built source
+# states how the date its rows became public is known (`release_date_policy`):
+#   from_api            the source states each row's first publication (ALFRED, ONS, StatCan, EDGAR)
+#   reference_plus_lag  a published, fixed schedule: the reference date plus `release_lag_days`
+#   same_as_reference   only for a value public on the date it describes (a market close, a policy
+#                       rate set in advance)
+#   as_collected        a reading taken when collected (a prediction market, a news item, a halt)
+#   unknown             no defensible date: the row is stored without one and never feeds a backtest
+# Observed behaviour of each source, with dates, is docs/knowledge/macro-sources.md.
+sources:
+  # What a source may name as its consumer: `hypothesis:<id>` (resolved against the research
+  # registry by a test), `component:<name>`, `view:<name>` or `safety:<name>`.
+  consumers:
+    components:
+      - crowding
+      - vol_mispricing
+      - iv_term_inversion
+      - skew_extremes
+      - regime_fragility
+      - cross_asset_divergence
+      - trend_inflection
+      - prediction_market_divergence
+      - gdelt_pulse
+      - insider_clusters
+      - central_bank_surprise
+      - catalyst_window
+      - promoted_patterns
+      - llm_nomination
+    views: [equity_grid, macro_board, option_surface]
+    safety: [instrument_halts]
+
+  providers:
+    # ── macro: built ──
+    fred:
+      name: FRED and ALFRED (Federal Reserve Bank of St. Louis)
+      area: macro
+      status: built
+      credential: FRED_API_KEY
+      consumers:
+        - view:macro_board
+        - view:equity_grid
+        - view:option_surface
+        - component:regime_fragility
+        - component:central_bank_surprise
+        - hypothesis:H6
+      activation: null
+      release_date_policy: from_api
+      release_lag_days: 0
+      # FRED posts the H.15 rates in the US afternoon; two hours after New York's close.
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 120}]
+      stale_after_hours: 100
+      bias_notes:
+        - ALFRED's initial-release view dates each value by its first publication; a series read
+          at its latest vintage (value_vintage latest) carries revised values on first-release dates.
+    ecb:
+      name: ECB Data Portal (SDMX)
+      area: macro
+      status: built
+      credential: null
+      consumers: [view:macro_board, view:option_surface, component:central_bank_surprise]
+      activation: null
+      # The portal serves no publication date; each series below states its own rule.
+      release_date_policy: unknown
+      release_lag_days: 0
+      schedule: [{venue: XETR, anchor: close, offset_minutes: 60}]
+      stale_after_hours: 100
+      bias_notes:
+        - Values as published now; the ECB revises some series without vintages.
+    eia:
+      name: EIA API v2 (US Energy Information Administration)
+      area: macro
+      status: built
+      credential: EIA_API_KEY
+      consumers: [view:equity_grid]
+      activation: null
+      # Week ending Friday, published the Wednesday after (Thursday in a holiday week): six days
+      # is the later of the two. Lite's three days dated each week before its release.
+      release_date_policy: reference_plus_lag
+      release_lag_days: 6
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 60}]
+      stale_after_hours: 200
+      bias_notes:
+        - Weekly levels as published now; EIA revises without vintages.
+    ons:
+      name: Office for National Statistics (UK), website time series
+      area: macro
+      status: built
+      credential: null
+      consumers: [view:macro_board]
+      activation: null
+      # Each month carries its own updateDate: a last-updated stamp, later than or equal to first
+      # publication, so it can delay knowledge and never advance it.
+      release_date_policy: from_api
+      release_lag_days: 0
+      schedule: [{venue: XLON, anchor: close, offset_minutes: 60}]
+      stale_after_hours: 100
+      bias_notes:
+        - A month's value is the latest revision; its date is its last update.
+    statcan:
+      name: Statistics Canada Web Data Service
+      area: macro
+      status: built
+      credential: null
+      consumers: [view:macro_board]
+      activation: null
+      release_date_policy: from_api
+      release_lag_days: 0
+      schedule: [{venue: XTSE, anchor: close, offset_minutes: 60}]
+      stale_after_hours: 100
+      bias_notes:
+        - Older points carry the date of a later restatement, which is the conservative direction.
+    boj:
+      name: Bank of Japan Time-Series Data Search API
+      area: macro
+      status: built
+      credential: null
+      consumers: [component:central_bank_surprise, component:cross_asset_divergence]
+      activation: null
+      # The API serves one last-update date per series, never per observation: each series below
+      # states its own rule.
+      release_date_policy: unknown
+      release_lag_days: 0
+      schedule: [{venue: XTKS, anchor: close, offset_minutes: 120}]
+      stale_after_hours: 100
+      bias_notes:
+        - Values as published now, without vintages. The database holds no JGB yields (2026-10-23).
+    bis:
+      name: BIS Data Portal (SDMX)
+      area: macro
+      status: built
+      credential: null
+      consumers:
+        - component:central_bank_surprise
+        - component:regime_fragility
+        - component:cross_asset_divergence
+      activation: null
+      release_date_policy: unknown
+      release_lag_days: 0
+      schedule: [{venue: XSWX, anchor: close, offset_minutes: 60}]
+      stale_after_hours: 200
+      bias_notes:
+        - Credit-to-GDP gaps and effective exchange rates are revised in place; a stored value is
+          the latest revision dated by the release rule, not the value public then.
+    frb:
+      name: Federal Reserve Board, the excess bond premium (Gilchrist and Zakrajšek)
+      area: macro
+      status: built
+      credential: null
+      consumers: [hypothesis:H6, component:regime_fragility]
+      activation: null
+      # September 2026 was published on 2026-10-06 (the file's Last-Modified), 35 days after the
+      # month's first day; 45 days leaves room for a later update.
+      release_date_policy: reference_plus_lag
+      release_lag_days: 45
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 120}]
+      stale_after_hours: 1000
+      bias_notes:
+        - Each monthly update re-estimates the whole history; a stored value is the latest
+          estimate, not the one public on its release date.
+
+    # ── macro: declared, built when a consumer appears ──
+    eurostat:
+      name: Eurostat dissemination API
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: >-
+        A component or hypothesis that reads the euro-area HICP flash or activity indicators
+        before FRED redistributes them; Eurostat serves no per-observation publication date, so
+        its rows would be live-only.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    boe:
+      name: Bank of England Interactive Statistical Database
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: >-
+        A component that reads UK gilt yields or the policy path daily; the macro board reads
+        SONIA and the ten-year yield through FRED.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    snb:
+      name: Swiss National Bank data portal
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: A Swiss region on the macro board or a hypothesis that reads Swiss rates.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    bundesbank:
+      name: Deutsche Bundesbank time-series database
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: >-
+        A component that reads German yields daily (the research harness already loads the
+        Bundesbank's yield curve for its studies).
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    boc_valet:
+      name: Bank of Canada Valet API
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: A component that reads Canadian rates daily (FRED's are monthly).
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    abs:
+      name: Australian Bureau of Statistics data API
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: >-
+        A source of Australian CPI with a per-observation release date; the ABS SDMX API serves
+        none (lite, 2026-09-15).
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    rba:
+      name: Reserve Bank of Australia statistical tables
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: A component that reads Australian yields daily.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    bcb_sgs:
+      name: Banco Central do Brasil SGS
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: Brazil's rates or CPI on the macro board beyond BIS's policy rate.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    norges_bank:
+      name: Norges Bank SDMX API
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: A Norwegian region on the macro board.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    mas:
+      name: Monetary Authority of Singapore statistics
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: A Singapore region on the macro board.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    banxico:
+      name: Banco de México SIE API
+      area: macro
+      status: declared
+      credential: BANXICO_TOKEN
+      consumers: []
+      activation: A Mexican region on the macro board.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    cbrt_evds:
+      name: Central Bank of the Republic of Türkiye EVDS
+      area: macro
+      status: declared
+      credential: EVDS_API_KEY
+      consumers: []
+      activation: A Turkish region on the macro board.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    dbnomics:
+      name: DBnomics (aggregator)
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: >-
+        A live view that needs a series no direct fetcher serves; live use only, since it keeps no
+        vintages.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+    mof_japan:
+      name: Ministry of Finance Japan, JGB interest rates
+      area: macro
+      status: declared
+      credential: null
+      consumers: []
+      activation: >-
+        A component that reads daily JGB yields; the Bank of Japan's database holds none, and the
+        macro board reads the monthly ten-year yield through FRED.
+      release_date_policy: null
+      release_lag_days: null
+      schedule: []
+      stale_after_hours: null
+      bias_notes: []
+
+    # ── positioning ──
+    cftc:
+      name: CFTC Commitments of Traders (legacy futures-only)
+      area: positioning
+      status: built
+      credential: null
+      consumers: [component:crowding, view:macro_board, hypothesis:H9]
+      activation: null
+      # Tuesday positions, published the Friday after at 15:30 ET. A government shutdown delays
+      # reports (October-November 2025); the rule then dates them early (knowledge file).
+      release_date_policy: reference_plus_lag
+      release_lag_days: 3
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 90}]
+      stale_after_hours: 200
+      bias_notes:
+        - A report revised after its release is stored as revised.
+
+    # ── insiders ──
+    sec_edgar:
+      name: SEC EDGAR Form 4
+      area: insiders
+      status: built
+      credential: SEC_USER_AGENT
+      consumers: [component:insider_clusters, hypothesis:H2]
+      activation: null
+      # A filing is public on its filing date (EDGAR's own); a trade is reported up to two
+      # business days after it was made.
+      release_date_policy: from_api
+      release_lag_days: 0
+      # EDGAR posts a day's form index in the US evening.
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 360}]
+      stale_after_hours: 100
+      bias_notes:
+        - Forward collection only; history before the first run is not loaded here.
+
+    # ── events ──
+    polymarket:
+      name: Polymarket Gamma API
+      area: events
+      status: built
+      credential: null
+      consumers: [component:prediction_market_divergence]
+      activation: null
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule:
+        - {venue: XETR, anchor: close, offset_minutes: 15}
+        - {venue: XNYS, anchor: close, offset_minutes: 15}
+      stale_after_hours: 50
+      bias_notes: []
+    kalshi:
+      name: Kalshi public market data (read-only)
+      area: events
+      status: built
+      credential: null
+      consumers: [component:prediction_market_divergence]
+      activation: null
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule:
+        - {venue: XETR, anchor: close, offset_minutes: 15}
+        - {venue: XNYS, anchor: close, offset_minutes: 15}
+      stale_after_hours: 50
+      bias_notes: []
+    gdelt:
+      name: GDELT DOC 2.0 API
+      area: events
+      status: built
+      credential: null
+      consumers: [component:gdelt_pulse]
+      activation: null
+      release_date_policy: as_collected
+      release_lag_days: 0
+      # After the UTC day New York's session ends in, so that day is complete.
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 300}]
+      stale_after_hours: 50
+      bias_notes:
+        - Article counts of the open hour grow as GDELT indexes; only complete UTC days are stored.
+    rss:
+      name: Curated RSS and Atom feeds (central banks, regulators, issuers' filings)
+      area: news
+      status: built
+      credential: SEC_USER_AGENT
+      consumers: [hypothesis:H7, component:llm_nomination]
+      activation: null
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule:
+        - {venue: XTKS, anchor: close, offset_minutes: 15}
+        - {venue: XETR, anchor: open, offset_minutes: 60}
+        - {venue: XETR, anchor: close, offset_minutes: 15}
+        - {venue: XNYS, anchor: open, offset_minutes: 60}
+        - {venue: XNYS, anchor: close, offset_minutes: 15}
+      stale_after_hours: 30
+      bias_notes:
+        - A feed lists only its latest items; anything published and withdrawn between two reads
+          is never seen.
+
+    # ── calendars ──
+    earnings:
+      name: Yahoo Finance earnings dates (research-grade)
+      area: calendar
+      status: built
+      credential: null
+      consumers: [component:catalyst_window, view:equity_grid]
+      activation: null
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 420}]
+      stale_after_hours: 400
+      bias_notes:
+        - Research-grade, unofficial; an upcoming date may be an estimate and may move, and it is
+          never decisive on its own.
+
+    # ── halts (a safety rule) ──
+    nasdaq_trader:
+      name: Nasdaq Trader trade halts (RSS)
+      area: halts
+      status: built
+      credential: null
+      consumers: [safety:instrument_halts]
+      activation: null
+      release_date_policy: as_collected
+      release_lag_days: 0
+      # Read by the heartbeat (halts.refresh_minutes), not by a scheduled job.
+      schedule: []
+      stale_after_hours: 1
+      bias_notes:
+        - Single-stock halts only; it never says a market is closed.
+
+  # ── macro series ──
+  macro:
+    collection:
+      # Lite's macro.collection: history pulled on a series' first run, a repeat inside the
+      # refetch window issues no request, and a series returning more rows keeps the newest.
+      default_window_years: 10
+      refetch_after_seconds: 21600
+      max_observations_per_series: 30000
+      # Lite's collectors.macro: a source abandoned after this many failed series in a row; the
+      # other sources go on.
+      stop_after_consecutive_failures: 5
+    commodity_history:
+      # Lite's commodities.history: a 5-year percentile misleads on a 10-20 year commodity cycle.
+      window_years: 20
+      # native: each series at its own frequency; monthly: FRED aggregates (the one place a
+      # frequency is ever asked for).
+      frequency: native
+      aggregation_method: avg
+    fred:
+      observations_url: https://api.stlouisfed.org/fred/series/observations
+      vintage_dates_url: https://api.stlouisfed.org/fred/series/vintagedates
+      series_url: https://api.stlouisfed.org/fred/series
+      # FRED's own ceiling on vintage dates per output_type=4 request (its error names it).
+      max_vintages_per_call: 2000
+    ecb:
+      data_url: https://data-api.ecb.europa.eu/service/data
+    eia:
+      base_url: https://api.eia.gov/v2
+    ons:
+      base_url: https://www.ons.gov.uk
+      # The ONS publishes in London; a UTC update stamp is read as that day there.
+      timezone: Europe/London
+    statcan:
+      vectors_url: https://www150.statcan.gc.ca/t1/wds/rest/getDataFromVectorsAndLatestNPeriods
+    boj:
+      data_url: https://www.stat-search.boj.or.jp/api/v1/getDataCode
+    bis:
+      data_url: https://stats.bis.org/api/v1/data
+    frb:
+      ebp_url: https://www.federalreserve.gov/econres/notes/feds-notes/ebp_csv.csv
+    # Every series at its native frequency, never resampled. `units` is what the source reports
+    # (a mismatch fails the series: its meaning changed) or, where it reports none, what the
+    # series carries. `key` addresses the series at its source. A series names its consumers;
+    # one nothing consumes is not declared.
+    series:
+      # FRED: United States
+      - {id: DFF, source: fred, frequency: daily, units: "%", group: us_core, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, component:central_bank_surprise]}
+      - {id: DTB3, source: fred, frequency: daily, units: "%", group: risk_free, key: null,
+         release: null, value_vintage: initial, consumers: [view:option_surface]}
+      - {id: DGS2, source: fred, frequency: daily, units: "%", group: us_core, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, component:central_bank_surprise]}
+      - {id: DGS10, source: fred, frequency: daily, units: "%", group: us_core, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, component:regime_fragility]}
+      - {id: CPIAUCSL, source: fred, frequency: monthly, units: "Index 1982-1984=100", group: cpi,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: BAA10Y, source: fred, frequency: daily, units: "%", group: credit, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, component:regime_fragility]}
+      - {id: VIXCLS, source: fred, frequency: daily, units: "Index", group: volatility, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, component:regime_fragility, hypothesis:H6]}
+      - {id: VXVCLS, source: fred, frequency: daily, units: "Index", group: volatility, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, component:regime_fragility]}
+      # FRED: OECD long-term government yields (monthly)
+      - {id: IRLTLT01DEM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01ESM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01GBM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01JPM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01KRM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01AUM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01EZM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01ILM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01FRM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01ITM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRLTLT01CAM156N, source: fred, frequency: monthly, units: "%", group: international,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      # FRED: Eurostat's HICP indices. Eurostat rebased to 2025=100 during 2026, so the value is
+      # read at the latest vintage (one base) and dated by the initial release.
+      - {id: CP0000EZCCM086NEST, source: fred, frequency: monthly, units: "Index 2025=100",
+         group: cpi, key: null, release: null, value_vintage: latest,
+         consumers: [view:macro_board]}
+      - {id: CP0000DEM086NEST, source: fred, frequency: monthly, units: "Index 2025=100",
+         group: cpi, key: null, release: null, value_vintage: latest,
+         consumers: [view:macro_board]}
+      - {id: CP0000ESM086NEST, source: fred, frequency: monthly, units: "Index 2025=100",
+         group: cpi, key: null, release: null, value_vintage: latest,
+         consumers: [view:macro_board]}
+      - {id: CP0000FRM086NEST, source: fred, frequency: monthly, units: "Index 2025=100",
+         group: cpi, key: null, release: null, value_vintage: latest,
+         consumers: [view:macro_board]}
+      - {id: CP0000ITM086NEST, source: fred, frequency: monthly, units: "Index 2025=100",
+         group: cpi, key: null, release: null, value_vintage: latest,
+         consumers: [view:macro_board]}
+      # FRED: short and policy rates outside the US and the euro area
+      - {id: IUDSOIA, source: fred, frequency: daily, units: "%", group: policy_rate, key: null,
+         release: null, value_vintage: initial,
+         consumers: [view:macro_board, view:option_surface]}
+      - {id: IRSTCI01JPM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRSTCI01KRM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRSTCI01AUM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRSTCI01ILM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
+         key: null, release: null, value_vintage: initial, consumers: [view:macro_board]}
+      - {id: IRSTCI01CAM156N, source: fred, frequency: monthly, units: "%", group: policy_rate,
+         key: null, release: null, value_vintage: initial,
+         consumers: [view:macro_board, view:option_surface]}
+      # FRED: commodity long history (commodity_history window)
+      - {id: DCOILWTICO, source: fred, frequency: daily, units: "$ per Barrel",
+         group: commodity_history, key: null, release: null, value_vintage: initial,
+         consumers: [view:equity_grid]}
+      - {id: DCOILBRENTEU, source: fred, frequency: daily, units: "$ per Barrel",
+         group: commodity_history, key: null, release: null, value_vintage: initial,
+         consumers: [view:equity_grid]}
+      - {id: DHHNGSP, source: fred, frequency: daily, units: "$ Per Mil. BTU",
+         group: commodity_history, key: null, release: null, value_vintage: initial,
+         consumers: [view:equity_grid]}
+      - {id: PCOPPUSDM, source: fred, frequency: monthly, units: "U.S. $ per Metric Ton",
+         group: commodity_history, key: null, release: null, value_vintage: initial,
+         consumers: [view:equity_grid]}
+      # ECB Data Portal. key is flowRef/seriesKey; the portal reports no units here.
+      # €STR is published at 08:00 CET on each TARGET day for the previous business day.
+      - {id: ESTR, source: ecb, frequency: daily, units: "%", group: risk_free,
+         key: EST/B.EU000A2X2A25.WT, release: {policy: reference_plus_lag, lag_days: 1},
+         value_vintage: null, consumers: [view:option_surface]}
+      # A policy rate in force on a date was announced before it.
+      - {id: ECB_DFR, source: ecb, frequency: daily, units: "%", group: policy_rate,
+         key: FM/D.U2.EUR.4F.KR.DFR.LEV, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board, component:central_bank_surprise]}
+      # The euro reference rates, units of the currency per euro, public on the day they describe.
+      - {id: EURUSD, source: ecb, frequency: daily, units: USD per EUR, group: fx,
+         key: EXR/D.USD.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURGBP, source: ecb, frequency: daily, units: GBP per EUR, group: fx,
+         key: EXR/D.GBP.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURJPY, source: ecb, frequency: daily, units: JPY per EUR, group: fx,
+         key: EXR/D.JPY.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURKRW, source: ecb, frequency: daily, units: KRW per EUR, group: fx,
+         key: EXR/D.KRW.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURHKD, source: ecb, frequency: daily, units: HKD per EUR, group: fx,
+         key: EXR/D.HKD.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURCNY, source: ecb, frequency: daily, units: CNY per EUR, group: fx,
+         key: EXR/D.CNY.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURILS, source: ecb, frequency: daily, units: ILS per EUR, group: fx,
+         key: EXR/D.ILS.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURBRL, source: ecb, frequency: daily, units: BRL per EUR, group: fx,
+         key: EXR/D.BRL.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURAUD, source: ecb, frequency: daily, units: AUD per EUR, group: fx,
+         key: EXR/D.AUD.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURCAD, source: ecb, frequency: daily, units: CAD per EUR, group: fx,
+         key: EXR/D.CAD.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      - {id: EURINR, source: ecb, frequency: daily, units: INR per EUR, group: fx,
+         key: EXR/D.INR.EUR.SP00.A, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [view:macro_board]}
+      # EIA: crude stocks excluding the SPR, thousand barrels (EIA's MBBL).
+      - {id: WCESTUS1, source: eia, frequency: weekly, units: MBBL, group: energy_inventory,
+         key: petroleum/stoc/wstk, release: null, value_vintage: null,
+         consumers: [view:equity_grid]}
+      # ONS: the UK's published annual CPI rate (key is the route under the website).
+      - {id: UK_CPI_YOY, source: ons, frequency: monthly, units: "%", group: cpi,
+         key: economy/inflationandpriceindices/timeseries/d7g7/mm23, release: null,
+         value_vintage: null, consumers: [view:macro_board]}
+      # Statistics Canada vector 41690973, CPI all-items; WDS reports no unit string.
+      - {id: CA_CPI, source: statcan, frequency: monthly, units: "Index 2002=100", group: cpi,
+         key: "41690973", release: null, value_vintage: null, consumers: [view:macro_board]}
+      # Bank of Japan: key is <database>/<series code>.
+      # The 09:00 JST Tokyo spot rate is a market observation of its own day.
+      - {id: BOJ_USDJPY, source: boj, frequency: daily, units: Yen per U.S. Dollar, group: fx,
+         key: FM08/FXERD01, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:cross_asset_divergence]}
+      # The monetary base is released on the second business day of the next month (September
+      # 2026 on 2026-10-02): 38 days from the month's first day covers the longest month.
+      - {id: BOJ_MONETARY_BASE, source: boj, frequency: monthly, units: "100 million yen",
+         group: monetary_base, key: MD01/MABS1AN11,
+         release: {policy: reference_plus_lag, lag_days: 38}, value_vintage: null,
+         consumers: [component:central_bank_surprise]}
+      # BIS: key is <dataflow>/<series key>; units are BIS's UNIT_MEASURE codes (368 per cent a
+      # year, 770 per cent of GDP, 882 an index). A policy rate in force was announced before it.
+      - {id: BIS_CBPOL_US, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.US, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_XM, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.XM, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_GB, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.GB, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_JP, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.JP, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_KR, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.KR, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_AU, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.AU, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_CA, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.CA, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_IL, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.IL, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_BR, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.BR, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_IN, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.IN, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_CN, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.CN, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      - {id: BIS_CBPOL_HK, source: bis, frequency: daily, units: "368", group: policy_rate,
+         key: WS_CBPOL/D.HK, release: {policy: same_as_reference, lag_days: 0},
+         value_vintage: null, consumers: [component:central_bank_surprise]}
+      # Credit-to-GDP gaps, quarterly: published in the BIS's quarterly release about three
+      # quarters after the quarter begins (2026-Q1 was the newest on 2026-10-23).
+      - {id: BIS_CREDIT_GAP_US, source: bis, frequency: quarterly, units: "770", group: credit,
+         key: WS_CREDIT_GAP/Q.US.P.A.C, release: {policy: reference_plus_lag, lag_days: 290},
+         value_vintage: null, consumers: [component:regime_fragility]}
+      - {id: BIS_CREDIT_GAP_XM, source: bis, frequency: quarterly, units: "770", group: credit,
+         key: WS_CREDIT_GAP/Q.XM.P.A.C, release: {policy: reference_plus_lag, lag_days: 290},
+         value_vintage: null, consumers: [component:regime_fragility]}
+      - {id: BIS_CREDIT_GAP_CN, source: bis, frequency: quarterly, units: "770", group: credit,
+         key: WS_CREDIT_GAP/Q.CN.P.A.C, release: {policy: reference_plus_lag, lag_days: 290},
+         value_vintage: null, consumers: [component:regime_fragility]}
+      - {id: BIS_CREDIT_GAP_JP, source: bis, frequency: quarterly, units: "770", group: credit,
+         key: WS_CREDIT_GAP/Q.JP.P.A.C, release: {policy: reference_plus_lag, lag_days: 290},
+         value_vintage: null, consumers: [component:regime_fragility]}
+      # Nominal broad effective exchange rates, monthly; September 2026 was out by 2026-10-23.
+      - {id: BIS_EER_US, source: bis, frequency: monthly, units: "882", group: fx,
+         key: WS_EER/M.N.B.US, release: {policy: reference_plus_lag, lag_days: 52},
+         value_vintage: null, consumers: [component:cross_asset_divergence]}
+      - {id: BIS_EER_XM, source: bis, frequency: monthly, units: "882", group: fx,
+         key: WS_EER/M.N.B.XM, release: {policy: reference_plus_lag, lag_days: 52},
+         value_vintage: null, consumers: [component:cross_asset_divergence]}
+      - {id: BIS_EER_JP, source: bis, frequency: monthly, units: "882", group: fx,
+         key: WS_EER/M.N.B.JP, release: {policy: reference_plus_lag, lag_days: 52},
+         value_vintage: null, consumers: [component:cross_asset_divergence]}
+      - {id: BIS_EER_CN, source: bis, frequency: monthly, units: "882", group: fx,
+         key: WS_EER/M.N.B.CN, release: {policy: reference_plus_lag, lag_days: 52},
+         value_vintage: null, consumers: [component:cross_asset_divergence]}
+      # Federal Reserve Board: key is the file's column. Percentage points.
+      - {id: EBP, source: frb, frequency: monthly, units: percentage points, group: credit,
+         key: ebp, release: null, value_vintage: null,
+         consumers: [hypothesis:H6, component:regime_fragility]}
+      - {id: GZ_SPREAD, source: frb, frequency: monthly, units: percentage points, group: credit,
+         key: gz_spread, release: null, value_vintage: null,
+         consumers: [component:regime_fragility]}
+
+  # ── positioning (CFTC) ──
+  positioning:
+    # One ZIP per year (1986 on), each holding annual.txt; the current year's grows weekly.
+    annual_url_template: https://www.cftc.gov/files/dea/history/deacot{year}.zip
+    socrata_url: https://publicreporting.cftc.gov/resource/6dca-aqww.json
+    socrata_page_size: 5000
+    # The incremental read re-reads this many weeks, so a report revised after release is
+    # picked up.
+    incremental_weeks: 8
+    backfill_start_year: 2006
+    # Crowding (Session 15) ranks the current share of open interest within the trailing window;
+    # no rank until the window holds the warm-up (the old ObliskIQ's 156 and 52 weeks).
+    percentile_window_weeks: 156
+    percentile_min_weeks: 52
+    # Velocity: the change of the share over this many reports.
+    velocity_weeks: 4
+    # The registry: id (what the universe and the board name) -> the CFTC contract market code.
+    contracts:
+      COT_SP500: {code: "13874A", name: E-mini S&P 500 (CME),
+                  consumers: [component:crowding, view:macro_board]}
+      COT_NASDAQ: {code: "209742", name: Nasdaq-100 mini (CME), consumers: [component:crowding]}
+      COT_UST10Y: {code: "043602", name: UST 10-year note (CBOT), consumers: [component:crowding]}
+      # The classic 30-year bond; 043607 is the ultra 10-year note.
+      COT_UST30Y: {code: "020601", name: UST bond (CBOT), consumers: [component:crowding]}
+      COT_WTI: {code: "067651", name: WTI crude (NYMEX),
+                consumers: [component:crowding, hypothesis:H9]}
+      COT_NATGAS: {code: "023651", name: Natural gas (NYMEX),
+                   consumers: [component:crowding, hypothesis:H9]}
+      COT_GOLD: {code: "088691", name: Gold (COMEX),
+                 consumers: [component:crowding, hypothesis:H9]}
+      COT_SILVER: {code: "084691", name: Silver (COMEX),
+                   consumers: [component:crowding, hypothesis:H9]}
+      COT_COPPER: {code: "085692", name: Copper (COMEX),
+                   consumers: [component:crowding, hypothesis:H9]}
+      COT_USD: {code: "098662", name: US dollar index (ICE), consumers: [component:crowding]}
+      COT_EUR: {code: "099741", name: Euro FX (CME), consumers: [component:crowding]}
+
+  # ── insiders (SEC EDGAR Form 4) ──
+  insiders:
+    daily_index_url_template: https://www.sec.gov/Archives/edgar/daily-index/{year}/QTR{quarter}/form.{day}.idx
+    archive_url: https://www.sec.gov/Archives
+    tickers_url: https://www.sec.gov/files/company_tickers.json
+    forms: ["4", "4/A"]
+    # SEC's fair-access limit is ten requests a second.
+    request_spacing_seconds: 0.15
+    # A first run, or one after a gap, reads at most this many days back.
+    lookback_days: 10
+    # The cluster inputs: open-market purchases (code P) by officers and directors over the
+    # trailing window of filing dates.
+    purchase_code: P
+    cluster_window_days: 30
+
+  # ── events ──
+  events:
+    polymarket:
+      gamma_url: https://gamma-api.polymarket.com
+      # Curated events (macro-relevant, each a set of binary markets), by Gamma event slug,
+      # read 2026-10-23. An event that ends drops out; its replacement is a reviewed edit.
+      curated_events:
+        - fed-decision-in-october-20260617190323537
+        - fed-decision-in-december-20260729232808632
+        - fed-decision-in-january-20260729233815502
+        - how-many-fed-rate-cuts-in-2026
+        - ecb-interest-rates-december-2026
+        - us-recession-by-end-of-2026
+        - us-recession-by-end-of-2027-20260807185409760
+        - october-inflation-us-monthly
+      # Tag discovery: open events under these tags are recorded as candidates for curation.
+      discovery_tags: [fed-rates, macro-indicators, recession, tariffs, geopolitics]
+      discovery_limit: 20
+      # A discovered market is recorded only above this liquidity (US dollars).
+      min_discovery_liquidity: 10000
+    kalshi:
+      api_url: https://api.elections.kalshi.com/trade-api/v2
+      # Curated series, read 2026-10-23: Fed decision, upper bound of the funds rate, recession.
+      curated_series: [KXFEDDECISION, KXFED, RECSSNBER]
+      max_markets_per_series: 60
+    # Velocity: the probability change against the newest snapshot at least this old.
+    velocity_hours: 24
+    gdelt:
+      doc_url: https://api.gdeltproject.org/api/v2/doc/doc
+      timespan: 7d
+      # GDELT answers 429 "limit requests to one every 5 seconds"; the shared egress of a cloud
+      # session met it at ten seconds too (2026-10-23).
+      request_spacing_seconds: 12
+      rate_limited_backoff_seconds: 60
+      rate_limited_retries: 2
+      # A z-score needs this many prior days; before that the query is warming up.
+      min_history_days: 20
+      # Region and theme queries (the old ObliskIQ's gdelt_regions.json).
+      queries:
+        middle_east: {query: '(Iran OR Israel OR Gaza OR Hormuz OR "Middle East")', theme: conflict}
+        europe: {query: '(Ukraine OR Russia OR NATO OR "European Union")', theme: conflict}
+        asia: {query: '(Taiwan OR "South China Sea" OR "North Korea")', theme: conflict}
+        latam: {query: '(Venezuela OR "Latin America") (crisis OR sanctions OR military)', theme: politics}
+
+  # ── news (RSS and Atom) ──
+  news:
+    # A body larger than this is refused (a feed is a few hundred kilobytes).
+    max_body_bytes: 5000000
+    max_summary_chars: 4000
+    feeds:
+      fed_press: {url: "https://www.federalreserve.gov/feeds/press_all.xml", kind: central_bank,
+                  region: us, symbol: null}
+      ecb_press: {url: "https://www.ecb.europa.eu/rss/press.html", kind: central_bank,
+                  region: eurozone, symbol: null}
+      boe_news: {url: "https://www.bankofengland.co.uk/rss/news", kind: central_bank, region: uk,
+                 symbol: null}
+      boj_whatsnew: {url: "https://www.boj.or.jp/en/rss/whatsnew.xml", kind: central_bank,
+                     region: japan, symbol: null}
+      snb_press: {url: "https://www.snb.ch/public/en/rss/pressrel", kind: central_bank,
+                  region: null, symbol: null}
+      boc_press: {url: "https://www.bankofcanada.ca/content_type/press-releases/feed/",
+                  kind: central_bank, region: canada, symbol: null}
+      rba_media: {url: "https://www.rba.gov.au/rss/rss-cb-media-releases.xml",
+                  kind: central_bank, region: australia, symbol: null}
+      sec_press: {url: "https://www.sec.gov/news/pressreleases.rss", kind: regulator, region: us,
+                  symbol: null}
+      # Issuers' filings through EDGAR's company feeds (8-K, and 6-K for foreign issuers): the
+      # issuer feed that reads the same way for every listed name.
+      fcx_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000831259&type=8-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: us, symbol: FCX}
+      alb_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000915913&type=8-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: us, symbol: ALB}
+      mos_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001285785&type=8-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: us, symbol: MOS}
+      bg_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001996862&type=8-K&owner=include&count=40&output=atom",
+                   kind: issuer, region: us, symbol: BG}
+      ccj_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001009001&type=6-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: canada, symbol: CCJ}
+      ntr_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001725964&type=6-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: canada, symbol: NTR}
+      asml_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000937966&type=6-K&owner=include&count=40&output=atom",
+                     kind: issuer, region: null, symbol: ASML}
+      san_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000891478&type=6-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: spain, symbol: SAN}
+      tte_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000879764&type=6-K&owner=include&count=40&output=atom",
+                    kind: issuer, region: france, symbol: TTE}
+
+  # ── halts ──
+  halts:
+    nasdaq_trader:
+      url: https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts
+      # The origin its incidents carry; the calendars replace this origin's incidents wholesale.
+      origin: nasdaq-trader-halts
+      # The feed's Market code -> the venue whose single-stock halts it reports. A code not listed
+      # (NYSE American, say) is read and left out.
+      markets: {NASDAQ: XNAS, NYSE: XNYS}
+      # The halt and resumption times are this venue's local time.
+      time_venue: XNYS
+      refresh_minutes: 5
+      # This many failed reads in a row alert; the last good state stays in force meanwhile.
+      alert_after_failures: 3
+
+  # ── catalysts ──
+  catalysts:
+    # Central-bank decisions (the decision day) and key releases, each date with the page that
+    # states it (read 2026-10-23). A date is added by a reviewed edit when its source publishes it.
+    events:
+      - {kind: fomc_decision, region: us, day: 2026-10-28, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2026-12-09, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-01-27, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-03-17, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-04-28, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-06-09, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-07-28, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-09-15, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-10-27, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: fomc_decision, region: us, day: 2027-12-08, source: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"}
+      - {kind: ecb_decision, region: eurozone, day: 2026-10-29, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2026-12-17, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-02-04, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-03-18, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-04-29, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-06-10, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-07-22, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-09-09, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-10-28, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: ecb_decision, region: eurozone, day: 2027-12-16, source: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}
+      - {kind: boe_decision, region: uk, day: 2026-11-05, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2026-12-17, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-02-04, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-03-18, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-04-29, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-06-17, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-07-29, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-09-16, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-11-04, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boe_decision, region: uk, day: 2027-12-16, source: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"}
+      - {kind: boj_decision, region: japan, day: 2026-10-30, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2026-12-18, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-01-22, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-03-18, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-04-28, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-06-11, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-07-22, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-09-22, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-10-29, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: boj_decision, region: japan, day: 2027-12-17, source: "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm"}
+      - {kind: us_cpi, region: us, day: 2026-11-10, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2026-12-10, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-01-13, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-02-11, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-03-10, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-04-13, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-05-12, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-06-10, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-07-14, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-08-11, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-09-14, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-10-14, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-11-10, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_cpi, region: us, day: 2027-12-10, source: "https://www.bls.gov/schedule/news_release/cpi.htm"}
+      - {kind: us_payrolls, region: us, day: 2026-11-06, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2026-12-04, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-01-08, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-02-05, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-03-05, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-04-02, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-05-07, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-06-04, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-07-02, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-08-06, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-09-03, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-10-08, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-11-05, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+      - {kind: us_payrolls, region: us, day: 2027-12-03, source: "https://www.bls.gov/schedule/news_release/empsit.htm"}
+    earnings:
+      # The universe's stock instruments, read again once their newest dates are this old.
+      refresh_days: 7
+      # Dates further out than this are not kept (an estimate that far out is noise).
+      horizon_days: 120
+      # How many past reports are read with the upcoming one.
+      past_reports: 8
