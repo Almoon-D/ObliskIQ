@@ -23,7 +23,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 8 | Universe and market-data collectors | global universe with hedged classes and look-through, stock candidates, venue profiles, eligibility policy, collectors (option surfaces stored forward) | done (collectors built against fixtures: no IBKR call from the cloud; holdings and research history loaded live) | v0.13.0 |
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | done (capabilities from the owner's paper run and lite; the probe on paper is a command for the owner) | v0.14.0 |
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | done (every built source but GDELT collected live from the cloud; the extractor waits on its key; H7 pre-registered, #46) | v0.15.0 |
-| 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | planned | |
+| 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | done (built and accepted on an offline fixture store; the census reports the gates untested until Session 12) | v0.16.0 |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | planned | |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
@@ -38,6 +38,62 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Session 11 — Measurement store and views (2026-10-23, v0.16.0)
+
+**Landed.**
+- Migration `011_measurements.sql` and `store/measurements.py` (D130): one long-format table of
+  every leaf of every entity (equity-grid cell, macro-board cell, instrument, correlated pair) as
+  of a session, with status, reason and reason code, `n_obs`, window, units, source, the weakest
+  market-data status behind the value and `inputs_hash`. Reads are bounded by `as_of`; a build
+  replaces its own session only.
+- `grid/`: lite's 15 indicator families (45 leaves per cell, D134), its estimators and window
+  honesty, per-input freshness by requirement group and the macro blanket; the equity grid
+  (market × sector, 192 cells) and the macro board (region × asset class, D131) as builders that
+  write measurements and views that read them; the four ranked views with trajectories; the
+  cross-asset correlation matrix keyed on legs with norms and shifts; family reach; the census.
+- The session's implied-vol solve (`grid/iv_session.py`): chains a route priced without vols, at
+  the money, discounted at the rate released by the chain's session
+  (`numerics.implied_vol.solve.risk_free_series`), written to the snapshot's own column with its
+  method; non-convergence counted and the step degraded above the configured share.
+- HAR-RV (`grid/har.py`, D132) and overnight-gap distributions with earnings flagged on the venue
+  calendar (`grid/gaps.py`, D133), as instrument leaves.
+- `obliskiq compute <solve-iv|measure|rankings|census|all>` (`orchestration/compute.py`) under one
+  run record, exit codes as the collectors'.
+- Config: `config/defaults/grid.yaml` (lite's `grid` and `census` keys with lite's values, and the
+  board, HAR and gap settings), `config/defaults/screen.yaml` (lite's two IV-percentile bounds),
+  `smile.skew_delta` and `smile.term_structure`; `us.credit` and `us.vol_index` wired to Session
+  10's BAA10Y, VIXCLS and VXVCLS.
+
+**Tests.** Lite's window-honesty, isolation and validation tests ported (`test_grid_*.py`,
+`test_cli_compute.py`, `test_store_measurements.py`), with failure branches: refusals per family,
+restated opens, a rebased CPI, mixed frequencies and units changes in a correlation, a singular or
+negative HAR fit, an unplaceable earnings window, an unconverged solve, a step that raises. A
+build is point in time (data released after `as_of` changes no row and no hash) and
+reproducible. `make check` green (see the PR).
+
+**Acceptance.** `tests/integration/test_measurement_acceptance.py`: an offline fixture store
+(`tests/support/measure_rig.py`, synthetic and deterministic) yields both views with honest
+statuses: measured cells on their native instruments, the option families where a chain is
+collected, unmapped cells told apart from unseeded ones, every leaf not `ok` with its reason, the
+disclosure flagging a two-stock fund. The import contracts and an AST walk prove the compute run
+reaches neither `ibkr` nor `httpx`, and `compute all` runs with network sockets refused. On an
+empty store `compute all` writes 8,640 grid leaves and 813 board leaves, all honestly absent, and
+exits degraded.
+
+**Deferred.** The census's gates are Session 12's: until they exist it reports every gate
+untested and its step is degraded (D134). Nothing else of the prompt. No IBKR call from the
+session.
+
+**Live findings.** None: no live call.
+
+**Prompt edit.** §12 named `config/defaults/{liquidity,smile}.yaml` as the files Session 2
+started; Session 11 added smile's `skew_delta` and `term_structure` and created
+`config/defaults/screen.yaml` with lite's two IV-percentile bounds, so §12 now names them (a
+fact, not scope).
+
+**Dependabot.** No patch or minor update was open; the major cryptography 50 (#9, #5) stays red
+and in Follow-ups (D96).
+
 ### Session 10 — Macro, positioning, insiders and events (2026-10-23, v0.15.0)
 
 **Landed.**
@@ -1604,9 +1660,20 @@ settles it.
 | The EventExtractor's first call: Gemini's OpenAI-compatible reply, its `usage`, and the `json_schema` response format accepted (no key in the session) | 10 | the owner setting `GEMINI_API_KEY` |
 | The service's source jobs, the halt refresh and the extractor on the machine (built and tested over the fake broker and a mock web) | 10 | the first week of `serve` |
 | `yfinance`'s earnings dates from the deployment machine (worked from the cloud, 2026-10-23) | 10 | the first week of `serve` |
+| `obliskiq compute all` on a store the collectors filled live: each family's reach and its dominant blocker against the fixture store's, the session solve on a route that prices chains without vols, the coverage floor, and the run's time on the machine | 11 | the first command list after the collectors' live round |
 
 ## Follow-ups
 
+- Session 12: the candidate gates feed `grid/census.py` (`Census.run`), which reports every gate
+  untested until then (D134); the option surface's leaves join `measurements` under their own
+  entity kind or the instrument's.
+- The service runs no compute step yet: `obliskiq compute all` by hand. A scheduled job after
+  each region's collection lands with the first engine that reads the store on its own (Session
+  12 or 13).
+- Lite's 13-week positioning change (`commodities.cot`) is not carried (D134); add it to
+  `data/positioning/readings.py` if a consumer asks for it.
+- `GEMINI_API_KEY` in a developer's environment makes `test_cli_llm.py` and `test_env.py` fail
+  locally (they assume the key absent); CI is unaffected. Clear the key inside those tests.
 - CFTC release exceptions: the 2025 government shutdown delayed the October–November reports,
   which the fixed lag of three days dates early; an exceptions list from the CFTC's notices before
   a backtest reads those weeks (D126).
