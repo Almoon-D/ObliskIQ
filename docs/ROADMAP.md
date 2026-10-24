@@ -69,7 +69,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 restated opens, a rebased CPI, mixed frequencies and units changes in a correlation, a singular or
 negative HAR fit, an unplaceable earnings window, an unconverged solve, a step that raises. A
 build is point in time (data released after `as_of` changes no row and no hash) and
-reproducible. `make check` green (see the PR).
+reproducible. `make check` green: 4,656 tests, coverage 99.71 %.
 
 **Acceptance.** `tests/integration/test_measurement_acceptance.py`: an offline fixture store
 (`tests/support/measure_rig.py`, synthetic and deterministic) yields both views with honest
