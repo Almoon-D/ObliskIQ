@@ -5,6 +5,43 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.16.0] - 2026-10-23
+
+Session 11, the measurement store and its views: one long-format store of every measured leaf,
+with the equity grid, the macro board, four ranked views, the cross-asset correlation matrix and
+the census read from it; the session's implied-vol solve; a HAR-RV realised-vol forecast and
+per-instrument overnight-gap distributions with earnings flagged. Compute touches no network.
+
+### Added
+
+- Migration `011_measurements.sql` and `store/measurements.py` (DECISIONS D130): one row per
+  entity, leaf and session with its status (`ok | n/a | stale | inapplicable`), reason and reason
+  code, `n_obs`, window, units, source, the weakest market-data status behind it and the
+  SHA-256 of its inputs; `CHECK`s refuse an incoherent row.
+- `grid/`: frames (bars, release-dated macro, FX, CPI year on year, positioning, chains); the 15
+  indicator families with their 45 leaves per cell, lite's estimators (Parkinson, Garman-Klass
+  with the restated-open refusal, close to close) and window honesty; per-input freshness and the
+  macro blanket; the equity grid (market × sector) and the macro board (region × asset class,
+  D131) builders and views; four ranked views with trajectories; the cross-asset correlation
+  matrix keyed on legs with its norms and shifts; family reach and the census.
+- `grid/iv_session.py`: the session's implied-vol solve on chains priced without vols, written
+  to the snapshot's own column with its method; degraded runs counted.
+- `grid/har.py` and `grid/gaps.py` (D132, D133): HAR-RV by numpy least squares at 21 and 63
+  sessions, and overnight-gap quantiles with and without earnings, as instrument leaves.
+- `obliskiq compute <solve-iv|measure|rankings|census|all>` under one run record, with
+  `--as-of` and `--dry-run`; the compute import contract covers `orchestration.compute`, and a
+  test runs it with network sockets refused.
+- `config/defaults/grid.yaml` (lite's `grid` and `census` values) and
+  `config/defaults/screen.yaml` (lite's two IV-percentile bounds); `smile.skew_delta`,
+  `smile.term_structure` and `numerics.implied_vol.solve.risk_free_series`.
+
+### Changed
+
+- The macro board's labels are a closed vocabulary bound to their asset class and series count,
+  and an asset class the code cannot read is refused (`schema_universe.BOARD_LABELS`).
+- `us.credit` reads BAA10Y and `us.vol_index` VIXCLS over VXVCLS (`config/universe.yaml`).
+- A collector's snapshot re-upsert keeps the session's solved implied vol.
+
 ## [0.15.0] - 2026-10-23
 
 Session 10, macro, positioning, insiders and events: every source besides IBKR declared with what

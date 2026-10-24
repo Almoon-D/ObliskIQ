@@ -1668,8 +1668,9 @@ mutation, not by being green"), and the matching tests;
 legacy/lite/references/commodities-universe.md. Port lite's `option_sleeve`, `tenor`,
 `zombie_test`, `equity_risk`, `fx_inflation`, `commodities`, `screen`, `liquidity` and
 `smile` keys you consume (legacy/lite/config.yaml:37-117, 134-144, 156-269, 581-719;
-Session 2 ported part of the last two into `config/defaults/{liquidity,smile}.yaml`;
-extend those files; Session 4a ported `tenor.mandatory_close_trading_days` into
+Session 2 ported part of the last two into `config/defaults/{liquidity,smile}.yaml`,
+and Session 11 smile's `skew_delta` and `term_structure` and screen's two IV-percentile
+bounds into `config/defaults/{smile,screen}.yaml`; extend those files; Session 4a ported `tenor.mandatory_close_trading_days` into
 `config/defaults/instruments.yaml`, so the rest of `tenor` joins it there), except
 `option_sleeve.budget_pct`: the option budget is read from Session 7's `capital.budgets`
 (one owner; recorded in DECISIONS).

@@ -2985,3 +2985,140 @@ Rejected:
   heartbeat.
 
 Rejected: an alert per failed source run, which GDELT's throttling alone would make noise.
+
+## Session 11 — Measurement store and views (2026-10-23)
+
+### D130 · One measurement store; every view a query (§5.7)
+
+- **The table.** `measurements` holds one leaf of one entity as of one session:
+  `(entity_kind, entity_id, indicator, leaf, as_of)` with its value, status (`ok | n/a | stale |
+  inapplicable`), reason, `n_obs`, window, units, source and `inputs_hash`, as the prompt names
+  them, plus a groupable `reason_code`, the `market_data_status` of the quotes behind the value and
+  `computed_at`. An entity is an equity-grid cell (`us/broad`), a macro-board cell
+  (`us.rate_10y`), an instrument (its conid) or a correlated pair of legs
+  (`equity:us|rate:DGS10`); `indicator` is the family. A build upserts its own session, so each
+  leaf's rows across sessions are its history and a rebuild replaces one session only. `CHECK`s
+  refuse a measured leaf without a finite value, an absent one with a value, and any leaf that is
+  not `ok` without a reason and a code.
+- **Inputs.** `source` names the inputs read (`bars:<conid>`, `chain:<conid>`, `macro:<ids>`).
+  `inputs_hash` is the SHA-256 of a fingerprint of those inputs (a digest of the rows read, by
+  `as_of`) and of the grid's settings, so a rebuild on the same store reproduces every row and a
+  changed input or setting changes the hash.
+- **Views are queries.** The equity grid, the macro board, the four ranked views, family reach,
+  the correlation flags and the census read `measurements` (and the universe); nothing they derive
+  is stored again. Lite's `grid_coverage` disclosure (instrument, kind, hedged class, top-two
+  concentration) is read at view time from the universe and the dated holdings files Session 8
+  stores, so the concentration is a measured fact where a file exists and "not sourced" where it
+  does not.
+- **The solved implied vol** stays in the snapshot's own column (D25's column-targeted writer): a
+  collector's re-upsert keeps the session's solve, and the solver writes only its two columns.
+- **`obliskiq compute <solve-iv|measure|rankings|census|all>`** runs the steps under one run
+  record. Exit codes are the collectors': a young store is degraded (2), a step that raises fails
+  the run (1) and the next step still runs. The steps touch no network: the import contract covers
+  `orchestration.compute`, and a test runs `all` with network sockets, name resolution and
+  connections refused (a local socket pair stays allowed: asyncio's loop wakes itself through one,
+  and a private network namespace keeps them).
+
+Rejected:
+
+- A table per view (lite's `grid`, `grid_coverage`, `grid_rankings`, `correlation_matrix`,
+  `universe_census`): each a second owner of facts the measurements hold.
+- Storing whether a correlation shift is flagged: derived from the shift and
+  `grid.correlation_shift_sd` when read, so a changed threshold cannot leave stale flags.
+
+### D131 · The macro board (§5.7)
+
+The board's axes and each cell's inputs are Session 8's (`config/universe.yaml`, `macro_board`).
+What each asset class measures, here first (lite had no board):
+
+- **`equity_index`**: the grid's returns, distance-from-high and realised-vol families on the
+  instrument that claims the cell, and positioning where the cell names a CFTC contract.
+- **`rate_2y`, `rate_10y`, `credit`**: the level, its change over each horizon in
+  `grid.macro_board.change_horizons_months` (3 and 12; both ends release-aligned) and the level's
+  percentile over `percentile_window_years` (5) of released observations.
+- **`vol_index`**: the same, and the term slope, short over long minus one (the statistic
+  `rv_term_slope` computes, so a positive slope is an inverted curve).
+- **`curve`**: the slope the label names and its changes; **`real_rate`**: the policy rate, CPI year
+  on year and their difference, stale when the CPI print is older than the macro window (lite's
+  family 12); **`fx_vs_base`**: the local currency against the base over each horizon;
+  **`commodities`**: per root, the front-against-next annualised roll and the front month's return.
+- **Labels are a closed vocabulary.** Each label the board computes is bound to its asset class
+  and its series count (`schema_universe.BOARD_LABELS`), and an asset class the code cannot read
+  is refused. The region's policy rate is the first series of a `policy_minus_*` real rate, else
+  the second of a `10y_minus_policy` curve; where both name one they must agree.
+- **The grid's macro families read the board.** A grid market's FX rate, policy rate, CPI,
+  ten-year yield, curve and CFTC contract are its same-name region's cells (lite's per-market
+  series, regrouped by Session 8), and a cell the board declares unmapped hands its declared reason
+  to the leaf.
+- **US credit and volatility wired.** Session 10 declared BAA10Y, VIXCLS and VXVCLS for the
+  board; their cells (`us.credit`, `us.vol_index` with `short_over_long`) now read them.
+- **Freshness**: a series cell against `grid.freshness_days.macro`, a commodities cell against the
+  daily-bars window (curves are collected with the bars, after each venue's close).
+
+Rejected: resampling or interpolating a series to a common date for a change (a change reads the
+newest value released on or before each end).
+
+### D132 · The realised-volatility forecast: HAR-RV (§5.5, §5.11)
+
+- **Model.** Corsi's HAR-RV, fitted per instrument by ordinary least squares (`numpy.linalg
+  .lstsq`): the mean daily variance over the next `h` sessions on today's, the past week's mean
+  and the past month's mean (`weekly_sessions` 5, `monthly_sessions` 22, Corsi's). One direct
+  regression per horizon in `horizons_days` (21 and 63), annualised on the strike band's trading
+  year. The in-sample R² is reported beside each forecast.
+- **Close-to-close squared returns**, overnight gaps included: the forecast is compared with an
+  implied vol, which prices the total variance to expiry (lite's rule for `iv_minus_hv`).
+- **History.** The daily window the collectors hold; a fit needs `min_sessions` (252) returns,
+  and every training target lies inside the history held on `as_of`. `n_obs` counts the training
+  rows, whose `h`-session targets overlap.
+- **Refusals**: too little history, a singular design, or a forecast variance that is not positive
+  (a linear model extrapolated below zero) is no forecast.
+
+The values are judgements for Session 17's base rates and the vol-mispricing component, not
+evidence of anything: neither consumer trades on them before its own test.
+
+Rejected: a log-HAR (it changes the estimand from variance to log variance and needs a bias
+correction to forecast the variance), and a range estimator as the variance proxy.
+
+### D133 · The overnight-gap distribution (D67)
+
+- **A gap** is the log move from a session's close to the next session's open, over the daily
+  window. Its quantiles at `grid.overnight_gaps.quantiles` (1, 5, 50, 95 and 99 %) are leaves of
+  the instrument, on at least `min_gaps` (60) gaps.
+- **Earnings.** A gap whose window (the previous close to this open, on the listing venue's
+  calendar) holds a report time from the earnings dates held by `as_of` is an earnings gap. The
+  quantiles outside earnings are a separate leaf set; the earnings gaps' minimum and maximum are
+  leaves (a stock reports four times a year, too few for a quantile). A window the calendar cannot
+  place is counted as unplaced and left out of both, never guessed. A fund, an index or a
+  commodity product reports no earnings (`inapplicable`); a stock without collected dates is
+  `n/a`.
+- **A restated open** (above `garman_klass_max_restated_open_share`) makes every gap a zero by
+  construction, so the distribution is refused.
+
+Session 17 pre-registers which quantile sizes a position (D67); this session measures them.
+
+### D134 · Where the grid departs from lite
+
+- **No vendor IV percentile.** No route ObliskIQ collects serves one (D25), so family 8 is the
+  self-computed percentile of the snapshot's implied vol over `iv_percentile_window_weeks`, after
+  `iv_self_source_min_sessions` accumulated snapshots; lite's `iv_percentile_source` switch and its
+  vendor and divergence leaves are not carried. A cell has 45 leaves, not lite's 47.
+- **Positioning reads Session 10's reading** (`sources.positioning`: a 156-week percentile after
+  52 weeks of warm-up, the change over 4 reports), one owner of positioning. Lite's
+  `commodities.cot` (a 5-year percentile, changes over 4 and 13 weeks) is not carried; its 13-week
+  change is a follow-up if a consumer asks for it.
+- **Weekly closes are derived** from daily bars (the store holds daily bars only, D25), so the
+  long-run range reads the two years the backfill holds, and its window says how many weeks.
+- **The daily window, the reference tenor and the trading year** are the collectors'
+  (`collectors.backfill.window_years`, `collectors.vol.primary_tenor_days` and
+  `trading_days_per_year`), as lite tied its grid to its backfill and its strike band.
+- **`market_data_status_live` is not carried**: statuses are decoded at collection; a leaf carries
+  the weakest status behind it, and an unreported one is `NULL`, never real-time.
+- **Discount rates** for the solve (`numerics.implied_vol.solve.risk_free_series`): EUR reads the
+  ECB's ESTR, which Session 10 declared, where lite read FRED's mirror of it; a rate is the value
+  released by the chain's session, and an observation without a release date is not read (lite
+  admitted one).
+- **The census** counts the newest chain's contracts and reports family reach. The candidate gates
+  are Session 12's, so until then it reports every gate untested (`untested`) and the step is
+  degraded; Session 12 feeds its gates in.
+- **Screen bounds.** The ranked views' conditions read lite's `screen.cheap_iv_percentile_max` and
+  `extended_iv_percentile_min` (`config/defaults/screen.yaml`), which Session 12's gates read too.

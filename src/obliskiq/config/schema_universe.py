@@ -23,9 +23,11 @@ Ported from ObliskIQ-lite-MCP's ``collect/universe.py`` (the loader's invariants
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from types import MappingProxyType
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import AfterValidator, Field, PositiveInt, StringConstraints, model_validator
@@ -134,6 +136,66 @@ class MacroRegionConfig(FrozenModel):
     cells: dict[Identifier, MacroCellConfig]
 
 
+#: The asset classes the board knows how to read (grid/macro_board.py), and what each reads:
+#: ``instrument`` an instrument that claims the cell, ``one`` a single series, ``pair`` two series
+#: combined by the cell's label, ``levels`` one series or a labelled pair, ``roots`` futures curves.
+BOARD_ASSET_CLASSES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "equity_index": "instrument",
+        "rate_2y": "one",
+        "rate_10y": "one",
+        "curve": "pair",
+        "real_rate": "pair",
+        "fx_vs_base": "one",
+        "credit": "one",
+        "vol_index": "levels",
+        "commodities": "roots",
+    }
+)
+
+#: The labels a cell may carry: the asset class each belongs to and how many series it combines.
+#: The board computes each by name, so a label nothing computes is refused here.
+BOARD_LABELS: Final[Mapping[str, tuple[str, int]]] = MappingProxyType(
+    {
+        "cot_positioning": ("equity_index", 1),
+        "10y_minus_2y": ("curve", 2),
+        "10y_minus_policy": ("curve", 2),
+        "policy_minus_cpi_index_yoy": ("real_rate", 2),
+        "policy_minus_cpi_rate": ("real_rate", 2),
+        "short_over_long": ("vol_index", 2),
+    }
+)
+
+#: The label prefix that makes a real-rate cell's first series the region's policy rate, and the
+#: curve label that makes a curve's second series the policy rate.
+POLICY_FIRST_PREFIX: Final = "policy_minus_"
+POLICY_SECOND_LABEL: Final = "10y_minus_policy"
+
+
+def _cell_shape_problems(ref: str, kind: str, cell: MacroCellConfig) -> list[str]:
+    """A cell's series, roots and label fit what its asset class reads."""
+    count = len(cell.series)
+    rule = BOARD_LABELS.get(cell.label) if cell.label is not None else None
+    problems: list[str] = []
+    if cell.label is not None and (rule is None or rule[0] != ref.partition(".")[2]):
+        problems.append(f"{ref} carries label {cell.label}, which the board does not compute there")
+    elif rule is not None and count != rule[1]:
+        problems.append(f"{ref}: label {cell.label} combines {rule[1]} series, not {count}")
+    if cell.roots and kind != "roots":
+        problems.append(f"{ref} names futures roots; only a commodities cell reads them")
+    if kind == "roots" and cell.series:
+        problems.append(f"{ref} names series; a commodities cell reads futures roots")
+    if kind == "one" and count > 1:
+        problems.append(f"{ref} reads one series, not {count}")
+    if kind == "pair" and count and cell.label is None:
+        problems.append(f"{ref} combines two series and must say how (a label)")
+    if kind == "levels" and count > 1 and cell.label is None:
+        problems.append(f"{ref} names {count} series without a label saying how they combine")
+    if kind == "instrument" and count and cell.label is None:
+        problems.append(f"{ref} names series without a label saying what they are")
+    return problems
+
+
 class MacroBoardConfig(FrozenModel):
     asset_classes: list[Identifier] = Field(min_length=1)
     regions: dict[Identifier, MacroRegionConfig] = Field(min_length=1)
@@ -142,6 +204,12 @@ class MacroBoardConfig(FrozenModel):
     def _every_cell_declared(self) -> Self:
         if len(set(self.asset_classes)) != len(self.asset_classes):
             raise ValueError("macro_board.asset_classes lists an asset class twice")
+        unknown = sorted(set(self.asset_classes) - set(BOARD_ASSET_CLASSES))
+        if unknown:
+            raise ValueError(
+                f"macro_board.asset_classes names {', '.join(unknown)}, which the board does not "
+                "know how to read"
+            )
         wanted = set(self.asset_classes)
         problems = []
         for name, region in sorted(self.regions.items()):
@@ -149,9 +217,41 @@ class MacroBoardConfig(FrozenModel):
             extra = sorted(set(region.cells) - wanted)
             problems += [f"{name}.{cell} is not declared" for cell in missing]
             problems += [f"{name}.{cell} is not an asset class of the board" for cell in extra]
+            for cell_name, cell in sorted(region.cells.items()):
+                kind = BOARD_ASSET_CLASSES.get(cell_name)
+                if kind is not None:
+                    problems += _cell_shape_problems(f"{name}.{cell_name}", kind, cell)
+            policy = self.policy_series(name)
+            curve = region.cells.get("curve")
+            if (
+                policy is not None
+                and curve is not None
+                and curve.label == POLICY_SECOND_LABEL
+                and curve.series[1] != policy
+            ):
+                problems.append(
+                    f"{name}: the real rate's policy rate {policy} and the curve's "
+                    f"{curve.series[1]} disagree"
+                )
         if problems:
             raise ValueError(_listing(problems, "macro_board.regions"))
         return self
+
+    def policy_series(self, region: str) -> str | None:
+        """The region's policy rate: the first series of a ``policy_minus_*`` real rate, else the
+        second of a ``10y_minus_policy`` curve; ``None`` when neither declares one."""
+        cells = self.regions[region].cells
+        real = cells.get("real_rate")
+        if (
+            real is not None
+            and real.label is not None
+            and real.label.startswith(POLICY_FIRST_PREFIX)
+        ):
+            return real.series[0]
+        curve = cells.get("curve")
+        if curve is not None and curve.label == POLICY_SECOND_LABEL:
+            return curve.series[1]
+        return None
 
 
 # ── instruments ──

@@ -229,7 +229,7 @@ def test_the_macro_board_refuses_unknown_double_and_contradictory_claims(shipped
     refused(shipped, contradiction, f"{ref} must either name its inputs")
 
     def unknown_root(d: Data) -> None:
-        cell = d["macro_board"]["regions"][region]["cells"][asset_class]
+        cell = d["macro_board"]["regions"]["world"]["cells"]["commodities"]
         cell["roots"] = [*cell["roots"], "ZZ"]
 
     refused(shipped, unknown_root, "names root ZZ, not a declared futures root")

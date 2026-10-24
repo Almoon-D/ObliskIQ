@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.15.0"
+version = "0.16.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -171,7 +171,9 @@ forbidden_modules = ["obliskiq.decision", "obliskiq.execution", "obliskiq.ibkr"]
 [[tool.importlinter.contracts]]
 name = "Compute never reaches the broker, the network or execution"
 type = "forbidden"
-source_modules = ["obliskiq.quant", "obliskiq.grid", "obliskiq.engines"]
+source_modules = [
+    "obliskiq.quant", "obliskiq.grid", "obliskiq.engines", "obliskiq.orchestration.compute",
+]
 forbidden_modules = ["obliskiq.ibkr", "httpx", "obliskiq.execution"]
 
 [[tool.importlinter.contracts]]

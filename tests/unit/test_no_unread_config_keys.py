@@ -47,6 +47,9 @@ RUNTIME_KEYED = {
     "research.data.yahoo.suffixes": "IBKR exchange -> Yahoo suffix, by the listing's exchange",
     "research.data.yahoo.digits": "IBKR exchange -> Yahoo's code width, by the listing's",
     "core.roles": "role id -> its name and exposure series, by the exposure asked for",
+    "numerics.implied_vol.solve.risk_free_series": (
+        "currency -> discount-rate series, by the underlying's currency"
+    ),
 }
 
 #: Profile sections the code holds by their own name (a typed model passed to a policy), with

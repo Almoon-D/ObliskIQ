@@ -275,8 +275,12 @@ def upsert_snapshots(store: Store, snapshots: Sequence[Snapshot]) -> int:
             "historical_vol_30d = excluded.historical_vol_30d, "
             "dividend_yield = excluded.dividend_yield, "
             "dividend_yield_basis = excluded.dividend_yield_basis, "
-            "implied_vol_solved = excluded.implied_vol_solved, "
-            "implied_vol_solved_source = excluded.implied_vol_solved_source, "
+            # The solved pair belongs to the session's solve (upsert_solved_implied_vol): a
+            # re-collected quote that carries none keeps the one already solved.
+            "implied_vol_solved = CASE WHEN excluded.implied_vol_solved IS NULL "
+            "THEN snapshots.implied_vol_solved ELSE excluded.implied_vol_solved END, "
+            "implied_vol_solved_source = CASE WHEN excluded.implied_vol_solved IS NULL "
+            "THEN snapshots.implied_vol_solved_source ELSE excluded.implied_vol_solved_source END, "
             "source = excluded.source, collected_at = excluded.collected_at, "
             "market_data_status = excluded.market_data_status, "
             "market_data_raw = excluded.market_data_raw, "
@@ -284,6 +288,32 @@ def upsert_snapshots(store: Store, snapshots: Sequence[Snapshot]) -> int:
             [snapshot_params(snapshot) for snapshot in snapshots],
         )
     return len(snapshots)
+
+
+def upsert_solved_implied_vol(
+    store: Store,
+    *,
+    conid: int,
+    snapshot_date: date,
+    value: float,
+    method: str,
+    route: str,
+    at: datetime,
+) -> None:
+    """Write one underlying's solved implied volatility for a session, and no other column.
+
+    The vendor's columns stay as collected. A session with a chain and no snapshot gets a row
+    holding only the solved pair, stamped with the route that supplied the chain (``route``).
+    """
+    with store.transaction():
+        store.execute(
+            "INSERT INTO snapshots (snapshot_date, conid, implied_vol_solved, "
+            "implied_vol_solved_source, source, collected_at) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (snapshot_date, conid) DO UPDATE SET "
+            "implied_vol_solved = excluded.implied_vol_solved, "
+            "implied_vol_solved_source = excluded.implied_vol_solved_source",
+            (date_text(snapshot_date), conid, value, method, route, stamp_text(at)),
+        )
 
 
 def snapshots(
@@ -392,6 +422,19 @@ def chain_rows(
         params.append(date_text(expiry))
     sql += ' ORDER BY underlying_conid, expiry, "right", strike'
     return tuple(chain_row_from_row(row) for row in store.execute(sql, params).fetchall())
+
+
+def latest_chain_sessions(store: Store, *, as_of: date) -> tuple[tuple[int, date], ...]:
+    """Every underlying with a chain collected on or before ``as_of`` and its newest such session,
+    by underlying."""
+    rows = store.execute(
+        "SELECT underlying_conid, MAX(snapshot_date) FROM chain_snapshots WHERE snapshot_date <= ? "
+        "GROUP BY underlying_conid ORDER BY underlying_conid",
+        (date_text(as_of),),
+    ).fetchall()
+    return tuple(
+        (int(row[0]), read_date(row[1], "chain_snapshots", "snapshot_date")) for row in rows
+    )
 
 
 def chain_row_count(store: Store, *, as_of: date, underlying_conid: int | None = None) -> int:

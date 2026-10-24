@@ -29,6 +29,7 @@ from .schema_calendars import (
 from .schema_collectors import CollectorsConfig
 from .schema_costs import CostsConfig
 from .schema_execution import DisciplineConfig, ExecutionConfig
+from .schema_grid import CensusConfig, GridConfig, ScreenConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
 from .schema_instruments import (
     InstrumentsConfig,
@@ -67,6 +68,9 @@ def _file_name_in_data_dir(value: str) -> str:
 
 
 type DataFileName = Annotated[str, AfterValidator(_file_name_in_data_dir)]
+
+#: How a series in percent declares its units (``sources.macro.series[].units``).
+PERCENT_UNITS = "%"
 
 
 class AccountConfig(FrozenModel):
@@ -140,6 +144,9 @@ class ObliskConfig(FrozenModel):
     broker_capabilities: BrokerCapabilitiesConfig
     sources: SourcesConfig
     llm: LlmConfig
+    grid: GridConfig
+    census: CensusConfig
+    screen: ScreenConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -212,9 +219,50 @@ class ObliskConfig(FrozenModel):
         problems += self._currency_problems()
         problems += self._skeleton_problems()
         problems += self._source_problems()
+        problems += self._grid_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def _grid_problems(self) -> list[str]:
+        """The benchmark is a measured market; every grid market has a macro-board region of its
+        name (the series its macro families read); the term-structure targets sit inside the
+        tenor band the chain collector buys; every discount-rate series is a declared percent
+        series."""
+        grid = self.grid
+        markets = self.universe.grid.markets
+        regions = self.universe.macro_board.regions
+        problems: list[str] = []
+        benchmark = markets.get(grid.benchmark_market)
+        if benchmark is None or benchmark.native_index is None:
+            problems.append(
+                f"grid.benchmark_market: {grid.benchmark_market} is not a grid market with a "
+                "native index"
+            )
+        problems += [
+            f"universe.grid.markets.{name}: no macro_board region of that name holds its series"
+            for name in sorted(markets)
+            if name not in regions
+        ]
+        terms = self.smile.term_structure
+        tenor = self.tenor
+        if not (
+            tenor.entry_dte_min <= terms.front_target_dte
+            and terms.back_target_dte <= tenor.entry_dte_max
+        ):
+            problems.append(
+                "smile.term_structure: both targets must sit inside tenor.entry_dte_min.."
+                "entry_dte_max, the expiries the chain collector buys"
+            )
+        series = {entry.id: entry for entry in self.sources.macro.series}
+        for currency, series_id in sorted(self.numerics.implied_vol.solve.risk_free_series.items()):
+            entry = series.get(series_id)
+            if entry is None or entry.units != PERCENT_UNITS:
+                problems.append(
+                    f"numerics.implied_vol.solve.risk_free_series.{currency}: {series_id} is not "
+                    f"a declared series in {PERCENT_UNITS}"
+                )
+        return problems
 
     def _universe_problems(self) -> list[str]:
         """Every exchange code the universe sends maps to a venue, and every instrument lists in

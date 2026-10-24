@@ -1,5 +1,5 @@
-"""The shape of the migrations (``001_core.sql`` through ``010_sources.sql``) and the constraints
-that keep a bad row out.
+"""The shape of the migrations (``001_core.sql`` through ``011_measurements.sql``) and the
+constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
 saying so. Each CHECK has a row it must refuse.
@@ -259,6 +259,12 @@ SHAPE = {
         "source:TEXT!*, target:TEXT!*, last_attempt_at:TEXT!, last_success_at:TEXT, "
         "last_ok:INTEGER!, last_rows:INTEGER!, detail:TEXT"
     ),
+    # 011_measurements
+    "measurements": (
+        "entity_kind:TEXT!*, entity_id:TEXT!*, indicator:TEXT!, leaf:TEXT!*, as_of:TEXT!*, "
+        "value:REAL, status:TEXT!, reason:TEXT, reason_code:TEXT, n_obs:INTEGER, window:TEXT, "
+        "units:TEXT, source:TEXT, market_data_status:TEXT, inputs_hash:TEXT!, computed_at:TEXT!"
+    ),
 }
 
 INDEXES = {
@@ -310,6 +316,8 @@ INDEXES = {
     "ix_news_collected",
     "ix_extractions_item",
     "ix_extractions_produced",
+    # 011_measurements
+    "ix_measurements_session",
 }
 
 STAMP = "2026-10-09T22:30:00Z"
@@ -372,6 +380,17 @@ ROWS: dict[str, dict[str, Any]] = {
         "collector": "bars",
         "started_at": STAMP,
         "status": "running",
+    },
+    "measurements": {
+        "entity_kind": "equity_cell",
+        "entity_id": "us/broad",
+        "indicator": "returns",
+        "leaf": "return_5d_local",
+        "as_of": "2026-10-08",
+        "value": 0.01,
+        "status": "ok",
+        "inputs_hash": "a" * 64,
+        "computed_at": STAMP,
     },
 }
 
@@ -738,3 +757,43 @@ def test_a_run_with_steps_cannot_be_deleted(store: Store) -> None:
     put(store, "run_steps", run_id="run-1", step_index=0)
     with pytest.raises(sqlite3.IntegrityError):
         store.execute("DELETE FROM runs WHERE run_id = 'run-1'")
+
+
+# ── measurements ──
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"entity_kind": "market"},
+        {"entity_id": " "},
+        {"as_of": "2026-10"},
+        {"status": "missing"},
+        {"value": None},
+        {"value": float("inf")},
+        {"status": "n/a", "reason": "r", "reason_code": "c"},
+        {"status": "n/a", "value": None, "reason": "r"},
+        {"status": "inapplicable", "value": None, "reason_code": "c"},
+        {"status": "stale", "value": None, "reason": "r", "reason_code": "c"},
+        {"n_obs": -1},
+        {"market_data_status": "REALTIME"},
+        {"inputs_hash": "abc"},
+        {"inputs_hash": "G" * 64},
+        {"computed_at": "2026-10-09"},
+    ],
+)
+def test_a_bad_measurement_is_refused(store: Store, overrides: dict[str, Any]) -> None:
+    refuses(store, "measurements", **overrides)
+
+
+def test_an_absent_leaf_says_why_and_carries_no_value(store: Store) -> None:
+    put(store, "measurements", status="n/a", value=None, reason="no bars", reason_code="short")
+    put(store, "measurements", leaf="x", status="stale", reason="old", reason_code="inputs_stale")
+    assert store.execute("SELECT COUNT(*) FROM measurements").fetchone()[0] == 2
+
+
+def test_a_leaf_is_unique_per_entity_and_session(store: Store) -> None:
+    put(store, "measurements")
+    refuses(store, "measurements")
+    put(store, "measurements", as_of="2026-10-09")
+    put(store, "measurements", entity_kind="macro_cell")
