@@ -1,0 +1,23 @@
+# The risk engine (engines/risk): lite's `equity_risk` block (legacy/lite/config.yaml:134-144,
+# @b1ebd49) with lite's values, and lite's `data.atr_period`, the window those stops are scaled by.
+# docs/DECISIONS.md says why each is what it is.
+equity_risk:
+  # Stops are volatility-scaled, never a fixed percentage: a 20 % stop is noise on a 90-vol name
+  # and far too loose on a 15-vol one. lite.
+  stop_type: volatility_scaled
+  # The stop sits this many ATRs below the entry. lite.
+  stop_atr_multiple: 2.5
+  # The trailing stop protects a gain without capping it, which is why mandatory scaling out was
+  # rejected; it trails the running high by this many ATRs. lite.
+  trailing_stop_enabled: true
+  trailing_stop_atr_multiple: 3.0
+  # The average true range is the simple mean of this many true ranges (lite's data.atr_period).
+  atr_period: 20
+  # Adding to a loser needs a logged re-underwrite citing a new dated catalyst still ahead. lite.
+  allow_averaging_down: false
+  # A holding with earnings inside its hold window gets an explicit decision, never silent
+  # exposure: hold (carry it), flag_and_size (flag it and size for the gap), force_reduce. lite.
+  pre_earnings_rule: flag_and_size
+  # An entry above this share of its long-run range going into earnings requires a decision:
+  # reduce, hedge, or a stated reason for carrying the gap. lite.
+  pre_earnings_range_decile_trigger: 0.90

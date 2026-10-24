@@ -84,6 +84,15 @@ grid:
     quantiles: [0.01, 0.05, 0.50, 0.95, 0.99]
     min_gaps: 60
 
+  # The option surface per underlying (MASTER_PLAN §5.7; DECISIONS D136). Not in lite. Each listed
+  # expiry nearest a tenor here (within smile.term_structure.max_target_deviation_days) is read at
+  # the money and at each |delta| on both wings, beside its liquidity and its at-the-money theta.
+  # The tenors sit inside the chain collector's entry window (tenor.entry_dte_min..max, a test
+  # asserts it); the deltas inside the smile's delta band and below the money. Judgements.
+  option_surface:
+    tenors_days: [95, 135, 180]
+    deltas: [0.10, 0.25]
+
 # The weekly census of the option universe: below this many contracts clearing every gate it
 # reports so. Either the gates are miscalibrated or the sleeve is too small; neither is fixed
 # by relaxing a threshold.

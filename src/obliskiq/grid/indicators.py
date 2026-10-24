@@ -21,7 +21,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Final
+from typing import Final, Protocol
 
 from ..config.schema import ObliskConfig
 from ..domain.enums import AssetClass, MarketDataStatus
@@ -171,6 +171,31 @@ class GridParams:
     def sessions_to_days(self, sessions: int) -> int:
         """Trading sessions as calendar days."""
         return round(sessions * self.calendar_days_per_year / self.trading_days_per_year)
+
+
+class ChainInputs(Protocol):
+    """What the option-chain families read: a cell's instrument here, an underlying in the option
+    surface (``grid/option_surface.py``), so both read one implementation."""
+
+    @property
+    def store(self) -> Store: ...
+
+    @property
+    def params(self) -> GridParams: ...
+
+    @property
+    def as_of(self) -> date: ...
+
+    @property
+    def conid(self) -> int | None: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def chain(self) -> ChainSmile: ...
+
+    def options_unavailable(self) -> str | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -660,7 +685,7 @@ def rv_term_structure(inputs: CellInputs) -> list[Cell]:
 # ─────────────────────────  7-9. implied volatility  ─────────────────────────
 
 
-def _no_options_reason(inputs: CellInputs, family: str) -> str:
+def _no_options_reason(inputs: ChainInputs, family: str) -> str:
     declared = (inputs.options_unavailable() or "").rstrip(". ")
     return (
         f"{family} needs an option chain, and the universe declares none reachable for "
@@ -783,11 +808,11 @@ def implied_vol(inputs: CellInputs) -> list[Cell]:
             market_data_status=atm.status,
         )
     ]
-    cells.append(_skew(inputs))
-    return cells + _term_structure(inputs)
+    cells.append(skew_cell(inputs))
+    return cells + term_structure_cells(inputs)
 
 
-def _skew(inputs: CellInputs) -> Cell:
+def skew_cell(inputs: ChainInputs) -> Cell:
     """The risk reversal at ``smile.skew_delta``, off the hygiene-filtered smile, refusing
     (with the deltas each side reached) where the band does not bracket the target: the
     nearest listed strike would publish a 45-delta reading under a 25-delta name."""
@@ -843,7 +868,7 @@ def _leg(expiries: list[date], as_of: date, target: int, tolerance: int) -> tupl
     return (None if abs(dte - target) > tolerance else nearest), dte
 
 
-def _term_structure(inputs: CellInputs) -> list[Cell]:
+def term_structure_cells(inputs: ChainInputs) -> list[Cell]:
     """Front versus back ATM implied vol, both off the exchange-quoted chain or no leaf at all
     (a slope with a solved end and a quoted end has a methodology break inside one number).
     Each leg is the nearest listed expiry to its target; the window is the two actual DTEs and
@@ -956,7 +981,7 @@ def _term_structure(inputs: CellInputs) -> list[Cell]:
     return cells
 
 
-def iv_percentile(inputs: CellInputs) -> list[Cell]:
+def iv_percentile(inputs: ChainInputs) -> list[Cell]:
     """The snapshot implied vol ranked over its own trailing window, self-computed from
     accumulated snapshots once enough have accrued (DECISIONS D134: no route serves a vendor
     percentile)."""

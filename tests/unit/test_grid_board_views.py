@@ -19,8 +19,9 @@ from measure_rig import (
 )
 
 from obliskiq.config import ObliskConfig
+from obliskiq.decision.gates import Gate
 from obliskiq.domain.instrument import Instrument
-from obliskiq.domain.market import ChainRow
+from obliskiq.domain.market import Bar, ChainRow
 from obliskiq.domain.measurement import EntityKind, Measurement, MeasurementStatus
 from obliskiq.grid import views
 from obliskiq.grid.census import Census, Verdict
@@ -252,10 +253,13 @@ def test_a_correlation_shift_is_flagged_beyond_the_configured_deviations(
 # ── the census ──
 
 
+GAP = "no budget is known to this run"
+
+
 def test_the_census_says_no_data_without_a_chain(
     store: Store, shipped_settings: ObliskConfig
 ) -> None:
-    result = Census(shipped_settings).run(store, as_of=AS_OF)
+    result = Census(shipped_settings).run(store, as_of=AS_OF, budget_gap=GAP)
     assert result.verdict is Verdict.NO_DATA
     assert "could not" not in result.report()
 
@@ -265,18 +269,59 @@ def test_the_census_never_reports_an_untested_gate_as_passed(
     shipped_settings: ObliskConfig,
     make_instrument: Callable[..., Instrument],
     make_chain_row: Callable[..., ChainRow],
+    make_bar: Callable[..., Bar],
 ) -> None:
     repos.upsert_instrument(store, make_instrument())
-    repos.upsert_chain_rows(store, [make_chain_row(snapshot_date=AS_OF)])
+    repos.upsert_bars(store, [make_bar(session_date=AS_OF, close=100.0)])
+    expiry = AS_OF + timedelta(days=120)
+    repos.upsert_chain_rows(
+        store,
+        [
+            make_chain_row(snapshot_date=AS_OF, expiry=expiry, strike=strike, delta=delta)
+            for strike, delta in ((100.0, 0.5), (105.0, 0.4))
+        ],
+    )
     measurements.upsert_measurements(
         store, [row(f"m{i}/broad", "implied_vol", OK) for i in range(3)]
     )
-    result = Census(shipped_settings).run(store, as_of=AS_OF)
+    result = Census(shipped_settings).run(store, as_of=AS_OF, budget_gap=GAP)
     assert result.verdict is Verdict.UNTESTED
-    assert result.contracts_scanned == 1
-    assert "none is reported passed" in result.reason
+    assert result.contracts_scanned == 2
+    assert result.passed_all_gates == 0
+    assert result.passed_with_untested == 2
+    assert result.untested[Gate.PRICE_CEILING] == 2
+    assert result.per_gate.get(Gate.PRICE_CEILING, 0) == 0
+    assert "an untested gate is not a passed gate" in result.reason
     assert result.thin_families == ("implied_vol",)
     assert "THIN: implied_vol" in result.report()
+    assert "price_ceiling: 0 pass, 2 untested" in result.report()
+
+
+def test_the_census_counts_a_refusal_per_gate_and_says_thin(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    make_instrument: Callable[..., Instrument],
+    make_chain_row: Callable[..., ChainRow],
+) -> None:
+    repos.upsert_instrument(store, make_instrument())
+    repos.upsert_chain_rows(store, [make_chain_row(snapshot_date=AS_OF)])
+    result = Census(shipped_settings).run(store, as_of=AS_OF, budget_gap=GAP)
+    assert result.verdict is Verdict.THIN
+    assert result.per_gate.get(Gate.TENOR, 0) == 0
+    assert "below the floor" in result.reason
+
+
+def test_a_chain_of_no_pinned_instrument_is_no_data(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    make_instrument: Callable[..., Instrument],
+    make_chain_row: Callable[..., ChainRow],
+) -> None:
+    repos.upsert_instrument(store, make_instrument(conid=1, symbol="ZZZ"))
+    repos.upsert_chain_rows(store, [make_chain_row(snapshot_date=AS_OF, underlying_conid=1)])
+    result = Census(shipped_settings).run(store, as_of=AS_OF, budget_gap=GAP)
+    assert result.verdict is Verdict.NO_DATA
+    assert "of no instrument the universe pins" in result.reason
 
 
 # ── board refusals ──

@@ -85,6 +85,20 @@ class OvernightGapsConfig(FrozenModel):
         return self
 
 
+class OptionSurfaceConfig(FrozenModel):
+    """The tenors and wing deltas the option surface reads each underlying at."""
+
+    tenors_days: list[PositiveInt] = Field(min_length=1)
+    deltas: list[Share] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        _distinct_ascending(self.tenors_days, "option_surface.tenors_days")
+        if self.deltas != sorted(set(self.deltas)):
+            raise ValueError("option_surface.deltas must be distinct and ascending")
+        return self
+
+
 class GridConfig(FrozenModel):
     benchmark_market: Identifier
     correlation_shift_sd: PositiveFloat
@@ -108,6 +122,7 @@ class GridConfig(FrozenModel):
     macro_board: MacroBoardSettings
     har_rv: HarRvConfig
     overnight_gaps: OvernightGapsConfig
+    option_surface: OptionSurfaceConfig
 
     @model_validator(mode="after")
     def _ordered(self) -> Self:

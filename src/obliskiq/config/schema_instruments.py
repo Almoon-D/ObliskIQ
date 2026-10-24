@@ -43,17 +43,26 @@ class InstrumentsConfig(FrozenModel):
 
 
 class TenorConfig(FrozenModel):
-    """lite's ``tenor`` keys: the entry window the chain collector photographs and the mandatory
-    close the pre-trade gate reads (Session 12 ports the rest)."""
+    """lite's ``tenor`` keys: the entry window the chain collector photographs and the candidate
+    gates enforce, the catalyst buffer, the minimum hold, the theta-budget switch and the
+    mandatory close the pre-trade gate and the options sleeve read."""
 
     entry_dte_min: PositiveInt
     entry_dte_max: PositiveInt
     mandatory_close_trading_days: PositiveInt
+    catalyst_buffer_days: PositiveInt
+    hold_days_min: PositiveInt
+    require_theta_budget_check: bool
 
     @model_validator(mode="after")
     def _window(self) -> Self:
         if self.entry_dte_min >= self.entry_dte_max:
             raise ValueError("entry_dte_min must be below entry_dte_max")
+        if self.entry_dte_min <= self.hold_days_min:
+            raise ValueError(
+                "entry_dte_min must sit above hold_days_min: entering at the hold figure lands the "
+                "exit on the expiry"
+            )
         return self
 
 

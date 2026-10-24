@@ -5,7 +5,8 @@
 # says why each value is what it is. Values marked "lite" are ObliskIQ-lite-MCP's (config.yaml
 # `discipline`, @b1ebd49).
 
-# lite's `discipline` block (legacy/lite/config.yaml:333-350): the keys the order path reads.
+# lite's `discipline` block (legacy/lite/config.yaml:333-350): the keys the order path and the
+# candidate gates read.
 discipline:
   # Entries are limit orders: a patient limit or an IBKR algo with a limit cap, never a stop.
   # lite.
@@ -15,6 +16,11 @@ discipline:
   exit_reasons_allowed:
     [invalidation, target, time_window, zombie, mandatory_close, stop, trailing_stop, override,
      rebalance, withdrawal]
+  # A top-decile entry needs a dated catalyst: "it is going up" is not a reason. The top decile is
+  # this share of the long-run range; a different rule from equity_risk's pre-earnings trigger,
+  # which carries the same value today. lite.
+  entry_top_decile_requires_catalyst: true
+  entry_top_decile_pctile: 0.90
 
 execution:
   modes:

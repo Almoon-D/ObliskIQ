@@ -80,7 +80,11 @@ def test_all_runs_every_step_and_a_young_store_is_degraded_not_failed(
     assert "equity grid for 2026-10-22" in out
     assert "macro board:" in out
     assert "most_extended:" in out
-    assert "census for 2026-10-22: untested" in out
+    assert "option surface: 3 underlyings" in out
+    assert "fx: 16 markets" in out
+    assert "commodity: 16 roots" in out
+    assert "options sleeve on 2026-10-22: shadow: evidence fails: H8 is not in the research" in out
+    assert "census for 2026-10-22: thin" in out
     assert out.rstrip().endswith("run: degraded")
     settings = load_config(config_dir).settings
     with open_store(settings, seeded) as store:
@@ -91,7 +95,11 @@ def test_all_runs_every_step_and_a_young_store_is_degraded_not_failed(
         assert [step.name for step in runs_repo.steps_of(store, record.run_id)] == [
             "solve-iv",
             "measure",
+            "surface",
+            "fx",
+            "commodity",
             "rankings",
+            "sleeve",
             "census",
         ]
 

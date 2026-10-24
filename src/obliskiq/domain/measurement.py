@@ -29,6 +29,10 @@ class EntityKind(StrEnum):
     MACRO_CELL = "macro_cell"
     INSTRUMENT = "instrument"
     CORRELATION_PAIR = "correlation_pair"
+    #: A grid market ('us'): its four-way FX decomposition and carry test.
+    MARKET = "market"
+    #: A futures root ('CL'): its curve, its positioning, cycle and inventory readings.
+    COMMODITY_ROOT = "commodity_root"
 
 
 class MeasurementStatus(StrEnum):

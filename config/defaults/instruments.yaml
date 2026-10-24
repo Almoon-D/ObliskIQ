@@ -33,8 +33,8 @@ instruments:
     - "DOUBLE LONG"
     - "DOUBLE SHORT"
 
-# lite's `tenor` block (legacy/lite/config.yaml:93-104): the keys the chain collector and the
-# pre-trade gate read. The options sleeve (Session 12) ports the rest.
+# lite's `tenor` block (legacy/lite/config.yaml:93-104): the keys the chain collector, the
+# pre-trade gate, the candidate gates and the options sleeve read.
 tenor:
   # The entry window for undated theses: the chain collector photographs only the expiries inside
   # it (the catalyst sets the tenor of a dated thesis). The minimum is lite's hold_days_min plus
@@ -47,3 +47,12 @@ tenor:
   # lite counted from the expiry; the anchor here is the last tradable session
   # (docs/knowledge/calendars.md, "Expiry and the last tradable session").
   mandatory_close_trading_days: 10
+  # An expiry must clear a dated catalyst by this many days: catalysts slip, and post-event
+  # repricing takes days. The catalyst sets a dated thesis's tenor. lite.
+  catalyst_buffer_days: 30
+  # The intended minimum hold. entry_dte_min sits above it on purpose: entering at the hold figure
+  # lands the exit on the expiry and violates the assignment rule. lite.
+  hold_days_min: 70
+  # An option entry must keep min_recoverable_pct_of_premium of its premium if the thesis takes
+  # its full expected time with nothing else moving (the theta budget), checked at entry. lite.
+  require_theta_budget_check: true

@@ -28,6 +28,13 @@ from .schema_calendars import (
 )
 from .schema_collectors import CollectorsConfig
 from .schema_costs import CostsConfig
+from .schema_engines import (
+    CommoditiesConfig,
+    EquityRiskConfig,
+    FxInflationConfig,
+    OptionSleeveConfig,
+    ZombieTestConfig,
+)
 from .schema_execution import DisciplineConfig, ExecutionConfig
 from .schema_grid import CensusConfig, GridConfig, ScreenConfig
 from .schema_ibkr import HttpConfig, IbkrConfig
@@ -71,6 +78,8 @@ type DataFileName = Annotated[str, AfterValidator(_file_name_in_data_dir)]
 
 #: How a series in percent declares its units (``sources.macro.series[].units``).
 PERCENT_UNITS = "%"
+#: An at-the-money option's |delta|: a wing is read below it, on its own side of the smile.
+ATM_ABS_DELTA = 0.5
 
 
 class AccountConfig(FrozenModel):
@@ -147,6 +156,11 @@ class ObliskConfig(FrozenModel):
     grid: GridConfig
     census: CensusConfig
     screen: ScreenConfig
+    option_sleeve: OptionSleeveConfig
+    zombie_test: ZombieTestConfig
+    equity_risk: EquityRiskConfig
+    fx_inflation: FxInflationConfig
+    commodities: CommoditiesConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -253,6 +267,22 @@ class ObliskConfig(FrozenModel):
             problems.append(
                 "smile.term_structure: both targets must sit inside tenor.entry_dte_min.."
                 "entry_dte_max, the expiries the chain collector buys"
+            )
+        surface = grid.option_surface
+        if not (
+            tenor.entry_dte_min <= surface.tenors_days[0]
+            and surface.tenors_days[-1] <= tenor.entry_dte_max
+        ):
+            problems.append(
+                "grid.option_surface.tenors_days: every tenor must sit inside tenor.entry_dte_min.."
+                "entry_dte_max, the expiries the chain collector buys"
+            )
+        if not (
+            self.smile.min_abs_delta <= surface.deltas[0] and surface.deltas[-1] < ATM_ABS_DELTA
+        ):
+            problems.append(
+                "grid.option_surface.deltas: every wing delta must sit inside the smile's delta "
+                f"band (smile.min_abs_delta) and below the money ({ATM_ABS_DELTA})"
             )
         series = {entry.id: entry for entry in self.sources.macro.series}
         for currency, series_id in sorted(self.numerics.implied_vol.solve.risk_free_series.items()):
