@@ -9,6 +9,7 @@ same leaves in every branch.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import dataclasses
 from datetime import date, timedelta
 
 import pytest
@@ -37,7 +38,7 @@ from obliskiq.domain.measurement import MeasurementStatus
 from obliskiq.grid import indicators
 from obliskiq.grid.cells import Cell
 from obliskiq.grid.estimators import close_to_close
-from obliskiq.grid.frames import MacroReader, market_spec
+from obliskiq.grid.frames import MacroReader, cpi_yoy, market_spec
 from obliskiq.grid.indicators import CellInputs, CellInstrument, GridParams
 from obliskiq.quant.bsm import BsmInputs
 from obliskiq.store import Store, repos
@@ -658,3 +659,254 @@ def test_every_family_emits_the_same_leaves_whatever_it_finds(
     for family, compute in indicators.INDICATOR_FUNCTIONS:
         assert [cell.leaf for cell in compute(full)] == expected[family], family
     assert len(indicators.INDICATOR_FUNCTIONS) == 15
+
+
+# ── refusals on degenerate inputs ──
+
+
+def flat_bars(conid: int, count: int, *, close: float, ranged: bool) -> list[Bar]:
+    return [
+        Bar(
+            conid=conid,
+            session_date=day,
+            open=close if ranged else None,
+            high=close if ranged else None,
+            low=close if ranged else None,
+            close=close,
+            volume=None,
+            source="t",
+        )
+        for day in business_days(AS_OF, count)
+    ]
+
+
+def test_a_window_opening_on_a_zero_close_has_no_return_and_no_range(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    repos.upsert_instrument(store, instrument(SPX))
+    repos.upsert_bars(store, flat_bars(SPX, 400, close=0.0, ranged=False))
+    cell = inputs(store, shipped_settings)
+    returns = leaves(indicators.returns(cell))
+    assert returns["return_21d_local"].status is NA
+    assert "not positive" in (returns["return_21d_local"].reason or "")
+    for found in indicators.distance_from_high(cell):
+        assert found.status is NA
+        assert "no usable closes" in (found.reason or "")
+
+
+def test_a_bar_range_of_nothing_is_no_range_estimate(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    repos.upsert_instrument(store, instrument(SPX))
+    repos.upsert_bars(store, flat_bars(SPX, 200, close=100.0, ranged=True))
+    found = leaves(indicators.realised_vol(inputs(store, shipped_settings)))
+    ranges = {
+        leaf for leaf, cell in found.items() if "carry no usable range" in (cell.reason or "")
+    }
+    # Garman-Klass is refused first: an open equal to the previous close is a restated one.
+    assert ranges == {"parkinson_vol_30d", "parkinson_vol_30d_percentile"}
+    assert {found[leaf].status for leaf in ranges} == {NA}
+
+
+def test_term_legs_on_one_expiry_or_too_close_are_not_a_term_structure(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_chain(store, shipped_settings, [125, 150])
+    close = leaves(indicators.implied_vol(qqq(store, shipped_settings)))
+    assert "25d apart" in (close["implied_vol_term_slope"].reason or "")
+    terms = shipped_settings.smile.term_structure.model_copy(
+        update={"max_target_deviation_days": 60}
+    )
+    wide = shipped_settings.model_copy(
+        update={"smile": shipped_settings.smile.model_copy(update={"term_structure": terms})}
+    )
+    store.execute("DELETE FROM chain_snapshots")
+    seed_chain(store, shipped_settings, [140, 400])
+    same = leaves(indicators.implied_vol(qqq(store, wide)))
+    assert "same listed expiry (140d)" in (same["implied_vol_term_slope"].reason or "")
+
+
+def test_a_chain_without_vols_yields_no_term_leg(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_chain(store, shipped_settings, [95, 180], with_iv=False)
+    found = leaves(indicators.implied_vol(qqq(store, shipped_settings)))
+    assert "front leg" in (found["implied_vol_term_slope"].reason or "")
+    assert found["implied_vol_atm_front"].status is NA
+
+
+def test_a_self_percentile_with_no_recent_implied_vol_is_absent(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    days = business_days(AS_OF, 520)
+    repos.upsert_instrument(store, instrument(QQQ))
+    repos.upsert_snapshots(
+        store, [snapshot(d, 0.2 if i < 260 else None, solved=0.2) for i, d in enumerate(days)]
+    )
+    found = leaves(indicators.iv_percentile(qqq(store, shipped_settings)))
+    assert found["iv_percentile"].status is NA
+    assert "carries a finite implied vol" in (found["iv_percentile"].reason or "")
+
+
+def test_iv_minus_hv_needs_a_realised_vol_too(store: Store, shipped_settings: ObliskConfig) -> None:
+    seed_bars(store, QQQ, 20)
+    spot = repos.bar_series(store, QQQ, as_of=AS_OF)[-1].close
+    repos.upsert_chain_rows(
+        store,
+        chain(
+            QQQ,
+            spot,
+            session=AS_OF,
+            expiries=[AS_OF + timedelta(days=d) for d in (95, 180)],
+            bsm=BsmInputs.from_config(shipped_settings),
+        ),
+    )
+    found = leaves(indicators.iv_hv_spread(qqq(store, shipped_settings)))
+    assert found["iv_minus_hv"].status is NA
+    assert "no realised vol" in (found["iv_minus_hv"].reason or "")
+
+
+def canada(store: Store, settings: ObliskConfig) -> CellInputs:
+    return inputs(
+        store, settings, market="canada", conid=XIU, asset_class=AssetClass.ETF, benchmark=SPX
+    )
+
+
+def test_a_flat_series_has_no_correlation_and_says_why(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_bars(store, SPX, 300)
+    repos.upsert_instrument(store, instrument(XIU))
+    repos.upsert_bars(store, flat_bars(XIU, 300, close=50.0, ranged=False))
+    found = leaves(indicators.correlation_to_benchmark(canada(store, shipped_settings)))
+    for window in shipped_settings.grid.correlation_windows_days:
+        assert found[f"correlation_{window}d"].reason_code is not None
+        assert found[f"correlation_{window}d"].reason_code.value == "no_dispersion"
+
+
+def test_a_pair_that_never_moves_apart_has_no_norm_to_shift_from(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    """The same prices under two conids correlate at one in every window; the sessions only
+    the Canadian leg traded are dropped, never paired with a neighbour."""
+    seed_bars(store, SPX, 640)
+    repos.upsert_instrument(store, instrument(XIU))
+    repos.upsert_bars(
+        store,
+        [
+            bar.model_copy(update={"conid": XIU})
+            for bar in repos.bar_series(store, SPX, as_of=AS_OF)
+        ],
+    )
+    for bar in repos.bar_series(store, SPX, as_of=AS_OF)[:10]:
+        store.execute(
+            "DELETE FROM bars WHERE conid = ? AND session_date = ?",
+            (SPX, bar.session_date.isoformat()),
+        )
+    found = leaves(indicators.correlation_to_benchmark(canada(store, shipped_settings)))
+    assert found["correlation_30d"].value == pytest.approx(1.0)
+    assert found["correlation_shift_30d"].status is NA
+    assert "no dispersion" in (found["correlation_shift_30d"].reason or "")
+
+
+def test_a_policy_rate_without_a_declared_cpi_keeps_the_real_rate_inapplicable(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    repos.upsert_macro(
+        store,
+        monthly_series(
+            "IRSTCI01JPM156N", "fred", months=12, start=0.5, step=0.0, units="%", lag_days=20
+        ),
+    )
+    found = leaves(indicators.policy_rate(inputs(store, shipped_settings, market="japan")))
+    assert found["policy_rate"].status is OK
+    assert found["policy_rate_real"].status is INAPPLICABLE
+
+
+def test_a_curve_without_its_second_point_has_no_slope(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    repos.upsert_macro(
+        store,
+        daily_series(
+            "DGS10",
+            "fred",
+            business_days(AS_OF, 30),
+            seed=2,
+            start=4.0,
+            vol=0.01,
+            units="%",
+            level=True,
+        ),
+    )
+    cell = inputs(store, shipped_settings)
+    uncollected = leaves(indicators.yield_curve(cell))
+    assert uncollected["long_rate_10y"].status is OK
+    assert uncollected["curve_slope"].status is NA
+    cell.spec = dataclasses.replace(
+        cell.spec, slope_short=None, slope_label=None, slope_gap="no short rate is declared"
+    )
+    undeclared = leaves(indicators.yield_curve(cell))
+    assert undeclared["curve_slope"].status is INAPPLICABLE
+    assert "no short rate is declared" in (undeclared["curve_slope"].reason or "")
+
+
+# ── the macro reader ──
+
+
+def reader(store: Store, settings: ObliskConfig) -> MacroReader:
+    return MacroReader(store, MacroCatalog.from_settings(settings), AS_OF)
+
+
+def test_the_reader_reads_declared_series_only_and_says_why_one_is_empty(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    assert reader(store, shipped_settings).value_at("NOT_DECLARED", AS_OF) is None
+    assert "is not declared" in reader(store, shipped_settings).absence("NOT_DECLARED")
+    repos.upsert_macro(
+        store,
+        [
+            observation(
+                "DGS10",
+                "fred",
+                AS_OF - timedelta(days=3),
+                4.0,
+                release=None,
+                frequency="daily",
+                units="%",
+            )
+        ],
+    )
+    assert "none carries a release date" in reader(store, shipped_settings).absence("DGS10")
+
+
+def test_cpi_year_on_year_is_read_as_published_or_from_a_print_a_year_back(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    universe = shipped_settings.universe
+    japan = cpi_yoy(
+        reader(store, shipped_settings), market_spec(universe, "japan"), days_per_year=365.25
+    )
+    assert japan.value is None
+    assert japan.problem == market_spec(universe, "japan").cpi_gap
+    repos.upsert_macro(
+        store,
+        monthly_series("UK_CPI_YOY", "ons", months=3, start=3.2, step=0.0, units="%", lag_days=20),
+    )
+    uk = cpi_yoy(reader(store, shipped_settings), market_spec(universe, "uk"), days_per_year=365.25)
+    assert uk.value == pytest.approx(0.032)
+    repos.upsert_macro(
+        store,
+        monthly_series(
+            "CPIAUCSL",
+            "fred",
+            months=6,
+            start=300.0,
+            step=0.8,
+            units="Index 1982-1984=100",
+            lag_days=20,
+        ),
+    )
+    us = cpi_yoy(reader(store, shipped_settings), market_spec(universe, "us"), days_per_year=365.25)
+    assert us.value is None
+    assert "a year before" in (us.problem or "")

@@ -13,7 +13,8 @@ from pydantic import ValidationError
 
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema import ObliskConfig as Schema
-from obliskiq.config.schema_grid import GridConfig, HarRvConfig, ScreenConfig
+from obliskiq.config.schema_grid import GridConfig, HarRvConfig, OvernightGapsConfig, ScreenConfig
+from obliskiq.config.schema_numerics import SmileConfig, TermStructureConfig
 from obliskiq.config.schema_universe import BOARD_ASSET_CLASSES, UniverseConfig
 
 type Data = dict[str, Any]
@@ -183,4 +184,40 @@ def test_the_policy_rate_must_agree_between_the_real_rate_and_the_curve(universe
         universe,
         lambda d: cell(d, "eurozone", "curve").update(series=["IRLTLT01EZM156N", "DFF"]),
         "disagree",
+    )
+
+
+def test_quantiles_run_upwards_and_term_targets_keep_their_separation(
+    shipped_settings: ObliskConfig,
+) -> None:
+    with pytest.raises(ValidationError, match="ascending"):
+        OvernightGapsConfig.model_validate({"quantiles": [0.5, 0.05], "min_gaps": 60})
+    terms = shipped_settings.smile.term_structure.model_dump()
+    with pytest.raises(ValidationError, match="min_separation_days apart"):
+        TermStructureConfig.model_validate({**terms, "back_target_dte": 120})
+    smile = shipped_settings.smile.model_dump()
+    with pytest.raises(ValidationError, match="inside the delta band"):
+        SmileConfig.model_validate({**smile, "skew_delta": 0.99})
+
+
+def test_a_cell_naming_inputs_its_asset_class_does_not_read_is_refused(universe: Data) -> None:
+    refused(
+        universe,
+        lambda d: cell(d, "us", "equity_index").update(roots=["CL"]),
+        "only a commodities cell reads them",
+    )
+    refused(
+        universe,
+        lambda d: cell(d, "world", "commodities").update(series=["DGS10"]),
+        "a commodities cell reads futures roots",
+    )
+    refused(
+        universe,
+        lambda d: cell(d, "us", "vol_index").update(label=None),
+        "names 2 series without a label",
+    )
+    refused(
+        universe,
+        lambda d: cell(d, "world", "equity_index").update(series=["DGS10"]),
+        "without a label saying what they are",
     )

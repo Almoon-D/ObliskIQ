@@ -189,10 +189,6 @@ class MacroReader:
         spec = self.catalog.spec(series_id)
         return None if spec is None else spec.units
 
-    def frequency(self, series_id: str) -> str | None:
-        spec = self.catalog.spec(series_id)
-        return None if spec is None else spec.frequency
-
     def latest(self, series_id: str) -> MacroObservation | None:
         series = self.series(series_id)
         return None if series is None else series.latest

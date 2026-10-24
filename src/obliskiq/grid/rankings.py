@@ -255,20 +255,20 @@ class Rankings:
         """The view's description with the size and shape of what it ranked, always: a seven-
         percent, single-market slice printed like a whole-board view is the lens this project
         exists to avoid, and no count threshold catches it."""
-        parts = [detail]
-        if board:
-            share = round(DECIMAL_TO_PERCENT * reachable / board)
-            parts.append(
-                f"REACH: ranked over {ranked_over} of {reachable} reachable cell(s), {share}% of "
-                f"the {board}-cell board"
-            )
+        # Called only with a ranked row, so the board and the markets are never empty.
+        share = round(DECIMAL_TO_PERCENT * reachable / board)
+        parts = [
+            detail,
+            f"REACH: ranked over {ranked_over} of {reachable} reachable cell(s), {share}% of the "
+            f"{board}-cell board",
+        ]
         unique = sorted(set(markets))
         if len(unique) == 1:
             parts.append(
                 f"EVERY ranked cell is from ONE market ({unique[0]}); this is not a view of the "
                 "board and must not be read as one"
             )
-        elif unique:
+        else:
             parts.append(f"markets represented: {', '.join(unique)}")
         if ranked_over < self._min_cells:
             parts.append(

@@ -51,7 +51,6 @@ Q_COLLECTED: Final = "collected"
 class Skip(StrEnum):
     """Why an underlying was not solved, counted per run."""
 
-    NO_CHAIN = "no_chain"
     VENDOR_SERVED = "vendor_already_served_iv"
     NO_SPOT = "no_spot"
     NO_INSTRUMENT = "instrument_not_seeded"
@@ -75,23 +74,22 @@ class SessionSolver:
 
     def run(self, *, as_of: date, at: datetime, write: bool = True) -> SolveReport:
         report = SolveReport(as_of=as_of)
-        for conid in repos.chain_underlyings(self._store, as_of=as_of):
-            self._solve_one(conid, as_of=as_of, at=at, report=report, write=write)
+        for conid, session in repos.latest_chain_sessions(self._store, as_of=as_of):
+            self._solve_one(conid, session, as_of=as_of, at=at, report=report, write=write)
         return report
 
     def _solve_one(
-        self, conid: int, *, as_of: date, at: datetime, report: SolveReport, write: bool
+        self,
+        conid: int,
+        session: date,
+        *,
+        as_of: date,
+        at: datetime,
+        report: SolveReport,
+        write: bool,
     ) -> None:
         store = self._store
-        session = repos.latest_chain_date(store, as_of=as_of, underlying_conid=conid)
-        rows = (
-            ()
-            if session is None
-            else repos.chain_rows(store, as_of=as_of, underlying_conid=conid, snapshot_date=session)
-        )
-        if session is None or not rows:
-            report.skip(Skip.NO_CHAIN)
-            return
+        rows = repos.chain_rows(store, as_of=as_of, underlying_conid=conid, snapshot_date=session)
         if any(row.iv is not None for row in rows):
             report.skip(Skip.VENDOR_SERVED)
             return

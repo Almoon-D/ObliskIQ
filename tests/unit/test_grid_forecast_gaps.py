@@ -46,6 +46,7 @@ def har_closes(count: int, *, seed: int = 5) -> list[float]:
 def test_daily_variances_are_squared_log_returns_of_positive_closes() -> None:
     found = daily_variances([100.0, 110.0, 0.0, 99.0])
     assert found == pytest.approx([math.log(1.1) ** 2, math.log(99 / 110) ** 2])
+    assert len(daily_variances([100.0, 0.0])) == 0
 
 
 def test_a_fit_on_har_structured_returns_forecasts_a_plausible_vol() -> None:
@@ -187,7 +188,10 @@ def test_quantile_leaf_names() -> None:
 
 
 def seed_stock(
-    store: Store, make_instrument: Callable[..., Instrument], **bar_kwargs: object
+    store: Store,
+    make_instrument: Callable[..., Instrument],
+    count: int = 520,
+    **bar_kwargs: object,
 ) -> None:
     repos.upsert_instrument(
         store,
@@ -200,7 +204,7 @@ def seed_stock(
             option_exchange=None,
         ),
     )
-    repos.upsert_bars(store, make_bars(FCX, business_days(AS_OF, 520), seed=11, **bar_kwargs))  # type: ignore[arg-type]
+    repos.upsert_bars(store, make_bars(FCX, business_days(AS_OF, count), seed=11, **bar_kwargs))  # type: ignore[arg-type]
 
 
 def stock_leaves(
@@ -272,3 +276,56 @@ def test_old_bars_make_the_instrument_leaves_stale(
     assert {row.status for row in rows if row.leaf == "har_rv_forecast_21d"} == {
         MeasurementStatus.STALE
     }
+
+
+def test_a_short_history_has_no_forecast_and_too_few_gaps(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    calendars: Calendars,
+    make_instrument: Callable[..., Instrument],
+) -> None:
+    seed_stock(store, make_instrument, count=40)
+    found = stock_leaves(store, shipped_settings, calendars)
+    assert found["har_rv_forecast_21d"].status is NA
+    assert found["har_rv_r2_21d"].status is NA
+    assert found["gap_q5"].reason_code == "sample_too_short"
+    assert "below the 60" in (found["gap_q5"].reason or "")
+
+
+def test_too_few_gaps_known_not_to_span_a_report_leave_that_side_absent(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    calendars: Calendars,
+    make_instrument: Callable[..., Instrument],
+) -> None:
+    seed_stock(store, make_instrument, count=62)
+    reports = [datetime(2026, 8, 5, 21, 0, tzinfo=UTC), datetime(2026, 9, 9, 21, 0, tzinfo=UTC)]
+    sources_repo.save_earnings_dates(store, earnings("FCX", reports))
+    found = stock_leaves(store, shipped_settings, calendars)
+    assert found["gap_q5"].status is OK
+    assert found["gap_ex_earnings_q5"].status is NA
+    assert "known not to span a report" in (found["gap_ex_earnings_q5"].reason or "")
+    assert found["gap_earnings_max"].n_obs == 2
+
+
+def test_a_venue_the_calendars_do_not_know_places_no_earnings_gap(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    calendars: Calendars,
+    make_instrument: Callable[..., Instrument],
+) -> None:
+    seed_stock(store, make_instrument)
+    reports = [datetime(2026, 7, 23, 11, 0, tzinfo=UTC)]
+    sources_repo.save_earnings_dates(store, earnings("FCX", reports))
+    declared = shipped_settings.universe.instrument("FCX")
+    assert declared is not None
+    rows = InstrumentMeasures(store, shipped_settings, calendars).for_instrument(
+        declared.model_copy(update={"listing_exchange": "NOWHERE"}),
+        FCX,
+        as_of=AS_OF,
+        computed_at=STAMP,
+    )
+    found = {row.leaf: row for row in rows}
+    assert found["gap_q5"].status is OK
+    assert found["gap_ex_earnings_q5"].status is NA
+    assert "spans a known earnings report" in (found["gap_earnings_min"].reason or "")

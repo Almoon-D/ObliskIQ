@@ -371,7 +371,8 @@ class MacroBoardBuilder:
         )
         floor = self._params.min_percentile
         window = f"{years}y of {series_id}"
-        if len(values) < floor:
+        rank = percentile_of(values, current) if len(values) >= floor else None
+        if rank is None:
             return Cell.absent(
                 "level_percentile",
                 LEVEL,
@@ -379,11 +380,6 @@ class MacroBoardBuilder:
                 f"window, below the {floor} floor",
                 code=Reason.SHORT_SAMPLE,
                 window=window,
-            )
-        rank = percentile_of(values, current)
-        if rank is None:
-            return Cell.absent(
-                "level_percentile", LEVEL, "no finite value to rank", code=Reason.SHORT_SAMPLE
             )
         return Cell.measured(
             "level_percentile",

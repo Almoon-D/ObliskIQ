@@ -467,48 +467,56 @@ def curves() -> list[CurvePoint]:
     return out
 
 
+#: Holdings files by fund: XLE's top two above the two-stock flag, QQQ's below it.
+HOLDINGS = {
+    "XLE": (
+        "energy",
+        (("XOM", "EXXON MOBIL CORP", 0.23), ("CVX", "CHEVRON CORP", 0.18), ("COP", "CONOCO", 0.07)),
+    ),
+    "QQQ": (
+        "technology",
+        (("AAPL", "APPLE INC", 0.09), ("MSFT", "MICROSOFT CORP", 0.08), ("NVDA", "NVIDIA", 0.07)),
+    ),
+}
+
+
 def holdings(store: Store) -> None:
-    """XLE's holdings file: two names above the two-stock flag."""
+    """One dated holdings file per fund in ``HOLDINGS``."""
     as_of = AS_OF - timedelta(days=2)
-    lines = [
-        Holding(
-            fund_symbol="XLE",
-            as_of=as_of,
-            line=index,
-            ticker=ticker,
-            name=name,
-            asset_class="Equity",
-            issuer_sector="Energy",
-            sector="energy",
-            location="United States",
-            country="US",
-            exchange="New York Stock Exchange Inc.",
-            ibkr_exchange="NYSE",
-            currency="USD",
-            weight=weight,
-            candidate_key=None,
-        )
-        for index, (ticker, name, weight) in enumerate(
-            (
-                ("XOM", "EXXON MOBIL CORP", 0.23),
-                ("CVX", "CHEVRON CORP", 0.18),
-                ("COP", "CONOCO", 0.07),
+    for fund, (sector, names) in HOLDINGS.items():
+        lines = [
+            Holding(
+                fund_symbol=fund,
+                as_of=as_of,
+                line=index,
+                ticker=ticker,
+                name=name,
+                asset_class="Equity",
+                issuer_sector=sector,
+                sector=sector,
+                location="United States",
+                country="US",
+                exchange="New York Stock Exchange Inc.",
+                ibkr_exchange="NYSE",
+                currency="USD",
+                weight=weight,
+                candidate_key=None,
             )
+            for index, (ticker, name, weight) in enumerate(names)
+        ]
+        universe_repo.save_holdings(
+            store,
+            HoldingsFile(
+                fund_symbol=fund,
+                as_of=as_of,
+                issuer="fixture",
+                url=f"https://example.invalid/{fund.lower()}.csv",
+                downloaded_at=STAMP,
+                content_sha256="0" * 64,
+                rows=len(lines),
+            ),
+            lines,
         )
-    ]
-    universe_repo.save_holdings(
-        store,
-        HoldingsFile(
-            fund_symbol="XLE",
-            as_of=as_of,
-            issuer="iShares",
-            url="https://example.invalid/xle.csv",
-            downloaded_at=STAMP,
-            content_sha256="0" * 64,
-            rows=len(lines),
-        ),
-        lines,
-    )
 
 
 def earnings(symbol: str, reports: list[datetime]) -> list[EarningsDate]:

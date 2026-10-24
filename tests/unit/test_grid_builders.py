@@ -28,7 +28,7 @@ from measure_rig import (
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.measurement import EntityKind, Measurement, MeasurementStatus
 from obliskiq.grid.cells import Cell, to_measurement
-from obliskiq.grid.equity_grid import EquityGridBuilder, Freshness, stale_reason
+from obliskiq.grid.equity_grid import EquityGridBuilder, Freshness, stale_reason, tally
 from obliskiq.grid.macro_board import MacroBoardBuilder
 from obliskiq.grid.vocabulary import Input, Reason, Units
 from obliskiq.store import Store, measurements, repos
@@ -104,16 +104,23 @@ def test_the_macro_blanket_lifts_on_the_broad_cell_only(
 def test_an_unpinned_instrument_is_told_apart_from_an_unseeded_one(
     store: Store, shipped_settings: ObliskConfig
 ) -> None:
-    universe = shipped_settings.universe
+    data = shipped_settings.model_dump(mode="json")
+    for declared in data["universe"]["instruments"]:
+        if declared["symbol"] == "QQQ":
+            declared["conid"] = None
+    settings = ObliskConfig.model_validate(data)
+    universe = settings.universe
     unpinned = [
         (key, c)
         for key, c in universe.cells().items()
         if c.symbol and universe.instrument(c.symbol).conid is None  # type: ignore[union-attr]
     ]
-    rows = build(store, shipped_settings)
+    assert unpinned  # the vacuity guard
+    rows = build(store, settings)
     for (market, sector), declared in unpinned:
         reason = cell(rows, f"{market}/{sector}")["return_5d_local"].reason or ""
         assert "pin" in reason, declared.symbol
+    assert "collect universe" in (cell(rows, "us/broad")["return_5d_local"].reason or "")
 
 
 def test_a_build_is_point_in_time(
@@ -214,3 +221,18 @@ def test_an_inapplicable_leaf_needs_a_structural_code() -> None:
         Cell.inapplicable("x", "returns", "why", code=Reason.SHORT_SAMPLE)
     with pytest.raises(ValueError, match="structural code"):
         Cell.absent("x", "returns", "why", code=Reason.NO_INSTRUMENT)
+
+
+def test_a_report_with_nothing_missing_lists_no_reason() -> None:
+    row = to_measurement(
+        Cell.measured("x", "returns", 0.1, units=Units.DECIMAL),
+        entity_kind=EntityKind.EQUITY_CELL,
+        entity_id="us/broad",
+        as_of=AS_OF,
+        source=None,
+        fingerprint={},
+        computed_at=STAMP,
+    )
+    summary = tally(AS_OF, [row], markets=1, sectors=1, measured_cells=1).summary()
+    assert "1 populated" in summary
+    assert "why leaves are missing" not in summary

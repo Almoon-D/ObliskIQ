@@ -139,8 +139,7 @@ def _disclosure(
     if declared_cell.symbol is None:
         return Disclosure(None, "none", False, None, None, declared_cell.reason)
     instrument = universe.instrument(declared_cell.symbol)
-    if instrument is None:
-        return Disclosure(declared_cell.symbol, "none", False, None, None, None)
+    assert instrument is not None  # a measured cell's symbol is the instrument that claims it
     seeded = resolve_conid(store, instrument, as_of=as_of) is not None
     hedged = instrument.attributes.hedged
     kind = (

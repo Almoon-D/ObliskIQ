@@ -106,6 +106,10 @@ def test_a_leaf_history_is_newest_first_bounded_and_keeps_its_gaps(store: Store)
         )
 
 
+def test_an_empty_upsert_writes_nothing(store: Store) -> None:
+    assert measurements.upsert_measurements(store, []) == 0
+
+
 def test_an_upsert_replaces_its_leaf_and_session(store: Store) -> None:
     measurements.upsert_measurements(store, [row()])
     measurements.upsert_measurements(store, [row(value=0.02)])
@@ -188,10 +192,21 @@ def test_a_recollected_quote_keeps_the_session_solve(
     assert stored.implied_vol_solved == 0.2
 
 
-def test_chain_underlyings_are_bounded_by_the_day(
+def test_the_latest_chain_sessions_are_bounded_by_the_day(
     store: Store, make_instrument: Callable[..., object], make_chain_row: Callable[..., ChainRow]
 ) -> None:
     repos.upsert_instrument(store, make_instrument())  # type: ignore[arg-type]
-    repos.upsert_chain_rows(store, [make_chain_row(snapshot_date=date(2026, 10, 8))])
-    assert repos.chain_underlyings(store, as_of=date(2026, 10, 8)) == (756733,)
-    assert repos.chain_underlyings(store, as_of=date(2026, 10, 7)) == ()
+    repos.upsert_chain_rows(
+        store,
+        [
+            make_chain_row(snapshot_date=date(2026, 10, 8)),
+            make_chain_row(snapshot_date=date(2026, 10, 9)),
+        ],
+    )
+    assert repos.latest_chain_sessions(store, as_of=date(2026, 10, 9)) == (
+        (756733, date(2026, 10, 9)),
+    )
+    assert repos.latest_chain_sessions(store, as_of=date(2026, 10, 8)) == (
+        (756733, date(2026, 10, 8)),
+    )
+    assert repos.latest_chain_sessions(store, as_of=date(2026, 10, 7)) == ()

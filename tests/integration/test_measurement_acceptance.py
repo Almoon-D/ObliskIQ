@@ -85,6 +85,8 @@ def test_a_measured_cell_reads_its_native_instrument(
     assert us.disclosure.kind == "native_index"
     assert us.leaves["return_63d_local"].status is OK
     assert us.leaves["return_63d_local"].source == f"bars:{SPX}"
+    assert view.leaf("us", "broad", "return_63d_local") == us.leaves["return_63d_local"]
+    assert view.leaf("atlantis", "broad", "return_63d_local") is None
     # USD is not the base: the base leg reads EURUSD and is measured too.
     assert us.leaves["return_63d_base"].status is OK
     # The benchmark's correlation to itself is structural, not uncollected.
@@ -142,6 +144,9 @@ def test_the_disclosure_flags_a_two_stock_fund(
     assert energy.top2_concentration == pytest.approx(0.41)
     assert energy.note is not None
     assert "TWO-STOCK READ" in energy.note
+    technology = view.cells[("us", "technology")].disclosure
+    assert technology.top2_concentration == pytest.approx(0.17)
+    assert "TWO-STOCK READ" not in (technology.note or "")
     staples = view.cells[("us", "consumer_staples")].disclosure
     assert staples.top2_concentration is None
     assert staples.note is not None

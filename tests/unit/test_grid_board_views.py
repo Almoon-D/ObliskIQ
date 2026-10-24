@@ -8,7 +8,15 @@ from collections.abc import Callable
 from datetime import timedelta
 
 import pytest
-from measure_rig import AS_OF, STAMP, business_days, daily_series, monthly_series, observation
+from measure_rig import (
+    AS_OF,
+    STAMP,
+    business_days,
+    curves,
+    daily_series,
+    monthly_series,
+    observation,
+)
 
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.instrument import Instrument
@@ -269,3 +277,107 @@ def test_the_census_never_reports_an_untested_gate_as_passed(
     assert "none is reported passed" in result.reason
     assert result.thin_families == ("implied_vol",)
     assert "THIN: implied_vol" in result.report()
+
+
+# ── board refusals ──
+
+
+def test_a_level_released_beyond_the_macro_window_is_stale(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    days = [d for d in business_days(AS_OF, 200) if d < AS_OF - timedelta(days=60)]
+    repos.upsert_macro(
+        store,
+        daily_series("DGS10", "fred", days, seed=1, start=4.0, vol=0.01, units="%", level=True),
+    )
+    cell = board(store, shipped_settings)["us.rate_10y"]
+    assert cell["level"].status is STALE
+
+
+def test_a_level_in_units_the_board_cannot_read_is_refused(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    sources = shipped_settings.sources
+    series = [
+        s.model_copy(update={"units": "Billions of Dollars"}) if s.id == "DGS10" else s
+        for s in sources.macro.series
+    ]
+    settings = shipped_settings.model_copy(
+        update={
+            "sources": sources.model_copy(
+                update={"macro": sources.macro.model_copy(update={"series": series})}
+            )
+        }
+    )
+    cell = board(store, settings)["us.rate_10y"]
+    assert {row.reason_code for row in cell.values()} == {"units_not_as_declared"}
+
+
+def test_a_level_carrying_two_units_is_refused(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    days = business_days(AS_OF, 30)
+    repos.upsert_macro(
+        store,
+        [
+            observation(
+                "DGS10", "fred", d, 4.0, release=d, frequency="daily", units="%" if i else "percent"
+            )
+            for i, d in enumerate(days)
+        ],
+    )
+    cell = board(store, shipped_settings)["us.rate_10y"]
+    assert {row.reason_code for row in cell.values()} == {"mixed_units_in_window"}
+
+
+def test_one_volatility_index_has_no_term_slope(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    data = shipped_settings.model_dump(mode="json")
+    data["universe"]["macro_board"]["regions"]["us"]["cells"]["vol_index"].update(
+        series=["VIXCLS"], label=None
+    )
+    settings = ObliskConfig.model_validate(data)
+    cell = board(store, settings)["us.vol_index"]
+    assert cell["term_slope"].status is INAPPLICABLE
+    assert "one volatility index" in (cell["term_slope"].reason or "")
+
+
+def test_a_curve_change_needs_both_ends_released_before_its_window(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    days = business_days(AS_OF, 30)
+    for series_id, start in (("DGS10", 4.0), ("DGS2", 3.5)):
+        repos.upsert_macro(
+            store,
+            daily_series(
+                series_id, "fred", days, seed=2, start=start, vol=0.01, units="%", level=True
+            ),
+        )
+    cell = board(store, shipped_settings)["us.curve"]
+    assert cell["slope"].status is OK
+    assert cell["slope_change_3m"].status is NA
+
+
+def test_a_front_month_that_opened_at_zero_has_no_return(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    cutoff = AS_OF - timedelta(days=80)
+    repos.upsert_curve_points(
+        store,
+        [
+            point.model_copy(update={"price": 0.0})
+            if point.snapshot_date <= cutoff and point.annualised_roll is None
+            else point
+            for point in curves()
+        ],
+    )
+    cell = board(store, shipped_settings)["world.commodities"]
+    assert cell["front_return_3m_CL"].status is NA
+    assert "not positive" in (cell["front_return_3m_CL"].reason or "")
+
+
+def test_no_correlation_build_is_an_empty_matrix(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    assert views.correlation_matrix(store, shipped_settings, as_of=AS_OF) == []

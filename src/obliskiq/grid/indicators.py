@@ -16,6 +16,7 @@ grid whose leaf set changes with its status is a grid whose rows cannot be joine
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import math
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -473,26 +474,23 @@ def _percentile_leaf(
 ) -> Cell:
     floor = inputs.params.rv_percentile_min_independent
     window = f"{inputs.params.daily_window_years}y window of {tenor}d rolling vol"
-    if len(history) < floor:
+    usable = [reading for reading in history if math.isfinite(reading)]
+    value = percentile_of(usable, level) if len(usable) >= floor else None
+    if value is None:
         return Cell.absent(
             leaf,
             Family.REALISED_VOL,
-            _too_few_independent(len(history), floor, tenor),
+            _too_few_independent(len(usable), floor, tenor),
             code=Reason.SHORT_SAMPLE,
             window=window,
-        )
-    value = percentile_of(history, level)
-    if value is None:
-        return Cell.absent(
-            leaf, Family.REALISED_VOL, "no usable reading to rank against", code=Reason.SHORT_SAMPLE
         )
     return Cell.measured(
         leaf,
         Family.REALISED_VOL,
         value,
         units=Units.PERCENTILE,
-        window=window_label(window, len(history), "readings"),
-        n_obs=len(history),
+        window=window_label(window, len(usable), "readings"),
+        n_obs=len(usable),
     )
 
 
@@ -942,30 +940,19 @@ def _term_structure(inputs: CellInputs) -> list[Cell]:
             market_data_status=status,
         ),
     ]
-    if back_quote.iv <= 0:
-        cells.append(
-            Cell.absent(
-                "implied_vol_term_slope",
-                Family.IMPLIED_VOL,
-                f"the back leg's ATM implied vol is {back_quote.iv:.4f}, which cannot be a "
-                "denominator; the two levels beside this leaf are still measured",
-                code=Reason.NO_CHAIN,
-                window=window,
-            )
+    # Smile hygiene drops every non-positive implied vol, so the back leg is a valid denominator.
+    cells.append(
+        Cell.measured(
+            "implied_vol_term_slope",
+            Family.IMPLIED_VOL,
+            front_quote.iv / back_quote.iv - 1.0,
+            units=Units.RATIO,
+            window=window,
+            reason=provenance,
+            n_obs=len(front_smile) + len(back_smile),
+            market_data_status=status,
         )
-    else:
-        cells.append(
-            Cell.measured(
-                "implied_vol_term_slope",
-                Family.IMPLIED_VOL,
-                front_quote.iv / back_quote.iv - 1.0,
-                units=Units.RATIO,
-                window=window,
-                reason=provenance,
-                n_obs=len(front_smile) + len(back_smile),
-                market_data_status=status,
-            )
-        )
+    )
     return cells
 
 
@@ -1014,24 +1001,14 @@ def iv_percentile(inputs: CellInputs) -> list[Cell]:
     )
     rows = repos.snapshots(inputs.store, inputs.conid, as_of=inputs.as_of, limit=sessions)
     values = [row.implied_vol for row in rows if row.implied_vol is not None]
-    if not values:
-        return [
-            Cell.absent(
-                "iv_percentile",
-                Family.IV_PERCENTILE,
-                f"{accumulated} snapshots had accumulated by {inputs.as_of}, but none inside the "
-                f"most recent {window} carries an implied vol",
-                code=Reason.NO_IV_PERCENTILE,
-                window=window,
-            )
-        ]
-    rank = percentile_of(values, values[-1])
+    rank = percentile_of(values, values[-1]) if values else None
     if rank is None:
         return [
             Cell.absent(
                 "iv_percentile",
                 Family.IV_PERCENTILE,
-                "no finite implied vol to rank",
+                f"{accumulated} snapshots had accumulated by {inputs.as_of}, but none inside the "
+                f"most recent {window} carries a finite implied vol",
                 code=Reason.NO_IV_PERCENTILE,
                 window=window,
             )
@@ -1466,25 +1443,16 @@ def turnover(inputs: CellInputs) -> list[Cell]:
             )
         ]
     needed = max(params.min_turnover, params.technical_window_days)
-    if len(volumes) < needed:
-        return [
-            Cell.absent(
-                "turnover_vs_average",
-                Family.TURNOVER,
-                f"only {len(volumes)} session(s) carry volume, below the {needed} needed to "
-                "compare against an average",
-                code=Reason.NO_VOLUME,
-                window=window,
-            )
-        ]
-    recent = mean(volumes[-params.technical_window_days :])
+    # Every volume kept is positive, so both means are once the floor is met.
+    recent = mean(volumes[-params.technical_window_days :]) if len(volumes) >= needed else None
     baseline = mean(volumes)
     if not recent or not baseline:
         return [
             Cell.absent(
                 "turnover_vs_average",
                 Family.TURNOVER,
-                "the volume history holds no usable average",
+                f"only {len(volumes)} session(s) carry volume, below the {needed} needed to "
+                "compare against an average",
                 code=Reason.NO_VOLUME,
                 window=window,
             )

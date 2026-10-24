@@ -143,8 +143,7 @@ class GridReport:
             lines.append("why leaves are missing:")
             for code, count in sorted(self.reasons.items(), key=lambda item: (-item[1], item[0])):
                 lines.append(f"  {count:>5}  {code}")
-                if code in self.examples:
-                    lines.append(f"         e.g. {self.examples[code]}")
+                lines.append(f"         e.g. {self.examples[code]}")
         return "\n".join(lines)
 
 
@@ -165,8 +164,8 @@ def tally(
             continue
         code = row.reason_code or UNCLASSIFIED
         reasons[code] += 1
-        if row.reason is not None:
-            examples.setdefault(code, row.reason)
+        # A leaf that is not ok always carries its reason (Measurement refuses one without).
+        examples.setdefault(code, row.reason or "")
     return GridReport(
         as_of=as_of,
         markets=markets,
@@ -232,17 +231,17 @@ class _Inputs:
         return self._done[source]
 
     def _compute(self, source: Input) -> tuple[str | None, object]:
+        if source is Input.MACRO:
+            return self._macro()
         conid = self.conid
+        # A cell without an instrument is blanketed before its market-data inputs are described.
+        assert conid is not None
         if source is Input.DAILY_BARS:
-            if conid is None:
-                return None, None
             return f"bars:{conid}", (
                 _digest(self.daily),
                 None if self.benchmark is None else _digest(self.benchmark_daily),
             )
         if source is Input.OPTION_CHAIN:
-            if conid is None:
-                return None, None
             session = repos.latest_chain_date(self.store, as_of=self.as_of, underlying_conid=conid)
             rows = (
                 ()
@@ -252,15 +251,14 @@ class _Inputs:
                 )
             )
             return f"chain:{conid}", (session, _digest([r.model_dump() for r in rows]))
-        if source is Input.UNDERLYING_SNAPSHOT:
-            if conid is None:
-                return None, None
-            newest = repos.snapshots(self.store, conid, as_of=self.as_of, limit=1)
-            count = repos.implied_vol_snapshot_count(self.store, conid, as_of=self.as_of)
-            return f"snapshot:{conid}", (
-                count,
-                None if not newest else _digest(newest[-1].model_dump()),
-            )
+        newest = repos.snapshots(self.store, conid, as_of=self.as_of, limit=1)
+        count = repos.implied_vol_snapshot_count(self.store, conid, as_of=self.as_of)
+        return f"snapshot:{conid}", (
+            count,
+            None if not newest else _digest(newest[-1].model_dump()),
+        )
+
+    def _macro(self) -> tuple[str | None, object]:
         ids = self.spec.series_ids
         prints = {
             series_id: None

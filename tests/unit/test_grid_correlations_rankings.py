@@ -300,3 +300,95 @@ def test_rankings_read_the_newest_built_session(
     measurements.upsert_measurements(store, [old])
     (row,) = Rankings(shipped_settings).build(store, as_of=AS_OF)
     assert row.value == -0.2
+
+
+# ── refusals the matrix states ──
+
+
+def rate_pair(rows: dict[str, dict[str, Measurement]]) -> dict[str, Measurement]:
+    return rows[pair_id(Leg(ASSET_EQUITY, "us", "us"), Leg(ASSET_RATE, "DGS10", "us"))]
+
+
+def test_an_equity_leg_whose_index_has_no_bars_is_absent(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_pair(store)
+    store.execute("DELETE FROM bars WHERE conid = ?", (DAX,))
+    rows = matrix_rows(store, shipped_settings)
+    germany = rows[pair_id(Leg(ASSET_EQUITY, "germany", "germany"), Leg(ASSET_EQUITY, "us", "us"))]
+    assert "has no bars for its native index" in (germany["correlation_30d"].reason or "")
+
+
+def test_a_leg_with_no_declared_cadence_or_two_cadences_is_refused(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_pair(store)
+    days = business_days(AS_OF, 640)
+    undeclared = [
+        observation("DGS10", "fred", d, 4.0, release=d, frequency="daily", units="%").model_copy(
+            update={"frequency": None}
+        )
+        for d in days
+    ]
+    repos.upsert_macro(store, undeclared)
+    found = rate_pair(matrix_rows(store, shipped_settings))["correlation_30d"]
+    assert "declares no frequency" in (found.reason or "")
+    repos.upsert_macro(
+        store,
+        [
+            observation("DGS10", "fred", d, 4.0, release=d, frequency=cadence, units="%")
+            for d, cadence in zip(days, ["daily", "weekly"] * 320, strict=True)
+        ],
+    )
+    found = rate_pair(matrix_rows(store, shipped_settings))["correlation_30d"]
+    assert "more than one frequency" in (found.reason or "")
+
+
+def test_a_short_or_flat_rate_leg_has_no_correlation(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_pair(store)
+    store.execute("DELETE FROM macro")
+    days = business_days(AS_OF, 640)
+    repos.upsert_macro(
+        store,
+        [
+            observation("DGS10", "fred", d, 4.0, release=d, frequency="daily", units="%")
+            for d in days
+        ],
+    )
+    flat = rate_pair(matrix_rows(store, shipped_settings))["correlation_30d"]
+    assert flat.reason_code == "no_dispersion"
+    store.execute("DELETE FROM macro")
+    repos.upsert_macro(
+        store,
+        [
+            observation("DGS10", "fred", d, 4.0 + i / 100, release=d, frequency="daily", units="%")
+            for i, d in enumerate(days[-20:])
+        ],
+    )
+    short = rate_pair(matrix_rows(store, shipped_settings))["correlation_30d"]
+    assert short.reason_code == "sample_too_short"
+
+
+def test_a_row_meets_its_full_definition_only_when_every_condition_held() -> None:
+    def row(conditions: dict[str, bool | None]) -> RankingRow:
+        return RankingRow(
+            dimension=Dimension.MOST_EXTENDED,
+            rank=1,
+            market="us",
+            sector="broad",
+            leaf="distance_from_high_52w",
+            value=0.0,
+            window=None,
+            status=OK,
+            market_data_status=None,
+            detail="",
+            reachable=1,
+            ranked_over=1,
+            conditions=conditions,
+        )
+
+    assert row({}).meets_full_definition is None
+    assert row({"a": True, "b": True}).meets_full_definition is True
+    assert row({"a": True, "b": False}).meets_full_definition is False

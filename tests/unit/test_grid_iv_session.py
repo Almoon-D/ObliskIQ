@@ -30,9 +30,15 @@ from obliskiq.store import Store, repos
 
 
 def seed_xiu(
-    store: Store, settings: ObliskConfig, *, with_iv: bool = False, rate: bool = True
+    store: Store,
+    settings: ObliskConfig,
+    *,
+    with_iv: bool = False,
+    rate: bool = True,
+    dte: int = 120,
+    **instrument_update: object,
 ) -> float:
-    repos.upsert_instrument(store, instrument(XIU))
+    repos.upsert_instrument(store, instrument(XIU).model_copy(update=instrument_update))
     bars = make_bars(XIU, business_days(AS_OF, 60), seed=3)
     repos.upsert_bars(store, bars)
     spot = bars[-1].close
@@ -42,7 +48,7 @@ def seed_xiu(
             XIU,
             spot,
             session=AS_OF,
-            expiries=[AS_OF + timedelta(days=120)],
+            expiries=[AS_OF + timedelta(days=dte)],
             bsm=BsmInputs.from_config(settings),
             with_iv=with_iv,
             rate=0.0275,
@@ -175,3 +181,29 @@ def test_an_underlying_without_a_spot_is_skipped(
     store.execute("DELETE FROM bars")
     report = SessionSolver(store, shipped_settings).run(as_of=AS_OF, at=STAMP)
     assert report.skipped == {Skip.NO_SPOT: 1}
+
+
+def test_an_instrument_registered_after_the_session_is_not_solved(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    seed_xiu(store, shipped_settings, created_at=STAMP + timedelta(days=5))
+    report = SessionSolver(store, shipped_settings).run(as_of=AS_OF, at=STAMP)
+    assert report.skipped == {Skip.NO_INSTRUMENT: 1}
+
+
+def test_a_chain_with_no_expiry_in_the_solve_band_is_not_solved(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    """Past ``solve.max_dte`` the early-exercise premium is no longer a small error."""
+    seed_xiu(store, shipped_settings, dte=400)
+    report = SessionSolver(store, shipped_settings).run(as_of=AS_OF, at=STAMP)
+    assert report.skipped == {Skip.NO_CONTRACTS: 1}
+
+
+def test_a_currency_with_no_discount_series_is_never_discounted_at_a_guess(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    assert "JPY" not in shipped_settings.numerics.implied_vol.solve.risk_free_series
+    seed_xiu(store, shipped_settings, currency="JPY")
+    report = SessionSolver(store, shipped_settings).run(as_of=AS_OF, at=STAMP)
+    assert report.skipped == {Skip.NO_RATE: 1}

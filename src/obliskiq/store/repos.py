@@ -424,14 +424,17 @@ def chain_rows(
     return tuple(chain_row_from_row(row) for row in store.execute(sql, params).fetchall())
 
 
-def chain_underlyings(store: Store, *, as_of: date) -> tuple[int, ...]:
-    """Every underlying with a chain collected on or before ``as_of``, ascending."""
+def latest_chain_sessions(store: Store, *, as_of: date) -> tuple[tuple[int, date], ...]:
+    """Every underlying with a chain collected on or before ``as_of`` and its newest such session,
+    by underlying."""
     rows = store.execute(
-        "SELECT DISTINCT underlying_conid FROM chain_snapshots WHERE snapshot_date <= ? "
-        "ORDER BY underlying_conid",
+        "SELECT underlying_conid, MAX(snapshot_date) FROM chain_snapshots WHERE snapshot_date <= ? "
+        "GROUP BY underlying_conid ORDER BY underlying_conid",
         (date_text(as_of),),
     ).fetchall()
-    return tuple(int(row[0]) for row in rows)
+    return tuple(
+        (int(row[0]), read_date(row[1], "chain_snapshots", "snapshot_date")) for row in rows
+    )
 
 
 def chain_row_count(store: Store, *, as_of: date, underlying_conid: int | None = None) -> int:

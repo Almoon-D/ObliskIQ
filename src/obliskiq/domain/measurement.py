@@ -9,7 +9,6 @@ groupable ``reason_code``; an absent leaf carries no value and a measured one a 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-import math
 from datetime import date
 from enum import StrEnum
 from typing import Annotated, Self
@@ -67,8 +66,6 @@ class Measurement(DomainModel):
     def _coherent(self) -> Self:
         if self.status.has_value != (self.value is not None):
             raise ValueError(f"{self.leaf}: a {self.status.value} leaf has a value exactly when ok")
-        if self.value is not None and not math.isfinite(self.value):
-            raise ValueError(f"{self.leaf}: a measured value is finite")
         if self.status is not MeasurementStatus.OK and (
             self.reason is None or self.reason_code is None
         ):

@@ -210,9 +210,9 @@ class CorrelationMatrix:
                 values, frozenset({DAILY}), frozenset(), _digest(sorted(values.items()))
             )
         series = reader.series(leg.series)
-        if series is None:
-            return None
-        observations = [o for o in series.observations if o.reference_date >= since]
+        observations = (
+            [] if series is None else [o for o in series.observations if o.reference_date >= since]
+        )
         if not observations:
             return None
         values = {o.reference_date: o.value for o in observations}

@@ -196,3 +196,13 @@ def test_close_to_close_readings_step_by_the_tenor_and_share_a_boundary_close() 
     and no return."""
     closes = walk(10 * 30 + 1, step=0.01)
     assert len(rolling_close_to_close(closes, 30, trading_days_per_year=BASIS)) == 10
+
+
+def test_a_bar_whose_open_or_close_leaves_its_range_is_corrupt_not_wide() -> None:
+    assert ohlc_bars([105.0, 100.0], [104.0, 104.0], [99.0, 99.0], [100.0, 106.0]) == []
+    assert ohlc_bars([None, 100.0], [104.0, 99.0], [99.0, 104.0], [100.0, 100.0]) == []
+
+
+def test_no_bars_is_no_range_estimate() -> None:
+    assert parkinson([], trading_days_per_year=252) is None
+    assert garman_klass([], trading_days_per_year=252) is None
