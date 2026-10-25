@@ -93,7 +93,7 @@ Two existing tests were repaired:
 - `test_a_liquidity_gate_must_be_meaningful` failed on the new key rather than on its override;
 - the sleeve's skipped-chain test now seeds the chain it skips.
 
-Builds are point in time and reproducible. `make check` green: TESTS tests, coverage COVERAGE %.
+Builds are point in time and reproducible. `make check` green: 4,930 tests, coverage 99.73 %.
 
 **Acceptance.** `tests/integration/test_engines_acceptance.py`:
 - An offline fixture store (`tests/support/options_rig.py`) yields the option surface with honest
