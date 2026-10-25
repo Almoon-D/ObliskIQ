@@ -31,6 +31,7 @@ from obliskiq.domain.capital import (
     QuestionOption,
     WithdrawalReservation,
 )
+from obliskiq.domain.core import RoleStatus, RoleTarget, TargetPortfolio, Trigger
 from obliskiq.domain.orders import (
     ExecutionMode,
     Fill,
@@ -342,6 +343,14 @@ def test_a_cycle_summary_counts_and_lists_what_it_did() -> None:
 # ── the digest ──
 
 
+def _role(role: str, status: RoleStatus, weight: str) -> RoleTarget:
+    return RoleTarget(
+        role=role, status=status, static_weight=Decimal(weight), scale=Decimal(1),
+        target_weight=Decimal(weight), held_weight=Decimal(0), reduction_held=False, vehicles=(),
+        reason="r",
+    )  # fmt: skip
+
+
 def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
     plan = RebalancePlan(
         mode=ExecutionMode.SHADOW,
@@ -351,6 +360,21 @@ def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
             _decision("hold", held=Decimal(3), value=Decimal("532.5")),
             _decision("skip", value=None, symbol="IWDA"),
         ],
+        portfolio=TargetPortfolio(
+            variant="A",
+            as_of=AT.date(),
+            trend_as_of=None,
+            budget=Decimal(950),
+            trigger=Trigger.BAND,
+            roles=(
+                _role("world_equity", RoleStatus.FILLED, "0.09"),
+                _role("gold", RoleStatus.UNFILLED, "0"),
+            ),
+            vehicles=(),
+            trades=(),
+            withheld=(),
+            notes=(),
+        ),
         blocked="reconciliation is drift: new risk is frozen",
     )
     run = RunRow(
@@ -399,6 +423,10 @@ def test_the_digest_renders_every_part_and_flags_what_needs_attention() -> None:
     assert "NAV: 100,000.00 EUR" in body
     assert "managed 1,000.00 EUR (a book of 1000.00 (started at 1000))" in body
     assert "no rebalance now: reconciliation is drift" in body
+    # The core's variant and trigger, and each role it cannot fill; a filled role is not listed.
+    assert "core variant A: band" in body
+    assert "gold: unfilled, target 0.0%" in body
+    assert "world_equity: filled" not in body
     assert "held 3 = 532.50 (53.2%)" in body
     assert "IWDA: held 0 = unvalued" in body
     assert "177.6 (simulated)" in body

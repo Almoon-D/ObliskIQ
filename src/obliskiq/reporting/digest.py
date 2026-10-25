@@ -27,6 +27,7 @@ from ..config.schema import ObliskConfig
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..domain.calendar import PhaseKind
 from ..domain.capital import CashEvent, OwnerQuestion, QuestionState
+from ..domain.core import RoleStatus
 from ..domain.orders import (
     ExecutionMode,
     Fill,
@@ -234,7 +235,7 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
             lines += [
                 f"  {role.role}: {role.status.value}, target {role.target_weight:.1%}"
                 for role in portfolio.roles
-                if role.status.value != "filled"
+                if role.status is not RoleStatus.FILLED
             ]
         if plan.blocked is not None:
             lines.append(f"  no rebalance now: {plan.blocked}")
