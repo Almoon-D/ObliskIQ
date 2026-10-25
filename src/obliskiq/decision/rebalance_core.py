@@ -56,7 +56,14 @@ from ..capital.deploy import held_back
 from ..capital.managed import BookHolding, CapitalReader, CapitalView
 from ..config.schema import ObliskConfig
 from ..config.schema_runtime import TradingConfig
-from ..domain.core import PlannedTrade, RoleTarget, TargetPortfolio, Trigger, VehicleTarget
+from ..domain.core import (
+    PlannedTrade,
+    RoleStatus,
+    RoleTarget,
+    TargetPortfolio,
+    Trigger,
+    VehicleTarget,
+)
 from ..domain.instrument import TradedInstrument
 from ..domain.orders import (
     TERMINAL_STATES,
@@ -175,7 +182,7 @@ class RebalancePlan:
             for role in portfolio.roles:
                 lines.append(
                     f"  role {role.role} ({role.status.value}): weight {role.static_weight:.4f} "
-                    f"x scale {role.scale} -> target {role.target_weight:.4f}, held "
+                    f"x scale {role.scale.normalize()} -> target {role.target_weight:.4f}, held "
                     f"{role.held_weight:.4f}: {role.reason}"
                 )
             lines += [f"  note: {note}" for note in portfolio.notes]
@@ -709,6 +716,7 @@ class CoreRebalancer:
         """A role no vehicle row reports (none priced, confirmed or proposable): skipped, why."""
         conid = role.vehicles[0] if role.vehicles else None
         instrument = None if conid is None else self._directory.describe(conid)
+        idle = role.status is RoleStatus.FILLED and role.target_weight == ZERO
         return RoleDecision(
             role=role.role,
             conid=conid,
@@ -717,10 +725,10 @@ class CoreRebalancer:
             held=ZERO,
             value=None,
             target=role.target_weight * portfolio.budget,
-            action=SKIP,
+            action=HOLD if idle else SKIP,
             quantity=ZERO,
             notional=ZERO,
-            reason=role.reason,
+            reason=f"no target now; {role.reason}" if idle else role.reason,
         )
 
     def _refusal(
@@ -863,6 +871,10 @@ def _untraded(
             SKIP,
             f"below its target ({trigger.value}): the cash covers no unit of it at the scale "
             "every buy shares",
+        )
+    if short > ZERO:
+        return _row(
+            portfolio, vehicle, found, HOLD, f"within one unit of its target ({trigger.value})"
         )
     return _row(portfolio, vehicle, found, HOLD, f"at its target ({trigger.value})")
 

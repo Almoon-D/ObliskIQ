@@ -49,6 +49,7 @@ dev = [
     "pytest-cov>=7.0",
     "respx>=0.22",
     "ruff>=0.14",
+    "skfolio>=1.11",
     "types-PyYAML>=6.0.12",
 ]
 
@@ -175,6 +176,12 @@ source_modules = [
     "obliskiq.quant", "obliskiq.grid", "obliskiq.engines", "obliskiq.orchestration.compute",
 ]
 forbidden_modules = ["obliskiq.ibkr", "httpx", "obliskiq.execution"]
+
+[[tool.importlinter.contracts]]
+name = "Test-only libraries never reach the package (the risk budget's independent check)"
+type = "forbidden"
+source_modules = ["obliskiq"]
+forbidden_modules = ["skfolio", "scipy", "sklearn", "cvxpy"]
 
 [[tool.importlinter.contracts]]
 name = "Nothing imports the legacy snapshot"

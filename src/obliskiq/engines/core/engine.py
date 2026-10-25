@@ -402,8 +402,10 @@ def _role_targets(
             reasons.append(f"trend scale {scale}")
         if role in decision.held:
             reasons.append("its trend reduction is held: the tax exceeds the benefit")
-        if roles.status[role] is not RoleStatus.FILLED and static > ZERO:
+        if roles.status[role] is RoleStatus.HELD_ONLY and static > ZERO:
             reasons.append("its target is capped at what it holds; the rest stays in cash")
+        elif roles.status[role] is RoleStatus.UNFILLED and static > ZERO:
+            reasons.append("its weight stays in the book's cash")
         out.append(
             RoleTarget(
                 role=role,

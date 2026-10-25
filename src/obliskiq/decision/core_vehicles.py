@@ -205,10 +205,14 @@ class CoreVehicleChooser:
             unconfirmed = [
                 f"{v.symbol} ({refused[v.conid]})" for v in selection.ranked if v.conid in refused
             ]
+            first = selection.rejected[0] if selection.rejected else None
             why = (
                 f"IBKR did not confirm {', '.join(unconfirmed)}"
                 if unconfirmed
-                else f"none of its {len(selection.rejected)} candidates passes the gates"
+                else "it has no candidate"
+                if first is None
+                else f"none of its {len(selection.rejected)} candidates passes the gates (first, "
+                f"{first.symbol} [{first.gate.value}]: {first.reason})"
             )
             reasons.append(f"no vehicle may be bought: {why}")
         else:
@@ -220,7 +224,11 @@ class CoreVehicleChooser:
             conids = {v.symbol: v.conid for v in selection.ranked}
             found = next((p for p in group.partners if conids[p.symbol] not in refused), None)
             if found is None:
-                reasons.append("no swap partner")
+                refusal = group.refused[0] if group.refused else None
+                reasons.append(
+                    "no swap partner"
+                    + ("" if refusal is None else f" ({refusal.symbol}: {refusal.reason})")
+                )
             else:
                 partner = conids[found.symbol]
                 reasons.append(f"swap partner {found.symbol}")

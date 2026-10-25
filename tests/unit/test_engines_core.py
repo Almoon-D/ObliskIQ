@@ -82,7 +82,7 @@ def test_an_empty_book_buys_every_role_and_leaves_an_unfilled_one_in_cash(a: Var
             target = portfolio.role(role)
             assert target is not None
             assert (target.status, target.target_weight) == (RoleStatus.UNFILLED, 0)
-            assert "the rest stays in cash" in target.reason
+            assert "its weight stays in the book's cash" in target.reason
         else:
             assert trades[conid] == (OrderSide.BUY, D(int(weight * 10000 / 100)))
     invested = sum((t.notional for t in portfolio.trades), D(0))
