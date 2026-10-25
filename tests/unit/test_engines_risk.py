@@ -105,6 +105,14 @@ def test_short_history_gives_no_stop_rather_than_a_guessed_one(
     assert stops.stops(bars(make_bar, swing=1.0), entry_price=0.0) is None
 
 
+def test_a_stop_at_or_below_zero_is_no_stop(
+    shipped_settings: ObliskConfig, stops: StopEngine, make_bar: Callable[..., Bar]
+) -> None:
+    """A true range of 2 x 30 = 60 on a 100 close: 2.5 ATRs is 150 below the entry."""
+    assert shipped_settings.equity_risk.stop_atr_multiple * 60.0 > 100.0
+    assert stops.stops(bars(make_bar, swing=30.0), entry_price=100.0) is None
+
+
 def test_a_bar_with_no_high_is_skipped_not_filled(
     stops: StopEngine, make_bar: Callable[..., Bar]
 ) -> None:

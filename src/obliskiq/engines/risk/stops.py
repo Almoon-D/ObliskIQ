@@ -72,12 +72,15 @@ class StopEngine:
     def stops(
         self, bars: Sequence[Bar], *, entry_price: float, trailing_high: float | None = None
     ) -> StopLevels | None:
-        """The stop and the trailing stop; ``None`` when the bars hold too few true ranges or
-        the entry is not a price."""
+        """The stop and the trailing stop; ``None`` when the bars hold too few true ranges, the
+        entry is not a price, or the volatility puts the stop at or below zero (no price a stop
+        can rest at: the name is too volatile for the rule, never given a guessed one)."""
         atr = self.atr(bars)
         if atr is None or atr <= 0 or entry_price <= 0:
             return None
         stop = entry_price - self._stop_multiple * atr
+        if stop <= 0:
+            return None
         trailing = None
         if self._trailing_enabled and trailing_high is not None:
             trailing = trailing_high - self._trailing_multiple * atr

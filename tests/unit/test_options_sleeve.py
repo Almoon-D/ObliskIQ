@@ -366,6 +366,18 @@ def test_without_a_multiplier_no_premium_is_priced(
     assert "could be priced" in run.activation.reason()
 
 
+def test_a_median_contract_on_an_unmapped_exchange_leaves_the_friction_untested(
+    store: Store, shipped_settings: ObliskConfig, sleeve: OptionsSleeve
+) -> None:
+    seed_options(store, shipped_settings)
+    store.execute("UPDATE chain_snapshots SET option_exchange = 'NOWHERE'")
+    run = sleeve.evaluate(as_of=AS_OF, investable=Decimal(100000))
+    assert run.friction is not None
+    assert run.friction.share is None
+    assert "NOWHERE maps to no venue" in run.friction.reason
+    assert run.activation.legs[2].holds is None
+
+
 def test_an_active_sleeve_logs_no_shadow_entry(
     store: Store, shipped_settings: ObliskConfig, calendars: Calendars
 ) -> None:

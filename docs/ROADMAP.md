@@ -84,9 +84,14 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 gates.py`, `test_options_*.py`, `test_engines_*.py`, `test_grid_option_surface.py`), with failure
 branches:
 - an untested gate never counted as passed, a crossed book, a missing rate, an unparseable
-  calendar;
+  calendar, a stale chain or surface;
 - an out-of-order or corrupt ledger event, a reconciled close, a zombie re-confirmed;
-- a stale or single-rung curve, a units mismatch in a base rate, an empty seasonal band.
+- a stale or single-rung curve, a units mismatch in a base rate, an empty seasonal band;
+- a conversion nothing prices, an unmapped option exchange, a stop the volatility puts at zero.
+
+Two existing tests were repaired:
+- `test_a_liquidity_gate_must_be_meaningful` failed on the new key rather than on its override;
+- the sleeve's skipped-chain test now seeds the chain it skips.
 
 Builds are point in time and reproducible. `make check` green: TESTS tests, coverage COVERAGE %.
 
@@ -112,7 +117,7 @@ of `decision/gates.py` and records the test that kills each mutant:
 - Not ported: lite's commodity-proxy regression and agricultural linkage, its screen buckets
   (cheap, coiled) and futures options (D135). All are in Follow-ups.
 - In a compute run the pool's gates are untested (no account read), so the census reads `thin`
-  or `untested` until the service hands it investable capital.
+  or `untested`. `Census.run` takes the pool from a caller that read the account (Session 17).
 - No IBKR call from the session.
 
 **Live findings.** None: no live call.

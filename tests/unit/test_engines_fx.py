@@ -59,6 +59,11 @@ def eurusd(day: date, value: float, released: date | None = None) -> MacroObserv
     return obs("EURUSD", "ecb", "USD per EUR", day, value, released)
 
 
+def month(back: int) -> date:
+    """A monthly print's reference date, ``back`` months of 30 days before ``AS_OF``."""
+    return AS_OF - timedelta(days=30 * back)
+
+
 # ── rates ──
 
 
@@ -184,7 +189,6 @@ def seeded_us(store: Store, shipped_settings: ObliskConfig) -> Store:
             for day in days
         ],
     )
-    month = lambda back: AS_OF - timedelta(days=30 * back)  # noqa: E731
     repos.upsert_macro(
         store,
         [

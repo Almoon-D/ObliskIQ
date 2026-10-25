@@ -363,3 +363,15 @@ def test_every_tracked_root_is_built_and_viewed(
     assert status is MeasurementStatus.OK
     assert choice.rejected == FUTURES_TRACKING_WRAPPER
     assert view["BZ"][1].recommended is None
+
+
+def test_an_untracked_root_is_not_built(store: Store, shipped_settings: ObliskConfig) -> None:
+    roots = [
+        root.model_copy(update={"tracked": root.root != "CL"})
+        for root in shipped_settings.universe.futures_roots
+    ]
+    universe = shipped_settings.universe.model_copy(update={"futures_roots": roots})
+    settings = shipped_settings.model_copy(update={"universe": universe})
+    rows = CommodityEngine(store, settings).build(as_of=AS_OF, computed_at=STAMP)
+    assert rows
+    assert "CL" not in {row.entity_id for row in rows}

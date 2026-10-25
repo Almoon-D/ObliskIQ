@@ -5,13 +5,15 @@ stale chain making its leaves stale, and the build point in time.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from collections.abc import Callable
 from datetime import date, timedelta
 
 import pytest
-from options_rig import AS_OF, SPY, STAMP, seed_options
+from options_rig import AS_OF, SPOT, SPY, STAMP, seed_options
 
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.macro import MacroObservation
+from obliskiq.domain.market import Snapshot
 from obliskiq.domain.measurement import EntityKind, Measurement, MeasurementStatus
 from obliskiq.grid.option_surface import (
     SURFACE,
@@ -117,6 +119,41 @@ def test_theta_without_a_rate_is_absent_with_the_series(
     theta = leaves[tenor_leaf(95, "theta_share")]
     assert theta.status is NA
     assert theta.reason_code == "risk_free_rate_absent"
+
+
+def test_theta_reads_the_collected_dividend_yield_and_no_rate_without_a_series(
+    store: Store, shipped_settings: ObliskConfig, make_snapshot: Callable[..., Snapshot]
+) -> None:
+    seed_options(store, shipped_settings, iv_percentile=None)
+    seed_rate(store)
+    repos.upsert_snapshots(
+        store,
+        [
+            make_snapshot(
+                snapshot_date=AS_OF,
+                conid=SPY,
+                last=SPOT,
+                bid=SPOT - 0.01,
+                ask=SPOT + 0.01,
+                dividend_yield=0.013,
+                dividend_yield_basis="trailing 12 months",
+            )
+        ],
+    )
+    theta = build(store, shipped_settings)[tenor_leaf(95, "theta_share")]
+    assert theta.status is OK
+    assert "dividend yield collected (trailing 12 months)" in (theta.reason or "")
+    solve = shipped_settings.numerics.implied_vol.solve
+    rates = {k: v for k, v in solve.risk_free_series.items() if k != "USD"}
+    numerics = shipped_settings.numerics.model_copy(
+        update={
+            "implied_vol": shipped_settings.numerics.implied_vol.model_copy(
+                update={"solve": solve.model_copy(update={"risk_free_series": rates})}
+            )
+        }
+    )
+    no_series = build(store, shipped_settings.model_copy(update={"numerics": numerics}))
+    assert no_series[tenor_leaf(95, "theta_share")].reason_code == "risk_free_rate_absent"
 
 
 def test_a_wing_the_band_does_not_reach_is_absent_not_substituted(
