@@ -100,7 +100,7 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
     short history, a missing rate, a gap;
   - `test_core_config.py`: a non-convergent solve, an incoherent variant;
   - `test_core_vehicles.py`, `test_core_correlations.py`.
-- `make check` green: TESTS tests, coverage COVERAGE %.
+- `make check` green: 5,008 tests, coverage 99.70 %.
 
 **Deferred.**
 - No IBKR call from the session. The core's live paper cycle is a command list for the owner
