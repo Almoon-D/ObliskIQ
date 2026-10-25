@@ -6,7 +6,9 @@ census, the sleeve's shadow log, the decision layer), so the gates read the same
 they run: the expiry's hygiene-filtered smile at the chain's own spot, the underlying's
 implied-vol percentile from the option surface built for the session, the session the option is
 sold by, the rate into the base currency, the pool and the sleeve's open positions. An input that
-cannot be read is passed as absent with why, and its gate is untested.
+cannot be read is passed as absent with why, and its gate is untested. A chain, or a surface,
+older than ``grid.freshness_days.option_chain`` is no reading of the session: the chain is
+skipped with why, the surface's percentile left untested.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -22,7 +24,7 @@ from ...decision.gates import Affordability, OptionCandidate
 from ...domain.market import ChainRow
 from ...domain.measurement import Measurement, MeasurementStatus
 from ...grid.frames import ChainSmile
-from ...grid.option_surface import surface_view
+from ...grid.option_surface import surface_session, surface_view
 from ...grid.option_surface import underlying_spot as spot_at
 from ...quant.smile import SmileFilters
 from ...store import repos
@@ -62,6 +64,7 @@ class CandidateBook:
         self._settings = settings
         self._filters = SmileFilters.from_config(settings)
         self._dates = None if calendars is None else SleeveDates(settings, calendars)
+        self._freshness = settings.grid.freshness_days.option_chain
         self.skipped: list[Skipped] = []
         self._close_cache: dict[tuple[str, date, int | None], tuple[date | None, str | None]] = {}
 
@@ -72,7 +75,7 @@ class CandidateBook:
         self.skipped = []
         store = self._store
         rates = BaseRates(store, self._settings, as_of=as_of)
-        surface = surface_view(store, as_of=as_of)
+        surface, surface_gap = self._surface(as_of)
         for conid, session in repos.latest_chain_sessions(store, as_of=as_of):
             declared = self._settings.universe.pinned(conid)
             if declared is None:
@@ -80,10 +83,23 @@ class CandidateBook:
                     Skipped(conid, f"the chain of {conid} is of no instrument the universe pins")
                 )
                 continue
+            age = (as_of - session).days
+            if age > self._freshness:
+                self.skipped.append(
+                    Skipped(
+                        conid,
+                        f"the newest chain of {declared.symbol} is from {session}, {age} days old, "
+                        f"beyond the {self._freshness}-day grid.freshness_days.option_chain "
+                        "window: a stale quote is no candidate",
+                    )
+                )
+                continue
             spot = spot_at(store, conid, session)
             chain = ChainSmile(store, conid, as_of, spot, self._filters)
             rate = rates.reading(declared.currency)
-            percentile, percentile_gap = self._percentile(surface.get(conid, {}), as_of)
+            percentile, percentile_gap = self._percentile(
+                surface.get(conid, {}), as_of, surface_gap
+            )
             for row in chain.rows():
                 smile = None if spot is None else chain.at_expiry(row.expiry)
                 close_by, close_gap = self._close_by(declared, row, conid)
@@ -112,11 +128,29 @@ class CandidateBook:
                     catalyst_date=catalyst_date,
                 )
 
+    def _surface(self, as_of: date) -> tuple[dict[int, dict[str, Measurement]], str | None]:
+        """The newest surface on or before ``as_of`` while it is fresh; an older one is no
+        reading of this session's implied vol."""
+        session = surface_session(self._store, as_of=as_of)
+        if session is None:
+            return {}, None
+        age = (as_of - session).days
+        if age > self._freshness:
+            return {}, (
+                f"the newest option surface is from {session}, {age} days old, beyond the "
+                f"{self._freshness}-day grid.freshness_days.option_chain window"
+            )
+        return surface_view(self._store, as_of=as_of), None
+
     @staticmethod
-    def _percentile(leaves: dict[str, Measurement], as_of: date) -> tuple[float | None, str | None]:
+    def _percentile(
+        leaves: dict[str, Measurement], as_of: date, surface_gap: str | None
+    ) -> tuple[float | None, str | None]:
         found = leaves.get(IV_PERCENTILE_LEAF)
         if found is None:
-            return None, f"the option surface was not built for this underlying by {as_of}"
+            return None, surface_gap or (
+                f"the option surface was not built for this underlying by {as_of}"
+            )
         if found.status is not MeasurementStatus.OK or found.value is None:
             return None, (
                 f"the surface's implied-vol percentile is {found.status.value}: {found.reason}"

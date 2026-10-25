@@ -13,7 +13,8 @@ instruments:
     - leveraged_etps                  # embedded leverage; daily reset decays badly over 90-200d
     - inverse_etps
   # lite's switch for long options on futures. It stays false in this build: a futures option
-  # needs the never-exercise rule, which the options sleeve (Session 12) builds. lite.
+  # needs its own never-exercise rule and a wider close buffer, which the options sleeve does not
+  # carry (DECISIONS D135). lite.
   allow_futures_options: false
   # Leveraged and inverse ETPs, matched case-insensitively against the instrument's resolved
   # DESCRIPTION, never its ticker ('BULL' is a substring of plenty of innocent names). An option

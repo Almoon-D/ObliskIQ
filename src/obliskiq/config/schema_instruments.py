@@ -36,8 +36,8 @@ class InstrumentsConfig(FrozenModel):
             )
         if self.allow_futures_options:
             raise ValueError(
-                "allow_futures_options stays false: a futures option needs the never-exercise "
-                "rule, which the options sleeve (Session 12) builds"
+                "allow_futures_options stays false: a futures option needs its own never-exercise "
+                "rule and a wider close buffer, which the options sleeve does not carry"
             )
         return self
 

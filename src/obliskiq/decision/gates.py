@@ -245,9 +245,9 @@ class CandidateGates:
         self._top_decile_pctile = discipline.entry_top_decile_pctile
         self._cheap_iv_max = settings.screen.cheap_iv_percentile_max
         self._base_currency = settings.account.base_currency
-        instruments = settings.instruments
-        self._prohibited = frozenset(instruments.prohibited)
-        self._markers = tuple(instruments.leveraged_inverse_markers)
+        # The mandate's prohibitions are not switches: configuration cannot drop one
+        # (``InstrumentsConfig``), so the instrument gate applies them unconditionally.
+        self._markers = tuple(settings.instruments.leveraged_inverse_markers)
 
     # ── the composition ──
 
@@ -322,7 +322,7 @@ class CandidateGates:
         the cash instrument, not the option, which is why the sleeve exists; the jurisdiction's
         eligibility policy judges the option at the order (pre-trade)."""
         symbol = declared.symbol
-        if declared.asset_class is AssetClass.FUTURE and "futures_options" in self._prohibited:
+        if declared.asset_class is AssetClass.FUTURE:
             return _fail(
                 Gate.INSTRUMENT,
                 f"{symbol} is a futures contract: an option on it is a futures option, which the "
@@ -338,16 +338,15 @@ class CandidateGates:
                 None,
                 None,
             )
-        if self._prohibited & {"leveraged_etps", "inverse_etps"}:
-            marker = leveraged_inverse_marker(declared.description, self._markers)
-            if marker is not None:
-                return _fail(
-                    Gate.INSTRUMENT,
-                    f"{symbol} reads as a leveraged or inverse product (marker {marker!r} in "
-                    f"{declared.description!r})",
-                    None,
-                    None,
-                )
+        marker = leveraged_inverse_marker(declared.description, self._markers)
+        if marker is not None:
+            return _fail(
+                Gate.INSTRUMENT,
+                f"{symbol} reads as a leveraged or inverse product (marker {marker!r} in "
+                f"{declared.description!r})",
+                None,
+                None,
+            )
         return GateResult()
 
     # ── tenor ──

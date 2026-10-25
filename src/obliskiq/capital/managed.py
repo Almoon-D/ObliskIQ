@@ -138,7 +138,8 @@ def book_fills(fills: Sequence[IntentFill], mode: ExecutionMode) -> list[IntentF
 
 class CapitalReader:
     """The one reader of managed and investable capital: the rebalancer, the reservation planner
-    and, later, the options sleeve (Session 12) and the decision layer (Session 17) use it."""
+    and, later, the decision layer (Session 17), which hands the options sleeve its investable
+    capital, use it."""
 
     def __init__(
         self,

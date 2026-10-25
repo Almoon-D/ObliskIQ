@@ -24,7 +24,7 @@ from enum import StrEnum
 
 from ..calendars.service import Calendars
 from ..config.schema import ObliskConfig
-from ..decision.gates import CandidateGates, Gate
+from ..decision.gates import Affordability, CandidateGates, Gate
 from ..engines.options_sleeve.candidates import CandidateBook, Pool
 from ..store import options as options_repo
 from ..store import repos
@@ -111,9 +111,11 @@ class Census:
         as_of: date,
         budget_gap: str,
         calendars: Calendars | None = None,
+        affordability: Affordability | None = None,
     ) -> CensusResult:
-        """The census on ``as_of``. The pool's budget is not known to an offline run, so its gate
-        is untested with ``budget_gap``; the sleeve's open positions are read from the store."""
+        """The census on ``as_of``. The pool is ``affordability`` when the caller read the
+        account; an offline run knows no budget, so the pool's gate is untested with
+        ``budget_gap``. The sleeve's open positions are read from the store."""
         reach = tuple(grid_reach(store, as_of=as_of))
         thin = self._thin(reach)
         session = repos.latest_chain_date(store, as_of=as_of)
@@ -133,8 +135,8 @@ class Census:
                 thin_families=thin,
             )
         pool = Pool(
-            affordability=None,
-            affordability_gap=budget_gap,
+            affordability=affordability,
+            affordability_gap=None if affordability is not None else budget_gap,
             open_positions=len(options_repo.open_positions(store, as_of=as_of)),
             open_positions_gap=None,
         )

@@ -36,6 +36,9 @@ the observation that settled it.
 
 - `calendars.md` — what `exchange_calendars` reports, the venue facts `venues.yaml` cites,
   and how expiry and daylight saving behave.
+- `commodities.md` — the futures roots and what may express each, proxy purity, the regime
+  signals behind the commodity engine and the contango check; condenses lite's commodities
+  reference.
 - `costs.md` — the commission schedules, the transaction taxes and the friction assumptions
   behind `costs.yaml`, and how well each was confirmed.
 - `ibkr-capabilities.md` — what the Web API searches, quotes and previews per asset class and

@@ -24,7 +24,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 9 | Broker capabilities and vehicle selector | capabilities measured, core candidates, swap partners, vehicle selector | done (capabilities from the owner's paper run and lite; the probe on paper is a command for the owner) | v0.14.0 |
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | done (every built source but GDELT collected live from the cloud; the extractor waits on its key; H7 pre-registered, #46) | v0.15.0 |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | done (built and accepted on an offline fixture store; the census reports the gates untested until Session 12) | v0.16.0 |
-| 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | planned | |
+| 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | planned | |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series | planned | |
@@ -38,6 +38,88 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Session 12 — Engines and gates (2026-10-24, v0.17.0)
+
+**Landed.**
+- `decision/gates.py` (D139): the candidate gates, composed once. The census, the sleeve's shadow
+  log and Session 17 all run the same `CandidateGates.candidate`:
+  - instrument (never a future, nor a leveraged or inverse product), tenor, catalyst buffer and
+    mandatory close;
+  - liquidity (spread, open interest with lite's depth waiver, session volume);
+  - smile, the concurrency cap, and the pool's price ceiling and minimum premium.
+  The entry gates (size, payoff ratio, entry range, theta budget) apply once a thesis sizes a
+  position. Every refusal has a reason code; an absent input leaves its gate untested, with why.
+- `grid/option_surface.py` (D136): the option surface as leaves of each underlying's instrument
+  entity. Per tenor of 95, 135 and 180 days, on the nearest listed expiry: vol at the money and
+  at |delta| 0.10 and 0.25 on each wing, the risk reversal, theta share and liquidity. Per
+  underlying: the IV percentile and the term slope. `surface_view` reads it.
+- `engines/options_sleeve/` (D135, D138):
+  - the pooled budget from `capital.budgets.option_premium` of investable capital;
+  - the penalty ledger: penalty booked at detection, recovery on qualifying realised gains, and
+    the close reconciled by the difference;
+  - the concurrency cap and the minimum premium;
+  - the catalyst-driven tenor window and the mandatory close from `last_tradable_session` and
+    `session_before`;
+  - the strike-smile N(d₂) zombie test over two consecutive reviews;
+  - the activation condition: H8 sufficient, the pre-registered number of median premiums, and
+    the friction gate. While it fails, the sleeve logs its would-be entries
+    (`option_shadow_entries`).
+- `engines/fx/`: base rates from the macro board's `fx_vs_base`; per grid market, the four-way
+  decomposition (local and base, nominal and real) over the board's horizons, the inflation and
+  depreciation flags, and lite's carry-illusion test.
+- `engines/commodity/`: per tracked root, the curve's shape and the wrapper it permits, Session
+  10's positioning with its extreme flag, the cycle percentile over the long history, and
+  inventory against its seasonal band. `CurveContangoCheck` implements Session 8's
+  `ContangoCheck` (D137).
+- `engines/risk/`: volatility-scaled and trailing stops on ATR, the averaging-down rule (a new
+  dated catalyst still ahead) and the pre-earnings decision.
+- Migration `012_engines.sql`; `obliskiq compute <surface|fx|commodity|sleeve>`, with `all` running
+  eight steps; `docs/knowledge/commodities.md`.
+- Config: lite's `option_sleeve` (without `budget_pct`, D135), `zombie_test`, `equity_risk`,
+  `fx_inflation` and `commodities` keys with lite's values; the rest of `tenor`;
+  `liquidity.spread_waiver_min_open_interest`; the entry discipline's top-decile rule;
+  `grid.option_surface`.
+
+**Tests.** Lite's gate, penalty, zombie, risk, FX and commodity tests are ported (`test_decision_
+gates.py`, `test_options_*.py`, `test_engines_*.py`, `test_grid_option_surface.py`), with failure
+branches:
+- an untested gate never counted as passed, a crossed book, a missing rate, an unparseable
+  calendar;
+- an out-of-order or corrupt ledger event, a reconciled close, a zombie re-confirmed;
+- a stale or single-rung curve, a units mismatch in a base rate, an empty seasonal band.
+
+Builds are point in time and reproducible. `make check` green: TESTS tests, coverage COVERAGE %.
+
+**Acceptance.** `tests/integration/test_engines_acceptance.py`:
+- An offline fixture store (`tests/support/options_rig.py`) yields the option surface with honest
+  statuses.
+- A futures-tracking ETC is eligible under `es` inside the contango ceiling, ineligible beyond it,
+  and ineligible with no curve.
+- The sleeve stays in shadow at any budget while H8 is unregistered, and logs its would-be
+  entries.
+
+The mutation check (`tests/unit/test_gates_mutation.py`) breaks three gate invariants on a copy
+of `decision/gates.py` and records the test that kills each mutant:
+- the crossed book (`test_a_crossed_book_fails_and_no_depth_waives_it`);
+- the pool's commitments (`test_the_pool_is_the_budget_less_the_penalty_and_the_commitments`);
+- the entry window's floor (`test_an_entry_at_the_minimum_hold_is_refused`).
+
+`compute all` runs its eight steps with every network socket refused.
+
+**Deferred.**
+- The order path keeps the fail-closed `UnavailableContangoCheck`: the universe declares no
+  futures-tracking product, and wiring the curve in waits on the service scheduling compute (D137).
+- Not ported: lite's commodity-proxy regression and agricultural linkage, its screen buckets
+  (cheap, coiled) and futures options (D135). All are in Follow-ups.
+- In a compute run the pool's gates are untested (no account read), so the census reads `thin`
+  or `untested` until the service hands it investable capital.
+- No IBKR call from the session.
+
+**Live findings.** None: no live call.
+
+**Dependabot.** No patch or minor update was open. The major cryptography 50 (#9, #5) stays red
+and in Follow-ups (D96).
+
 ### Session 11 — Measurement store and views (2026-10-23, v0.16.0)
 
 **Landed.**
@@ -1660,16 +1742,24 @@ settles it.
 | The EventExtractor's first call: Gemini's OpenAI-compatible reply, its `usage`, and the `json_schema` response format accepted (no key in the session) | 10 | the owner setting `GEMINI_API_KEY` |
 | The service's source jobs, the halt refresh and the extractor on the machine (built and tested over the fake broker and a mock web) | 10 | the first week of `serve` |
 | `yfinance`'s earnings dates from the deployment machine (worked from the cloud, 2026-10-23) | 10 | the first week of `serve` |
+| The option surface, the sleeve's candidates and the census on live chains: each tenor's nearest expiry, the smile's wings at deltas 0.10 and 0.25, the liquidity share, and how many contracts clear every gate; the FX decomposition on the board's live `fx_vs_base` and CPI; the commodity leaves on live curves (`VERIFY-LIVE(the option surface on live chains)`, `VERIFY-LIVE(futures curve prices)`) | 12 | the first command list after the collectors' live round |
 | `obliskiq compute all` on a store the collectors filled live: each family's reach and its dominant blocker against the fixture store's, the session solve on a route that prices chains without vols, the coverage floor, and the run's time on the machine | 11 | the first command list after the collectors' live round |
 
 ## Follow-ups
 
-- Session 12: the candidate gates feed `grid/census.py` (`Census.run`), which reports every gate
-  untested until then (D134); the option surface's leaves join `measurements` under their own
-  entity kind or the instrument's.
 - The service runs no compute step yet: `obliskiq compute all` by hand. A scheduled job after
   each region's collection lands with the first engine that reads the store on its own (Session
-  12 or 13).
+  13 or 17). With it, the order path's eligibility reads the commodity engine's contango check
+  through the store worker, in place of the fail-closed `UnavailableContangoCheck` (D137). That
+  is needed before a futures-tracking ETC joins the universe.
+- Session 17 hands the options sleeve its investable capital (`CapitalReader`) so the pool's
+  gates are tested, and turns an active sleeve's entries into intents. Its penalty ledger is
+  written by the fills and the zombie reviews it schedules.
+- Not ported from lite (D135): the commodity-proxy beta and R² regression with its `min_r2`
+  flag, and the agricultural linkage (fertiliser names on natural gas), both for Session 15's
+  commodity components; the screen's cheap and coiled buckets, for Session 15; futures options
+  (`instruments.allow_futures_options`), only with a never-exercise rule and a wider close
+  buffer.
 - Lite's 13-week positioning change (`commodities.cot`) is not carried (D134); add it to
   `data/positioning/readings.py` if a consumer asks for it.
 - `GEMINI_API_KEY` in a developer's environment makes `test_cli_llm.py` and `test_env.py` fail

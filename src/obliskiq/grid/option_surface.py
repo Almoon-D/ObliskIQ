@@ -14,7 +14,8 @@ the grid's own families (one implementation).
 
 Every leaf not ``ok`` says why: no chain collected, no expiry near the tenor, no smile surviving
 hygiene, no wing reaching the delta, no rate to discount at. A chain older than
-``grid.freshness_days.option_chain`` makes every leaf it feeds stale.
+``grid.freshness_days.option_chain`` makes every leaf it feeds stale. VERIFY-LIVE(the option
+surface on live chains): built and accepted on fixture chains.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -490,10 +491,18 @@ class OptionSurfaceBuilder:
 # ── the view ──
 
 
+def surface_session(store: Store, *, as_of: date) -> date | None:
+    """The newest session on or before ``as_of`` the surface was built for (the instrument
+    entity's other leaves, the forecast and the gaps, are built on their own sessions)."""
+    return measurements_repo.measured_session(
+        store, EntityKind.INSTRUMENT, as_of=as_of, indicator=SURFACE
+    )
+
+
 def surface_view(store: Store, *, as_of: date) -> dict[int, dict[str, Measurement]]:
     """The newest surface built on or before ``as_of``, by underlying conid then leaf: a query
     over the measurements, nothing stored twice."""
-    session = measurements_repo.measured_session(store, EntityKind.INSTRUMENT, as_of=as_of)
+    session = surface_session(store, as_of=as_of)
     if session is None:
         return {}
     view: dict[int, dict[str, Measurement]] = {}

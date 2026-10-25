@@ -92,12 +92,17 @@ def upsert_measurements(store: Store, rows: Sequence[Measurement]) -> int:
     return len(rows)
 
 
-def measured_session(store: Store, entity_kind: EntityKind, *, as_of: date) -> date | None:
-    """The newest session on or before ``as_of`` with a build of ``entity_kind``."""
-    row = store.execute(
-        "SELECT MAX(as_of) FROM measurements WHERE entity_kind = ? AND as_of <= ?",
-        (entity_kind.value, date_text(as_of)),
-    ).fetchone()
+def measured_session(
+    store: Store, entity_kind: EntityKind, *, as_of: date, indicator: str | None = None
+) -> date | None:
+    """The newest session on or before ``as_of`` with a build of ``entity_kind`` (of
+    ``indicator``'s leaves only, when it is given)."""
+    sql = "SELECT MAX(as_of) FROM measurements WHERE entity_kind = ? AND as_of <= ?"
+    params: list[object] = [entity_kind.value, date_text(as_of)]
+    if indicator is not None:
+        sql += " AND indicator = ?"
+        params.append(indicator)
+    row = store.execute(sql, params).fetchone()
     return None if row[0] is None else read_date(row[0], "measurements", "as_of")
 
 

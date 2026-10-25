@@ -25,6 +25,7 @@ neighbouring weeks would pull the band toward the reading), and at least
 ``min_band_observations`` prior-year readings before a deviation is reported.
 
 Reading a futures curve is a data operation: no contract is ever a candidate here.
+VERIFY-LIVE(futures curve prices): the ladder was seen live, its prices only in fixtures.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """

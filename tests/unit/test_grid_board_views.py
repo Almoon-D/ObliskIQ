@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Callable
 from datetime import timedelta
+from decimal import Decimal
 
 import pytest
 from measure_rig import (
@@ -17,9 +18,12 @@ from measure_rig import (
     monthly_series,
     observation,
 )
+from options_rig import AS_OF as OPTIONS_AS_OF
+from options_rig import SPY, seed_options
 
+from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
-from obliskiq.decision.gates import Gate
+from obliskiq.decision.gates import CandidateGates, Gate
 from obliskiq.domain.instrument import Instrument
 from obliskiq.domain.market import Bar, ChainRow
 from obliskiq.domain.measurement import EntityKind, Measurement, MeasurementStatus
@@ -309,6 +313,28 @@ def test_the_census_counts_a_refusal_per_gate_and_says_thin(
     assert result.verdict is Verdict.THIN
     assert result.per_gate.get(Gate.TENOR, 0) == 0
     assert "below the floor" in result.reason
+
+
+def test_a_census_given_the_pool_tests_every_gate_and_can_be_viable(
+    store: Store, shipped_settings: ObliskConfig, calendars: Calendars
+) -> None:
+    seed_options(store, shipped_settings)
+    gates = CandidateGates(shipped_settings)
+    pool = gates.affordability(
+        budget=Decimal(100_000), penalty_balance=Decimal(0), committed_premium=Decimal(0)
+    )
+    census = Census(shipped_settings)
+    result = census.run(
+        store, as_of=OPTIONS_AS_OF, budget_gap=GAP, calendars=calendars, affordability=pool
+    )
+    assert result.verdict is Verdict.VIABLE, result.report()
+    assert result.passed_all_gates >= shipped_settings.census.min_viable_contracts
+    assert len(result.survivors) == result.passed_all_gates
+    assert result.untested.get(Gate.PRICE_CEILING, 0) == 0
+    assert all(name.startswith(f"{SPY}:") for name in result.survivors)
+    offline = census.run(store, as_of=OPTIONS_AS_OF, budget_gap=GAP, calendars=calendars)
+    assert offline.verdict is Verdict.UNTESTED
+    assert offline.passed_all_gates == 0
 
 
 def test_a_chain_of_no_pinned_instrument_is_no_data(

@@ -91,11 +91,29 @@ def test_a_smile_threshold_must_be_positive(field: str) -> None:
         SmileConfig.model_validate(_smile(**{field: 0}))
 
 
+LIQUIDITY = {
+    "max_spread_pct": 0.15,
+    "spread_waiver_min_open_interest": 5000,
+    "min_open_interest": 500,
+    "require_session_volume": True,
+}
+
+
 @pytest.mark.parametrize(
     "overrides",
-    [{"max_spread_pct": 0.0}, {"min_open_interest": 0}, {"require_session_volume": "perhaps"}],
+    [
+        {"max_spread_pct": 0.0},
+        {"min_open_interest": 0},
+        {"require_session_volume": "perhaps"},
+        {"spread_waiver_min_open_interest": 500},
+    ],
 )
 def test_a_liquidity_gate_must_be_meaningful(overrides: dict[str, Any]) -> None:
-    fields = {"max_spread_pct": 0.15, "min_open_interest": 500, "require_session_volume": True}
+    assert LiquidityConfig.model_validate(LIQUIDITY)
     with pytest.raises(ValidationError):
-        LiquidityConfig.model_validate({**fields, **overrides})
+        LiquidityConfig.model_validate({**LIQUIDITY, **overrides})
+
+
+def test_the_spread_waiver_is_for_a_book_deeper_than_the_floor() -> None:
+    with pytest.raises(ValidationError, match="must exceed min_open_interest"):
+        LiquidityConfig.model_validate({**LIQUIDITY, "spread_waiver_min_open_interest": 499})
