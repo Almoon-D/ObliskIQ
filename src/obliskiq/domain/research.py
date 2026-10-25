@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import re
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import AfterValidator, Field, model_validator
 
@@ -122,3 +122,15 @@ class Trial(DomainModel):
     sharpe: float | None
     observations: Annotated[int, Field(ge=0)] | None
     outcome: NonEmptyText | None
+
+
+class RegisteredHypothesis(DomainModel):
+    """A hypothesis as ``research/pattern_registry.yaml`` records it: its lifecycle status, its
+    outcome under the decision rule (``None`` until a confirmation run), and, for a layer whose
+    activation needs one, the number of median premiums its pre-registration states."""
+
+    hypothesis: NonEmptyText
+    status: Literal["idea", "pre-registered", "tested", "shadow", "active", "retired"]
+    decision: Literal["sufficient", "insufficient", "inconclusive"] | None
+    min_median_premiums: Annotated[int, Field(gt=0)] | None
+    source: NonEmptyText

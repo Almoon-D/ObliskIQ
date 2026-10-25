@@ -1,0 +1,33 @@
+# The commodity engine (engines/commodity): the keys of lite's `commodities` block
+# (legacy/lite/config.yaml:580-719, @b1ebd49) it reads, with lite's values. The buckets and the
+# roots are the universe's (config/universe.yaml `futures_roots`, the commodity axis), the long
+# price history's window is sources.macro.commodity_history.window_years and positioning is
+# Session 10's reading (sources.positioning, DECISIONS D134): one owner each.
+# docs/knowledge/commodities.md holds the observed behaviour these rules rest on.
+commodities:
+  term_structure:
+    # Above this annualised contango a futures-tracking wrapper bleeds roll over a 90-200 day hold
+    # whether or not the thesis is right: it is refused, and the view goes through a physically
+    # backed ETC or a producer equity. A futures-tracking ETC is eligible under `es` only while
+    # its root's curve passes (the ContangoCheck, DECISIONS D113). lite.
+    contango_max_annualised_for_futures_wrapper: 0.05
+  # The wrapper order the curve chooses from (PRIIPs-aware: EU ETCs carry KIDs). A futures-tracking
+  # wrapper is the last resort and is dropped while the curve is beyond the contango ceiling. lite.
+  preferred_wrapper_order: [eu_listed_physical_etc, producer_equity, futures_tracking_wrapper]
+  cot:
+    # Positioning at or beyond this percentile, either tail, is extreme: a move that starts would
+    # be violent. It conditions; it never times a trade. lite.
+    extreme_percentile: 0.95
+    # An extreme needs a separate price confirmation before anything acts on it. lite.
+    require_price_confirmation: true
+  history:
+    # Inventory is compared with the same ISO week in prior years, not with a rolling window:
+    # crude builds every spring whatever the regime. lite.
+    seasonal_adjustment: true
+  inventory:
+    # The seasonal band: the same ISO week in this many prior years, this many weeks either side
+    # (a shifted holiday week does not empty it), and at least this many prior-year readings
+    # before a deviation is reported. lite.
+    seasonal_window_years: 5
+    seasonal_week_halfwidth: 1
+    min_band_observations: 3

@@ -170,7 +170,7 @@ def test_a_futures_tracking_etc_waits_for_the_contango_rule(shipped_settings: An
     wider = with_instruments(universe, etc)
     closed = EuPriipsEligibility(wider, rules(), UnavailableContangoCheck()).assess_declared(etc)
     assert not closed.eligible
-    assert "Session 12" in closed.reason
+    assert "no reading of CL's curve is wired in" in closed.reason
     open_ = EuPriipsEligibility(wider, rules(), PassingContango()).assess_declared(etc)
     assert open_.eligible  # an ETC needs its KID, not the UCITS form
     with pytest.raises(ValueError, match="futures replication names its futures_root"):

@@ -5,6 +5,56 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.17.0] - 2026-10-24
+
+Session 12, the engines and the gates: the option surface per underlying, the options sleeve
+behind its activation condition (it runs in shadow and logs its would-be entries), the FX,
+commodity and equity-risk engines, the candidate gates composed once, and the commodity curve's
+contango check for futures-tracking products.
+
+### Added
+
+- `decision/gates.py` (DECISIONS D139): `CandidateGates`. One composition of instrument, tenor,
+  catalyst buffer, mandatory close, liquidity, smile, concurrency and pool gates, plus the entry
+  gates (position size, payoff ratio, entry range, theta budget). Each refusal has a reason code.
+  An untested gate is never a passed one.
+- `grid/option_surface.py` (D136): per underlying and tenor, the implied vol at the money and at
+  each wing's |delta|, skew, theta share and liquidity, plus the IV percentile and term slope, as
+  measurement leaves; `surface_view`.
+- `engines/options_sleeve/` (D135, D138):
+  - the penalty ledger: pooled budget, penalty booked at detection, recovery on qualifying
+    realised gains, reconciled on close;
+  - the strike-smile N(d₂) zombie test over consecutive reviews, and the theta budget;
+  - date rules from the last tradable session;
+  - the concurrency cap and the minimum premium;
+  - the three-legged activation condition with its friction gate;
+  - the shadow log.
+- `engines/fx/`: base rates from the macro board, the four-way decomposition (local and base,
+  nominal and real), the depreciation and inflation flags, and the carry-illusion test, as leaves
+  of each grid market.
+- `engines/commodity/`: curve shape and wrapper choice, positioning, cycle percentile and
+  inventory against its seasonal band, as leaves of each futures root. `CurveContangoCheck` for
+  the `eu_priips` policy (D137).
+- `engines/risk/`: volatility-scaled and trailing stops on ATR, the averaging-down rule and the
+  pre-earnings decision.
+- Migration `012_engines.sql`: the `market` and `commodity_root` entity kinds, plus
+  `option_positions`, `option_ledger`, `zombie_observations` and `option_shadow_entries`.
+- `obliskiq compute` gains `surface`, `fx`, `commodity` and `sleeve`; `all` runs eight steps.
+- Config: `config/defaults/{options,risk,fx,commodities}.yaml` with lite's values, lite's
+  remaining `tenor` keys, `liquidity.spread_waiver_min_open_interest`, the entry discipline's
+  top-decile rule and `grid.option_surface`.
+- `docs/knowledge/commodities.md`, condensed from lite's commodities reference.
+
+### Changed
+
+- The census runs the candidate gates over the sleeve's candidates and reports `viable`, `thin`,
+  `untested` or `no_data`. Its step is ok only when viable. It takes the pool from a caller that
+  read the account; offline, the pool's gates are untested.
+- Candidates skip a chain older than `grid.freshness_days.option_chain`, and a surface that old
+  leaves the IV-percentile gate untested.
+- `Smile.iv_at_delta`; the grid's skew and term-structure cells take any chain source;
+  `measured_session` takes an optional indicator.
+
 ## [0.16.0] - 2026-10-23
 
 Session 11, the measurement store and its views: one long-format store of every measured leaf,

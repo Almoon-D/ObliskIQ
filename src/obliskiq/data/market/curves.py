@@ -9,7 +9,7 @@ the calendar basis; the front's is NULL, not 0.0 (there is nothing to roll it ag
 unpriced point has none, because a fictional flat point drags every contango reading toward
 "fine". A ladder on which not one rung carried a price is degraded: the expiries are retrievable
 any day, the prices are the part that has to be taken today. Contango and backwardation are
-classified downstream (the ContangoCheck, Session 12), not here.
+classified downstream (the commodity engine and its ContangoCheck), not here.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """

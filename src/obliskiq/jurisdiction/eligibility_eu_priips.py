@@ -9,8 +9,10 @@ states (``eligibility`` in ``config/jurisdictions/<id>.yaml``):
   so it is data and an option underlying, never a purchase; the verdict says which facts refuse
   it. An unknown fact refuses too: an unknown KID is not an available one.
 * **Futures-tracking ETCs** roll a futures curve: eligible only while lite's contango rule passes
-  on the curve they roll, through a :class:`ContangoCheck`. The commodity engine computes it
-  (Session 12); until then :class:`UnavailableContangoCheck` fails closed.
+  on the curve they roll, through a :class:`ContangoCheck`. The commodity engine implements it on
+  the curve known on a day (``engines/commodity``); where no curve reading is wired in (the order
+  path, until the service runs the commodity step on its schedule) :class:`UnavailableContangoCheck`
+  fails closed (DECISIONS D137).
 * **Bonds**: government bonds by the profile's switch, corporate bonds off by default.
 * **Options**: eligible when their underlying is; on an ETF or ETC the policy refuses, held only
   under the mandatory close (or refused, by the profile's choice); on anything else refused.
@@ -49,13 +51,14 @@ class ContangoCheck(Protocol):
 
 
 class UnavailableContangoCheck:
-    """The contango rule before the commodity engine exists: every curve fails it."""
+    """The contango rule where no curve reading is wired in: every curve fails it."""
 
     def assess(self, root: str) -> ContangoVerdict:
         return ContangoVerdict(
             False,
-            f"the contango rule on {root}'s curve is computed by the commodity engine (Session "
-            "12); until then a futures-tracking product is refused",
+            f"no reading of {root}'s curve is wired in here (the commodity engine runs by hand, "
+            "obliskiq compute commodity, until the service schedules it), so a futures-tracking "
+            "product is refused",
         )
 
 

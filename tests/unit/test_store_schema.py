@@ -1,4 +1,4 @@
-"""The shape of the migrations (``001_core.sql`` through ``011_measurements.sql``) and the
+"""The shape of the migrations (``001_core.sql`` through ``012_engines.sql``) and the
 constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
@@ -259,11 +259,36 @@ SHAPE = {
         "source:TEXT!*, target:TEXT!*, last_attempt_at:TEXT!, last_success_at:TEXT, "
         "last_ok:INTEGER!, last_rows:INTEGER!, detail:TEXT"
     ),
-    # 011_measurements
+    # 011_measurements, rebuilt by 012_engines
     "measurements": (
         "entity_kind:TEXT!*, entity_id:TEXT!*, indicator:TEXT!, leaf:TEXT!*, as_of:TEXT!*, "
         "value:REAL, status:TEXT!, reason:TEXT, reason_code:TEXT, n_obs:INTEGER, window:TEXT, "
         "units:TEXT, source:TEXT, market_data_status:TEXT, inputs_hash:TEXT!, computed_at:TEXT!"
+    ),
+    # 012_engines
+    "option_positions": (
+        "position_id:INTEGER*, underlying_conid:INTEGER!, option_conid:INTEGER, expiry:TEXT!, "
+        "strike:REAL!, right:TEXT!, contracts:INTEGER!, multiplier:REAL!, "
+        "premium_per_unit:TEXT!, currency:TEXT!, premium_base:TEXT!, fx_to_base:TEXT, "
+        "opened_on:TEXT!, close_by:TEXT!, target:REAL, prob_target_at_entry:REAL, "
+        "catalyst_date:TEXT, intent_id:TEXT, closed_on:TEXT, exit_reason:TEXT"
+    ),
+    "option_ledger": (
+        "event_id:INTEGER*, event_on:TEXT!, event_type:TEXT!, position_id:INTEGER, "
+        "conid:INTEGER, amount:TEXT!, penalty_added:TEXT!, penalty_balance_after:TEXT!, "
+        "exit_reason:TEXT, quote_currency:TEXT, quote_amount:TEXT, fx_to_base:TEXT, note:TEXT!, "
+        "recorded_at:TEXT!"
+    ),
+    "zombie_observations": (
+        "position_id:INTEGER!*, observed_on:TEXT!*, all_conditions_met:INTEGER!, delta:REAL, "
+        "dte:INTEGER, prob_target:REAL, prob_ratio_vs_entry:REAL, "
+        "recoverable_pct_of_premium:REAL, detail:TEXT!, recorded_at:TEXT!"
+    ),
+    "option_shadow_entries": (
+        "as_of:TEXT!*, underlying_conid:INTEGER!*, expiry:TEXT!*, strike:REAL!*, right:TEXT!*, "
+        "snapshot_date:TEXT!, option_conid:INTEGER, bid:REAL, ask:REAL, mid:REAL!, iv:REAL, "
+        "delta:REAL, multiplier:REAL, currency:TEXT!, premium_base:TEXT, iv_percentile:REAL, "
+        "market_data_status:TEXT, untested:TEXT!, activation:TEXT!, computed_at:TEXT!"
     ),
 }
 
@@ -316,8 +341,11 @@ INDEXES = {
     "ix_news_collected",
     "ix_extractions_item",
     "ix_extractions_produced",
-    # 011_measurements
+    # 011_measurements, rebuilt by 012_engines
     "ix_measurements_session",
+    # 012_engines
+    "ix_option_positions_open",
+    "ix_option_ledger_position",
 }
 
 STAMP = "2026-10-09T22:30:00Z"
@@ -390,6 +418,50 @@ ROWS: dict[str, dict[str, Any]] = {
         "value": 0.01,
         "status": "ok",
         "inputs_hash": "a" * 64,
+        "computed_at": STAMP,
+    },
+    "option_positions": {
+        "underlying_conid": 756733,
+        "expiry": "2027-01-15",
+        "strike": 100.0,
+        "right": "C",
+        "contracts": 1,
+        "multiplier": 100.0,
+        "premium_per_unit": "2.50",
+        "currency": "USD",
+        "premium_base": "214.00",
+        "fx_to_base": "0.856",
+        "opened_on": "2026-10-08",
+        "close_by": "2026-12-31",
+    },
+    "option_ledger": {
+        "event_on": "2026-10-08",
+        "event_type": "premium_committed",
+        "position_id": 1,
+        "amount": "214.00",
+        "penalty_added": "0",
+        "penalty_balance_after": "0",
+        "note": "committed",
+        "recorded_at": STAMP,
+    },
+    "zombie_observations": {
+        "position_id": 1,
+        "observed_on": "2026-10-09",
+        "all_conditions_met": 0,
+        "detail": "{}",
+        "recorded_at": STAMP,
+    },
+    "option_shadow_entries": {
+        "as_of": "2026-10-09",
+        "underlying_conid": 756733,
+        "expiry": "2027-01-15",
+        "strike": 100.0,
+        "right": "C",
+        "snapshot_date": "2026-10-08",
+        "mid": 2.5,
+        "currency": "USD",
+        "untested": "[]",
+        "activation": "shadow: evidence fails",
         "computed_at": STAMP,
     },
 }
@@ -765,7 +837,7 @@ def test_a_run_with_steps_cannot_be_deleted(store: Store) -> None:
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"entity_kind": "market"},
+        {"entity_kind": "region"},
         {"entity_id": " "},
         {"as_of": "2026-10"},
         {"status": "missing"},
@@ -797,3 +869,117 @@ def test_a_leaf_is_unique_per_entity_and_session(store: Store) -> None:
     refuses(store, "measurements")
     put(store, "measurements", as_of="2026-10-09")
     put(store, "measurements", entity_kind="macro_cell")
+
+
+def test_the_new_entity_kinds_are_accepted(store: Store) -> None:
+    put(store, "measurements", entity_kind="market", entity_id="us")
+    put(store, "measurements", entity_kind="commodity_root", entity_id="CL")
+    assert store.execute("SELECT COUNT(*) FROM measurements").fetchone()[0] == 2
+
+
+# ── the options sleeve ──
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"right": "X"},
+        {"contracts": 0},
+        {"strike": 0},
+        {"premium_per_unit": "0"},
+        {"premium_base": ""},
+        {"currency": "usd"},
+        {"close_by": "2026-10-07"},  # before it opened
+        {"close_by": "2027-02-01"},  # after the expiry
+        {"closed_on": "2026-10-09"},  # closed without a reason
+        {"exit_reason": "target"},  # a reason without a close
+        {"closed_on": "2026-10-07", "exit_reason": "target"},  # closed before it opened
+        {"prob_target_at_entry": 1.5},
+        {"fx_to_base": "0"},
+    ],
+)
+def test_a_bad_option_position_is_refused(store: Store, overrides: dict[str, Any]) -> None:
+    refuses(store, "option_positions", **overrides)
+
+
+def test_an_option_position_closes_once_and_is_never_rewritten(store: Store) -> None:
+    put(store, "option_positions")
+    with pytest.raises(sqlite3.IntegrityError):
+        store.execute("UPDATE option_positions SET contracts = 2 WHERE position_id = 1")
+    store.execute(
+        "UPDATE option_positions SET closed_on = '2026-10-20', exit_reason = 'target' "
+        "WHERE position_id = 1"
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        store.execute("UPDATE option_positions SET exit_reason = 'zombie' WHERE position_id = 1")
+    with pytest.raises(sqlite3.IntegrityError):
+        store.execute("DELETE FROM option_positions")
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"event_type": "refund"},
+        {"position_id": None},  # a commitment belongs to a position
+        {"position_id": 99},  # to one that exists
+        {"amount": "-1"},
+        {"penalty_balance_after": "-0.01"},
+        {"note": " "},
+        {"quote_currency": "USD"},  # a conversion is stated whole
+        {"event_type": "qualifying_gain", "position_id": None},  # names its instrument
+        {"event_type": "qualifying_gain", "position_id": None, "conid": 5},  # and its reason
+        {"event_type": "qualifying_gain", "conid": 5, "exit_reason": "target"},  # no position
+    ],
+)
+def test_a_bad_ledger_event_is_refused(store: Store, overrides: dict[str, Any]) -> None:
+    put(store, "option_positions")
+    refuses(store, "option_ledger", **overrides)
+
+
+def test_the_ledger_is_append_only(store: Store) -> None:
+    put(store, "option_positions")
+    put(store, "option_ledger")
+    put(
+        store,
+        "option_ledger",
+        event_type="qualifying_gain",
+        position_id=None,
+        conid=5,
+        exit_reason="target",
+        amount="10",
+        penalty_added="-10",
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        store.execute("UPDATE option_ledger SET amount = '1'")
+    with pytest.raises(sqlite3.IntegrityError):
+        store.execute("DELETE FROM option_ledger")
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"all_conditions_met": 2},
+        {"position_id": 99},
+        {"detail": "not json"},
+        {"prob_target": 1.2},
+    ],
+)
+def test_a_bad_zombie_observation_is_refused(store: Store, overrides: dict[str, Any]) -> None:
+    put(store, "option_positions")
+    refuses(store, "zombie_observations", **overrides)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"snapshot_date": "2026-10-10"},  # priced off a chain from after its session
+        {"mid": 0},
+        {"right": "c"},
+        {"untested": "{}"},
+        {"activation": ""},
+        {"delta": 1.5},
+        {"market_data_status": "REALTIME"},
+    ],
+)
+def test_a_bad_shadow_entry_is_refused(store: Store, overrides: dict[str, Any]) -> None:
+    refuses(store, "option_shadow_entries", **overrides)

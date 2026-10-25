@@ -60,7 +60,7 @@ from ..execution.instruments import prohibited_reasons, traded_instrument
 from ..jurisdiction.eligibility import EligibilityPolicy
 from ..jurisdiction.tax import TaxPolicy
 from ..orchestration.schedule import moment
-from ..quant.costs import CostBook, LegCost
+from ..quant.costs import FX_VENUE, CostBook, LegCost
 from ..quant.costs import OrderTerms as CostTerms
 from ..quant.tracking import CorrelationReading
 from .capabilities import BrokerCapabilities
@@ -69,8 +69,6 @@ ZERO: Final = Decimal(0)
 ONE: Final = Decimal(1)
 #: A round trip converts twice: into the vehicle's currency to buy, back to sell.
 CONVERSIONS_PER_ROUND_TRIP: Final = 2
-#: Where a spot conversion is costed (its commission schedule names no venue).
-FX_VENUE: Final = "IDEALPRO"
 #: A year of a monthly price.
 MONTHS_PER_YEAR: Final = 12
 

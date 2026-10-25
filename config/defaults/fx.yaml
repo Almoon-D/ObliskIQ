@@ -1,0 +1,20 @@
+# The FX engine (engines/fx): lite's `fx_inflation` block (legacy/lite/config.yaml:156-171,
+# @b1ebd49) with lite's values. Every market return decomposes four ways (local nominal, local
+# real, base nominal, base real) and is ranked on base real only. lite's rank_on,
+# flagged_market_rule and require_physical_hedging are not keys here: each could take one value
+# only (ranking reads base real and nothing else; the mandate prohibits FX forwards), and a key
+# that cannot be changed is a decision that looks made and is not (DECISIONS D135).
+fx_inflation:
+  # A market whose decomposition is missing a leg is n/a and unranked; false would rank on the
+  # local return alone. lite.
+  require_four_way_decomposition: true
+  # Flag thresholds: local CPI year on year, and the local currency's annualised move against
+  # the base over depreciation_window_years. A flagged market's thesis must address the currency.
+  # lite.
+  high_inflation_cpi_yoy: 0.10
+  high_depreciation_3y_annualised: 0.10
+  depreciation_window_years: 3
+  # The carry-illusion test (covered interest parity): a hedged-equivalent yield within this of
+  # the base rate is the base rate. The differential is an approximation, so an exact equality
+  # test would never fire. lite.
+  carry_illusion_tolerance: 0.01

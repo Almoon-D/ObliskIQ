@@ -126,5 +126,15 @@ class SmileConfig(FrozenModel):
 
 class LiquidityConfig(FrozenModel):
     max_spread_pct: PositiveFloat
+    spread_waiver_min_open_interest: PositiveInt
     min_open_interest: PositiveInt
     require_session_volume: bool
+
+    @model_validator(mode="after")
+    def _waiver_above_floor(self) -> Self:
+        if self.spread_waiver_min_open_interest <= self.min_open_interest:
+            raise ValueError(
+                "spread_waiver_min_open_interest must exceed min_open_interest: the waiver is for "
+                "a book deeper than the floor"
+            )
+        return self

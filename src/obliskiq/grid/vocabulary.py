@@ -121,6 +121,11 @@ class Reason(StrEnum):
     NO_FORECAST = "no_forecast"
     NO_EARNINGS = "no_earnings_reported"
     NO_EARNINGS_DATES = "earnings_dates_absent"
+    NO_TENOR = "no_expiry_near_tenor"
+    NO_RATE = "risk_free_rate_absent"
+    NO_SMILE = "no_smile_after_hygiene"
+    NO_SPOT = "no_underlying_price"
+    NO_HISTORY = "history_absent"
 
 
 #: The structural codes: each says no collector could ever fill the leaf, and each is declared

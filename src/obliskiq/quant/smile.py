@@ -464,6 +464,13 @@ class Smile:
             n_points=len(self.points),
         )
 
+    def iv_at_delta(self, target_delta: float, *, calls: bool) -> SmileQuote | None:
+        """The implied volatility at ``target_delta`` |delta| on one wing (calls at and above the
+        spot, puts below it), the strike interpolated in delta; ``None`` when that wing does not
+        bracket the target (the nearest listed strike is never substituted)."""
+        strike = self._strike_at_delta(target_delta, calls=calls)
+        return None if strike is None else self.iv_at(strike)
+
     def delta_reach(self) -> SkewReach:
         """The |delta| range each side of this smile spans, read off the surviving points.
 

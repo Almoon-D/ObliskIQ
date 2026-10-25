@@ -41,6 +41,8 @@ _EQUITY_LIKE = frozenset({AssetClass.STOCK, AssetClass.ETF, AssetClass.ETC})
 
 #: A round trip pays every cost twice: once to enter, once to leave.
 LEGS_IN_A_ROUND_TRIP = 2
+#: The venue a spot currency conversion trades on (IBKR's IDEALPRO), as the cost model names it.
+FX_VENUE = "IDEALPRO"
 
 type Side = Literal["buy", "sell"]
 _SIDES = frozenset({"buy", "sell"})

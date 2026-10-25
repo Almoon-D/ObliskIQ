@@ -28,10 +28,12 @@ type MessageId = Annotated[str, Field(pattern=r"^[op][0-9]+$")]
 
 
 class DisciplineConfig(FrozenModel):
-    """lite's ``discipline`` keys the order path reads."""
+    """lite's ``discipline`` keys the order path and the candidate gates read."""
 
     entry_order_type: Literal["limit_only"]
     exit_reasons_allowed: list[NonEmptyText] = Field(min_length=1)
+    entry_top_decile_requires_catalyst: bool
+    entry_top_decile_pctile: Annotated[float, Field(gt=0, lt=1)]
 
 
 class ModesConfig(FrozenModel):

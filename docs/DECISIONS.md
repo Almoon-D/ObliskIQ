@@ -3122,3 +3122,146 @@ Session 17 pre-registers which quantile sizes a position (D67); this session mea
   degraded; Session 12 feeds its gates in.
 - **Screen bounds.** The ranked views' conditions read lite's `screen.cheap_iv_percentile_max` and
   `extended_iv_percentile_min` (`config/defaults/screen.yaml`), which Session 12's gates read too.
+
+### D135 · The options sleeve's configuration (§5.6, D66)
+
+- **The budget is `capital.budgets.option_premium` of investable capital**, read through Session
+  7's `SleeveBudgets`, not lite's `option_sleeve.budget_pct`. The prompt's "current NAV" is
+  investable capital (Session 7's managed capital less unmanaged holdings and open
+  reservations): the sleeve's budget falls when capital falls, and one key owns the share. A
+  second key for the same fraction would let the two drift apart.
+- **The pool** is that budget less the penalty balance and the premium open positions commit
+  (`penalty.py`, lite's formula). Without the commitments the budget would not be a cap.
+- **The activation condition** has three legs, each true, false or untested, and the sleeve trades
+  only when all three hold (D66):
+  - **evidence**: `option_sleeve.activation.hypothesis` (H8) is registered with the outcome
+    `sufficient`;
+  - **budget**: the budget buys the pre-registered `activation.median_premiums` of the session's
+    median premium. The number belongs to the pre-registration, so without one this leg is
+    untested;
+  - **friction**: a round trip's commission plus the currency conversion costs at most
+    `friction_max_share_of_premium` of a median premium.
+  H8 is not in `research/pattern_registry.yaml`, so the sleeve runs in shadow.
+- **`friction_max_share_of_premium` is 0.15**, lite's own derivation turned into a gate. Lite set
+  `min_premium_base_currency` at EUR 20 because a round trip's commission (EUR 3.00 at Eurex's EUR
+  1.50 a contract) is 15 % of it. The gate keeps that share at every premium, with the conversion
+  priced by the `spot_fx` schedule at IDEALPRO. It is a judgement, quoted, and H8's
+  pre-registration may set its own.
+- **Not ported**, each with its reason in the file that would hold it:
+  - `fx_inflation.rank_on`, `flagged_market_rule` and `require_physical_hedging`: each could take
+    one value only. Ranking reads base-real returns and nothing else, and the mandate prohibits FX
+    forwards. A key that cannot change is a decision that looks made and is not.
+  - `instruments.allow_futures_options` stays false. A futures option needs its own
+    never-exercise rule and a wider close buffer, which the sleeve does not carry (Follow-ups).
+  - Lite's screen buckets (cheap, coiled) and its commodity-proxy regression wait for their
+    consumers (Follow-ups).
+
+Rejected: an activation leg that defaults to holding when it cannot be read. An untested leg keeps
+the sleeve in shadow, as an untested gate keeps a contract from counting.
+
+### D136 · The option surface (§5.7)
+
+- **Where it lives.** The option surface is a leaf set of each underlying's `instrument` entity in
+  the measurement store (indicator `option_surface`), not a table of its own: D130's one store,
+  queried by `surface_view`.
+- **Tenors.** For each tenor in `grid.option_surface.tenors_days` (95, 135 and 180) the listed
+  expiry nearest it is read, and only one within `smile.term_structure.max_target_deviation_days`.
+  Another tenor is never published under this one's name, and the leaf's window carries the actual
+  days.
+- **Per tenor**, off the expiry's hygiene-filtered smile (the one the gates and the zombie test
+  read):
+  - the at-the-money vol, and the vol at each |delta| of `grid.option_surface.deltas` (0.10 and
+    0.25) on each wing;
+  - the risk reversal at `smile.skew_delta`;
+  - the at-the-money call's theta as a share of its value per day;
+  - liquidity: the median spread, the open interest, and the share of contracts the candidate
+    gates' liquidity test passes.
+- **Per underlying**: the implied-vol percentile and the term slope, computed by the grid's own
+  families, one implementation.
+- **The values are judgements.** The tenors sit inside the entry window (`tenor.entry_dte_min` to
+  `entry_dte_max`), and the deltas inside the smile's delta band and below the money. A config
+  check refuses either outside its bounds.
+- A chain older than `grid.freshness_days.option_chain` makes every leaf it feeds stale. Every
+  absent leaf names its reason (no chain, no expiry near the tenor, no smile, no wing reaching the
+  delta, no rate).
+
+Rejected: interpolating between expiries to a constant tenor. That is a vol nobody can trade, and
+it hides which listed expiry the number came from.
+
+### D137 · Where the contango check is wired (§5.3, D113)
+
+- **The check.** `engines/commodity`'s `CurveContangoCheck` implements Session 8's `ContangoCheck`.
+  A futures-tracking product passes only while its root's newest curve on `as_of` is classified,
+  fresh (within `grid.freshness_days.daily_bars`) and inside
+  `commodities.term_structure.contango_max_annualised_for_futures_wrapper`. An unclassified, stale
+  or missing curve fails closed. The acceptance test runs it through the `eu_priips` policy on a
+  futures-tracking ETC.
+- **The order path keeps `UnavailableContangoCheck`**, which refuses every futures-tracking product:
+  - The policy registry is in `jurisdiction`, which may not import the store (import contract).
+  - A synchronous store read inside the async pre-trade path would block the event loop.
+  - The service does not yet schedule the commodity step, so the curve the check would read is
+    whatever was last computed by hand.
+  The universe declares no futures-tracking product today (its ETCs are physical), so the
+  fail-closed check refuses nothing yet. Wiring it, from the service's scheduled compute through
+  the store worker, is a follow-up.
+
+Rejected: reading the curve on demand from the order path, which would block the event loop and
+open a second reader of the curve.
+
+### D138 · The sleeve's store (§5.6, §8)
+
+- **Migration 012** rebuilds `measurements` to add two entity kinds, `market` (a grid market's
+  four-way FX decomposition and carry test) and `commodity_root` (a futures root's curve,
+  positioning, cycle and inventory). SQLite cannot change a CHECK in place.
+- **`option_positions`**: identity is fixed at the open, the position closes once with its reason,
+  and it is never deleted. `close_by` is stored, computed from the last tradable session of the
+  option and its underlying less `tenor.mandatory_close_trading_days`.
+- **`option_ledger`** is append-only (lite's), in the base currency:
+  - Events: a premium committed, a loss detected, a loss closed, a qualifying gain, and an option
+    gain.
+  - The balance is replayed from the events on every read. `penalty_balance_after` is the audit
+    trail, which `PenaltyLedger.verify` checks against the replay.
+  - A commitment is released by its position closing, never by a second row.
+  - An event dated before the newest one is refused, so a replay is ordered by its dates.
+- **`zombie_observations`**: one review per position per session. The streak counts consecutive
+  reviews, and the penalty is booked once, at confirmation (`zombie_test.book_penalty_at:
+  detection`).
+- **`option_shadow_entries`**: every contract that failed no gate while the sleeve runs in shadow,
+  with its quote, its premium in the base currency, the gates it left untested and why the sleeve
+  did not trade. This is H8's forward record, and a rebuild of a session replaces that session's
+  rows.
+
+### D139 · The candidate gates, composed once (§5.6)
+
+- **One implementation.** `decision/gates.py`'s `CandidateGates.candidate` is the gate composition
+  that the census, the sleeve's shadow log and Session 17's decision layer all run. The gates are
+  the instrument, tenor, the catalyst buffer, the mandatory close, liquidity, the smile, the
+  concurrency cap and the pool.
+- **The entry gates** need a size and a thesis, so they apply once one exists (`entry`): position
+  size, the payoff ratio at a named target, the entry's place in its range, and the theta budget.
+- **Results.** Each refusal carries a reason code (`Gate`). A gate whose input is absent is
+  **untested**, with why, and a waived gate (a rule in configuration, such as the open-interest
+  depth that waives a wide spread) counts as passed.
+- **The mandate is not a switch.** The instrument gate refuses a futures underlying and a
+  leveraged or inverse description unconditionally. `InstrumentsConfig` already refuses a
+  `prohibited` list that drops a mandate category, so a gate conditioned on that list would only
+  look configurable.
+- **Freshness.** Candidates come from each underlying's newest chain. A chain older than
+  `grid.freshness_days.option_chain` is skipped with why, and a surface older than that leaves
+  the IV-percentile gate untested. A stale quote is no candidate.
+- **The census verdicts**:
+  - `viable`: at least `census.min_viable_contracts` contracts clear every gate fully tested;
+  - `untested`: untested gates could explain the shortfall;
+  - `thin`: they could not;
+  - `no_data`: no contract was scanned.
+  The step is ok only when `viable`.
+- **Offline.** A compute run has no account read, so the pool's gates are untested
+  (`OFFLINE_BUDGET`), and the census reads `thin` or `untested`, never `viable`. `Census.run`
+  takes the pool (`affordability`) from a caller that read the account, which is Session 17's
+  service.
+- **The mutation check** breaks three invariants on a copy of the module: a crossed book fails
+  before the depth waiver, the pool subtracts the commitments, and the entry window starts above
+  the minimum hold. `tests/unit/test_gates_mutation.py` records the test that kills each mutant.
+
+Rejected: each caller filtering with its own subset of the gates. The census would count contracts
+the sleeve refuses.

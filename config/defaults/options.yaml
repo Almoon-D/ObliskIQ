@@ -1,0 +1,60 @@
+# The options sleeve (MASTER_PLAN §5.6; engines/options_sleeve): lite's `option_sleeve` and
+# `zombie_test` blocks (legacy/lite/config.yaml:36-116, @b1ebd49) with lite's values, and the
+# sleeve's activation condition (DECISIONS D66). docs/DECISIONS.md says why each is what it is.
+#
+# lite's `option_sleeve.budget_pct` is not here: the sleeve's budget is `capital.budgets
+# .option_premium` (config/defaults/capital.yaml) on current investable capital, one owner of the
+# number (DECISIONS D135).
+option_sleeve:
+  # The penalty is a continuous balance, never a binary lock: a realised or detected option loss
+  # adds this multiple of itself, and qualifying realised gains work it back down one for one.
+  # QUOTED. lite.
+  loss_penalty_multiple: "2.0"
+  # Recovery is measured on realised gains, never on NAV: NAV measures beta, not skill. lite.
+  recovery_basis: realised_gains
+  # A realised gain on a non-option position reduces the penalty only when it was exited for one
+  # of these reasons. trailing_stop is here because the equity discipline prefers it for winners,
+  # and a trailing stop only arms once a position is in profit, so the channel does not leak.
+  # override never counts. lite.
+  qualifying_exit_reasons: [target, time_window, trailing_stop]
+  # The payoff at a realistic, named target: intrinsic value there over the premium. lite.
+  min_payoff_ratio: 3.0
+  # The only anti-fragmentation rule: splitting does not reduce the penalty, it raises the
+  # probability of paying it. lite.
+  max_concurrent_positions: 5
+  # The absolute floor on a position's premium, in the base currency: below it a round trip's
+  # commission alone (EUR 3.00 at Eurex's EUR 1.50 a contract) costs more than the widest spread
+  # liquidity.max_spread_pct would accept (EUR 3.00 / 0.15 = EUR 20). QUOTED. lite.
+  min_premium_base_currency: "20"
+  # When the sleeve trades instead of running in shadow (DECISIONS D66): its hypothesis is
+  # sufficient in research/pattern_registry.yaml, and the budget buys the number of median
+  # premiums that hypothesis's pre-registration states, each within the friction gate.
+  activation:
+    # The registered hypothesis the sleeve's activation reads: an option against a share with a
+    # stop, for a signal the research pipeline found sufficient (DECISIONS D66, D71).
+    hypothesis: H8
+    # The friction gate (MASTER_PLAN §5.6): a round trip's commission plus the currency
+    # conversion's cost, as a share of the premium, at most this. lite's own floor puts it at
+    # 0.15: at min_premium_base_currency a round trip's commission is exactly this share.
+    # QUOTED. A judgement on lite's derivation (DECISIONS D135).
+    friction_max_share_of_premium: "0.15"
+
+zombie_test:
+  # All four conditions must hold, on this many consecutive review sessions; a drawdown is not a
+  # condition. lite.
+  max_delta: 0.15
+  max_dte: 45
+  # N(d2) at the payoff-ratio target, and its ratio to the entry's. lite.
+  max_prob_target: 0.10
+  max_prob_ratio_vs_entry: 0.50
+  # The bid as a share of the premium paid: below it there is nothing to rescue. The theta budget
+  # at entry uses the same floor. lite.
+  min_recoverable_pct_of_premium: 0.15
+  # Kills single-day false positives. lite.
+  consecutive_sessions_required: 2
+  # N(d2) is read off the strike smile at the target, not at the money: the smile embeds the skew
+  # and corrects the fat-tail bias of a constant sigma. lite.
+  prob_vol_source: strike_smile_iv
+  # detection: the penalty is booked when the zombie is confirmed, which removes the incentive to
+  # defer the close; close: booked when the position is closed. lite.
+  book_penalty_at: detection

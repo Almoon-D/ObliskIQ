@@ -3,6 +3,9 @@
 liquidity:
   # Widest bid-ask spread, as a fraction of the mid.
   max_spread_pct: 0.15
+  # A book this deep waives the spread gate: with that much size resting, the quoted spread is
+  # not what a limit at mid pays. A crossed book is never waived. lite.
+  spread_waiver_min_open_interest: 5000
   min_open_interest: 500
   # A strike that did not trade in the session is rejected; a missing volume counts as none.
   require_session_volume: true
