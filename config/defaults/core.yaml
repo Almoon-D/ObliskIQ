@@ -1,4 +1,4 @@
-# The core (MASTER_PLAN §5.4).
+# The core (MASTER_PLAN §5.4): its roles, the variants Session 4c registered and the one it runs.
 core:
   # The core's roles: the nine Session 4c registered (research/preregistrations/core-allocation.md,
   # its codes in brackets). Each names the research series the role was priced on there
@@ -17,21 +17,98 @@ core:
     gold: {name: "Gold (GOLD)", exposure_series: gld.close}
     broad_commodities: {name: "Broad commodities (COMMOD)", exposure_series: crsox.adj_close}
     cash: {name: "Cash (CASH)", exposure_series: euro_cash.level}
-  # SKELETON (Session 6's walking skeleton; removed in Session 13, which builds the variant the
-  # owner chose): a static book the basic rebalancer (decision/rebalance_basic.py) trades toward.
-  # Three roles of variant A, the static risk balance the owner's point selects (DECISIONS D91),
-  # weighted as A weights them (research/preregistrations/core-allocation.md: WORLD 9 %, EM 7 %,
-  # EGB_INT 34 %) scaled to fill the book. Each conid is pinned and described in
-  # config/universe.yaml, its role among the instrument's core roles; the vehicles are candidates,
-  # not Session 9's selection. Like the real core, these positions carry no protective stops.
-  # QUOTED weights.
-  skeleton_targets:
-    # Global developed equity: iShares Core MSCI World UCITS ETF (Acc) on the LSE, quoted in USD,
-    # so a cycle exercises the currency conversion.
-    - {role: world_equity, weight: "0.18", conid: 78999785}
-    # Emerging-market equity: iShares Core MSCI EM IMI UCITS ETF (Acc) on Euronext Amsterdam.
-    - {role: em_equity, weight: "0.14", conid: 153454120}
-    # Euro government bonds: iShares € Govt Bond 7-10yr UCITS ETF on Euronext Amsterdam (A's
-    # intermediate role holds 3-7 years; this was the euro government line IBKR's search
-    # confirmed).
-    - {role: euro_govt_intermediate, weight: "0.68", conid: 43614383}
+
+  # The variant the core runs, one of `variants` below. The owner's point on Session 4c's frontier,
+  # a 30 % drawdown reached on at most 5 % of 20-year paths, resolves to A, the static risk balance
+  # with wide bands (DECISIONS D88, D91); Session 4e found no total-risk scaling sufficient (D95).
+  # Another point is the owner's authorisation, recorded in DECISIONS first.
+  variant: A
+
+  # Every constant below is Session 4c's pre-registration's, with its codes written as the role
+  # ids above (a test holds them to research/preregistrations/core-allocation.md). A change is a
+  # new pre-registration and its verdict, never an edit here.
+
+  # Where the trend tilt's freed weight goes, and an equity overlay's rest.
+  cash_role: cash
+  # The growth and inflation environments (Bridgewater 2012), in the pre-registration's order: a
+  # risk balance's solver runs through the roles in their first order of appearance. Each
+  # environment's risk budget is split equally among its roles; a role in two takes a share of each.
+  environments:
+    growth_up: [world_equity, em_equity, broad_commodities]
+    growth_down: [euro_govt_intermediate, euro_govt_long, us_treasuries, inflation_linked]
+    inflation_up: [inflation_linked, broad_commodities, gold]
+    inflation_down: [world_equity, em_equity, euro_govt_intermediate, euro_govt_long, us_treasuries]
+  # The declared long-run risk in EUR, a year: the author's round assumptions, never estimated from
+  # the test's data (D80). QUOTED.
+  risk:
+    volatilities:
+      world_equity: "0.15"
+      em_equity: "0.20"
+      broad_commodities: "0.17"
+      euro_govt_intermediate: "0.04"
+      euro_govt_long: "0.12"
+      us_treasuries: "0.10"
+      inflation_linked: "0.10"
+      gold: "0.16"
+    correlations:
+      - [world_equity, em_equity, "0.8"]
+      - [world_equity, broad_commodities, "0.4"]
+      - [world_equity, euro_govt_intermediate, "0"]
+      - [world_equity, euro_govt_long, "0"]
+      - [world_equity, us_treasuries, "0.2"]
+      - [world_equity, inflation_linked, "0.3"]
+      - [world_equity, gold, "0.2"]
+      - [em_equity, broad_commodities, "0.5"]
+      - [em_equity, euro_govt_intermediate, "0"]
+      - [em_equity, euro_govt_long, "0"]
+      - [em_equity, us_treasuries, "0.1"]
+      - [em_equity, inflation_linked, "0.3"]
+      - [em_equity, gold, "0.3"]
+      - [broad_commodities, euro_govt_intermediate, "-0.1"]
+      - [broad_commodities, euro_govt_long, "-0.1"]
+      - [broad_commodities, us_treasuries, "0.1"]
+      - [broad_commodities, inflation_linked, "0.3"]
+      - [broad_commodities, gold, "0.4"]
+      - [euro_govt_intermediate, euro_govt_long, "0.85"]
+      - [euro_govt_intermediate, us_treasuries, "0.4"]
+      - [euro_govt_intermediate, inflation_linked, "0.3"]
+      - [euro_govt_intermediate, gold, "0.2"]
+      - [euro_govt_long, us_treasuries, "0.4"]
+      - [euro_govt_long, inflation_linked, "0.3"]
+      - [euro_govt_long, gold, "0.2"]
+      - [us_treasuries, inflation_linked, "0.8"]
+      - [us_treasuries, gold, "0.4"]
+      - [inflation_linked, gold, "0.5"]
+  # Nothing trades while every role sits inside its outer band, the smaller of `absolute` weight
+  # points and `relative` of its target (the "5/25" rule); when one leaves it, every role goes back
+  # to its target. QUOTED.
+  bands: {absolute: "0.05", relative: "0.25"}
+  # The trend tilt (B, C, D): 12-month momentum over the cash role's and the close against its
+  # 10-month average, each turning only beyond the hysteresis; a role's scale is
+  # floor + (1 - floor) x positive signals / 2, never zero. QUOTED.
+  tilt: {momentum_months: 12, average_months: 10, hysteresis: "0.02", floor: "0.25"}
+  # With the tilt, a trend reduction is made only while the tax it adds is at most this share of
+  # the value sold: the benefit the reduction is assumed to buy, an assumption. QUOTED.
+  tax_aware: {benefit_fraction: "0.05"}
+
+  # The variants Session 4c registered, by the pre-registration's names. QUOTED weights and budgets.
+  variants:
+    equity reference: {strategy: buy_and_hold, weights: {world_equity: "1"}}
+    "60/40": {strategy: banded_weights, weights: {world_equity: "0.6", euro_govt_intermediate: "0.4"}}
+    A:
+      strategy: risk_balance
+      budgets: {growth_up: "0.25", growth_down: "0.25", inflation_up: "0.25", inflation_down: "0.25"}
+      tilt: false
+    B:
+      strategy: risk_balance
+      budgets: {growth_up: "0.25", growth_down: "0.25", inflation_up: "0.25", inflation_down: "0.25"}
+      tilt: true
+    C:
+      strategy: risk_balance
+      budgets: {growth_up: "0.7", growth_down: "0.1", inflation_up: "0.1", inflation_down: "0.1"}
+      tilt: true
+    D10: {strategy: equity_overlay, equity: world_equity, fraction: "0.2", tilt: true}
+    D20: {strategy: equity_overlay, equity: world_equity, fraction: "0.4", tilt: true}
+    D30: {strategy: equity_overlay, equity: world_equity, fraction: "0.6", tilt: true}
+    D40: {strategy: equity_overlay, equity: world_equity, fraction: "0.8", tilt: true}
+    D50: {strategy: equity_overlay, equity: world_equity, fraction: "1", tilt: true}

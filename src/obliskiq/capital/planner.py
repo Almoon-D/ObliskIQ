@@ -307,7 +307,6 @@ class ReservationPlanner:
         self._buffer = timedelta(days=config.reservations.buffer_days)
         self._postpone = timedelta(days=config.questions.postpone_days)
         self._budgets = SleeveBudgets(config)
-        self._weights = {t.conid: t.weight for t in settings.core.skeleton_targets}
 
     # ── the survey ──
 
@@ -433,8 +432,8 @@ class ReservationPlanner:
             if self._strategy.would_exit(facts, today=today):
                 slices.append(_Slice(rest, Category.EXIT_ANYWAY))
                 rest = ZERO
-            elif holding.sleeve is Sleeve.CORE:
-                target = self._weights.get(holding.conid, ZERO) * allocation.core
+            elif (weight := self._strategy.target_weight(facts, today=today)) is not None:
+                target = weight * allocation.of(holding.sleeve)
                 over = _whole(max(ZERO, holding.units - target / unit), ROUND_FLOOR)
                 if over > ZERO:
                     slices.append(_Slice(min(over, rest), Category.OVERWEIGHT))

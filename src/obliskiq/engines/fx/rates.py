@@ -63,25 +63,56 @@ class BaseRates:
         """The multiplier taking an amount in ``currency`` to the base; ``None`` when unknown."""
         return self.reading(currency).value
 
-    def _read(self, currency: str) -> RateReading:
+    def per_base_on(self, currency: str, day: date, *, max_age_days: int) -> RateReading:
+        """Units of ``currency`` per unit of the base on ``day`` (the divisor into the base): the
+        rate observed on or before ``day``, released by the reader's date and at most
+        ``max_age_days`` older than ``day``. A past day is converted at its own rate."""
         if currency == self._base:
             return RateReading(currency, ONE, f"{currency} is the base currency")
-        series = self._series.get(currency)
+        series, refused = self._series_of(currency)
         if series is None:
+            return RateReading(currency, None, refused)
+        found = self._reader.series(series)
+        observations = () if found is None else found.observations
+        latest = next((o for o in reversed(observations) if o.reference_date <= day), None)
+        if latest is None or latest.value <= 0:
+            return RateReading(currency, None, f"{series} has no rate on or before {day}")
+        if (day - latest.reference_date).days > max_age_days:
             return RateReading(
                 currency,
                 None,
-                f"no macro-board region in {currency} declares an FX series against {self._base}",
+                f"{series}'s rate of {latest.reference_date} is more than {max_age_days} days "
+                f"older than {day}",
+            )
+        return RateReading(
+            currency,
+            Decimal(repr(latest.value)),
+            f"{latest.value:g} {currency} per {self._base} ({series}, {latest.reference_date})",
+        )
+
+    def _series_of(self, currency: str) -> tuple[str | None, str]:
+        """The board's FX series for ``currency`` against the base, or why there is none."""
+        series = self._series.get(currency)
+        if series is None:
+            return None, (
+                f"no macro-board region in {currency} declares an FX series against {self._base}"
             )
         expected = f"{currency} per {self._base}"
         units = self._reader.units(series)
         if units != expected:
-            return RateReading(
-                currency,
-                None,
+            return None, (
                 f"{series} is declared in {units!r}, not {expected!r}; read the other way up it "
-                "would invert every conversion",
+                "would invert every conversion"
             )
+        return series, ""
+
+    def _read(self, currency: str) -> RateReading:
+        if currency == self._base:
+            return RateReading(currency, ONE, f"{currency} is the base currency")
+        series, refused = self._series_of(currency)
+        if series is None:
+            return RateReading(currency, None, refused)
+        expected = f"{currency} per {self._base}"
         value = self._reader.value_at(series, self._as_of)
         if value is None or value <= 0:
             return RateReading(currency, None, self._reader.absence(series))

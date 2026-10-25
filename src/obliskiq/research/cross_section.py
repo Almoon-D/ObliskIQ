@@ -47,6 +47,7 @@ import numpy as np
 from ..config.schema import ObliskConfig
 from ..domain.research import Observation, ResearchSeries
 from ..domain.tax import SecurityIdentity
+from ..engines.core.trades import share
 from ..errors import SimulationError
 from ..jurisdiction.profile import JurisdictionProfile
 from ..jurisdiction.tax_policies import TAX_POLICIES
@@ -77,7 +78,6 @@ from .simulate import (
     SimulationSettings,
     Simulator,
     StopRule,
-    share,
 )
 from .stats import (
     Breakeven,

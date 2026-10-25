@@ -3,15 +3,17 @@
 The reservation planner asks each sleeve, through this interface, what it knows of a position:
 whether the strategy would exit it anyway, whether it is protected (inside its entry window, a
 probe awaiting confirmation, a thesis with a pending catalyst) and until when, and its expected
-return. Sessions 13, 15 and 17 implement it for the core, the satellite and the decision layer.
+return and its target as a share of its sleeve's budget. The core implements it
+(``capital/core_value.py``); Sessions 15 and 17 implement it for the satellite and the decision
+layer.
 
 **An expected return counts only from a layer whose research outcome is sufficient**
 (MASTER_PLAN §5.9): an estimate from a layer that is insufficient, inconclusive or not evaluable is
 ignored, and the default ranking is the rule — the cash line and the part of a core role above its
 new target cost least, an ordinary holding more, a protected one most.
 
-:class:`DefaultStrategyValue` is that default until the sleeves fill the interface in: no exit
-signal and no expected return, and a satellite or options position protected for
+:class:`DefaultStrategyValue` is that default for the sleeves that do not fill the interface in yet:
+no exit signal, no expected return and no target, and a satellite or options position protected for
 ``capital.planner.entry_window_days`` after it was opened. Probes and catalysts are the
 satellite's (Session 15); without them nothing is protected for those reasons.
 
@@ -86,6 +88,10 @@ class StrategyValue(Protocol):
         """The position's expected annual return, if a layer gives one."""
         ...
 
+    def target_weight(self, position: PositionFacts, *, today: date) -> Decimal | None:
+        """The position's target as a share of its sleeve's budget, if the sleeve states one."""
+        ...
+
 
 class DefaultStrategyValue:
     """The default ranking: entry windows protect theses; nothing else is known."""
@@ -109,4 +115,8 @@ class DefaultStrategyValue:
 
     def expected_return(self, position: PositionFacts, *, today: date) -> ExpectedReturn | None:
         del position, today  # no layer's outcome is sufficient yet (DECISIONS D87, D95)
+        return None
+
+    def target_weight(self, position: PositionFacts, *, today: date) -> Decimal | None:
+        del position, today  # a sleeve states its targets through its own StrategyValue
         return None

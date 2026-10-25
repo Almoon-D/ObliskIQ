@@ -52,7 +52,7 @@ from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, localcontext
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from itertools import pairwise
 from operator import attrgetter
 from typing import Final, Protocol
@@ -62,6 +62,7 @@ import numpy as np
 from ..domain.enums import AssetClass
 from ..domain.research import Observation
 from ..domain.tax import ProposedTrade, SecurityIdentity, TaxYearSummary
+from ..engines.core.trades import affordable, delta_trades, share, units_of, whole
 from ..errors import SimulationError
 from ..jurisdiction.tax import TaxPolicy
 from ..quant.costs import CostBook, LegCost, OrderTerms
@@ -75,40 +76,13 @@ ZERO = Decimal(0)
 ONE = Decimal(1)
 #: The reference rates' own currency (ECB rates are units of a currency per euro).
 EURO: Final = "EUR"
-#: Halvings in the search for the share of a buy list the cash covers (2^-30 of the list).
-SCALE_BISECTIONS: Final = 30
 #: Months in a year, for stepping through month ends.
 MONTHS_PER_YEAR: Final = 12
-#: A target weight's last decimal place. Weights at this quantum add up exactly in Decimal's 28
-#: significant digits, and rounded down they never sum above the values they came from. It is
-#: fine enough that one unit of a position worth a millionth of a percent of the account comes
-#: back as one unit (a quantum of 1e-20 lost it in a billion-euro account).
-WEIGHT_QUANTUM: Final = Decimal("1e-24")
-#: A unit count this close to a whole number is that number: what Decimal rounding leaves of a
-#: round trip from units to a weight and back, far below any quantity a venue trades.
-UNIT_RESIDUE: Final = Decimal("1e-9")
 
 
 def exact(value: float) -> Decimal:
     """A float as the decimal its shortest representation spells."""
     return Decimal(repr(value))
-
-
-def share(value: Decimal, total: Decimal) -> Decimal:
-    """``value / total`` rounded down to :data:`WEIGHT_QUANTUM`: shares of one total computed
-    this way never sum above 1, so a rounding residue is never read as leverage."""
-    with localcontext() as context:
-        context.rounding = ROUND_FLOOR
-        return (value / total).quantize(WEIGHT_QUANTUM)
-
-
-def whole(units: Decimal, rounding: str = ROUND_FLOOR) -> Decimal:
-    """``units`` as whole units, rounded by ``rounding``; a count within :data:`UNIT_RESIDUE` of
-    a whole number is that number, so a position kept at its weight is not sold by one unit."""
-    nearest = units.to_integral_value()
-    if abs(units - nearest) <= UNIT_RESIDUE:
-        return nearest
-    return units.to_integral_value(rounding=rounding)
 
 
 @dataclass(frozen=True, slots=True)
@@ -718,8 +692,7 @@ class Simulator:
         state.units[key] = state.units.get(key, ZERO) + quantity
 
     def _units(self, value: Decimal, price: Decimal, rounding: str = ROUND_FLOOR) -> Decimal:
-        units = value / price
-        return whole(units, rounding) if self._settings.whole_units else units
+        return units_of(value, price, whole_units=self._settings.whole_units, rounding=rounding)
 
     # ── a run ──
 
@@ -913,51 +886,26 @@ class Simulator:
         for key in weights:
             prices.setdefault(key, self._base_price(key, on))
         investable = max(marked - liability, ZERO)
-        band = self._settings.no_trade_band
-        sells: list[tuple[str, Decimal]] = []
-        buys: list[tuple[str, Decimal]] = []
-        for key in sorted(set(weights) | set(state.units)):
-            target_value = investable * weights.get(key, ZERO)
-            target = self._units(target_value, prices[key])
-            delta = target - state.units.get(key, ZERO)
-            if delta == ZERO or (target > ZERO and abs(delta) * prices[key] < band * target_value):
-                continue
-            (sells if delta < ZERO else buys).append((key, abs(delta)))
+        sells, buys = delta_trades(
+            weights,
+            state.units,
+            prices,
+            investable,
+            band=self._settings.no_trade_band,
+            whole_units=self._settings.whole_units,
+        )
         for key, quantity in sells:
             self._sell(key, quantity, on, engine, state)
         self._pay(liability, on, engine, state)
-        plan = self._affordable(buys, state.cash, on, prices)
+        plan = affordable(
+            buys,
+            state.cash,
+            prices,
+            lambda key, quantity: self._buy_cost(key, quantity, on),
+            whole_units=self._settings.whole_units,
+        )
         for key, quantity in plan:
             self._buy(key, quantity, on, engine, state)
-
-    def _affordable(
-        self,
-        buys: list[tuple[str, Decimal]],
-        cash: Decimal,
-        on: date,
-        prices: Mapping[str, Decimal],
-    ) -> list[tuple[str, Decimal]]:
-        """The buys scaled by one common factor, the largest whose cost (notional and every
-        leg's cost) the cash covers; found by bisection, since a minimum commission makes the
-        cost of a smaller order more than proportional."""
-
-        def scaled(factor: Decimal) -> list[tuple[str, Decimal]]:
-            plan = [(key, self._units(q * factor * prices[key], prices[key])) for key, q in buys]
-            return [(key, q) for key, q in plan if q > ZERO]
-
-        def cost(plan: list[tuple[str, Decimal]]) -> Decimal:
-            return sum((self._buy_cost(key, q, on) for key, q in plan), ZERO)
-
-        if cost(buys) <= cash:
-            return buys
-        low, high = ZERO, ONE
-        for _ in range(SCALE_BISECTIONS):
-            middle = (low + high) / 2
-            if cost(scaled(middle)) <= cash:
-                low = middle
-            else:
-                high = middle
-        return scaled(low)
 
     def _check(self, weights: Mapping[str, Decimal]) -> None:
         unknown = sorted(set(weights) - set(self._instruments))

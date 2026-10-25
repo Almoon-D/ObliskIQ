@@ -1,6 +1,7 @@
 """``obliskiq preflight --paper-order-test``: one paper order per instrument, end to end.
 
-For each conid in ``ibkr.preflight.paper_order.conids`` (each in the skeleton allowlist): confirm
+For each conid in ``ibkr.preflight.paper_order.conids`` (each a described tradable candidate of
+the universe): confirm
 the contract through IBKR's contract search, read its trading rules and the algos offered, read
 a quote, preview the order (whatif), then make an entry intent buying the minimum quantity at a
 limit that cannot fill (``limit_offset_fraction`` below the bid, rounded down to the contract's
@@ -116,8 +117,8 @@ class PaperOrderTest:
         report.add("mode", True, "paper")
         for conid in self._conids:
             instrument = self._path.directory.describe(conid)
-            if instrument is None:  # pragma: no cover - the schema ties the conids to the allowlist
-                report.add(f"{conid}", False, "not in the skeleton allowlist")
+            if instrument is None:  # pragma: no cover - the schema ties the conids to the universe
+                report.add(f"{conid}", False, "no universe instrument describes it")
                 continue
             try:
                 await self._one(instrument, report)

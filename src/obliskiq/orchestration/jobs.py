@@ -3,11 +3,11 @@
 **A decision cycle** is one run record of four guarded steps: ``nav`` (today's NAV row and the
 day's exchange rates, ``orchestration/nav.py``), ``reserve`` (the owner questions whose deadline
 passed take their default, then the reservation planner's survey, questions and today's sales,
-``capital/planner.py``), ``rebalance`` (the skeleton's targets against the book, as intents,
-``decision/rebalance_basic.py``) and ``execute`` (the executor's cycle: sync, settle exits, expire,
-follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry run reads and
-plans, and writes nothing: no NAV row, no run record, no question, no intent, no order. The owner
-hears a run summary when a cycle did something or something failed, and every question the
+``capital/planner.py``), ``rebalance`` (the core engine's target portfolio against the book, as
+intents, ``decision/rebalance_core.py``) and ``execute`` (the executor's cycle: sync, settle exits,
+expire, follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry run reads
+and plans, and writes nothing: no NAV row, no run record, no question, no intent, no order. The
+owner hears a run summary when a cycle did something or something failed, and every question the
 planner asks.
 
 **The heartbeat** (every ``runtime.heartbeat_seconds``): the executor's cycle over the intents
@@ -35,7 +35,7 @@ from .. import __version__
 from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.schema import ObliskConfig
 from ..data.runner import source_health
-from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
+from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..domain.capital import OwnerQuestion
 from ..domain.orders import (
     TERMINAL_STATES,
@@ -90,7 +90,7 @@ class Jobs:
         settings: ObliskConfig,
         *,
         path: OrderPath,
-        rebalancer: BasicRebalancer,
+        rebalancer: CoreRebalancer,
         capital: CapitalParts,
         nav: NavCollector,
         reporter: Reporter,

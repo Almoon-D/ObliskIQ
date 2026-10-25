@@ -77,12 +77,12 @@ def hysteretic(measures: Sequence[float] | np.ndarray, buffer: float) -> bool:
     return bool(values[1 + outside[-1]] > 0)
 
 
-def trend_state(
+def trend_measures(
     closes: Sequence[float], cash: Sequence[float], rule: TrendRule
-) -> TrendState | None:
-    """The tilt at the last of ``closes`` (month-end closes, oldest first, in one currency), with
-    ``cash`` the cash index's closes on the same month ends. ``None`` when the history is
-    shorter than the rule needs."""
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Each evaluable month's momentum over cash and gap to the moving average, oldest first
+    (the measures the states are replayed from); ``None`` when the history is shorter than the
+    rule needs."""
     if len(cash) != len(closes):
         raise ValueError("the asset's and cash's month ends must align")
     prices = np.asarray(closes, dtype=float)
@@ -96,7 +96,28 @@ def trend_state(
     window = rule.average_months
     running = np.concatenate([[0.0], np.cumsum(prices)])
     averages = (running[window:] - running[:-window]) / window
-    gaps = prices[window - 1 :] / averages - 1
+    return momentum, prices[window - 1 :] / averages - 1
+
+
+def settled(closes: Sequence[float], cash: Sequence[float], rule: TrendRule) -> bool:
+    """Whether both states rest on a measure after the first that crossed the buffer: then the
+    state does not depend on where the history starts (a longer one gives the same state)."""
+    measures = trend_measures(closes, cash, rule)
+    if measures is None:
+        return False
+    return all(bool(np.any(np.abs(m[1:]) > rule.hysteresis)) for m in measures)
+
+
+def trend_state(
+    closes: Sequence[float], cash: Sequence[float], rule: TrendRule
+) -> TrendState | None:
+    """The tilt at the last of ``closes`` (month-end closes, oldest first, in one currency), with
+    ``cash`` the cash index's closes on the same month ends. ``None`` when the history is
+    shorter than the rule needs."""
+    measures = trend_measures(closes, cash, rule)
+    if measures is None:
+        return None
+    momentum, gaps = measures
     momentum_positive = hysteretic(momentum, rule.hysteresis)
     average_positive = hysteretic(gaps, rule.hysteresis)
     positives = int(momentum_positive) + int(average_positive)
