@@ -19,7 +19,7 @@ import respx
 from capital_rig import capital_parts, make_rebalancer
 from fake_broker import FakeBroker
 from order_rig import build_rig, terms
-from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market
+from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market, three_fund_core
 
 from obliskiq.calendars.service import Calendars
 from obliskiq.capital.planner import Category, Pace, ReservationPlan
@@ -75,7 +75,7 @@ async def rig(
     with respx.mock(assert_all_called=False) as router:
         broker = FakeBroker(router)
         built = await build_rig(
-            settings=shipped_settings,
+            settings=three_fund_core(shipped_settings),
             session=make_session(),
             broker=broker,
             tmp_path=tmp_path,
@@ -159,6 +159,9 @@ class Expects:
     def expected_return(self, position: PositionFacts, *, today: date) -> ExpectedReturn | None:
         value = self.returns.get(position.conid)
         return None if value is None else ExpectedReturn(value, self.evidence, "a test layer")
+
+    def target_weight(self, position: PositionFacts, *, today: date) -> Decimal | None:
+        return None
 
 
 # ── the cash line and a fresh thesis ──
@@ -414,6 +417,11 @@ async def test_an_overweight_is_sold_at_once(rig: Any) -> None:
     await bought(rig, IBGM, "5", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
     parts = capital_parts(rig)
     await reserve(rig, "400", NOW.date() + timedelta(days=14))
+    # Before the core's first survey it states no target: the line ranks as an ordinary one.
+    (sale, *_) = (await survey(parts)).lines[0].sales
+    assert sale.category is Category.ORDINARY
+    # Its survey notes the target portfolio: 887.50 held against 68 % of 950.
+    await make_rebalancer(rig, value=parts.value).survey(PAPER)
     (sale, *_) = (await survey(parts)).lines[0].sales
     assert (sale.category, sale.pace) == (Category.OVERWEIGHT, Pace.NOW)
     assert sale.strategy == 0
@@ -581,7 +589,7 @@ async def test_reservations_close_when_withdrawn(rig: Any) -> None:
     )
     assert (await survey(capital_parts(rig))).lines == []
     assert OptionEffect.PROCEED.value == "proceed"
-    assert IWDA  # the skeleton's dollar line is not part of these plans
+    assert IWDA  # the dollar line is not part of these plans
 
 
 # ── what the strategy says, and what cannot be known ──
@@ -604,6 +612,9 @@ class Stance:
         return Protected(Protection.PENDING_CATALYST, self.until)
 
     def expected_return(self, position: PositionFacts, *, today: date) -> ExpectedReturn | None:
+        return None
+
+    def target_weight(self, position: PositionFacts, *, today: date) -> Decimal | None:
         return None
 
 
@@ -742,13 +753,15 @@ async def test_a_position_with_a_working_sale_is_left_to_it(rig: Any) -> None:
         state=IntentState.SUBMITTED,
     )
     parts = capital_parts(rig)
+    await make_rebalancer(rig, value=parts.value).survey(PAPER)
     await reserve(rig, "600", NOW.date() + timedelta(days=14))
     (line,) = (await survey(parts)).lines
     assert line.from_cash == D(445)  # 1,000 less 532.50 and 200, plus the unit sold at 177.50
     # IBGM is the rebalancer's to sell: its proceeds are not the reservation's, and it is spared.
     assert [s.symbol for s in line.sales] == ["EXV1"]
     (sale,) = line.sales
-    assert sale.category is Category.OVERWEIGHT  # not a skeleton role: all of it above target
+    # No core role names EXV1: the core sells it anyway.
+    assert sale.category is Category.EXIT_ANYWAY
 
 
 async def test_unexplained_cash_alone_never_stops_a_withdrawal(rig: Any) -> None:

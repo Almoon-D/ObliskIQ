@@ -17,8 +17,11 @@ trade yet and leaves the cash floor as cash. At each decision cycle:
 4. each trade passes the **live guards**, and a trade that fails one is left, with its reason: an
    instrument nobody describes, an identity IBKR did not confirm, a venue not tradable now, an
    intent of this mode already working on it, a sale while an open reservation is not yet covered
-   by the book's cash (the reservation planner chooses those sales, ``capital/planner.py``), and a
-   trade below the minimum trade (``trading.min_trade``) or its own commission. Buys are made within
+   by the book's cash (the reservation planner chooses those sales, ``capital/planner.py``), a buy
+   that would take a loss the two-month rule still holds open (the live tax lots, DECISIONS D110:
+   the rebalancer never buys back inside an open window; a tax-aware variant's engine has already
+   sent it to the swap partner when one would not), and a trade below the minimum trade
+   (``trading.min_trade``) or its own commission. Buys are made within
    what the book may spend now: the smaller of the account's cash and the book's own cash, less
    the open withdrawal reservations, the part of a deposit not yet released for deployment
    (``capital/deploy.py``), every open buy's commitment and ``execution.pretrade.cash_floor``,
@@ -618,6 +621,7 @@ class CoreRebalancer:
             at,
             sizing,
             sells_paused=view.unfunded > ZERO,
+            hooks=hooks,
         )
         return plan
 
@@ -633,6 +637,7 @@ class CoreRebalancer:
         sizing: Sizing,
         *,
         sells_paused: bool,
+        hooks: TaxHooks | None,
     ) -> list[RoleDecision]:
         trades = {trade.conid: trade for trade in portfolio.trades}
         rows: dict[int, RoleDecision] = {}
@@ -647,7 +652,9 @@ class CoreRebalancer:
                     else _untraded(portfolio, vehicle, found)
                 )
                 continue
-            refusal = self._refusal(trade, found, venues, busy, at, sells_paused=sells_paused)
+            refusal = self._refusal(
+                trade, found, venues, busy, at, sells_paused=sells_paused, hooks=hooks
+            )
             if refusal is not None:
                 rows[vehicle.conid] = _row(portfolio, vehicle, found, SKIP, refusal)
             elif trade.side is OrderSide.SELL:
@@ -725,6 +732,7 @@ class CoreRebalancer:
         at: datetime,
         *,
         sells_paused: bool,
+        hooks: TaxHooks | None,
     ) -> str | None:
         """Why a planned trade is not made now, or ``None`` when it may be."""
         side = "sell" if trade.side is OrderSide.SELL else "buy"
@@ -739,6 +747,12 @@ class CoreRebalancer:
                 "sell: an open reservation is not yet covered; the reservation planner chooses "
                 "those sales"
             )
+        if (
+            trade.side is OrderSide.BUY
+            and hooks is not None
+            and hooks.purchase_defers_loss(trade.conid, at.date())
+        ):
+            return "buy: it would defer a loss the two-month rule still holds open"
         venue = venues.get(trade.conid)
         if venue is None:
             return f"{side}: its listing exchange maps to no venue"
