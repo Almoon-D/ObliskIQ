@@ -3265,3 +3265,159 @@ open a second reader of the curve.
 
 Rejected: each caller filtering with its own subset of the gates. The census would count contracts
 the sleeve refuses.
+
+## Session 13 — Core engine (2026-10-25)
+
+### D140 · One core mechanism for research and the live book (§5.4, D64, D80)
+
+- **The rules Session 4c tested are the live rules.** `engines/core/` holds the mechanism that was
+  `research/strategies.py`'s `CoreStrategy`:
+  - `rules.py`: role targets, the trend scale, the outer band, the losses-first sale order and
+    the held costly reductions;
+  - `weights.py`: the environments' risk balance and the equity overlay;
+  - `trades.py`: the delta trades in whole units, sells first, and the buys scaled by one common
+    factor to the cash.
+  Research's `CoreStrategy` subclasses `CoreRules` and adds only Session 4e's total-risk
+  scaling, and `research/simulate.py` sizes its trades with `engines.core.trades`. D64's contract
+  (decision, execution, ibkr and engines never import research) holds because the code moved
+  into `engines/`: research imports it, never the reverse.
+- **The live engine** (`engines/core/engine.py`, `plan_portfolio`) runs those rules on the live
+  book and returns a `TargetPortfolio` (`domain/core.py`): the targets and status of each role
+  and vehicle, the trades, the trades withheld with their reasons, and notes. It is pure. The
+  decision layer (`decision/rebalance_core.py`) reads the store, the quotes and the lots, and
+  turns the trades into intents under the live guards.
+- **Parity** (`tests/integration/test_core_parity.py`): research's `build_strategy` runs on the
+  locked pre-registration through the simulator over a fixture panel. At every rebalance date
+  the live engine plans on the same closes, read from the market store, with the simulator's
+  book as the live book. Weights and trades must be equal. The test covers A (with a band
+  breach and sales) and B (with tilt scales, swap-partner buys and held reductions), each
+  case asserting that it exercised what it covers.
+- **The risk budget's independent check** is skfolio's `RiskBudgeting` (a convex solver),
+  test-only. It is a dev dependency, and an import contract keeps skfolio, scipy, scikit-learn
+  and cvxpy out of the package. The legacy optimiser's still-valid risk-parity cases are
+  ported. Its other methods were dropped by the plan.
+
+Rejected:
+- A live port beside the research code: two implementations of one rule drift, and the tested
+  core would no longer be the traded one.
+- The live engine importing `research/`: this breaks D64's contract.
+
+### D141 · The variants are configuration, held to the pre-registration (§5.4, D79, D91, D95)
+
+- **`core.variants`** holds the ten variants Session 4c registered:
+  - the equity reference (buy and hold);
+  - 60/40 (banded weights);
+  - A, B and C (risk balance; B and C tilt);
+  - D10 to D50 (the equity overlay with the tilt).
+  Their constants are in `core.yaml`: environments, budgets, the declared volatilities and
+  correlations, bands, tilt and the tax-aware benefit fraction.
+  `tests/unit/test_core_config.py` holds every constant to
+  `research/preregistrations/core-allocation.md`, and the computed weights to the report's.
+  A change is a new pre-registration and its verdict, not an edit.
+- **`core.variant: A`** is the owner's point (D91), and Session 4e left it standing (D95). A
+  risk balance's weights are solved at load by `quant/risk_budget.py`, in the
+  pre-registration's environment order, and rounded to 10⁻⁶ with the remainder on the largest
+  weight. A solve that does not converge, or an invalid matrix, refuses the configuration
+  (`CoreError`).
+- **Removed:** the Session 6 skeleton (`core.skeleton_targets`), `decision/rebalance_basic.py`
+  and `trading.inner_band`. The pre-registration's rebalance returns every role to its target,
+  so its inner band is the target itself. A separate inner band would trade a book the
+  simulator holds still.
+
+### D142 · When the core trades: start, band, cash, hold (§5.4)
+
+Each cycle the engine names one trigger:
+- **Start.** The book holds nothing: every role is bought to its target.
+- **Band.** A role's weight is outside its outer band, the smaller of 5 points and 25 % of its
+  target. Every role goes back to its target as the simulator rebalances:
+  - a leg within `research.simulation.no_trade_band_fraction` of its target is left;
+  - whole units, sells first;
+  - the buys scaled by one factor to the cash and the proceeds after costs;
+  - a sale that costs more than it raises is not made.
+  Only a band breach sells: sells beyond the outer band only.
+- **Cash.** Inside the bands, the book holds at least the minimum trade more cash than its
+  targets leave in cash (a deposit, income, the proceeds of an earlier sale). The roles below
+  their targets are bought with that cash, and nothing is sold: cash flows first. The simulator
+  has no cash flows. With the minimum trade as the threshold, a band's whole-unit residue never
+  starts a cash trigger, so parity holds.
+- **Hold.** Nothing trades.
+
+Under the live guards:
+- A band's buys may spend only the cash spendable now. Spendable cash is the smaller of the
+  account's and the book's cash, less open reservations, deposits not yet released, open buys'
+  commitments and the cash floor. The rest waits for the sales' proceeds, and a later cycle's
+  cash trigger buys it.
+- A leg below `trading.min_trade` or its own commission is not made, and the reason is recorded.
+
+The band and the cash checks run every cycle on that cycle's prices (the daily drift check). The
+trend is evaluated monthly (D144).
+
+### D143 · A role's vehicles on the live book (§5.4, §5.8, D120, D122, D123)
+
+- **Vehicles.**
+  - The selector's best-ranked vehicle is the role's primary.
+  - A tax-aware variant also gets the swap partner `SwapPartners` finds. The partner needs a
+    measured correlation from the research store (`orchestration/correlations.py`, read once a
+    day). Without one, the role has no partner, and the reason is recorded.
+  - An identity IBKR did not confirm is never bought, and neither is a vehicle without a quote
+    this cycle.
+- **Held vehicles stay with their role:**
+  - a held vehicle that is still proposable is bought before the primary (the tested rule), so
+    a change in the ranking alone never churns the book;
+  - a held vehicle that is no longer proposable is closed: sold at the next band breach, never
+    bought;
+  - a held vehicle that no role names (`unlisted:`) has a target of zero, so it is outside its
+    band and is sold.
+- **Unfilled roles.** A role with no vehicle that may be bought keeps at most what it holds
+  (held only). One that holds nothing (unfilled) is held at zero and untilted. Its weight stays
+  in the book's cash: today that is gold and broad commodities, whose venues' capabilities are
+  unverified (16 % of A). Spreading the weight over the other roles would change the variant's
+  risk balance into one nobody tested.
+
+### D144 · The trend on the live book (§5.4, D82)
+
+- **Monthly, on the last completed month end.** The tilt reads month-end closes from the market
+  store's daily bars:
+  - the last bar on or before each month end, within `research.simulation.max_price_age_days`;
+  - converted to the base currency at `BaseRates.per_base_on`, within
+    `research.data.max_fx_age_days`;
+  - a month with no such close restarts the run, with a note.
+  `quant/trend.py`'s `trend_measures` and `settled` serve research and the live book alike.
+- **History.** A role's trend is read on its vehicle with the longest history: the primary is
+  aliased to it. A role with too few month ends on every vehicle is left whole, its reason
+  stated: the static weight is the fallback (D89). If the cash role has too little history,
+  momentum has nothing to be measured against, and every role is left whole.
+
+### D145 · Tax-aware execution on the live book (§5.4, §5.16, D110)
+
+- **The rule is the one tested:**
+  - sales take losses first, and a lot of unknown basis comes last;
+  - a trend reduction is made only while the tax it adds is at most
+    `core.tax_aware.benefit_fraction` of the value sold, or it is held and the portfolio says so;
+  - a buy the two-month rule would defer is made through the swap partner.
+  The answers come from the live lots (`TaxHooks`: basis, trial tax, deferral).
+- **Unknown tax holds the reduction.** The tax book may be incomplete for a security (D110).
+  Research knows every lot; the live book fails closed.
+- **D110's guard stays.** The rebalancer never buys a vehicle inside its open loss window. For a
+  variant that tilts, the engine has already sent that buy to the partner. For A, which has no
+  partner rule, the buy is withheld, with its reason, until the window closes. This is the one
+  place the live core is stricter than the tested core: research's A deferred the loss, and its
+  after-tax result counted the deferral.
+
+### D146 · The core's StrategyValue (§5.15, D108)
+
+`capital/core_value.py`'s `CoreStrategyValue` notes the portfolio of each survey, and the
+reservation planner reads it:
+- **Overweight.** A core position's target weight is its vehicle's weight in that portfolio,
+  times the core's allocation. "Above its target" is measured against it.
+- **Exits.** A core position whose vehicle has a target of zero (closed, unlisted, or a role
+  held at zero) is an exit the strategy makes anyway.
+- **Protection and expected return.** The core has neither.
+- **The satellite** keeps the default's answers.
+- **Before the first survey** the core states no target and exits nothing.
+
+The planner's `reserve` step runs before the cycle's rebalance, so it reads the previous cycle's
+portfolio, one cycle stale.
+
+Rejected: the planner re-running the engine. It would read the store and the quotes a second
+time for the same answer.

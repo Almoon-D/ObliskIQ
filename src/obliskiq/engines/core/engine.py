@@ -156,6 +156,9 @@ class LiveBook:
         return ZERO if price is None or price <= ZERO else whole(value / price)
 
     def sales_tax(self, sales: Sequence[tuple[str, Decimal]]) -> Decimal | None:
+        tax = self._tax
+        if tax is None:
+            return None
         trades: list[tuple[int, Decimal, Decimal]] = []
         for key, units in sales:
             if units <= ZERO:
@@ -164,10 +167,8 @@ class LiveBook:
             if self._answered(key) is None or price is None:
                 return None
             trades.append((int(key), units, price))
-        if self._tax is None:
-            return None
         try:
-            return self._tax.trial_tax(trades, on=self._state.on)
+            return tax.trial_tax(trades, on=self._state.on)
         except TaxError:  # a lot the engine cannot account for: the tax is unknown
             return None
 

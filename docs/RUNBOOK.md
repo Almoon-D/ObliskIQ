@@ -13,8 +13,8 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
   protective stops, reconciles with the broker, rewrites the health file and pings
   `OBLISK_HEALTH_PING_URL` when set;
 - four **decision cycles** each trading day, each an hour after a venue's open (Tokyo, Xetra, New
-  York) and one an hour before New York's close: the skeleton's targets are compared with the
-  book and the gaps become orders;
+  York) and one an hour before New York's close: the core engine's target portfolio is compared
+  with the book and its trades become orders;
 - the **daily digest** half an hour after New York's close;
 - each **data source** besides IBKR at the moments `config/sources.yaml` gives it (the macro
   series, the CFTC's positioning, SEC Form 4 filings, prediction markets, GDELT, the news feeds,
@@ -24,9 +24,12 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
   universe is not traded until it resumes; its venue and the venue's other instruments are.
 
 Times follow each venue's own calendar, daylight saving and holidays included
-(`config/defaults/runtime.yaml`). The **skeleton** book is three UCITS funds of the core's variant
-A (`config/defaults/core.yaml`): world equity on the LSE in dollars, emerging-market equity and euro
-government bonds on Amsterdam in euros. It is a walking skeleton: Session 13 replaces it.
+(`config/defaults/runtime.yaml`). The **core** runs the variant `core.variant` names
+(`config/defaults/core.yaml`; A, the static risk balance, by default). Each role is held in the fund
+the vehicle selector ranks first (`uv run obliskiq universe vehicles <role>` shows the ranking).
+The core trades when it starts, when a role leaves its outer band (the only time it sells), and
+when the book holds cash beyond its targets of at least the minimum trade. A role without a
+vehicle that may be bought keeps its weight in cash; the digest names it and says why.
 
 Only one obliskiq process may talk to the broker. `serve`, `run-cycle`, `preflight`, `reconcile`
 and `flatten` take a lock in the data directory; while the service runs, the others refuse.
@@ -109,7 +112,7 @@ systemctl --user start obliskiq
 
 - **Stop the service**: `systemctl --user stop obliskiq` (SIGTERM) or Ctrl-C. The job in hand
   finishes, the health file says `stopped`. Resting orders stay at IBKR: day limits expire at the
-  close, protective stops (none on the skeleton) keep resting.
+  close, protective stops (the core carries none) keep resting.
 - **Kill switch**: `uv run obliskiq kill on --reason "…"` blocks every order that adds risk at
   once, even with the configuration broken; the running service's sweep cancels working buys and
   conversions within seconds and keeps protective exits. `kill off --reason "…"` lifts it.
@@ -131,7 +134,7 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 | `session.competing_session` | Another login took the paper username: stop it (a Claude session, a browser). |
 | `service.downgraded` | Three cycles in a row failed; the mode is shadow. Read the run log (`status`, the digest's errors), fix the cause, then `mode set paper` again. |
 | `service.stuck_intent` | An order with no answer, or open past its expiry. `uv run obliskiq intents list`; compare with IBKR's open orders; `reconcile run`. |
-| `service.target_unconfirmed` | IBKR resolves a skeleton fund to another conid: that role is not traded. Report it; the conid in `config/universe.yaml` needs a correction (a corrected pin supersedes the old conid). |
+| `service.target_unconfirmed` | IBKR does not confirm a core fund's conid (it resolves to another, or is not found): that fund is never bought, and the role uses the next-ranked vehicle or keeps its weight in cash. Report it; the conid in `config/universe.yaml` needs a correction (a corrected pin supersedes the old conid). |
 | `order.warning_declined` | IBKR asked to confirm a warning the reply policy does not confirm; the order was cancelled. The alert and `intents list --all` carry IBKR's own words. |
 
 ## Read the digest
@@ -191,31 +194,33 @@ systemctl --user stop obliskiq
 
 and tell the session the bot is paused. Start the service again when the session is done.
 
-## Session 6's live paper cycle (owner, on the machine)
+## The core's live paper cycle (owner, on the machine)
 
 One supervised paper cycle with a managed-capital cap of a few hundred euros, the cap this test is
-allowed. Inside the European order window (Amsterdam and London both open: 09:30 to 17:15 Madrid
-time):
+allowed. Inside the European order window (09:30 to 17:15 Madrid time, when Xetra, Amsterdam and
+London are all open):
 
 1. `config/owner.yaml`: `capital: {mode: cap, cap_base: "800"}`; `uv run obliskiq config validate`.
 2. No service running (`systemctl --user stop obliskiq`; `uv run obliskiq status` shows no fresh
    heartbeat).
-3. `uv run obliskiq mode set paper --reason "Session 6 live cycle"`
-4. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan; the three funds confirmed (no
-   `not confirmed` line). With 800 euros at October 2026's prices: about one IWDA, two EMIM and
-   three IBGM.
-5. `uv run obliskiq run-cycle --mode paper`: the conversion into dollars first, then the three
-   buys. Expect `o10164` on the conversion: the reply policy declines it (D101) and the IWDA buy
-   waits; the intent history (`uv run obliskiq intents list --all`) and the alert now carry IBKR's
-   own text of the warning.
-6. Ten minutes later, `uv run obliskiq run-cycle --mode paper` again: reprices or fills, the
-   holdings registered to the core, reconciliation.
+3. `uv run obliskiq mode set paper --reason "core live cycle"`
+4. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan. It shows `variant A: start`,
+   then each role with its fund, its target and why. No role says `IBKR did not confirm`.
+   Under an 800-euro cap the minimum trade is 50 euros, so the plan buys only the roles whose
+   target is worth at least that and at least one unit; it says why for each of the others.
+   Gold and broad commodities keep their weight in cash until their venues are verified.
+5. `uv run obliskiq run-cycle --mode paper`: the buys. If a chosen fund trades in another
+   currency, the conversion comes first. Expect `o10164` on it: the reply policy declines it
+   (D101) and that buy waits. The intent history (`uv run obliskiq intents list --all`) and the
+   alert carry IBKR's own text of the warning.
+6. Ten minutes later, run `uv run obliskiq run-cycle --mode paper` again. It reprices or fills,
+   registers the holdings to the core, and reconciles.
 7. `uv run obliskiq status`, `uv run obliskiq holdings list`, `uv run obliskiq reconcile run`.
-8. With Telegram set, `uv run obliskiq serve` until the digest (half an hour after New York's
-   close: 22:30 Madrid time, 21:30 from 26 to 30 October while New York is still on summer time),
-   then stop it; without Telegram the digest is in the log.
-9. `uv run obliskiq mode set shadow --reason "Session 6 live cycle done"`
-10. Paste the masked outputs into a short session: *"Record Session 6's live paper cycle per
+8. With Telegram set, `uv run obliskiq serve` until the digest, then stop it. The digest comes
+   half an hour after New York's close: 22:30 Madrid time, or 21:30 while New York is on summer
+   time and Madrid is not. Without Telegram the digest is in the log.
+9. `uv run obliskiq mode set shadow --reason "core live cycle done"`
+10. Paste the masked outputs into a short session: *"Record the core's live paper cycle per
     SESSION_PROMPTS §A.5."*
 
 ## Session 9's capability probe (owner, on the machine)

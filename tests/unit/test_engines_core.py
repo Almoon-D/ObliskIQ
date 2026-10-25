@@ -16,7 +16,9 @@ from obliskiq.domain.core import RoleStatus, Trigger
 from obliskiq.domain.orders import OrderSide
 from obliskiq.engines.core.engine import BookState, LiveBook, RoleChoice, plan_portfolio
 from obliskiq.engines.core.history import HistoryView
+from obliskiq.engines.core.rules import RoleVehicles
 from obliskiq.engines.core.variants import Variant, build_variant
+from obliskiq.errors import CoreError
 
 WORLD, EM, EGB_INT, EGB_LONG, IL, UST, GOLD, COMMOD, CASH = range(11, 20)
 WORLD_PARTNER = 21
@@ -230,6 +232,17 @@ def test_a_role_without_enough_history_or_cash_history_is_left_whole(b: Variant)
     assert world is not None
     assert world.scale == 1
     assert "momentum has no cash history" in world.reason
+
+
+def test_the_rules_refuse_a_tilted_role_whose_trend_is_missing_and_not_left_whole(
+    b: Variant,
+) -> None:
+    # The engine leaves a role without history whole (above); a role it did not is an error,
+    # never a silent untilted target.
+    vehicles = {role: RoleVehicles(str(ROLE_CONIDS[role]), None) for role in b.roles}
+    rules = b.rules(vehicles, untilted=frozenset())
+    with pytest.raises(CoreError, match="B: world_equity lacks the 13 month ends the tilt needs"):
+        rules.decide(EMPTY, LiveBook(book(prices=PRICES), None))
 
 
 def test_a_role_reads_its_trend_on_another_vehicle_with_the_history(b: Variant) -> None:

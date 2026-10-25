@@ -23,14 +23,16 @@ from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market, three
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_runtime import CapitalConfig
+from obliskiq.decision import rebalance_core
+from obliskiq.decision.core_vehicles import Unmeasured
 from obliskiq.decision.rebalance_core import (
     CoreRebalancer,
     RebalancePlan,
     confirm_vehicles,
     minimum_trade,
 )
-from obliskiq.domain.capital import Adjustment, AdjustmentKind, Deposit
-from obliskiq.domain.core import Trigger
+from obliskiq.domain.capital import Adjustment, AdjustmentKind, Deposit, WithdrawalReservation
+from obliskiq.domain.core import RoleStatus, Trigger
 from obliskiq.domain.orders import (
     ExecutionMode,
     Fill,
@@ -43,7 +45,7 @@ from obliskiq.domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
-from obliskiq.errors import TaxError
+from obliskiq.errors import CalendarError, CoreError, StoreError, TaxError
 from obliskiq.execution.executor import RETRY_NEXT_WINDOW
 from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.store import capital as capital_repo
@@ -502,5 +504,186 @@ async def test_without_readable_lots_buys_proceed_unchecked_by_the_two_month_rul
 
     monkeypatch.setattr(survey._tax, "hooks", unreadable)
     plan = await survey.survey(ExecutionMode.SHADOW)
+    assert plan.blocked is None
+    assert len(plan.trades) == 3
+
+
+class DefersLosses:
+    """Tax lots under which buying any of ``deferred`` would defer a loss sold inside its
+    window; nothing else to say."""
+
+    def __init__(self, deferred: set[int]) -> None:
+        self.deferred = deferred
+
+    def complete(self, conid: int, units: Decimal) -> bool:
+        return True
+
+    def basis(self, conid: int) -> Decimal:
+        return Decimal(0)
+
+    def trial_tax(self, sales: Any, *, on: date) -> Decimal:
+        return Decimal(0)
+
+    def purchase_defers_loss(self, conid: int, on: date) -> bool:
+        return conid in self.deferred
+
+
+async def test_a_buy_inside_an_open_loss_window_is_withheld(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    survey = rebalancer(rig)
+
+    async def hooks() -> Any:
+        return DefersLosses({EMIM})
+
+    monkeypatch.setattr(survey._tax, "hooks", hooks)
+    roles = by_role(await survey.survey(ExecutionMode.SHADOW))
+    # The three funds have no swap partner, so the engine plans the buy and the live guard
+    # withholds it (DECISIONS D110, D145); the other roles are bought.
+    assert roles["em_equity"].action == "skip"
+    assert roles["em_equity"].reason == (
+        "buy: it would defer a loss the two-month rule still holds open"
+    )
+    assert roles["world_equity"].action == "buy"
+    assert roles["euro_govt_intermediate"].action == "buy"
+
+
+async def test_a_band_sale_waits_while_a_reservation_is_short(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # 887.50 of the book: far beyond its band
+    await rig.store(
+        capital_repo.record_reservation,
+        WithdrawalReservation(
+            amount=Decimal(500), currency="EUR", due_date=OPEN.date() + timedelta(days=10),
+            reason="r", created_at=OPEN, created_by="o", updated_at=OPEN,
+        ),
+    )  # fmt: skip
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.BAND
+    ibgm = by_role(plan)["euro_govt_intermediate"]
+    # The book's cash of 112.50 does not cover the 500 reserved: the reservation planner chooses
+    # the sales that raise it (DECISIONS D108), so the core's own sale waits.
+    assert ibgm.action == "skip"
+    assert ibgm.reason.startswith("sell: an open reservation is not yet covered")
+
+
+async def test_a_bands_buys_beyond_the_cash_wait_for_its_sales_proceeds(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # 887.50 of 950: the book holds 112.50 in cash
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.BAND
+    roles = by_role(plan)
+    assert (roles["euro_govt_intermediate"].action, roles["euro_govt_intermediate"].quantity) == (
+        "sell",
+        2,
+    )
+    # The engine buys with the sale's proceeds; now the book may spend 87.50, so the buys that
+    # do not fit wait for the proceeds and a later cycle's cash trigger buys them.
+    assert roles["world_equity"].action == "skip"
+    assert roles["world_equity"].reason == "buy of 1: waits for its sales' proceeds"
+
+
+async def test_cash_beyond_the_targets_buys_without_selling(rig: Any) -> None:
+    capped = with_capital(rig.settings, cap_base=Decimal(10000))
+    least = capped.trading.min_trade.model_copy(update={"fraction_of_managed": None})
+    settings = with_trading(capped, min_trade=least)  # 50: every leg here is one unit
+    rig.broker.cash = {"EUR": (Decimal(20000), None)}
+    # Every role inside its band, the book holding about 5 % of its budget beyond the targets.
+    await hold(rig, IBGM, "35", "EUR")  # 65.4 % against 68 %
+    await hold(rig, EMIM, "27", "EUR")  # 13.2 % against 14 %
+    await hold(rig, IWDA, "12", "USD")  # 15.9 % against 18 %
+    plan = await rebalancer(rig, settings).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.CASH
+    roles = by_role(plan)
+    # The roles below their targets are bought with the cash, nothing is sold; EMIM's one unit
+    # is below the minimum trade.
+    assert [(d.role, d.action, d.quantity) for d in plan.trades] == [
+        ("world_equity", "buy", 1),
+        ("euro_govt_intermediate", "buy", 1),
+    ]
+    assert roles["world_equity"].reason == "toward its target (cash)"
+    assert roles["em_equity"].reason == "buy of 46.42 is below the minimum trade 50.00"
+
+
+async def test_a_book_inside_its_bands_without_spare_cash_holds(rig: Any) -> None:
+    settings = with_capital(rig.settings, cap_base=Decimal(10000))
+    rig.broker.cash = {"EUR": (Decimal(20000), None)}
+    await hold(rig, IBGM, "36", "EUR")  # 67.3 % against 68 %
+    await hold(rig, EMIM, "28", "EUR")  # 13.7 % against 14 %
+    await hold(rig, IWDA, "13", "USD")  # 17.3 % against 18 %
+    plan = await rebalancer(rig, settings).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    # What the targets leave beyond the holdings is below the minimum trade of 200: a hold.
+    assert plan.portfolio.trigger is Trigger.HOLD
+    assert {(d.action, d.reason) for d in plan.decisions} == {("hold", "inside its band")}
+
+
+async def test_trading_windows_that_cannot_be_read_leave_the_selector_unmeasured(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def uncovered(*args: Any) -> Any:
+        raise CalendarError("no calendar covers that venue")
+
+    monkeypatch.setattr(rebalance_core, "windows", uncovered)
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert plan.blocked is None
+    assert len(plan.trades) == 3
+
+
+async def test_a_core_that_cannot_decide_trades_nothing(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def undecided(*args: Any) -> Any:
+        raise CoreError("three funds: world_equity lacks the 13 month ends the tilt needs")
+
+    monkeypatch.setattr(rebalance_core, "plan_portfolio", undecided)
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert plan.blocked == (
+        "the core cannot decide: three funds: world_equity lacks the 13 month ends the tilt needs"
+    )
+    assert plan.portfolio is None
+
+
+async def test_a_held_vehicle_without_a_venue_is_valued_and_never_bought(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # far beyond its band: a sale is due
+    directory = UniverseDirectory(
+        i.model_copy(update={"listing_exchange": "NOWHERE"}) if i.conid == IBGM else i
+        for i in UniverseDirectory.from_settings(rig.settings).instruments()
+    )
+    plan = await rebalancer(rig, directory=directory).survey(ExecutionMode.PAPER)
+    assert plan.blocked is None
+    assert plan.portfolio is not None
+    role = plan.portfolio.role("euro_govt_intermediate")
+    assert role is not None
+    # Held and valued, so the book is still decided; not proposable, so never bought; and its
+    # sale cannot be costed without a venue, so it is not made either.
+    assert role.status is RoleStatus.HELD_ONLY
+    assert "listing exchange NOWHERE maps to no venue" in role.reason
+    ibgm = by_role(plan)["euro_govt_intermediate"]
+    assert (ibgm.action, ibgm.value) == ("skip", Decimal("887.50"))
+    assert ibgm.reason == "sell of 2.0: the cost model cannot price it"
+
+
+async def test_research_correlations_that_cannot_be_read_are_unmeasured(rig: Any) -> None:
+    class Failing:
+        async def read(self, today: date) -> Any:
+            raise StoreError("the research store is locked")
+
+    class Reading:
+        def __init__(self) -> None:
+            self.found = Unmeasured("read")
+
+        async def read(self, today: date) -> Any:
+            return self.found
+
+    found = await rebalancer(rig, correlations=Failing())._measured(OPEN.date())
+    assert isinstance(found, Unmeasured)
+    assert found.reason == (
+        "the research correlations cannot be read: the research store is locked"
+    )
+    reading = Reading()
+    assert await rebalancer(rig, correlations=reading)._measured(OPEN.date()) is reading.found
+    plan = await rebalancer(rig, correlations=Failing()).survey(ExecutionMode.SHADOW)
     assert plan.blocked is None
     assert len(plan.trades) == 3

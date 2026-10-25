@@ -427,6 +427,16 @@ async def test_an_overweight_is_sold_at_once(rig: Any) -> None:
     assert sale.strategy == 0
 
 
+async def test_a_core_holding_below_its_target_is_an_ordinary_one(rig: Any) -> None:
+    await bought(rig, IBGM, "3", "177.50", sleeve=Sleeve.CORE, at=NOW - timedelta(days=90))
+    parts = capital_parts(rig)
+    await reserve(rig, "700", NOW.date() + timedelta(days=14))  # beyond the cash of 467.50
+    await make_rebalancer(rig, value=parts.value).survey(PAPER)
+    # 532.50 held against 68 % of the core's budget: nothing above its target to sell first.
+    (sale, *_) = (await survey(parts)).lines[0].sales
+    assert sale.category is Category.ORDINARY
+
+
 # ── settlement across a holiday and a daylight-saving change ──
 
 

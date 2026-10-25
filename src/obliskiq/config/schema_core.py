@@ -150,10 +150,6 @@ class CoreConfig(FrozenModel):
         """The roles of the environments, in their first order of appearance."""
         return list(dict.fromkeys(r for basket in self.environments.values() for r in basket))
 
-    def chosen(self) -> VariantConfig:
-        """The variant the core runs."""
-        return self.variants[self.variant]
-
     @model_validator(mode="after")
     def _coherent(self) -> Self:
         problems: list[str] = []

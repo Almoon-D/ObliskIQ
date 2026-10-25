@@ -454,6 +454,7 @@ async def test_the_hooks_answer_from_the_live_lots(
     hooks = await book.hooks()
     (lot,) = hooks.lots(IBGM)
     assert lot.quantity == D(6)
+    assert hooks.basis(IBGM) == D(600)  # six units at 100, no loss deferred onto them
     assert hooks.complete(IBGM, D(6))
     assert not hooks.complete(EXV1, D(0))  # nothing the lots ever held
     gain = hooks.tax_cost(IBGM, units=D(2), price=D(130), on=date(2026, 12, 1))

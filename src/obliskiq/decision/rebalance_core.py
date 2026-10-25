@@ -47,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
-from decimal import ROUND_FLOOR, Decimal
+from decimal import Decimal
 
 from ..calendars.service import Calendars
 from ..capital.budgets import SleeveBudgets
@@ -250,12 +250,6 @@ async def confirm_vehicles(
                 f"{identity.conid}, not the pinned {conid}"
             )
     return refused
-
-
-def _whole_units(value: Decimal, unit: Decimal) -> Decimal:
-    if unit <= ZERO or value <= ZERO:
-        return ZERO
-    return (value / unit).to_integral_value(rounding=ROUND_FLOOR)
 
 
 @dataclass(frozen=True, slots=True)

@@ -44,16 +44,26 @@ def test_the_caps_and_lists_refuse_what_does_not_fit() -> None:
         PaperOrderConfig(conids=[1, 1], limit_offset_fraction=Decimal("0.05"), intent_ttl_minutes=1)
 
 
-def test_the_paper_order_conids_must_be_tradable_universe_instruments(config_dir: Any) -> None:
+@pytest.mark.parametrize(
+    ("conid", "why"),
+    [
+        (756733, r"756733 \(SPY\) is not a tradable candidate"),
+        (1, r"1 is not pinned by a universe instrument"),
+        (117589399, r"117589399 \(ASML\) has no resolved description in the universe"),
+    ],
+)
+def test_the_paper_order_conids_must_be_tradable_universe_instruments(
+    config_dir: Any, conid: int, why: str
+) -> None:
     from obliskiq.config import ConfigInvalid, load_config
 
     owner = config_dir / "owner.yaml"
     owner.write_text(
         owner.read_text(encoding="utf-8")
-        + "\nibkr:\n  preflight:\n    paper_order:\n      conids: [756733]\n",
+        + f"\nibkr:\n  preflight:\n    paper_order:\n      conids: [{conid}]\n",
         encoding="utf-8",
     )
-    with pytest.raises(ConfigInvalid, match=r"756733 \(SPY\) is not a tradable candidate"):
+    with pytest.raises(ConfigInvalid, match=why):
         load_config(config_dir)
 
 
