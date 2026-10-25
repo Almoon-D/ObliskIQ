@@ -117,6 +117,22 @@ def test_as_of_uses_the_rate_known_on_the_day_not_the_newest(
     )
 
 
+def test_a_past_day_converts_at_its_own_rate_within_its_age(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    repos.upsert_macro(store, [eurusd(date(2026, 9, 28), 1.10), eurusd(AS_OF, 1.30)])
+    rates = BaseRates(store, shipped_settings, as_of=AS_OF)
+    assert rates.per_base_on("EUR", date(2026, 9, 30), max_age_days=5).value == 1
+    assert rates.per_base_on("USD", date(2026, 9, 30), max_age_days=5).value == Decimal("1.1")
+    stale = rates.per_base_on("USD", date(2026, 10, 10), max_age_days=5)
+    assert stale.value is None
+    assert "more than 5 days older than 2026-10-10" in stale.reason
+    before = rates.per_base_on("USD", date(2026, 9, 1), max_age_days=5)
+    assert before.value is None
+    assert "no rate on or before 2026-09-01" in before.reason
+    assert "declares an FX series" in rates.per_base_on("XAU", AS_OF, max_age_days=5).reason
+
+
 def test_a_series_declared_the_other_way_up_is_refused(
     store: Store, shipped_settings: ObliskConfig
 ) -> None:

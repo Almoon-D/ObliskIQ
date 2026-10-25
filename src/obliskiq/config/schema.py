@@ -27,6 +27,7 @@ from .schema_calendars import (
     VenueConfig,
 )
 from .schema_collectors import CollectorsConfig
+from .schema_core import CoreConfig
 from .schema_costs import CostsConfig
 from .schema_engines import (
     CommoditiesConfig,
@@ -49,7 +50,6 @@ from .schema_numerics import LiquidityConfig, NumericsConfig, SmileConfig
 from .schema_research import ResearchConfig
 from .schema_runtime import (
     CapitalConfig,
-    CoreConfig,
     ReportingConfig,
     RuntimeConfig,
     TradingConfig,
@@ -231,7 +231,6 @@ class ObliskConfig(FrozenModel):
         problems += self._capability_problems()
         problems += self._paper_order_problems()
         problems += self._currency_problems()
-        problems += self._skeleton_problems()
         problems += self._source_problems()
         problems += self._grid_problems()
         if problems:
@@ -418,21 +417,6 @@ class ObliskConfig(FrozenModel):
         if declared.description is None:
             return f"{conid} ({declared.symbol}) has no resolved description in the universe"
         return None
-
-    def _skeleton_problems(self) -> list[str]:
-        problems: list[str] = []
-        for target in self.core.skeleton_targets:
-            why = self._tradable(target.conid)
-            if why is not None:
-                problems.append(f"core.skeleton_targets.{target.role}: {why}")
-                continue
-            declared = self.universe.pinned(target.conid)
-            if declared is not None and target.role not in declared.exposures.core_roles:
-                problems.append(
-                    f"core.skeleton_targets.{target.role}: {declared.symbol} does not declare the "
-                    "role in its exposures.core_roles"
-                )
-        return problems
 
     def _paper_order_problems(self) -> list[str]:
         preflight = self.ibkr.preflight

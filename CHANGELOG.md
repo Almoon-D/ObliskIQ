@@ -5,6 +5,51 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.18.0] - 2026-10-25
+
+Session 13, the core engine: the variants Session 4c registered, built from configuration on the
+rules research tested, with A (the owner's point) by default. The live core and the simulator
+share one mechanism, and a parity test holds them to the same targets and trades. Rebalancing is
+cash first, sells only beyond the outer band and is tax-aware. Each role's fund comes from the
+vehicle selector.
+
+### Added
+
+- `engines/core/` (DECISIONS D140): the core's rules (role targets, the trend scale, the outer
+  band, losses-first sales, held costly reductions), the risk balance and equity overlay, whole-unit
+  delta trades with one buy scale, the ten registered variants, month-end history from the market
+  store, and `plan_portfolio` → `TargetPortfolio` (`domain/core.py`) with its trigger (start, band,
+  cash, hold), each role's status and reason, and the trades withheld with why.
+- `decision/core_vehicles.py` (D143): each role's primary from the vehicle selector and its swap
+  partner when the variant trades tax-aware; held vehicles kept, closed when no longer proposable,
+  and sold when no role names them.
+- `decision/rebalance_core.py` (D142, D145): the core's rebalancer over the engine's target
+  portfolio, under the live guards (identity, venue, working intents, reservations, the two-month
+  rule, the minimum trade, the commission, spendable cash), without stops.
+- `capital/core_value.py` (D146): the core's `StrategyValue`; the reservation planner measures a
+  core position's overweight against the core's last target portfolio.
+- `orchestration/correlations.py`: the selector's tracking and the partners' correlations read
+  from the research store once a day.
+- Config: `core.variant` (A), `core.cash_role`, `core.environments`, `core.risk`, `core.bands`,
+  `core.tilt`, `core.tax_aware` and `core.variants`, held to the pre-registration by a test (D141).
+- `quant/trend.py`: `trend_measures` and `settled`; `BaseRates.per_base_on`; `TaxHooks.basis`.
+- Tests: the parity test against the simulator, every variant's acceptance on the shipped universe
+  for a small and a large account, the risk budget against skfolio (a test-only dependency, kept
+  out of the package by an import contract) and the legacy optimiser's still-valid cases.
+
+### Changed
+
+- `research/strategies.py`'s `CoreStrategy` runs on `engines/core`'s rules and adds only
+  total-risk scaling; `research/simulate.py` sizes its trades with `engines/core/trades.py`.
+- The service confirms every vehicle a core role may hold at start; the digest and the plan show
+  the core's variant, trigger, trend date and each role's status.
+- docs/RUNBOOK.md: the core's live paper cycle replaces Session 6's.
+
+### Removed
+
+- The Session 6 skeleton: `core.skeleton_targets`, `decision/rebalance_basic.py` and
+  `trading.inner_band` (the core's bands are `core.bands`).
+
 ## [0.17.0] - 2026-10-24
 
 Session 12, the engines and the gates: the option surface per underlying, the options sleeve

@@ -1,6 +1,8 @@
-"""The basic rebalancer: targets against holdings in integer units, inside the inner band, above
-the minimum trade and the commission floor, within what the book may spend; and why a role or
-the whole book is left alone.
+"""The core's rebalancer over a three-fund variant (``service_rig.three_fund_core``): the engine's
+target portfolio against the holdings in integer units, a band breach trading every role back
+to its target, cash beyond the targets deployed without a sale, above the minimum trade and the
+commission floor, within what the book may spend; and why a vehicle, a role or the whole book is
+left alone.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -16,18 +18,21 @@ import respx
 from capital_rig import make_rebalancer
 from fake_broker import EURUSD, FakeBroker
 from order_rig import build_rig
-from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market
+from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market, three_fund_core
 
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_runtime import CapitalConfig
-from obliskiq.decision.rebalance_basic import (
-    BasicRebalancer,
+from obliskiq.decision import rebalance_core
+from obliskiq.decision.core_vehicles import Unmeasured
+from obliskiq.decision.rebalance_core import (
+    CoreRebalancer,
     RebalancePlan,
-    confirm_targets,
+    confirm_vehicles,
     minimum_trade,
 )
-from obliskiq.domain.capital import Adjustment, AdjustmentKind, Deposit
+from obliskiq.domain.capital import Adjustment, AdjustmentKind, Deposit, WithdrawalReservation
+from obliskiq.domain.core import RoleStatus, Trigger
 from obliskiq.domain.orders import (
     ExecutionMode,
     Fill,
@@ -40,7 +45,7 @@ from obliskiq.domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
-from obliskiq.errors import TaxError
+from obliskiq.errors import CalendarError, CoreError, StoreError, TaxError
 from obliskiq.execution.executor import RETRY_NEXT_WINDOW
 from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.store import capital as capital_repo
@@ -67,7 +72,7 @@ async def rig(
     with respx.mock(assert_all_called=False) as router:
         broker = FakeBroker(router)
         built = await build_rig(
-            settings=shipped_settings,
+            settings=three_fund_core(shipped_settings),
             session=make_session(),
             broker=broker,
             tmp_path=tmp_path,
@@ -79,7 +84,7 @@ async def rig(
         await built.aclose()
 
 
-def rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> BasicRebalancer:
+def rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> CoreRebalancer:
     return make_rebalancer(rig, settings, **kw)
 
 
@@ -129,7 +134,7 @@ async def hold(rig: Any, conid: int, units: str, currency: str) -> None:
 # ── the plan ──
 
 
-async def test_an_empty_book_buys_every_role_largest_shortfall_first(rig: Any) -> None:
+async def test_an_empty_book_buys_every_role_to_its_target(rig: Any) -> None:
     plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
     assert plan.blocked is None
     assert plan.capital is not None
@@ -138,6 +143,8 @@ async def test_an_empty_book_buys_every_role_largest_shortfall_first(rig: Any) -
     # The core's budget is 950: its own 70 % with the inactive satellite's and options' shares;
     # the cash floor of 5 % stays cash.
     assert plan.core_capital == Decimal(950)
+    assert plan.portfolio is not None
+    assert (plan.portfolio.variant, plan.portfolio.trigger) == ("three funds", Trigger.START)
     roles = by_role(plan)
     assert [(roles[r].action, roles[r].quantity) for r in roles] == [
         ("buy", Decimal(1)),  # world_equity: 171 of target, one IWDA is 126.03 in euros
@@ -147,44 +154,50 @@ async def test_an_empty_book_buys_every_role_largest_shortfall_first(rig: Any) -
     assert roles["world_equity"].notional == Decimal("126.0330")
     assert "world_equity" in plan.render()
     assert "may spend 975.00" in plan.render()
+    assert "variant three funds: start" in plan.render()
 
 
-async def test_buys_stop_at_what_the_book_may_spend(rig: Any) -> None:
+async def test_buys_share_one_scale_within_what_the_book_may_spend(rig: Any) -> None:
     rig.broker.cash = {"EUR": (Decimal(200), None)}  # 175 to spend above the floor of 25
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    # The largest shortfall first: IBGM (680 short) cannot buy one unit of 177.50.
-    assert roles["euro_govt_intermediate"].action == "skip"
-    assert "no cash for one unit" in roles["euro_govt_intermediate"].reason
-    # Then IWDA (180 short): one unit of 126.03 at the pair's rate.
-    assert (roles["world_equity"].action, roles["world_equity"].quantity) == ("buy", 1)
-    # 49 are left: one EMIM of 46.42 is below the minimum trade of 50.
-    assert roles["em_equity"].action == "skip"
-    assert "below the minimum trade 50.00" in roles["em_equity"].reason
+    # Every buy is scaled by one factor, as the simulator scales them: at any factor that buys
+    # an IBGM (one at a third of its three) the cash of 175 does not cover its 177.50, and below
+    # it no other buy reaches a whole unit.
+    assert {d.action for d in roles.values()} == {"skip"}
+    assert all("the cash covers no unit" in d.reason for d in roles.values())
 
 
-async def test_a_book_inside_its_bands_holds_and_an_overweight_sells(rig: Any) -> None:
-    await hold(rig, IBGM, "4", "EUR")  # 710: 30 above 680, the band is 20
-    await hold(rig, EMIM, "3", "EUR")  # 139.26 against 140: inside
-    await hold(rig, IWDA, "1", "USD")  # 126 against 180: 54 short, less than a unit
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
-    assert roles["em_equity"].action == "hold"
-    assert roles["world_equity"].action == "skip"
-    assert "less than one whole unit" in roles["world_equity"].reason
-    # 30 over is less than one IBGM: nothing to sell.
-    assert roles["euro_govt_intermediate"].action == "skip"
-    await hold(rig, IBGM, "5", "EUR")  # 887.50: 207.50 over, one unit to sell
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
+async def test_a_band_breach_takes_every_role_back_and_a_book_inside_its_bands_holds(
+    rig: Any,
+) -> None:
+    await hold(rig, IBGM, "4", "EUR")  # 710 of 950, 74.7 % against 68 %: beyond its 5 points
+    await hold(rig, EMIM, "2", "EUR")  # 92.84 against 133: inside its 3.5 points
+    await hold(rig, IWDA, "1", "USD")  # 126.03 against 171: inside its 4.5 points
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.BAND
+    roles = by_role(plan)
+    # IBGM goes back to three; EMIM stays at two whole units of its 133; IWDA at one.
     assert (roles["euro_govt_intermediate"].action, roles["euro_govt_intermediate"].quantity) == (
         "sell",
         1,
     )
+    assert roles["em_equity"].action == "hold"
+    assert roles["world_equity"].action == "hold"
+    await hold(rig, IBGM, "3", "EUR")
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    # At three IBGM (56 %) it is 12 points short; one more unit would put it 7 points over, so
+    # the target in whole units is three and nothing trades.
+    assert all(d.action in ("hold", "skip") for d in plan.decisions)
+    assert not plan.trades
 
 
-async def test_a_holding_the_targets_no_longer_name_is_sold(rig: Any) -> None:
+async def test_a_holding_no_role_names_is_sold(rig: Any) -> None:
     rig.broker.quote(89005163, bid="20.00", ask="20.02", last="20.01")  # EXV1
     await hold(rig, 89005163, "10", "EUR")
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
-    unlisted = roles["unlisted 89005163"]
+    unlisted = roles["unlisted:89005163"]
     assert (unlisted.action, unlisted.quantity, unlisted.weight) == ("sell", 10, 0)
 
 
@@ -200,7 +213,9 @@ async def test_a_trade_below_the_minimum_or_without_a_commission_is_not_made(rig
         update={"costs": rig.settings.costs.model_copy(update={"commissions": []})}
     )
     roles = by_role(await rebalancer(rig, no_schedules).survey(ExecutionMode.SHADOW))
-    assert all("no commission schedule" in d.reason for d in roles.values())
+    # Without a commission schedule no leg can be costed, so no buy can be sized.
+    assert all(d.action == "skip" for d in roles.values())
+    assert all("the cost model cannot price it" in d.reason for d in roles.values())
 
 
 def test_the_minimum_trade_combines_its_parts(shipped_settings: ObliskConfig) -> None:
@@ -230,22 +245,15 @@ async def test_a_role_whose_venue_is_closed_waits(rig: Any) -> None:
     assert all("not tradable now" in d.reason for d in roles.values())
 
 
-async def test_a_role_whose_listing_maps_to_no_venue_waits(rig: Any) -> None:
+async def test_a_role_whose_listing_maps_to_no_venue_is_not_bought(rig: Any) -> None:
     directory = UniverseDirectory(
         i.model_copy(update={"listing_exchange": "NOWHERE"}) if i.conid == IBGM else i
         for i in UniverseDirectory.from_settings(rig.settings).instruments()
     )
     roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
     assert roles["euro_govt_intermediate"].action == "skip"
-    assert "NOWHERE" in roles["euro_govt_intermediate"].reason
+    assert "listing exchange NOWHERE maps to no venue" in roles["euro_govt_intermediate"].reason
     assert roles["em_equity"].action == "buy"
-
-
-async def test_a_role_without_a_price_has_no_commission(rig: Any) -> None:
-    from obliskiq.decision.rebalance_basic import _Role
-
-    unpriced = _Role("r", IBGM, Decimal("0.5"), None, Decimal(0), None, None)
-    assert rebalancer(rig)._commission(unpriced, Decimal(1), "XAMS") is None
 
 
 async def test_a_role_an_intent_works_on_waits(rig: Any) -> None:
@@ -265,28 +273,45 @@ async def test_a_role_an_intent_works_on_waits(rig: Any) -> None:
     await rig.book.fact(first.intent_id, f"{RETRY_NEXT_WINDOW}: test")
     await rig.book.advance(first.intent_id, IntentState.CANCELLED, "test")
     roles = by_role(await survey.survey(ExecutionMode.SHADOW))
-    assert all(d.reason == "an intent already works on it" for d in roles.values())
-    roles = by_role(await survey.survey(ExecutionMode.PAPER))
-    assert all(d.action == "buy" for d in roles.values())
+    assert roles["world_equity"].reason == "an intent already works on it"
+    paper = await survey.survey(ExecutionMode.PAPER)
+    # No paper intent works on any vehicle: shadow's intents belong to shadow's book.
+    assert all(d.reason != "an intent already works on it" for d in paper.decisions)
+    assert len(paper.trades) == 3
 
 
-async def test_a_role_without_a_price_or_an_instrument_is_skipped(rig: Any) -> None:
+async def test_a_role_without_a_price_or_an_instrument_is_not_bought(rig: Any) -> None:
     del rig.broker.quotes[EMIM]
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    assert (roles["em_equity"].action, roles["em_equity"].reason) == ("skip", "no price")
+    assert roles["em_equity"].action == "skip"
+    assert f"conid {EMIM}: no price" in roles["em_equity"].reason
+    assert roles["em_equity"].symbol == "EMIM"
     directory = UniverseDirectory(
         i for i in UniverseDirectory.from_settings(rig.settings).instruments() if i.conid != IBGM
     )
     roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
-    assert roles["euro_govt_intermediate"].reason == "no instrument describes the conid"
-    assert roles["euro_govt_intermediate"].symbol == "?"
+    assert f"conid {IBGM}: no instrument describes it" in roles["euro_govt_intermediate"].reason
+    assert roles["euro_govt_intermediate"].symbol == "-"
 
 
-async def test_a_role_not_confirmed_by_ibkr_is_skipped(rig: Any) -> None:
+async def test_a_vehicle_not_confirmed_by_ibkr_is_never_bought(rig: Any) -> None:
     survey = rebalancer(rig)
     survey.refuse({IWDA: "IBKR resolves IWDA on LSEETF to conid 1"})
     roles = by_role(await survey.survey(ExecutionMode.SHADOW))
-    assert roles["world_equity"].reason == "not confirmed: IBKR resolves IWDA on LSEETF to conid 1"
+    assert roles["world_equity"].action == "skip"
+    assert (
+        "IBKR did not confirm IWDA (IBKR resolves IWDA on LSEETF to conid 1)"
+        in roles["world_equity"].reason
+    )
+
+
+async def test_a_held_vehicle_not_confirmed_is_not_traded(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # far beyond its band: a sale is due
+    survey = rebalancer(rig)
+    survey.refuse({IBGM: "not found"})
+    roles = by_role(await survey.survey(ExecutionMode.PAPER))
+    assert roles["euro_govt_intermediate"].action == "skip"
+    assert roles["euro_govt_intermediate"].reason == "not confirmed: not found"
 
 
 async def test_a_dollar_line_is_valued_by_the_pairs_quote_without_a_ledger_rate(
@@ -302,10 +327,10 @@ async def test_a_dollar_line_is_valued_by_the_pairs_quote_without_a_ledger_rate(
     assert plan.blocked == "the USD cash cannot be valued in EUR"
     rig.broker.cash = {"EUR": (Decimal(10000), None)}
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    assert roles["world_equity"].reason == "no price"
+    assert f"conid {IWDA}: no price" in roles["world_equity"].reason
     rig.broker.unavailable.add("snapshot")
     roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    assert all(d.reason == "no price" for d in roles.values())
+    assert all("no price" in d.reason for d in roles.values())
     rig.broker.unavailable.clear()
     rig.broker.cash["GBP"] = (Decimal(100), None)  # no ledger rate and no configured pair
     plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
@@ -430,18 +455,20 @@ async def test_a_trade_whose_rules_cannot_be_read_is_left(rig: Any) -> None:
 # ── confirming the targets ──
 
 
-async def test_each_target_is_confirmed_through_the_contract_search(rig: Any) -> None:
+async def test_each_vehicle_is_confirmed_through_the_contract_search(rig: Any) -> None:
     directory = UniverseDirectory.from_settings(rig.settings)
-    assert await confirm_targets(rig.settings, directory, rig.ibkr.secdef) == {}
+    conids = rebalancer(rig).vehicle_conids(OPEN.date())
+    assert sorted(conids) == sorted([IWDA, EMIM, IBGM])
+    assert await confirm_vehicles(directory, rig.ibkr.secdef, conids) == {}
     rig.broker.contracts[IWDA] = ("IWDA", "LSEETF", "USD")
     rig.broker.contracts[1] = ("EMIM", "AEB", "EUR")
     del rig.broker.contracts[EMIM]
     rig.broker.contracts.pop(IBGM)
-    refused = await confirm_targets(rig.settings, directory, rig.ibkr.secdef)
+    refused = await confirm_vehicles(directory, rig.ibkr.secdef, conids)
     assert refused[EMIM] == "IBKR resolves EMIM on AEB to conid 1, not the pinned 153454120"
     assert refused[IBGM].startswith("its identity cannot be confirmed")
     empty = UniverseDirectory(())
-    assert set((await confirm_targets(rig.settings, empty, rig.ibkr.secdef)).values()) == {
+    assert set((await confirm_vehicles(empty, rig.ibkr.secdef, conids)).values()) == {
         "no instrument describes it"
     }
 
@@ -477,5 +504,186 @@ async def test_without_readable_lots_buys_proceed_unchecked_by_the_two_month_rul
 
     monkeypatch.setattr(survey._tax, "hooks", unreadable)
     plan = await survey.survey(ExecutionMode.SHADOW)
+    assert plan.blocked is None
+    assert len(plan.trades) == 3
+
+
+class DefersLosses:
+    """Tax lots under which buying any of ``deferred`` would defer a loss sold inside its
+    window; nothing else to say."""
+
+    def __init__(self, deferred: set[int]) -> None:
+        self.deferred = deferred
+
+    def complete(self, conid: int, units: Decimal) -> bool:
+        return True
+
+    def basis(self, conid: int) -> Decimal:
+        return Decimal(0)
+
+    def trial_tax(self, sales: Any, *, on: date) -> Decimal:
+        return Decimal(0)
+
+    def purchase_defers_loss(self, conid: int, on: date) -> bool:
+        return conid in self.deferred
+
+
+async def test_a_buy_inside_an_open_loss_window_is_withheld(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    survey = rebalancer(rig)
+
+    async def hooks() -> Any:
+        return DefersLosses({EMIM})
+
+    monkeypatch.setattr(survey._tax, "hooks", hooks)
+    roles = by_role(await survey.survey(ExecutionMode.SHADOW))
+    # The three funds have no swap partner, so the engine plans the buy and the live guard
+    # withholds it (DECISIONS D110, D145); the other roles are bought.
+    assert roles["em_equity"].action == "skip"
+    assert roles["em_equity"].reason == (
+        "buy: it would defer a loss the two-month rule still holds open"
+    )
+    assert roles["world_equity"].action == "buy"
+    assert roles["euro_govt_intermediate"].action == "buy"
+
+
+async def test_a_band_sale_waits_while_a_reservation_is_short(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # 887.50 of the book: far beyond its band
+    await rig.store(
+        capital_repo.record_reservation,
+        WithdrawalReservation(
+            amount=Decimal(500), currency="EUR", due_date=OPEN.date() + timedelta(days=10),
+            reason="r", created_at=OPEN, created_by="o", updated_at=OPEN,
+        ),
+    )  # fmt: skip
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.BAND
+    ibgm = by_role(plan)["euro_govt_intermediate"]
+    # The book's cash of 112.50 does not cover the 500 reserved: the reservation planner chooses
+    # the sales that raise it (DECISIONS D108), so the core's own sale waits.
+    assert ibgm.action == "skip"
+    assert ibgm.reason.startswith("sell: an open reservation is not yet covered")
+
+
+async def test_a_bands_buys_beyond_the_cash_wait_for_its_sales_proceeds(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # 887.50 of 950: the book holds 112.50 in cash
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.BAND
+    roles = by_role(plan)
+    assert (roles["euro_govt_intermediate"].action, roles["euro_govt_intermediate"].quantity) == (
+        "sell",
+        2,
+    )
+    # The engine buys with the sale's proceeds; now the book may spend 87.50, so the buys that
+    # do not fit wait for the proceeds and a later cycle's cash trigger buys them.
+    assert roles["world_equity"].action == "skip"
+    assert roles["world_equity"].reason == "buy of 1: waits for its sales' proceeds"
+
+
+async def test_cash_beyond_the_targets_buys_without_selling(rig: Any) -> None:
+    capped = with_capital(rig.settings, cap_base=Decimal(10000))
+    least = capped.trading.min_trade.model_copy(update={"fraction_of_managed": None})
+    settings = with_trading(capped, min_trade=least)  # 50: every leg here is one unit
+    rig.broker.cash = {"EUR": (Decimal(20000), None)}
+    # Every role inside its band, the book holding about 5 % of its budget beyond the targets.
+    await hold(rig, IBGM, "35", "EUR")  # 65.4 % against 68 %
+    await hold(rig, EMIM, "27", "EUR")  # 13.2 % against 14 %
+    await hold(rig, IWDA, "12", "USD")  # 15.9 % against 18 %
+    plan = await rebalancer(rig, settings).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.trigger is Trigger.CASH
+    roles = by_role(plan)
+    # The roles below their targets are bought with the cash, nothing is sold; EMIM's one unit
+    # is below the minimum trade.
+    assert [(d.role, d.action, d.quantity) for d in plan.trades] == [
+        ("world_equity", "buy", 1),
+        ("euro_govt_intermediate", "buy", 1),
+    ]
+    assert roles["world_equity"].reason == "toward its target (cash)"
+    assert roles["em_equity"].reason == "buy of 46.42 is below the minimum trade 50.00"
+
+
+async def test_a_book_inside_its_bands_without_spare_cash_holds(rig: Any) -> None:
+    settings = with_capital(rig.settings, cap_base=Decimal(10000))
+    rig.broker.cash = {"EUR": (Decimal(20000), None)}
+    await hold(rig, IBGM, "36", "EUR")  # 67.3 % against 68 %
+    await hold(rig, EMIM, "28", "EUR")  # 13.7 % against 14 %
+    await hold(rig, IWDA, "13", "USD")  # 17.3 % against 18 %
+    plan = await rebalancer(rig, settings).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    # What the targets leave beyond the holdings is below the minimum trade of 200: a hold.
+    assert plan.portfolio.trigger is Trigger.HOLD
+    assert {(d.action, d.reason) for d in plan.decisions} == {("hold", "inside its band")}
+
+
+async def test_trading_windows_that_cannot_be_read_leave_the_selector_unmeasured(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def uncovered(*args: Any) -> Any:
+        raise CalendarError("no calendar covers that venue")
+
+    monkeypatch.setattr(rebalance_core, "windows", uncovered)
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert plan.blocked is None
+    assert len(plan.trades) == 3
+
+
+async def test_a_core_that_cannot_decide_trades_nothing(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def undecided(*args: Any) -> Any:
+        raise CoreError("three funds: world_equity lacks the 13 month ends the tilt needs")
+
+    monkeypatch.setattr(rebalance_core, "plan_portfolio", undecided)
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert plan.blocked == (
+        "the core cannot decide: three funds: world_equity lacks the 13 month ends the tilt needs"
+    )
+    assert plan.portfolio is None
+
+
+async def test_a_held_vehicle_without_a_venue_is_valued_and_never_bought(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # far beyond its band: a sale is due
+    directory = UniverseDirectory(
+        i.model_copy(update={"listing_exchange": "NOWHERE"}) if i.conid == IBGM else i
+        for i in UniverseDirectory.from_settings(rig.settings).instruments()
+    )
+    plan = await rebalancer(rig, directory=directory).survey(ExecutionMode.PAPER)
+    assert plan.blocked is None
+    assert plan.portfolio is not None
+    role = plan.portfolio.role("euro_govt_intermediate")
+    assert role is not None
+    # Held and valued, so the book is still decided; not proposable, so never bought; and its
+    # sale cannot be costed without a venue, so it is not made either.
+    assert role.status is RoleStatus.HELD_ONLY
+    assert "listing exchange NOWHERE maps to no venue" in role.reason
+    ibgm = by_role(plan)["euro_govt_intermediate"]
+    assert (ibgm.action, ibgm.value) == ("skip", Decimal("887.50"))
+    assert ibgm.reason == "sell of 2.0: the cost model cannot price it"
+
+
+async def test_research_correlations_that_cannot_be_read_are_unmeasured(rig: Any) -> None:
+    class Failing:
+        async def read(self, today: date) -> Any:
+            raise StoreError("the research store is locked")
+
+    class Reading:
+        def __init__(self) -> None:
+            self.found = Unmeasured("read")
+
+        async def read(self, today: date) -> Any:
+            return self.found
+
+    found = await rebalancer(rig, correlations=Failing())._measured(OPEN.date())
+    assert isinstance(found, Unmeasured)
+    assert found.reason == (
+        "the research correlations cannot be read: the research store is locked"
+    )
+    reading = Reading()
+    assert await rebalancer(rig, correlations=reading)._measured(OPEN.date()) is reading.found
+    plan = await rebalancer(rig, correlations=Failing()).survey(ExecutionMode.SHADOW)
     assert plan.blocked is None
     assert len(plan.trades) == 3

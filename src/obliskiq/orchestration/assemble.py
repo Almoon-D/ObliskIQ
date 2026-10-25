@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -24,12 +25,16 @@ from ..data.halts import HaltFeed
 from ..data.market.daily import MarketCollector
 from ..data.market.targets import collection_venues
 from ..data.runner import HEARTBEAT_SOURCES, SourceRunner, client_for
-from ..decision.rebalance_basic import BasicRebalancer
+from ..decision.core_vehicles import CoreVehicleChooser, CorrelationSource
+from ..decision.rebalance_core import CoreRebalancer
+from ..decision.swap_partners import SwapPartners
+from ..decision.vehicle_selector import VehicleSelector
 from ..env import Environment, secret_reader
 from ..execution.runtime import OrderPath, calendar_venues, open_order_path
 from ..ibkr.session import BrokerSession
 from ..ibkr.transport import Transport
 from ..ibkr.transport.gateway_login import LoginDriver
+from ..jurisdiction import ELIGIBILITY_POLICIES
 from ..jurisdiction.profile import JurisdictionProfile
 from ..llm.extractor import EventExtractor
 from ..quant.costs import CostBook
@@ -38,9 +43,10 @@ from ..reporting.notifier import LogNotifier, Notifier, TelegramNotifier
 from ..reporting.reporter import Reporter
 from ..util.http import RetryPolicy
 from .clock import Clock
+from .correlations import ResearchCorrelationSource
 from .jobs import Jobs
 from .nav import NavCollector
-from .parts import build_capital
+from .parts import CapitalParts, build_capital
 from .schedule import CollectPlan, SourceMoment, SourcePlan
 from .service import AlertHooks, Service
 
@@ -117,6 +123,37 @@ def _no_secret(_name: str) -> str | None:
     return None
 
 
+def build_rebalancer(
+    settings: ObliskConfig,
+    path: OrderPath,
+    parts: CapitalParts,
+    *,
+    now: Callable[[], datetime],
+    correlations: CorrelationSource | None = None,
+) -> CoreRebalancer:
+    """The core's rebalancer over an open order path: the variant ``core.variant`` names, its
+    roles' vehicles chosen by the vehicle selector under the profile's policies."""
+    policy = parts.tax.policy
+    selector = VehicleSelector(
+        settings, ELIGIBILITY_POLICIES.resolve(path.profile, settings), policy
+    )
+    return CoreRebalancer(
+        settings,
+        capital=parts.capital,
+        directory=path.directory,
+        calendars=path.calendars,
+        worker=path.worker,
+        maker=parts.maker,
+        costs=CostBook.from_config(settings),
+        kill=path.kill,
+        tax=parts.tax,
+        chooser=CoreVehicleChooser(settings, selector, SwapPartners(settings, policy)),
+        value=parts.value,
+        correlations=correlations,
+        now=now,
+    )
+
+
 def build_service(
     settings: ObliskConfig,
     *,
@@ -128,22 +165,13 @@ def build_service(
     http: httpx.AsyncClient | None = None,
     secrets: Callable[[str], str | None] | None = None,
     earnings: EarningsSource = yfinance_earnings,
+    correlations: CorrelationSource | None = None,
 ) -> Service:
     """The service over an open order path; with ``http``, it runs the sources and reads the
-    halt feed (``secrets`` resolves the credentials sources name)."""
+    halt feed (``secrets`` resolves the credentials sources name); ``correlations`` hands the
+    core's vehicle selector its research correlations."""
     parts = build_capital(settings, path, now=clock.now)
-    rebalancer = BasicRebalancer(
-        settings,
-        capital=parts.capital,
-        directory=path.directory,
-        calendars=path.calendars,
-        worker=path.worker,
-        maker=parts.maker,
-        costs=CostBook.from_config(settings),
-        kill=path.kill,
-        tax=parts.tax,
-        now=clock.now,
-    )
+    rebalancer = build_rebalancer(settings, path, parts, now=clock.now, correlations=correlations)
     venues = sorted({*calendar_venues(settings, path.directory), *anchor_venues(settings)})
     jobs = Jobs(
         settings,
@@ -254,13 +282,18 @@ async def open_service(
         ) as path,
         client_for(settings) as http,
     ):
-        yield build_service(
-            settings,
-            path=path,
-            reporter=reporter,
-            hooks=hooks,
-            clock=clock,
-            ping_url=env.health_ping_url,
-            http=http,
-            secrets=secret_reader(env),
-        )
+        correlations = ResearchCorrelationSource(settings, data_dir)
+        try:
+            yield build_service(
+                settings,
+                path=path,
+                reporter=reporter,
+                hooks=hooks,
+                clock=clock,
+                ping_url=env.health_ping_url,
+                http=http,
+                secrets=secret_reader(env),
+                correlations=correlations,
+            )
+        finally:
+            await correlations.aclose()

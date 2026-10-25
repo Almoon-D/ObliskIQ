@@ -8,17 +8,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from pathlib import Path
 from typing import Any
 
+from obliskiq.capital.core_value import CoreStrategyValue
 from obliskiq.capital.managed import CapitalReader
 from obliskiq.capital.planner import ReservationPlanner
 from obliskiq.capital.questions import OwnerQuestions
 from obliskiq.capital.strategy import DefaultStrategyValue, StrategyValue
 from obliskiq.capital.valuation import Valuer
 from obliskiq.config import ObliskConfig
-from obliskiq.decision.rebalance_basic import BasicRebalancer
+from obliskiq.decision.core_vehicles import CoreVehicleChooser
+from obliskiq.decision.rebalance_core import CoreRebalancer
+from obliskiq.decision.swap_partners import SwapPartners
+from obliskiq.decision.vehicle_selector import VehicleSelector
 from obliskiq.execution.instruments import InstrumentDirectory, UniverseDirectory
 from obliskiq.execution.intent_maker import IntentMaker
 from obliskiq.execution.pricing import Pricer
-from obliskiq.jurisdiction import TAX_POLICIES, load_profile
+from obliskiq.jurisdiction import ELIGIBILITY_POLICIES, TAX_POLICIES, load_profile
 from obliskiq.orchestration.parts import CapitalParts
 from obliskiq.quant.costs import CostBook
 from obliskiq.tax.book import TaxBook
@@ -65,27 +69,33 @@ def capital_parts(
         now=rig.clock,
     )
     questions = OwnerQuestions(rig.worker, now=rig.clock)
+    value = CoreStrategyValue(DefaultStrategyValue(chosen.capital))
     planner = ReservationPlanner(
         chosen,
         capital=capital,
         tax=tax,
         costs=CostBook.from_config(chosen),
         calendars=rig.calendars,
-        strategy=strategy or DefaultStrategyValue(chosen.capital),
+        strategy=strategy or value,
         worker=rig.worker,
         maker=maker,
         questions=questions,
         kill=rig.kill,
         now=rig.clock,
     )
-    return CapitalParts(capital, tax, questions, planner, maker)
+    return CapitalParts(capital, tax, questions, planner, maker, value)
 
 
-def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> BasicRebalancer:
+def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> CoreRebalancer:
+    """The core's rebalancer over the rig, wired as ``orchestration.assemble.build_rebalancer``
+    wires it."""
     chosen = settings if settings is not None else rig.settings
     directory = kw.pop("directory", UniverseDirectory.from_settings(chosen))
     parts = capital_parts(rig, chosen, directory=directory)
-    return BasicRebalancer(
+    profile = load_profile(REPO / "config", "es")
+    policy = TAX_POLICIES.resolve(profile, chosen)
+    selector = VehicleSelector(chosen, ELIGIBILITY_POLICIES.resolve(profile, chosen), policy)
+    return CoreRebalancer(
         chosen,
         capital=parts.capital,
         directory=directory,
@@ -95,5 +105,8 @@ def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -
         costs=CostBook.from_config(chosen),
         kill=rig.kill,
         tax=kw.pop("tax", parts.tax),
+        chooser=CoreVehicleChooser(chosen, selector, SwapPartners(chosen, policy)),
+        value=kw.pop("value", parts.value),
+        correlations=kw.pop("correlations", None),
         now=rig.clock,
     )

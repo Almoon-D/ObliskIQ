@@ -3,8 +3,10 @@
 The order path is the one the service runs (``execution.runtime.assemble``), over the order rig's
 read client, store and wall clock; the service is built by ``orchestration.assemble.build_service``.
 :class:`SimClock` jumps the wall clock to each moment the service sleeps until, so days of the
-service run in milliseconds. :func:`skeleton_market` gives the fake broker what the skeleton book
-needs: quotes for its three vehicles and the EUR.USD pair, contract search rows, cash and a NAV.
+service run in milliseconds. :func:`three_fund_core` makes the core a banded variant of three funds
+the fake broker quotes (one of them in dollars, so a cycle converts), and :func:`skeleton_market`
+gives the fake broker what that book needs: quotes for its three vehicles and the EUR.USD pair,
+contract search rows, cash and a NAV.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -20,9 +22,12 @@ from typing import Any
 import httpx
 from fake_broker import EURUSD, FakeBroker
 from order_rig import WallClock, whatif_answer
+from vehicle_rig import with_checks
 
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
+from obliskiq.config.schema_core import BandedWeightsVariant
+from obliskiq.domain.enums import AssetClass
 from obliskiq.execution.runtime import OrderPath, assemble
 from obliskiq.jurisdiction import load_profile
 from obliskiq.orchestration.assemble import build_service
@@ -30,8 +35,15 @@ from obliskiq.orchestration.service import AlertHooks, Service
 from obliskiq.reporting.alerts import AlertBook
 from obliskiq.reporting.reporter import Reporter
 
-#: The skeleton's vehicles (config/defaults/core.yaml, config/universe.yaml).
+#: The three funds the test core holds (config/universe.yaml).
 IWDA, EMIM, IBGM = 78999785, 153454120, 43614383
+#: The test core's variant: three roles at Session 6's weights, kept within the core's bands.
+THREE_FUNDS = "three funds"
+THREE_FUND_WEIGHTS = {
+    "world_equity": Decimal("0.18"),
+    "em_equity": Decimal("0.14"),
+    "euro_govt_intermediate": Decimal("0.68"),
+}
 #: The venues the service's calendars cover: the universe directory's and the jobs' anchors.
 SERVICE_VENUES = ("XAMS", "XETR", "XLON", "XMIL", "XNAS", "XNYS", "XPAR", "XSWX", "XTKS", "XTSE")
 
@@ -83,9 +95,39 @@ def whatif_in_currency(order: dict[str, Any]) -> dict[str, Any]:
     return whatif_answer(f"{cost:.2f}", CURRENCY.get(conid, "USD"))
 
 
+def three_fund_core(settings: ObliskConfig) -> ObliskConfig:
+    """The settings whose core runs :data:`THREE_FUNDS`: IWDA, EMIM and IBGM are the only
+    instruments that fill a core role, and ETFs on London and Amsterdam are verified, so each is
+    its role's one proposable vehicle."""
+    if settings.core.variant == THREE_FUNDS:
+        return settings
+    held = {IWDA, EMIM, IBGM}
+    universe = settings.universe
+    instruments = [
+        i
+        if i.conid in held
+        else i.model_copy(update={"exposures": i.exposures.model_copy(update={"core_roles": []})})
+        for i in universe.instruments
+    ]
+    variant = BandedWeightsVariant(strategy="banded_weights", weights=THREE_FUND_WEIGHTS)
+    core = settings.core.model_copy(
+        update={
+            "variant": THREE_FUNDS,
+            "variants": {**settings.core.variants, THREE_FUNDS: variant},
+        }
+    )
+    chosen = settings.model_copy(
+        update={
+            "core": core,
+            "universe": universe.model_copy(update={"instruments": instruments}),
+        }
+    )
+    return with_checks(chosen, (AssetClass.ETF, "XLON"), (AssetClass.ETF, "XAMS"))
+
+
 def skeleton_market(broker: FakeBroker, *, usd: str = "20000") -> None:
     """Quotes, contract search rows, whatifs, cash in euros and dollars and a NAV for the
-    skeleton."""
+    three funds."""
     broker.whatif_for = whatif_in_currency
     broker.quote(IWDA, bid="146.50", ask="146.60", last="146.55", sigma="15%")
     broker.quote(EMIM, bid="46.40", ask="46.44", last="46.42", sigma="18%")
@@ -144,6 +186,7 @@ def build_service_rig(
     """The service over ``rig``'s client and store, with ``settings`` and ``calendars``. Its
     collection jobs are off unless ``collect``: the fake broker serves no market history. With
     ``http`` it runs the sources and reads the halt feed through it (and reads no earnings)."""
+    settings = three_fund_core(settings)
     if not collect:
         schedule = settings.collectors.schedule.model_copy(update={"enabled": False})
         collectors = settings.collectors.model_copy(update={"schedule": schedule})

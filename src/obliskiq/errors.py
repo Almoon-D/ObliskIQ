@@ -101,6 +101,11 @@ class TaxError(ObliskError):
     reopened, a rule the profile does not state. Nothing is guessed."""
 
 
+class CoreError(ObliskError):
+    """The core's rules cannot decide a target: a signal they need is missing, or the variant's
+    constants do not make a portfolio. Nothing is guessed."""
+
+
 class ResearchError(ObliskError):
     """The research harness cannot produce a result it can stand behind."""
 

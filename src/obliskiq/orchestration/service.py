@@ -4,11 +4,11 @@
 closes the run records a killed process left ``running`` as ``interrupted`` (the next start is the
 only thing that can record a death); looks every intent that may be at the broker up by its cOID
 (``Executor.resume``: a crash between a placement and its fill never sends a second order);
-confirms the skeleton's conids through IBKR's contract search; refreshes IBKR's trading schedule
-for the calendars' cross-check; starts the broker session's keepalive and the kill switch's
-sweep; and catches up from the run log: a cycle or digest of the last day whose moment passed
-with no finished run runs now if it is at most ``runtime.catch_up_minutes`` late, and is recorded
-as missed otherwise.
+confirms every core vehicle's conid through IBKR's contract search; refreshes IBKR's trading
+schedule for the calendars' cross-check; starts the broker session's keepalive and the kill
+switch's sweep; and catches up from the run log: a cycle or digest of the last day whose moment
+passed with no finished run runs now if it is at most ``runtime.catch_up_minutes`` late, and is
+recorded as missed otherwise.
 
 **Then** it sleeps until the next heartbeat or job (``orchestration/schedule.py``: the cycles,
 the digest, the market collections and each source's runs) and runs it, refreshing IBKR's
@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING
 
 from ..calendars.status import Disagreement
 from ..config.schema import ObliskConfig
-from ..decision.rebalance_basic import BasicRebalancer, confirm_targets
+from ..decision.rebalance_core import CoreRebalancer, confirm_vehicles
 from ..domain.orders import ExecutionMode
 from ..errors import CalendarError
 from ..execution.boundary import OrderAlert
@@ -159,7 +159,7 @@ class Service:
         *,
         path: OrderPath,
         jobs: Jobs,
-        rebalancer: BasicRebalancer,
+        rebalancer: CoreRebalancer,
         reporter: Reporter,
         hooks: AlertHooks,
         clock: Clock,
@@ -202,7 +202,7 @@ class Service:
 
     async def prepare(self, *, dry_run: bool = False) -> None:
         """What every start needs before a job: the dead process's runs closed, every intent
-        that may be at the broker looked up by its cOID, the skeleton's conids confirmed and the
+        that may be at the broker looked up by its cOID, the core's vehicles confirmed and the
         trading schedule refreshed. ``dry_run`` only confirms and refreshes (it writes nothing)."""
         path = self._path
         self._hooks.source = "startup"
@@ -233,22 +233,18 @@ class Service:
         await self._catch_up(now)
 
     async def _confirm_targets(self) -> None:
+        conids = self._rebalancer.vehicle_conids(self._clock.now().date())
         try:
-            refused = await confirm_targets(
-                self._settings, self._path.directory, self._path.client.secdef
-            )
-        except Exception as exc:  # nothing confirmed: every role waits
-            refused = {
-                t.conid: f"the confirmation failed: {type(exc).__name__}"
-                for t in self._settings.core.skeleton_targets
-            }
+            refused = await confirm_vehicles(self._path.directory, self._path.client.secdef, conids)
+        except Exception as exc:  # nothing confirmed: every vehicle waits
+            refused = {conid: f"the confirmation failed: {type(exc).__name__}" for conid in conids}
         self._rebalancer.refuse(refused)
         for conid, why in sorted(refused.items()):
             self._reporter.push(
                 Alert(
                     "service.target_unconfirmed",
                     f"service.target_unconfirmed:{conid}",
-                    f"skeleton conid {conid} is not traded: {why}",
+                    f"core vehicle conid {conid} is not traded: {why}",
                     Severity.CRITICAL,
                     self._clock.now(),
                 ),

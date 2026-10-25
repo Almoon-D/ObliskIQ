@@ -24,9 +24,10 @@ from ..calendars.status import BlockReason
 from ..capital.planner import ReservationPlan, ReservationPlanner
 from ..capital.twr import TwrResult, account_twr
 from ..config.schema import ObliskConfig
-from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
+from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..domain.calendar import PhaseKind
 from ..domain.capital import CashEvent, OwnerQuestion, QuestionState
+from ..domain.core import RoleStatus
 from ..domain.orders import (
     ExecutionMode,
     Fill,
@@ -125,7 +126,7 @@ async def gather_digest(
     worker: StoreWorker,
     modes: Modes,
     kill: KillSwitch,
-    rebalancer: BasicRebalancer,
+    rebalancer: CoreRebalancer,
     planner: ReservationPlanner,
     calendars: Calendars,
     venues: Sequence[str],
@@ -228,6 +229,14 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
                 f"  managed {c.managed:,.2f} {base_currency} ({c.detail}); reserved "
                 f"{c.reserved:,.2f}, unmanaged {c.unmanaged:,.2f}, investable {c.investable:,.2f}"
             )
+        if plan.portfolio is not None:
+            portfolio = plan.portfolio
+            lines.append(f"  core variant {portfolio.variant}: {portfolio.trigger.value}")
+            lines += [
+                f"  {role.role}: {role.status.value}, target {role.target_weight:.1%}"
+                for role in portfolio.roles
+                if role.status is not RoleStatus.FILLED
+            ]
         if plan.blocked is not None:
             lines.append(f"  no rebalance now: {plan.blocked}")
         for decision in plan.decisions:

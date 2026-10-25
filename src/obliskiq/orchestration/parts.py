@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from ..capital.core_value import CoreStrategyValue
 from ..capital.managed import CapitalReader
 from ..capital.planner import ReservationPlanner
 from ..capital.questions import OwnerQuestions
@@ -23,13 +24,15 @@ from ..tax.book import TaxBook
 @dataclass(frozen=True, slots=True)
 class CapitalParts:
     """Capital, cash flows and tax over an order path: the one capital reader, the live tax
-    book, the owner questions, the reservation planner and the intent maker they share."""
+    book, the owner questions, the reservation planner, the intent maker they share and the
+    strategy value the core notes its target portfolio on."""
 
     capital: CapitalReader
     tax: TaxBook
     questions: OwnerQuestions
     planner: ReservationPlanner
     maker: IntentMaker
+    value: CoreStrategyValue
 
 
 def build_capital(
@@ -63,17 +66,18 @@ def build_capital(
         now=now,
     )
     questions = OwnerQuestions(path.worker, now=now)
+    value = CoreStrategyValue(DefaultStrategyValue(settings.capital))
     planner = ReservationPlanner(
         settings,
         capital=capital,
         tax=tax,
         costs=CostBook.from_config(settings),
         calendars=path.calendars,
-        strategy=DefaultStrategyValue(settings.capital),
+        strategy=value,
         worker=path.worker,
         maker=maker,
         questions=questions,
         kill=path.kill,
         now=now,
     )
-    return CapitalParts(capital, tax, questions, planner, maker)
+    return CapitalParts(capital, tax, questions, planner, maker, value)

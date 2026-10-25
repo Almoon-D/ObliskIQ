@@ -28,6 +28,7 @@ from ..config.schema import ObliskConfig
 from ..config.schema_vehicles import CapabilityReading, ListReading
 from ..decision.capabilities import BrokerCapabilities
 from ..decision.swap_partners import SwapGroup, SwapPartners
+from ..decision.vehicle_inputs import market_inputs, windows
 from ..decision.vehicle_selector import (
     Exposure,
     RankedVehicle,
@@ -36,9 +37,7 @@ from ..decision.vehicle_selector import (
     UnknownExposureError,
     VehicleMarket,
     VehicleSelector,
-    WindowOverlap,
     resolve_exposure,
-    window_overlap,
 )
 from ..errors import ObliskError
 from ..execution.capability_probe import CapabilityProbe
@@ -48,8 +47,6 @@ from ..quant.tracking import CorrelationReading
 from ..research.data import FxRates, universe_series_id
 from ..research.tracking import ResearchCorrelations, pair_readings, tracking_readings
 from ..store import open_research_store, open_store
-from ..store import repos as market_repo
-from ..store.db import Store
 from ..util.timeutil import utc_now
 
 if TYPE_CHECKING:
@@ -132,25 +129,6 @@ def _universe_capabilities(loaded: Loaded, out: TextIO) -> int:
 # ── vehicles ──
 
 
-def market_inputs(
-    store: Store, conids: Iterable[int], *, as_of: date, sessions: int
-) -> dict[int, VehicleMarket]:
-    """Each conid's latest close and average daily traded value over ``sessions`` stored bars."""
-    out: dict[int, VehicleMarket] = {}
-    for conid in conids:
-        bars = market_repo.bar_series(store, conid, as_of=as_of, limit=sessions)
-        if not bars:
-            continue
-        traded = [
-            Decimal(repr(bar.close)) * Decimal(repr(bar.volume))
-            for bar in bars
-            if bar.volume is not None
-        ]
-        average = sum(traded, Decimal(0)) / len(traded) if traded else None
-        out[conid] = VehicleMarket(Decimal(repr(bars[-1].close)), average, len(traded))
-    return out
-
-
 def base_rates(fx: FxRates, currencies: Iterable[str], base: str, on: date) -> dict[str, Decimal]:
     """The base currency's value of one unit of each currency on ``on``, where a fresh rate
     exists."""
@@ -160,22 +138,6 @@ def base_rates(fx: FxRates, currencies: Iterable[str], base: str, on: date) -> d
         if value is not None:
             rates[currency] = Decimal(repr(value))
     return rates
-
-
-def windows(
-    settings: ObliskConfig, calendars: Calendars, venues: Iterable[str], today: date
-) -> dict[str, WindowOverlap]:
-    """Each venue's overlap with the decision cycles on its next session from ``today``."""
-    out: dict[str, WindowOverlap] = {}
-    for venue in sorted(set(venues)):
-        day = (
-            today
-            if calendars.session_bounds(venue, today)
-            else calendars.next_session(venue, today)
-        )
-        if day is not None:
-            out[venue] = window_overlap(settings, calendars, venue, day)
-    return out
 
 
 def _vehicle_lines(vehicle: RankedVehicle, rank: int) -> list[str]:

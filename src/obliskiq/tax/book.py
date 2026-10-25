@@ -166,6 +166,11 @@ class TaxHooks:
     def lots(self, conid: int) -> tuple[TaxLot, ...]:
         return self._engine.lots(security_key(conid))
 
+    def basis(self, conid: int) -> Decimal:
+        """What selling every unit of ``conid`` counts against: its lots' cost and the losses
+        they carry (the core sells first from the vehicle with the smaller gain for its value)."""
+        return self._engine.basis(security_key(conid))
+
     def tax_cost(self, conid: int, *, units: Decimal, price: Decimal, on: date) -> TaxCostEstimate:
         """The tax selling ``units`` at ``price`` (base currency, before costs) adds to the year."""
         trade = ProposedTrade(

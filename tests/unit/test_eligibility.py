@@ -101,7 +101,7 @@ def test_a_us_domiciled_etf_is_refused_and_the_verdict_says_why(
         assert "UCITS form" in verdict.reason
 
 
-def test_the_skeletons_ucits_funds_and_shares_are_eligible(
+def test_the_core_funds_and_shares_are_eligible(
     policy: EuPriipsEligibility, shipped_settings: Any
 ) -> None:
     universe = shipped_settings.universe
@@ -113,8 +113,6 @@ def test_the_skeletons_ucits_funds_and_shares_are_eligible(
     share = policy.assess(traded(universe, FCX), underlying=None)
     assert share.eligible
     assert "not a packaged product" in share.reason
-    for target in shipped_settings.core.skeleton_targets:
-        assert policy.assess(traded(universe, target.conid), underlying=None).eligible
 
 
 def test_every_tradable_candidate_with_a_verdict_of_ineligible_is_explained(

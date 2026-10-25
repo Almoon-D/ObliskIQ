@@ -165,6 +165,18 @@ def test_targets_hold_the_base_at_the_share_and_the_rest_in_cash():
     assert scales == {"EQ": D("0.5"), "CASH": D(1)}
 
 
+def test_targets_need_a_view_that_estimates_covariance():
+    @dataclass
+    class TrendOnly:
+        as_of: date = date(2026, 10, 1)
+
+        def trend(self, key: str, rule: object) -> None:
+            return None
+
+    with pytest.raises(SimulationError, match="scales total risk on a view of covariance"):
+        strategy(scaling()).role_targets(TrendOnly(), Book({}))
+
+
 def test_a_reduction_whose_tax_is_above_its_benefit_is_held_when_tax_aware():
     built = strategy(scaling(), tax=True)
     costly = Book({"EQ": D(50), "CASH": D(50)}, taxes={"EQ": D("0.2")})

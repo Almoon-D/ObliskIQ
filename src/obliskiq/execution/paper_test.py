@@ -1,11 +1,12 @@
 """``obliskiq preflight --paper-order-test``: one paper order per instrument, end to end.
 
-For each conid in ``ibkr.preflight.paper_order.conids`` (each in the skeleton allowlist): confirm
-the contract through IBKR's contract search, read its trading rules and the algos offered, read
-a quote, preview the order (whatif), then make an entry intent buying the minimum quantity at a
-limit that cannot fill (``limit_offset_fraction`` below the bid, rounded down to the contract's
-tick), clear it through the pre-trade gate, place it through the write boundary, read its status
-and the live orders (is the cOID listed?), and cancel it. Every reply message id is recorded.
+For each conid in ``ibkr.preflight.paper_order.conids`` (each a described tradable candidate of
+the universe): confirm the contract through IBKR's contract search, read its trading rules and the
+algos offered, read a quote, preview the order (whatif), then make an entry intent buying the
+minimum quantity at a limit that cannot fill (``limit_offset_fraction`` below the bid, rounded down
+to the contract's tick), clear it through the pre-trade gate, place it through the write boundary,
+read its status and the live orders (is the cOID listed?), and cancel it. Every reply message id
+is recorded.
 
 An instrument quoted in a currency the account does not hold is refused by the gate's cash check
 (``currency_not_held``): that refusal is the expected, recorded outcome, not a failure. The test
@@ -116,8 +117,8 @@ class PaperOrderTest:
         report.add("mode", True, "paper")
         for conid in self._conids:
             instrument = self._path.directory.describe(conid)
-            if instrument is None:  # pragma: no cover - the schema ties the conids to the allowlist
-                report.add(f"{conid}", False, "not in the skeleton allowlist")
+            if instrument is None:  # pragma: no cover - the schema ties the conids to the universe
+                report.add(f"{conid}", False, "no universe instrument describes it")
                 continue
             try:
                 await self._one(instrument, report)

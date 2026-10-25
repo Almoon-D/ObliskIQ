@@ -25,7 +25,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 10 | Macro, positioning, insiders and events | the sources a registered hypothesis, component or safety rule consumes; incident feeds; catalyst calendar; a minimal EventExtractor (H7's clock) | done (every built source but GDELT collected live from the cloud; the extractor waits on its key; H7 pre-registered, #46) | v0.15.0 |
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | done (built and accepted on an offline fixture store; the census reports the gates untested until Session 12) | v0.16.0 |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
-| 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | planned | |
+| 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (A by default; parity with the simulator on a fixture history; gold and broad commodities in cash until a venue is verified; the live cycle a command list for the owner) | v0.18.0 |
 | 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry | planned | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series | planned | |
 | 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents | planned | |
@@ -38,6 +38,83 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 There is no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 ## Session log
+### Session 13 — Core engine (2026-10-25, v0.18.0)
+
+**Landed.**
+- `engines/core/` (D140): the mechanism Session 4c tested, now shared by research and the live
+  book.
+  - `rules.py`: role targets, the trend scale, the outer band, the losses-first sale order and
+    held costly reductions.
+  - `weights.py`: the environments' risk balance and the equity overlay.
+  - `trades.py`: whole-unit delta trades, sells first, and buys scaled by one factor.
+  - `variants.py`: the ten registered variants built from configuration.
+  - `history.py`: month-end closes from the market store's bars, converted to the base
+    currency.
+  - `engine.py`: `plan_portfolio`, which returns a `TargetPortfolio` (`domain/core.py`).
+  Research's `CoreStrategy` and the simulator run on the same code.
+- `core.yaml` (D141): every variant with its constants, held to the pre-registration by a test.
+  `core.variant: A` (D91, D95).
+- `decision/core_vehicles.py` (D143): each role's vehicles through the selector. Swap partners
+  for tax-aware variants. Held vehicles are kept, and closed when no longer proposable; a held
+  vehicle no role names is sold; a refused identity is never bought.
+- `decision/rebalance_core.py` replaces `rebalance_basic.py` (D142, D145). It has four triggers:
+  - start;
+  - band: every role back to its target, the only sales;
+  - cash: cash beyond the targets buys the roles below theirs;
+  - hold.
+  The live guards cover:
+  - an unconfirmed identity, the venue, intents already working;
+  - reservations (no sale while one is short), the two-month rule;
+  - the minimum trade and the commission;
+  - spendable cash.
+  Buys are scaled by one factor. A band's buys beyond the cash wait for the proceeds. There are
+  no stops.
+- `orchestration/correlations.py`: tracking and partner correlations read from the research
+  store once a day. Without a store they are unmeasured, with the remedy.
+- `capital/core_value.py` (D146): the core's `StrategyValue`. The planner measures "above its
+  target" against the core's last target portfolio and exits a vehicle the core holds at zero.
+- `quant/trend.py`: `trend_measures` and `settled`. `BaseRates.per_base_on` for a past day.
+  `TaxHooks.basis`.
+- The digest and the plan show the variant, the trigger, the trend date and each role's status
+  and reason.
+- Removed: `core.skeleton_targets`, `decision/rebalance_basic.py` and `trading.inner_band`.
+- skfolio as a test-only dependency, with an import contract that keeps skfolio, scipy,
+  scikit-learn and cvxpy out of the package.
+
+**Tests.**
+- `tests/integration/test_core_parity.py`: research's registered strategy through the simulator
+  against the live engine on the store's closes. Five histories: A twice (one with a rally) and B
+  three times. Equal weights and trades at every rebalance date. Each case asserts what it
+  exercises: a band breach with sales, and for B tilt scales, partner buys and held reductions.
+- `tests/integration/test_core_acceptance.py`: every registered variant produces a target
+  portfolio through the live rebalancer on the shipped universe, for 1,000 and 1,000,000 euros.
+  A holds its static weights on the filled roles, and gold's and commodities' 16 % stays in cash.
+- `tests/unit/test_quant_risk_budget.py`: closed forms, a Newton solve, skfolio on the core's
+  budgets and on random ones, and the legacy optimiser's still-valid cases: sample data, one
+  asset, ten assets, near-zero variance, non-negative weights.
+- Failure branches:
+  - `test_rebalance_core.py`: unvalued holdings, the kill switch, frozen reconciliation, an
+    unconfirmed or unquoted vehicle, a short reservation, a deferred loss, unknown tax, the
+    minimum trade, the commission, the cash floor and unaffordable buys;
+  - `test_engines_core.py` and `test_engines_core_history.py`: unfilled and held-only roles,
+    short history, a missing rate, a gap;
+  - `test_core_config.py`: a non-convergent solve, an incoherent variant;
+  - `test_core_vehicles.py`, `test_core_correlations.py`.
+- `make check` green: 5,008 tests, coverage 99.70 %.
+
+**Deferred.**
+- No IBKR call from the session. The core's live paper cycle is a command list for the owner
+  (docs/RUNBOOK.md, which replaces Session 6's).
+- Gold and broad commodities stay in cash until a venue of theirs is verified (Follow-ups).
+
+**Live findings.** None: no live call.
+
+**Dependabot.** filelock 4.2.1 (#49) and virtualenv 21.14.13 (#50) were merged. The major
+cryptography 50 (#9, #5) stays in Follow-ups (D96).
+
+**SESSION_PROMPTS edits.** None: later prompts name the core's `TargetPortfolio` and
+`StrategyValue` as built.
+
 ### Session 12 — Engines and gates (2026-10-24, v0.17.0)
 
 **Landed.**
@@ -1713,9 +1790,9 @@ settles it.
 | The spot-FX commission (0.20 bp, at least USD 2.00, charged in the base currency) against a conversion's trade | 5 | the execution test |
 | The cOID kept unique for 24 hours (the place-order reference) | 5 | T1 (the paper order test) |
 | The Adaptive algo's parameters and its limit cap, before `execution.pricing.algos` enables it | 5 | a paper order with the algo (Session 6 on) |
-| The skeleton's conids through `/iserver/secdef/search` and `/iserver/contract/{conid}/info` (IWDA 78999785 LSEETF USD, EMIM 153454120 AEB EUR, IBGM 43614383 AEB EUR; read on MCP) | 6 | Session 6's live paper cycle (`run-cycle --dry-run`) |
-| A whole cycle on paper: the conversion (and IBKR's text of `o10164` on it), three buys, their fills, the holdings registered to the core, reconciliation green, the digest | 6 | Session 6's live paper cycle |
-| Telegram's `sendMessage` in HTML mode from the machine, and a digest split under the cap | 6 | Session 6's live paper cycle (with `TELEGRAM_*` set) |
+| The core's vehicles' conids through `/iserver/secdef/search` and `/iserver/contract/{conid}/info` (every vehicle a core role may hold is confirmed at each start; Session 9 pinned them on MCP) | 6, 13 | the core's live paper cycle (`run-cycle --dry-run`) |
+| A whole cycle on paper: variant A's start (a conversion first if a chosen fund trades in another currency, and IBKR's text of `o10164` on it), the buys, their fills, the holdings registered to the core, reconciliation green, the digest with the core's variant, trigger and roles | 6, 13 | the core's live paper cycle |
+| Telegram's `sendMessage` in HTML mode from the machine, and a digest split under the cap | 6 | the core's live paper cycle (with `TELEGRAM_*` set) |
 | The shadow fill at the touch (D103) against paper fills of the same orders | 6 | 18 (TCA) |
 | The health ping (`OBLISK_HEALTH_PING_URL`) from the machine | 6 | the first week of `serve` |
 | The Gateway login on Java 21 and on Java 25 (the side test): passed once each, 2026-10-21 [CP ✓ 2026-10-21]; a second day lets them into `ibkr.gateway.java_major_versions` (D96) | D96 | a second day of the side runs (the order test's rerun day) |
@@ -1728,8 +1805,8 @@ settles it.
 | How IBKR reports dividends, interest, fees, withholding and conversions in the ledger and the account's activity; the classifier's fixtures from them (Session 7's item 10) | 7 | the first session with a working paper login |
 | Settlement lags read in secondary sources only (`verify_live` in `venues.yaml`: BVMF, XSGO, XSWX, XSHG, XSHE, XKRX, XTAI, XSPX, XEUR) | 7 | 8 (the venues the universe admits) |
 | The DGT's rulings on currency balances (V2422-20, V0463-21, V1613-25, V0152-26) in their official text | 7 | the monthly tax-source check (§5.16) |
-| The ledger's per-currency `exchangerate` as the trade date's rate for tax (recorded by the NAV step and the heartbeat) against the rate IBKR reports on a foreign fill | 7 | Session 6's live paper cycle |
-| The skeleton's tax facts (ISIN, issuer, tracked index) against `/iserver/contract/{conid}/info` | 7 | Session 6's live paper cycle |
+| The ledger's per-currency `exchangerate` as the trade date's rate for tax (recorded by the NAV step and the heartbeat) against the rate IBKR reports on a foreign fill | 7 | the core's live paper cycle (a fund in another currency) |
+| The core's vehicles' tax facts (ISIN, issuer, tracked index) against `/iserver/contract/{conid}/info` | 7, 13 | the core's live paper cycle |
 | The collectors' live round (`obliskiq collect daily`, read-only): the underlying snapshot field set on every venue and its availability against the plan (`market_data.feeds`, their prices and their sharing with the paper session); the daily bar's `t` stamp per venue (bars are dated in the venue's zone); the chain walk (`secdef/search` OPT months and venues against the pinned conid, `secdef/strikes`, `secdef/info` per strike with `maturityDate`, `multiplier`, `local_symbol`; the declared venues FTA, MEFFRV, MONEP, EUREX); `/trsrv/futures` for the 16 roots on their native exchanges; one scanner run (`STK.US.MAJOR`) | 8 | the first command list after T1's order test |
 | Pins for TOPIX, BARN, LISN and JDEP (`obliskiq universe pin`), and resolved descriptions for the 47 pinned instruments without one (an instrument without one is never ordered) | 8 | the collectors' live round |
 | Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`); Stocks: United States, Australia and Germany were held on the paper account by accepted previews [CP ✓ 2026-10-21] (`docs/knowledge/ibkr-capabilities.md`) | 8 | the capability probe (below), then each venue's first order |
@@ -1753,8 +1830,9 @@ settles it.
 ## Follow-ups
 
 - The service runs no compute step yet: `obliskiq compute all` by hand. A scheduled job after
-  each region's collection lands with the first engine that reads the store on its own (Session
-  13 or 17). With it, the order path's eligibility reads the commodity engine's contango check
+  each region's collection lands with the first engine that reads the measurement store on its
+  own (Session 17; the core reads the collected bars and the research store directly, D144,
+  D143). With it, the order path's eligibility reads the commodity engine's contango check
   through the store worker, in place of the fail-closed `UnavailableContangoCheck` (D137). That
   is needed before a futures-tracking ETC joins the universe.
 - Session 17 hands the options sleeve its investable capital (`CapitalReader`) so the pool's
@@ -1769,6 +1847,15 @@ settles it.
   `data/positioning/readings.py` if a consumer asks for it.
 - `GEMINI_API_KEY` in a developer's environment makes `test_cli_llm.py` and `test_env.py` fail
   locally (they assume the key absent); CI is unaffected. Clear the key inside those tests.
+- The core holds gold's and broad commodities' share (16 % of A) in cash. Their candidates list
+  on venues whose capabilities are unverified (the London and Milan lines, D121), so neither role
+  has a vehicle the selector may propose. They fill when Session 9's probe on paper verifies a venue.
+  The digest names both roles as unfilled (D143).
+- On the deployment machine, `obliskiq research data load-universe` fills the research store. The
+  service reads the selector's tracking correlations and the swap partners' correlations from it,
+  once a day (D143). Without it every reading is unmeasured: the selector ranks without tracking,
+  and a tilting variant has no partner. A needs neither. Session 19's deployment runs the load
+  with the machine's setup.
 - CFTC release exceptions: the 2025 government shutdown delayed the October–November reports,
   which the fixed lag of three days dates early; an exceptions list from the CFTC's notices before
   a backtest reads those weeks (D126).
@@ -1818,8 +1905,8 @@ settles it.
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
   (2026-10-17). Buying one is the owner's decision; Session 21 tests them if it is bought. The
   satellite has no tested selection signal (D87), and this is the cheapest step toward one.
-- **Owner:** the point is set (D91). Session 13 builds A, the static risk balance: 30 % reached
-  on at most 5 % of 20-year paths. Session 4e's total-risk specifications were neither
+- **Owner:** the point is set (D91). Session 13 built A, the static risk balance, as the core's
+  default (`core.variant`, D141): 30 % reached on at most 5 % of 20-year paths. Session 4e's total-risk specifications were neither
   sufficient nor within that point, so A stays (D95). Before Session 10: an
   LLM provider key, or the minimal extractor waits (D70). Also open: whether a hedge inside a UCITS share class fits the mandate (D69), a deep emergency
   limit for protective exits (off by default, D67), buying option-surface history for H8
@@ -1845,11 +1932,9 @@ settles it.
   held before the bot's first fill (entered by hand with their cost and date), so the hooks
   answer for them; a session before the live account (Session 18 at the latest).
 - Session 15: `StrategyValue` for the satellite (probes, pending catalysts, exits it makes
-  anyway); Session 13 for the core, Session 17 for the decision layer (D108).
+  anyway); Session 17 for the decision layer (D108). The core's is D146.
 - Session 19: Telegram and MCP answers to owner questions and the cash commands (D109).
-- Session 13: the core engine replaces `core.skeleton_targets` and `decision/rebalance_basic.py`
-  (and, with Session 8's universe, the skeleton's allowlist entries).
-- The session that records Session 6's live cycle: decide `o10164` on a conversion from IBKR's
+- The session that records the core's live paper cycle: decide `o10164` on a conversion from IBKR's
   text, now kept in the intent's history and the declined warning's alert (D101, D105).
 - Session 19: the deployment's unit or container replaces docs/RUNBOOK.md's example systemd unit.
 - When IBKR's pacing binds (the first weeks of `serve` show it): the gate reads the live orders and
@@ -1864,7 +1949,7 @@ settles it.
   automatic `live → live-small` downgrade would freeze every modify of an intent made under
   `live`, stop resizes and restores included. When the live levels can write, let a downgrade
   between two writing modes keep protective modifies of existing intents working.
-- First session with captured paper rows (Session 6's live cycle): the sweep cancels a live-order
+- First session with captured paper rows (the core's live paper cycle): the sweep cancels a live-order
   row it cannot read (D48), which could strip a protective stop whose row fails validation for
   another field; read the raw `side` and `secType` of an unreadable row and keep a readable
   non-`CASH` sell.
@@ -1886,7 +1971,7 @@ settles it.
 - **Owner:** paper runs use the Gateway with the automated login (owner, 2026-10-12; OAuth is
   the live account's, D42). Its login did not complete from a cloud container (most likely the
   outbound address changing per connection), so live runs happen on the deployment machine
-  (SESSION_PROMPTS §A.5, T1 and Session 6's live paper cycle in docs/RUNBOOK.md); sessions build
+  (SESSION_PROMPTS §A.5, T1 and the core's live paper cycle in docs/RUNBOOK.md); sessions build
   against fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
   and a daily manual login (D68).
 - Session 19: the deployment image's base is the OS D96 chose (Ubuntu 26.04), with the Java
@@ -1925,9 +2010,6 @@ settles it.
   by a reviewed entry; Session 11's views decide which ones to propose.
 - Session 15: lite's ADR map (legacy/old global_vehicles.py `ADR_MAP`): a company's US depositary
   line as another listing of a stock candidate, chosen when a thesis first orders it (D121).
-- Session 13: the rebalancer chooses each role's vehicle through the selector, passing it the
-  tracking correlations (`research/tracking.py`), the market inputs and the trading windows as
-  `obliskiq universe vehicles` does (`cli/vehicles.py`), and swaps through `SwapPartners`.
 - Session 18: the cost book prices an ETF of unknown market capitalisation at the illiquid friction
   tier (2.12 % a round trip, an assumption), so the selector separates European ETFs mostly by fee;
   a friction tier for ETFs by average daily traded value, from TCA (D120).
