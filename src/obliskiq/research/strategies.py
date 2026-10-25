@@ -39,17 +39,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import ROUND_FLOOR, Decimal
-from typing import Final
+from typing import cast
 
 import numpy as np
 
 from ..config.schema import ObliskConfig
-from ..errors import PreregistrationError, SimulationError
+from ..engines.core.mechanism import (
+    Bands,
+    BuyAndHold,
+    CoreBook,
+    CoreStrategy,
+    RoleVehicles,
+    TaxAware,
+    Weights,
+)
+from ..engines.core.view import CoreView
+from ..engines.core.weights import WEIGHT_QUANTUM, environment_budgets, risk_balanced
+from ..errors import CoreError, PreregistrationError, SimulationError
 from ..quant.covariance import EstimatorRule, portfolio_volatility
-from ..quant.risk_budget import covariance_from, risk_budget_weights
-from ..quant.trend import TrendRule
+from ..quant.risk_budget import covariance_from
+from ..quant.trend import TrendRule, TrendState
 from .prereg import (
     BandedWeightsSpec,
     BuyAndHoldSpec,
@@ -61,14 +72,10 @@ from .prereg import (
     StudySpec,
     TotalRiskSpec,
 )
-from .simulate import Book, MarketView, share
-
-type Weights = Mapping[str, Decimal]
+from .simulate import Book, MarketView
 
 ZERO = Decimal(0)
 ONE = Decimal(1)
-#: Static weights are kept to a millionth.
-WEIGHT_QUANTUM: Final = Decimal("0.000001")
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,50 +88,6 @@ class FixedWeights:
     def targets(self, view: MarketView, book: Book) -> Weights | None:
         del view, book  # the targets never change
         return self.weights
-
-
-@dataclass(frozen=True, slots=True)
-class BuyAndHold:
-    """Its weights on the first date, then nothing."""
-
-    name: str
-    weights: Weights
-
-    def targets(self, view: MarketView, book: Book) -> Weights | None:
-        del view
-        return None if book.units else self.weights
-
-
-@dataclass(frozen=True, slots=True)
-class RoleVehicles:
-    """The instruments that hold a role: its primary vehicle and, if any, its swap partner."""
-
-    primary: str
-    partner: str | None
-
-    @property
-    def keys(self) -> tuple[str, ...]:
-        return (self.primary,) if self.partner is None else (self.primary, self.partner)
-
-
-@dataclass(frozen=True, slots=True)
-class Bands:
-    """A role's outer band: the smaller of ``absolute`` weight and ``relative`` of its target."""
-
-    absolute: Decimal
-    relative: Decimal
-
-    def width(self, target: Decimal) -> Decimal:
-        return min(self.absolute, self.relative * target)
-
-
-@dataclass(frozen=True, slots=True)
-class TaxAware:
-    """A reduction is made only while its tax is at most ``benefit_fraction`` of the value sold
-    (``None``: reductions are always made); purchases go to a swap partner when the primary
-    would defer a loss."""
-
-    benefit_fraction: Decimal | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,77 +145,42 @@ class TotalRisk:
 
 
 @dataclass(frozen=True, slots=True)
-class CoreStrategy:
-    """Static role weights held within wide bands, optionally tilted by trend or scaled to a
-    target volatility, and executed tax-aware (the module docstring)."""
+class ScaledCoreStrategy(CoreStrategy):
+    """The core's mechanism with one risky share instead of the tilt (the module docstring):
+    the engine's strategy, whose role targets are scaled to a target volatility. It is research
+    only (DECISIONS D95): the account does not scale total risk."""
 
-    name: str
-    weights: Weights
-    vehicles: Mapping[str, RoleVehicles]
-    bands: Bands
-    cash_role: str | None
-    tilt: TrendRule | None
-    tax_aware: TaxAware | None
-    scaling: TotalRisk | None = None
+    scaling: TotalRisk = field(kw_only=True)
 
-    def __post_init__(self) -> None:
-        unknown = sorted(set(self.weights) - set(self.vehicles))
-        if unknown:
-            raise ValueError(f"strategy {self.name} weights roles without vehicles: {unknown}")
-        if any(w < ZERO for w in self.weights.values()) or sum(self.weights.values()) > ONE:
-            raise ValueError(
-                f"strategy {self.name} weights must be at least 0 and sum to 1 at most"
-            )
-        if (self.tilt is not None or self.tax_aware is not None) and self.cash_role is None:
-            raise ValueError(f"strategy {self.name} tilts or trades tax-aware without a cash role")
-        if self.cash_role is not None and self.cash_role not in self.vehicles:
-            raise ValueError(f"strategy {self.name} names a cash role without vehicles")
-        if self.tax_aware is not None and self.tilt is None and self.scaling is None:
-            raise ValueError(
-                f"strategy {self.name}: tax-aware execution belongs to the tilt or the scaling"
-            )
-        if self.scaling is not None:
-            if self.tilt is not None:
-                raise ValueError(f"strategy {self.name} both tilts and scales total risk (D92)")
-            if self.cash_role is None:
-                raise ValueError(f"strategy {self.name} scales total risk without a cash role")
-            unknown = sorted(set(self.scaling.base) - set(self.vehicles))
-            if unknown or self.cash_role in self.scaling.base:
-                raise ValueError(f"strategy {self.name}'s base names roles it cannot hold")
+    def _check(self) -> None:
+        self._check_common()
+        scaling = self.scaling
+        if self.tilt is not None:
+            raise ValueError(f"strategy {self.name} both tilts and scales total risk (D92)")
+        if self.cash_role is None:
+            raise ValueError(f"strategy {self.name} scales total risk without a cash role")
+        unknown = sorted(set(scaling.base) - set(self.vehicles))
+        if unknown or self.cash_role in scaling.base:
+            raise ValueError(f"strategy {self.name}'s base names roles it cannot hold")
 
-    # ── targets ──
+    def _states(
+        self, view: CoreView, book: CoreBook
+    ) -> tuple[dict[str, Decimal], dict[str, Decimal], dict[str, TrendState]]:
+        if self.cash_role is None:  # the check refuses this already
+            raise ValueError(f"strategy {self.name} scales total risk without a cash role")
+        return *self._scaled_targets(self.scaling, self.cash_role, view, book), {}
 
     def role_targets(
-        self, view: MarketView, book: Book | None = None
+        self, view: CoreView, book: CoreBook | None = None
     ) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
-        """Each role's target weight and its scale (1 without a tilt or a scaling): the trend's
-        scale, or the risky share of a total-risk strategy (from the share ``book`` holds)."""
-        if self.scaling is not None and self.cash_role is not None:
-            return self._scaled_targets(self.scaling, self.cash_role, view, book)
-        targets = dict(self.weights)
-        scales = dict.fromkeys(targets, ONE)
-        if self.tilt is None or self.cash_role is None:
-            return targets, scales
-        targets.setdefault(self.cash_role, ZERO)
-        scales.setdefault(self.cash_role, ONE)
-        cash = self.vehicles[self.cash_role].primary
-        for role, weight in self.weights.items():
-            if role == self.cash_role or weight == ZERO:
-                continue
-            state = view.trend(self.vehicles[role].primary, cash, self.tilt)
-            if state is None:
-                raise SimulationError(
-                    f"{self.name}: {role} lacks the {self.tilt.months_needed} month ends the "
-                    f"tilt needs on {view.as_of}"
-                )
-            scale = Decimal(repr(state.scale))
-            scales[role] = scale
-            targets[role] = weight * scale
-            targets[self.cash_role] += weight * (ONE - scale)
-        return targets, scales
+        """Each role's target weight and its scale: the risky share of the account (from the
+        share ``book`` holds)."""
+        if self.cash_role is None:  # the check refuses this already
+            raise ValueError(f"strategy {self.name} scales total risk without a cash role")
+        return self._scaled_targets(self.scaling, self.cash_role, view, book)
 
     def _scaled_targets(
-        self, scaling: TotalRisk, cash_role: str, view: MarketView, book: Book | None
+        self, scaling: TotalRisk, cash_role: str, view: CoreView, book: CoreBook | None
     ) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
         keys = [self.vehicles[role].primary for role in scaling.base]
         held = (
@@ -260,165 +188,16 @@ class CoreStrategy:
             if book is not None and book.units
             else None
         )
-        share = scaling.share(scaling.forecast(view, keys), held)
+        # A total-risk strategy is simulated only: the view is the research market view.
+        share = scaling.share(scaling.forecast(cast(MarketView, view), keys), held)
         targets = {role: share * weight for role, weight in scaling.base.items()}
         targets[cash_role] = ONE - share
         scales = dict.fromkeys(scaling.base, share)
         scales[cash_role] = ONE
         return targets, scales
 
-    def targets(self, view: MarketView, book: Book) -> Weights | None:
-        targets, scales = self.role_targets(view, book)
-        current = {role: self._role_weight(role, book) for role in self.vehicles}
-        if book.units:
-            if not self._outside(targets, current):
-                return None
-            aware = self.tax_aware
-            if aware is not None and aware.benefit_fraction is not None and self.cash_role:
-                targets = self._hold_costly_reductions(
-                    targets, scales, current, book, self.cash_role, aware.benefit_fraction
-                )
-                # A held reduction alone is no reason to trade the other roles.
-                if not self._outside(targets, current):
-                    return None
-        return self._vehicle_weights(targets, book)
-
-    def _outside(self, targets: Mapping[str, Decimal], current: Mapping[str, Decimal]) -> bool:
-        """Whether a role sits outside its outer band, or a role without a target is held."""
-        return any(
-            abs(current[role] - target) > self.bands.width(target)
-            for role, target in targets.items()
-        ) or any(current[role] > ZERO for role in set(self.vehicles) - set(targets))
-
-    def _role_weight(self, role: str, book: Book) -> Decimal:
-        return sum((book.weight(key) for key in self.vehicles[role].keys), ZERO)
-
-    # ── tax-aware execution ──
-
-    def _sale_order(self, role: str, book: Book) -> list[str]:
-        """The role's held vehicles, the one with the smaller gain for its value first."""
-
-        def gain_share(key: str) -> Decimal:
-            value = book.value(key)
-            return (value - book.basis(key)) / value
-
-        held = [key for key in self.vehicles[role].keys if book.value(key) > ZERO]
-        return sorted(held, key=lambda key: (gain_share(key), key))
-
-    def _sale_plan(self, role: str, amount: Decimal, book: Book) -> list[tuple[str, Decimal]]:
-        """The value to sell from each vehicle to take ``amount`` out of ``role``."""
-        plan: list[tuple[str, Decimal]] = []
-        left = amount
-        for key in self._sale_order(role, book):
-            if left <= ZERO:
-                break
-            take = min(left, book.value(key))
-            plan.append((key, take))
-            left -= take
-        return plan
-
-    def _hold_costly_reductions(
-        self,
-        targets: dict[str, Decimal],
-        scales: Mapping[str, Decimal],
-        current: Mapping[str, Decimal],
-        book: Book,
-        cash_role: str,
-        benefit_fraction: Decimal,
-    ) -> dict[str, Decimal]:
-        """A trend reduction whose tax exceeds its assumed benefit is not made: the role keeps
-        its weight and the cash role gives up what it would have received."""
-        held = dict(targets)
-        kept = ZERO
-        for role, target in targets.items():
-            if role == cash_role or scales[role] >= ONE or current[role] <= target:
-                continue
-            amount = (current[role] - target) * book.investable
-            tax = book.sales_tax(
-                [
-                    (key, book.units_for(key, value))
-                    for key, value in self._sale_plan(role, amount, book)
-                ]
-            )
-            if tax > benefit_fraction * amount:
-                held[role] = current[role]
-                kept += current[role] - target
-        if kept == ZERO:
-            return held
-        held[cash_role] -= min(kept, held[cash_role])
-        excess = sum(held.values(), ZERO) - ONE
-        if excess <= ZERO:
-            return held
-        # The cash role could not give it all: the roles still trading give up the rest, and
-        # if they cannot (tax owed leaves less to invest than is held), every role scales down.
-        free = [
-            role
-            for role in held
-            if role != cash_role and held[role] != current[role] and held[role] > ZERO
-        ]
-        pool = sum((held[role] for role in free), ZERO)
-        if pool >= excess:
-            for role in free:
-                held[role] -= excess * held[role] / pool
-            return held
-        for role in free:
-            held[role] = ZERO
-        total = sum(held.values(), ZERO)
-        return {role: weight / total for role, weight in held.items()}
-
-    def _buy_vehicle(self, role: str, book: Book) -> str:
-        """Where a purchase for ``role`` goes: a vehicle already held first, then the primary;
-        with tax-aware execution, the first that would not defer a loss (else the first)."""
-        vehicles = self.vehicles[role]
-        held = [key for key in vehicles.keys if book.value(key) > ZERO]
-        order = held + [key for key in vehicles.keys if key not in held]
-        if self.tax_aware is None or vehicles.partner is None:
-            return order[0]
-        for key in order:
-            if not book.purchase_defers_loss(key):
-                return key
-        return order[0]
-
-    def _vehicle_weights(self, targets: Mapping[str, Decimal], book: Book) -> dict[str, Decimal]:
-        """Each vehicle's weight, rounded down to the weight quantum: a residue of the arithmetic
-        above can never make them sum above 1."""
-        if book.investable <= ZERO:
-            return {
-                self.vehicles[role].primary: share(w, ONE)
-                for role, w in targets.items()
-                if w > ZERO
-            }
-        weights: dict[str, Decimal] = {}
-        for role, target in targets.items():
-            vehicles = self.vehicles[role]
-            values = {key: book.value(key) for key in vehicles.keys}
-            wanted = target * book.investable
-            change = wanted - sum(values.values(), ZERO)
-            if change > ZERO:
-                key = self._buy_vehicle(role, book)
-                values[key] += change
-            elif change < ZERO:
-                for key, value in self._sale_plan(role, -change, book):
-                    values[key] -= value
-            for key, value in values.items():
-                if value > ZERO:
-                    weights[key] = share(value, book.investable)
-        return weights
-
 
 # ── building a strategy from its specification ──
-
-
-def environment_budgets(
-    environments: Mapping[str, Sequence[str]], budgets: Mapping[str, Decimal]
-) -> dict[str, Decimal]:
-    """Each role's share of risk: every environment's budget split equally among its roles,
-    a role in two environments taking a share of each."""
-    shares: dict[str, Decimal] = {}
-    for environment, roles in environments.items():
-        for role in roles:
-            shares[role] = shares.get(role, ZERO) + budgets[environment] / len(roles)
-    return shares
 
 
 def total_risk(spec: TotalRiskSpec, core: CoreSpec) -> TotalRisk:
@@ -465,22 +244,18 @@ def static_weights(
     shares = environment_budgets(core.environments, spec.budgets)
     vols, corr = core.risk.matrix(roles)
     solver = settings.numerics.risk_budget
-    solution = risk_budget_weights(
-        covariance_from(vols, corr),
-        [float(shares[role]) for role in roles],
-        tolerance=solver.tolerance,
-        max_iterations=solver.max_iterations,
-    )
-    if not solution.converged:
-        raise PreregistrationError(
-            f"strategy {spec.name}: the risk budget did not converge in "
-            f"{solution.iterations} sweeps"
+    try:
+        return risk_balanced(
+            roles,
+            shares,
+            vols,
+            corr,
+            tolerance=solver.tolerance,
+            max_iterations=solver.max_iterations,
+            name=spec.name,
         )
-    weights = [Decimal(repr(w)).quantize(WEIGHT_QUANTUM) for w in solution.weights]
-    # The rounding remainder goes to the largest weight so that the weights sum to exactly 1.
-    largest = max(range(len(weights)), key=lambda i: weights[i])
-    weights[largest] += ONE - sum(weights, ZERO)
-    return dict(zip(roles, weights, strict=True))
+    except CoreError as exc:
+        raise PreregistrationError(str(exc)) from exc
 
 
 def tilt_rule(core: CoreSpec) -> TrendRule:
@@ -497,7 +272,7 @@ def tilt_rule(core: CoreSpec) -> TrendRule:
 
 def build_strategy(
     spec: StrategySpec, study: StudySpec, settings: ObliskConfig
-) -> FixedWeights | BuyAndHold | CoreStrategy:
+) -> FixedWeights | BuyAndHold | CoreStrategy | ScaledCoreStrategy:
     """The strategy a pre-registration names."""
     if isinstance(spec, FixedWeightsSpec):
         return FixedWeights(spec.name, dict(spec.weights))
@@ -516,16 +291,30 @@ def build_strategy(
         if core.tax_aware is None:  # the specification refuses this already
             raise PreregistrationError(f"strategy {spec.name} needs study.core.tax_aware")
         benefit = core.tax_aware.benefit_fraction
+    vehicles = {
+        role: RoleVehicles(held.primary, held.partner if aware else None)
+        for role, held in study.roles.items()
+    }
+    bands = Bands(core.bands.absolute, core.bands.relative)
+    tax_aware = TaxAware(benefit) if aware else None
+    weights = static_weights(spec, core, settings)
+    if isinstance(spec, TotalRiskSpec):
+        return ScaledCoreStrategy(
+            name=spec.name,
+            weights=weights,
+            vehicles=vehicles,
+            bands=bands,
+            cash_role=core.cash_role,
+            tilt=None,
+            tax_aware=tax_aware,
+            scaling=total_risk(spec, core),
+        )
     return CoreStrategy(
         name=spec.name,
-        weights=static_weights(spec, core, settings),
-        vehicles={
-            role: RoleVehicles(vehicles.primary, vehicles.partner if aware else None)
-            for role, vehicles in study.roles.items()
-        },
-        bands=Bands(core.bands.absolute, core.bands.relative),
+        weights=weights,
+        vehicles=vehicles,
+        bands=bands,
         cash_role=core.cash_role,
         tilt=tilt_rule(core) if tilt else None,
-        tax_aware=TaxAware(benefit) if aware else None,
-        scaling=total_risk(spec, core) if isinstance(spec, TotalRiskSpec) else None,
+        tax_aware=tax_aware,
     )

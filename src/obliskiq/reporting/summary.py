@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from dataclasses import dataclass
 
-from ..decision.rebalance_basic import BUY, SELL, SKIP, RebalancePlan
+from ..decision.core_rebalancer import BUY, SELL, SKIP, RebalancePlan
 from ..domain.orders import ExecutionMode, OrderIntent, OrderSide
 from ..execution.executor import CycleReport
 

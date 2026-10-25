@@ -24,7 +24,7 @@ from ..calendars.status import BlockReason
 from ..capital.planner import ReservationPlan, ReservationPlanner
 from ..capital.twr import TwrResult, account_twr
 from ..config.schema import ObliskConfig
-from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
+from ..decision.core_rebalancer import CoreRebalancer, RebalancePlan
 from ..domain.calendar import PhaseKind
 from ..domain.capital import CashEvent, OwnerQuestion, QuestionState
 from ..domain.orders import (
@@ -125,7 +125,7 @@ async def gather_digest(
     worker: StoreWorker,
     modes: Modes,
     kill: KillSwitch,
-    rebalancer: BasicRebalancer,
+    rebalancer: CoreRebalancer,
     planner: ReservationPlanner,
     calendars: Calendars,
     venues: Sequence[str],

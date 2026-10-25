@@ -143,3 +143,47 @@ def test_covariance_is_d_r_d_and_contributions_need_variance():
     with pytest.raises(ValueError, match="no variance"):
         risk_contributions([0.0, 0.0], cov)
     assert math.isclose(risk_contributions([1.0, 0.0], cov)[0], 1.0)
+
+
+# ── the legacy optimiser's remaining risk-parity cases, on sample covariances ──
+
+
+def sample_covariance(columns: np.ndarray) -> np.ndarray:
+    """The covariance of simulated daily returns, as the legacy tests estimated it."""
+    return np.cov(columns, rowvar=False).reshape(columns.shape[1], columns.shape[1])
+
+
+def test_a_single_asset_holds_everything() -> None:
+    solution = solve([[0.04]], [1.0])
+    assert solution.converged
+    assert solution.weights == pytest.approx([1.0])
+    assert solution.contributions == pytest.approx([1.0])
+
+
+def test_two_simulated_assets_get_equal_contributions_and_the_stabler_one_more_weight() -> None:
+    # The legacy case: one asset at 10 % a day, one at 2 %.
+    rng = np.random.default_rng(42)
+    returns = np.column_stack([rng.normal(0.001, 0.10, 100), rng.normal(0.001, 0.02, 100)])
+    solution = solve(sample_covariance(returns), [0.5, 0.5])
+    assert solution.weights[1] > solution.weights[0] > 0
+    assert solution.contributions == pytest.approx([0.5, 0.5], rel=1e-9)
+
+
+def test_ten_simulated_assets_balance_their_risk() -> None:
+    rng = np.random.default_rng(42)
+    solution = solve(sample_covariance(rng.normal(0.001, 0.02, size=(100, 10))), [0.1] * 10)
+    assert solution.converged
+    assert sum(solution.weights) == pytest.approx(1)
+    assert min(solution.weights) > 0
+    assert solution.contributions == pytest.approx([0.1] * 10, rel=1e-8)
+
+
+def test_an_asset_of_almost_no_variance_takes_nearly_all_the_weight_and_stays_finite() -> None:
+    rng = np.random.default_rng(42)
+    returns = np.column_stack([rng.normal(0.001, 0.0001, 100), rng.normal(0.001, 0.02, 100)])
+    cov = sample_covariance(returns) + np.eye(2) * 1e-8  # the legacy case's positive diagonal
+    solution = solve(cov, [0.5, 0.5])
+    assert solution.converged
+    assert np.all(np.isfinite(solution.weights))
+    assert solution.weights[0] > 0.99
+    assert solution.contributions == pytest.approx([0.5, 0.5], rel=1e-7)

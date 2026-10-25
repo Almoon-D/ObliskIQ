@@ -15,20 +15,18 @@ import pytest
 from research_core_toy import CORE_TOY
 
 from obliskiq.config import ObliskConfig
-from obliskiq.errors import PreregistrationError, SimulationError
-from obliskiq.quant.trend import TrendRule, TrendState
-from obliskiq.research.prereg import load_prereg
-from obliskiq.research.strategies import (
+from obliskiq.engines.core.mechanism import (
     Bands,
     BuyAndHold,
     CoreStrategy,
-    FixedWeights,
     RoleVehicles,
     TaxAware,
-    build_strategy,
-    environment_budgets,
-    static_weights,
 )
+from obliskiq.engines.core.weights import environment_budgets
+from obliskiq.errors import PreregistrationError, SimulationError
+from obliskiq.quant.trend import TrendRule, TrendState
+from obliskiq.research.prereg import load_prereg
+from obliskiq.research.strategies import FixedWeights, build_strategy, static_weights
 
 D = Decimal
 HUNDRED = Decimal(100)

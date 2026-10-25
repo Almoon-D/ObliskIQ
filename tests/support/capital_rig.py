@@ -5,8 +5,11 @@ them over an order path.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+from core_rig import EMIM, IBGM, IWDA, RIG_PINS, PinnedVehicles, rig_settings
 
 from obliskiq.capital.managed import CapitalReader
 from obliskiq.capital.planner import ReservationPlanner
@@ -14,7 +17,9 @@ from obliskiq.capital.questions import OwnerQuestions
 from obliskiq.capital.strategy import DefaultStrategyValue, StrategyValue
 from obliskiq.capital.valuation import Valuer
 from obliskiq.config import ObliskConfig
-from obliskiq.decision.rebalance_basic import BasicRebalancer
+from obliskiq.decision.core_closes import StoredCloses
+from obliskiq.decision.core_rebalancer import CoreRebalancer
+from obliskiq.engines.core.engine import CoreEngine
 from obliskiq.execution.instruments import InstrumentDirectory, UniverseDirectory
 from obliskiq.execution.intent_maker import IntentMaker
 from obliskiq.execution.pricing import Pricer
@@ -24,6 +29,8 @@ from obliskiq.quant.costs import CostBook
 from obliskiq.tax.book import TaxBook
 
 REPO = Path(__file__).resolve().parents[2]
+#: The core target the planner sees unless a test gives another: the rig variant's weights.
+RIG_WEIGHTS = {IWDA: Decimal("0.18"), EMIM: Decimal("0.14"), IBGM: Decimal("0.68")}
 
 
 def capital_parts(
@@ -32,6 +39,7 @@ def capital_parts(
     *,
     directory: InstrumentDirectory | None = None,
     strategy: StrategyValue | None = None,
+    core_weights: dict[int, Decimal] | None = None,
     jurisdiction: str = "es",
     config_dir: Path | None = None,
 ) -> CapitalParts:
@@ -76,16 +84,18 @@ def capital_parts(
         maker=maker,
         questions=questions,
         kill=rig.kill,
+        core_weights=lambda: RIG_WEIGHTS if core_weights is None else core_weights,
         now=rig.clock,
     )
     return CapitalParts(capital, tax, questions, planner, maker)
 
 
-def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> BasicRebalancer:
-    chosen = settings if settings is not None else rig.settings
+def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> CoreRebalancer:
+    """The core rebalancer over the rig, on the rig's variant and vehicles unless told otherwise."""
+    chosen = rig_settings(settings if settings is not None else rig.settings)
     directory = kw.pop("directory", UniverseDirectory.from_settings(chosen))
     parts = capital_parts(rig, chosen, directory=directory)
-    return BasicRebalancer(
+    return CoreRebalancer(
         chosen,
         capital=parts.capital,
         directory=directory,
@@ -95,5 +105,9 @@ def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -
         costs=CostBook.from_config(chosen),
         kill=rig.kill,
         tax=kw.pop("tax", parts.tax),
+        engine=CoreEngine(chosen),
+        vehicles=kw.pop("vehicles", PinnedVehicles(RIG_PINS)),
+        closes=StoredCloses(chosen, worker=rig.worker, directory=directory, rates=None),
+        secdef=kw.pop("secdef", None),
         now=rig.clock,
     )

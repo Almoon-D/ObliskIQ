@@ -24,12 +24,19 @@ from ..data.halts import HaltFeed
 from ..data.market.daily import MarketCollector
 from ..data.market.targets import collection_venues
 from ..data.runner import HEARTBEAT_SOURCES, SourceRunner, client_for
-from ..decision.rebalance_basic import BasicRebalancer
+from ..decision.core_closes import StoredCloses
+from ..decision.core_rebalancer import CoreRebalancer
+from ..decision.core_value import LatestTarget
+from ..decision.core_vehicles import VehicleChooser, VehicleSource
+from ..decision.swap_partners import SwapPartners
+from ..decision.vehicle_selector import VehicleSelector
+from ..engines.core.engine import CoreEngine
 from ..env import Environment, secret_reader
 from ..execution.runtime import OrderPath, calendar_venues, open_order_path
 from ..ibkr.session import BrokerSession
 from ..ibkr.transport import Transport
 from ..ibkr.transport.gateway_login import LoginDriver
+from ..jurisdiction import ELIGIBILITY_POLICIES, TAX_POLICIES
 from ..jurisdiction.profile import JurisdictionProfile
 from ..llm.extractor import EventExtractor
 from ..quant.costs import CostBook
@@ -43,6 +50,7 @@ from .nav import NavCollector
 from .parts import build_capital
 from .schedule import CollectPlan, SourceMoment, SourcePlan
 from .service import AlertHooks, Service
+from .vehicle_inputs import EcbRates, StoredRoleInputs
 
 
 def collect_plan(settings: ObliskConfig) -> CollectPlan:
@@ -128,11 +136,22 @@ def build_service(
     http: httpx.AsyncClient | None = None,
     secrets: Callable[[str], str | None] | None = None,
     earnings: EarningsSource = yfinance_earnings,
+    vehicles: VehicleSource | None = None,
 ) -> Service:
     """The service over an open order path; with ``http``, it runs the sources and reads the
     halt feed (``secrets`` resolves the credentials sources name)."""
-    parts = build_capital(settings, path, now=clock.now)
-    rebalancer = BasicRebalancer(
+    latest = LatestTarget()
+    parts = build_capital(settings, path, now=clock.now, core=latest)
+    tax = TAX_POLICIES.resolve(path.profile, settings)
+    chooser = vehicles or VehicleChooser(
+        settings,
+        VehicleSelector(settings, ELIGIBILITY_POLICIES.resolve(path.profile, settings), tax),
+        SwapPartners(settings, tax),
+        StoredRoleInputs(
+            settings, worker=path.worker, calendars=path.calendars, data_dir=path.data_dir
+        ),
+    )
+    rebalancer = CoreRebalancer(
         settings,
         capital=parts.capital,
         directory=path.directory,
@@ -142,6 +161,16 @@ def build_service(
         costs=CostBook.from_config(settings),
         kill=path.kill,
         tax=parts.tax,
+        engine=CoreEngine(settings),
+        vehicles=chooser,
+        closes=StoredCloses(
+            settings,
+            worker=path.worker,
+            directory=path.directory,
+            rates=EcbRates(settings, data_dir=path.data_dir),
+        ),
+        latest=latest,
+        secdef=path.client.secdef,
         now=clock.now,
     )
     venues = sorted({*calendar_venues(settings, path.directory), *anchor_venues(settings)})

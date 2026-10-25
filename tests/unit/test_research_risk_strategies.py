@@ -16,14 +16,12 @@ import numpy as np
 import pytest
 from research_risk_toy import RISK_TOY
 
+from obliskiq.engines.core.mechanism import Bands, CoreStrategy, RoleVehicles, TaxAware
 from obliskiq.errors import PreregistrationError, SimulationError
 from obliskiq.quant.covariance import Estimate, EstimatorRule
 from obliskiq.research.prereg import load_prereg
 from obliskiq.research.strategies import (
-    Bands,
-    CoreStrategy,
-    RoleVehicles,
-    TaxAware,
+    ScaledCoreStrategy,
     TotalRisk,
     build_strategy,
     declared_share,
@@ -105,9 +103,9 @@ def scaling(**overrides) -> TotalRisk:
     return TotalRisk(**fields)
 
 
-def strategy(rule: TotalRisk, *, tax: bool = False) -> CoreStrategy:
+def strategy(rule: TotalRisk, *, tax: bool = False) -> ScaledCoreStrategy:
     weights = {"EQ": D("0.625"), "CASH": D("0.375")}
-    return CoreStrategy(
+    return ScaledCoreStrategy(
         name="scaled",
         weights=weights,
         vehicles=VEHICLES,
@@ -183,17 +181,17 @@ def test_a_strategy_that_scales_refuses_a_tilt_a_missing_cash_role_or_an_unheld_
     common = {"name": "x", "weights": {"EQ": D("0.5")}, "bands": Bands(D("0.05"), D("0.25"))}
     tilt = TrendRule(momentum_months=3, average_months=2, hysteresis=0.0, floor=0.5)
     with pytest.raises(ValueError, match="both tilts and scales"):
-        CoreStrategy(**common, vehicles=VEHICLES, cash_role="CASH", tilt=tilt, tax_aware=None,
-                     scaling=rule)  # fmt: skip
+        ScaledCoreStrategy(**common, vehicles=VEHICLES, cash_role="CASH", tilt=tilt,
+                           tax_aware=None, scaling=rule)  # fmt: skip
     with pytest.raises(ValueError, match="without a cash role"):
-        CoreStrategy(**common, vehicles=VEHICLES, cash_role=None, tilt=None, tax_aware=None,
-                     scaling=rule)  # fmt: skip
+        ScaledCoreStrategy(**common, vehicles=VEHICLES, cash_role=None, tilt=None,
+                           tax_aware=None, scaling=rule)  # fmt: skip
     with pytest.raises(ValueError, match="cannot hold"):
-        CoreStrategy(**common, vehicles=VEHICLES, cash_role="CASH", tilt=None, tax_aware=None,
-                     scaling=scaling(base={"GD": D(1)}))  # fmt: skip
+        ScaledCoreStrategy(**common, vehicles=VEHICLES, cash_role="CASH", tilt=None,
+                           tax_aware=None, scaling=scaling(base={"GD": D(1)}))  # fmt: skip
     with pytest.raises(ValueError, match="tax-aware execution belongs"):
         CoreStrategy(**common, vehicles=VEHICLES, cash_role="CASH", tilt=None,
-                     tax_aware=TaxAware(D("0.05")), scaling=None)  # fmt: skip
+                     tax_aware=TaxAware(D("0.05")))  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -235,16 +233,16 @@ def test_the_builders_give_each_portfolio_its_rule_and_the_twin_its_declared_sha
     # 0.6 / 0.4 of a 16 % and a 4 % volatility, uncorrelated.
     assert rule.declared_volatility() == pytest.approx(math.sqrt(0.36 * 0.0256 + 0.16 * 0.0016))
     built = build_strategy(s2, study, shipped_settings)
-    assert isinstance(built, CoreStrategy)
+    assert isinstance(built, ScaledCoreStrategy)
     assert built.scaling is not None
     assert built.vehicles["EQ"].partner == "EQ_SWAP"  # tax-aware: swap partners
     assert built.tax_aware == TaxAware(D("0.05"))
     partners = build_strategy(s1, study, shipped_settings)
-    assert isinstance(partners, CoreStrategy)
+    assert isinstance(partners, ScaledCoreStrategy)
     assert partners.vehicles["EQ"].partner == "EQ_SWAP"
     assert partners.tax_aware == TaxAware(None)
     plain = build_strategy(s1.model_copy(update={"tax_aware": False}), study, shipped_settings)
-    assert isinstance(plain, CoreStrategy)
+    assert isinstance(plain, ScaledCoreStrategy)
     assert plain.vehicles["EQ"].partner is None
     assert plain.tax_aware is None
 

@@ -1,11 +1,10 @@
-"""The shape of the service, capital, the skeleton core, trading and reporting configuration.
+"""The shape of the service, capital, trading and reporting configuration.
 
 ``runtime`` schedules the service (MASTER_PLAN §5.14): a heartbeat, four decision cycles a trading
 day anchored to venue sessions, a daily digest. ``capital`` is managed capital, the sleeve budgets,
 deposits, withdrawal reservations, the planner and the time-weighted return (MASTER_PLAN §5.15).
-``core.skeleton_targets`` is the walking skeleton's static book, removed when Session 13 builds
-the core engine. ``trading`` is how the basic rebalancer trades toward it, and
-``reporting`` how the owner hears of it.
+``trading`` is how the core rebalancer trades toward the core engine's targets, and ``reporting``
+how the owner hears of it.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -15,10 +14,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
-from ..domain.base import Conid, NonEmptyText
 from ..domain.calendar import Mic
-from .base import FrozenModel, Identifier
-from .schema_vehicles import CoreRoleConfig
+from .base import FrozenModel
 
 type Anchor = Literal["open", "close"]
 type QuotedFraction = Annotated[Decimal, Field(gt=0, le=1, allow_inf_nan=False)]
@@ -172,34 +169,6 @@ class CapitalConfig(FrozenModel):
             raise ValueError(
                 "capital.satellite_ceiling leaves less than the core, option and cash budgets"
             )
-        return self
-
-
-class SkeletonTarget(FrozenModel):
-    """One role of the skeleton book: its weight of managed capital and the conid filling it."""
-
-    role: NonEmptyText
-    weight: QuotedFraction
-    conid: Conid
-
-
-class CoreConfig(FrozenModel):
-    #: The core's roles (MASTER_PLAN §5.4), by id: what ``exposures.core_roles`` and the skeleton
-    #: name.
-    roles: dict[Identifier, CoreRoleConfig] = Field(min_length=1)
-    skeleton_targets: list[SkeletonTarget] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _a_book(self) -> Self:
-        roles = [target.role for target in self.skeleton_targets]
-        conids = [target.conid for target in self.skeleton_targets]
-        if len(set(roles)) != len(roles) or len(set(conids)) != len(conids):
-            raise ValueError("each role and each conid is listed once")
-        unknown = sorted(set(roles) - set(self.roles))
-        if unknown:
-            raise ValueError(f"skeleton_targets name roles core.roles does not declare: {unknown}")
-        if sum((target.weight for target in self.skeleton_targets), Decimal(0)) > 1:
-            raise ValueError("the skeleton's weights add up to more than the whole book")
         return self
 
 

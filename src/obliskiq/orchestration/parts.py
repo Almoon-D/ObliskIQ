@@ -13,6 +13,7 @@ from ..capital.questions import OwnerQuestions
 from ..capital.strategy import DefaultStrategyValue
 from ..capital.valuation import Valuer
 from ..config.schema import ObliskConfig
+from ..decision.core_value import CoreStrategyValue, LatestTarget
 from ..execution.intent_maker import IntentMaker
 from ..execution.runtime import OrderPath
 from ..jurisdiction import TAX_POLICIES
@@ -33,9 +34,15 @@ class CapitalParts:
 
 
 def build_capital(
-    settings: ObliskConfig, path: OrderPath, *, now: Callable[[], datetime]
+    settings: ObliskConfig,
+    path: OrderPath,
+    *,
+    now: Callable[[], datetime],
+    core: LatestTarget | None = None,
 ) -> CapitalParts:
-    """The capital machinery over an open order path."""
+    """The capital machinery over an open order path; ``core`` is the core's latest target, which
+    the planner reads (the rebalancer writes it)."""
+    latest = core if core is not None else LatestTarget()
     valuer = Valuer(settings, reader=path.reader, directory=path.directory)
     capital = CapitalReader(
         settings,
@@ -69,11 +76,12 @@ def build_capital(
         tax=tax,
         costs=CostBook.from_config(settings),
         calendars=path.calendars,
-        strategy=DefaultStrategyValue(settings.capital),
+        strategy=CoreStrategyValue(latest, DefaultStrategyValue(settings.capital)),
         worker=path.worker,
         maker=maker,
         questions=questions,
         kill=path.kill,
+        core_weights=latest.weights,
         now=now,
     )
     return CapitalParts(capital, tax, questions, planner, maker)

@@ -5,6 +5,52 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.18.0] - 2026-10-25
+
+Session 13, the core engine: the variant the owner chose (A, the static risk balance with wide
+bands, DECISIONS D91) held by the mechanism the research harness simulated, with the vehicle
+selector filling its roles and the walking skeleton gone.
+
+### Added
+
+- `engines/core/` (DECISIONS D140): `CoreStrategy` (static role weights in wide bands, the trend
+  tilt, tax-aware execution), moved out of `research/strategies.py` so that the live decision path
+  and the harness run one class; `CoreEngine.portfolio`, which answers with a `TargetPortfolio`
+  (`domain/portfolio.py`); the registered `variants`, the delta execution (`plan_deltas`, called by
+  the simulator too), the month-end close (`month_end_closes`) and the risk-balanced weights.
+- `core.variant` (A) and `core.variants`: the ten portfolios of Session 4c with the
+  pre-registration's constants (environments, declared risk, bands, tilt, tax rule, budgets).
+  Tests hold them equal to `research/preregistrations/core-allocation.md`.
+- `decision/core_rebalancer.py` (replaces `rebalance_basic.py`): inside the outer bands only new
+  cash is spent, beyond them every vehicle goes to its target; `core_vehicles.py` (the selector
+  fills the roles, a held vehicle stays, a swap partner for the tilting variants),
+  `core_closes.py` (month-end closes from the stored bars and the ECB rates), `core_book.py` (the
+  lots' answers; an unpriced sale is held, never made blind), `core_value.py` (the core's
+  `StrategyValue` and the planner's view of its target).
+- `orchestration/vehicle_inputs.py`: the selector's inputs read from the market and research
+  stores for the service, shared with `obliskiq universe vehicles`.
+- Alerts `core.role_unfilled` and `core.not_evaluable`; the `service.target_unconfirmed` alert now
+  names the core vehicle IBKR does not confirm.
+- Tests: the parity of the engine with the simulator on one fixture history (A, B, C, D50), every
+  registered variant for a small and a large account, the configuration against the
+  pre-registration, the vehicle choice, the closes, the book, the rebalancer's bands.
+
+### Changed
+
+- `research.strategies.CoreStrategy` is `engines.core.mechanism.CoreStrategy`; total-risk scaling
+  is `ScaledCoreStrategy`, research only (D95). `Pricing.trend` and the simulator's rebalance call
+  the shared functions.
+- `TaxHooks.basis`; the reservation planner takes the core's target weights from the engine, not
+  from configuration.
+- The core's alerts and the RUNBOOK describe the engine, not the skeleton.
+- mypy checks as Linux (`platform = "linux"`): the service uses POSIX APIs, and a Windows checkout
+  reported them as errors.
+
+### Removed
+
+- `core.skeleton_targets`, `SkeletonTarget`, `decision/rebalance_basic.py` and the startup
+  confirmation of the skeleton's conids (each chosen vehicle is confirmed at its first survey).
+
 ## [0.17.0] - 2026-10-24
 
 Session 12, the engines and the gates: the option surface per underlying, the options sleeve

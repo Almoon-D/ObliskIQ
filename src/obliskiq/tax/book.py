@@ -173,6 +173,11 @@ class TaxHooks:
         )
         return self._engine.tax_cost(trade)
 
+    def basis(self, conid: int) -> Decimal:
+        """What a sale of every unit of ``conid`` counts against: the lots' cost and the losses
+        they carry."""
+        return self._engine.basis(security_key(conid))
+
     def trial_tax(self, sales: Sequence[tuple[int, Decimal, Decimal]], *, on: date) -> Decimal:
         """The tax ``sales`` (conid, units, price) add to the year made together, in order."""
         return self._engine.trial_tax(

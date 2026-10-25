@@ -115,3 +115,13 @@ class SimulationError(ResearchError):
 
 class DataSourceError(ResearchError):
     """A research data source answered with something the loader cannot read as data."""
+
+
+class CoreError(ObliskError):
+    """The core engine cannot form a target it can stand behind: a role without the history its
+    tilt reads, a variant the configuration does not register."""
+
+
+class TrendUnavailableError(CoreError, SimulationError):
+    """A tilted role lacks the month ends its tilt needs. In a simulation the study is not
+    evaluable; in the account the core holds what it has."""

@@ -1,5 +1,5 @@
-# How the basic rebalancer (decision/rebalance_basic.py) trades toward its targets. Amounts and
-# fractions are QUOTED. Session 13's core engine brings the wide inner and outer bands.
+# How the core rebalancer (decision/core_rebalancer.py) trades toward the core engine's target.
+# Amounts and fractions are QUOTED. The outer bands are `core.bands`.
 trading:
   # The smallest trade, in the base currency: `absolute_base`, `fraction_of_managed` (of managed
   # capital), or both combined by `combine` (max: the larger; min: the smaller); either may be
@@ -9,8 +9,9 @@ trading:
     absolute_base: "50"
     fraction_of_managed: "0.02"
     combine: max
-  # A role trades back to its target only once its weight is further from it than the smaller of
-  # `absolute` (weight points) and `relative` (a share of its target). Judgements.
+  # The inner band: inside the outer bands new cash buys a vehicle only once its weight is further
+  # under its target than the smaller of `absolute` (weight points) and `relative` (a share of its
+  # target). Judgements.
   inner_band:
     absolute: "0.02"
     relative: "0.10"

@@ -112,7 +112,7 @@ async def test_a_target_ibkr_does_not_confirm_is_alerted_and_not_traded(make: An
     del s.broker.contracts[EMIM]
     await run_until(s, BEFORE_EUROPE, BEFORE_EUROPE + timedelta(minutes=10))
     (alert,) = s.notifier.alerts("service.target_unconfirmed")
-    assert f"skeleton conid {EMIM} is not traded" in alert
+    assert f"core vehicle conid {EMIM} is not traded" in alert
     conids = {i.intent.conid for i in await s.rig.store(repo.intents_in_states, list(IntentState))}
     assert EMIM not in conids
     assert len(conids) == 2
@@ -121,14 +121,14 @@ async def test_a_target_ibkr_does_not_confirm_is_alerted_and_not_traded(make: An
 async def test_a_confirmation_that_breaks_leaves_every_role_waiting(
     make: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from obliskiq.orchestration import service as service_module
+    from obliskiq.decision import core_rebalancer
 
     s = await make()
 
     async def broken(*args: Any) -> dict[int, str]:
         raise RuntimeError("search broke")
 
-    monkeypatch.setattr(service_module, "confirm_targets", broken)
+    monkeypatch.setattr(core_rebalancer, "confirm_vehicles", broken)
     await run_until(s, BEFORE_EUROPE, BEFORE_EUROPE + timedelta(minutes=10))
     assert len(s.notifier.alerts("service.target_unconfirmed")) == 3
     assert await s.rig.store(repo.intents_in_states, list(IntentState)) == []

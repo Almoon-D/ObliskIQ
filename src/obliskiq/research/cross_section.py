@@ -54,6 +54,7 @@ from ..quant.costs import CostBook
 from ..quant.inference import MeanEstimate
 from ..store import Store
 from ..store.research import research_observations, research_series_info
+from ..util.decimals import share
 from .data import SurvivorshipReport, survivorship
 from .decide import AdequacyCheck, Decision, decide
 from .prereg import (
@@ -77,7 +78,6 @@ from .simulate import (
     SimulationSettings,
     Simulator,
     StopRule,
-    share,
 )
 from .stats import (
     Breakeven,

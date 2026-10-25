@@ -1,6 +1,7 @@
-"""The basic rebalancer: targets against holdings in integer units, inside the inner band, above
-the minimum trade and the commission floor, within what the book may spend; and why a role or
-the whole book is left alone.
+"""The core rebalancer: the engine's target against holdings in integer units, only new cash inside
+the outer bands and every vehicle back to its target beyond them, above the minimum trade and the
+commission floor, within what the book may spend; and why a vehicle or the whole book is left
+alone.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -14,6 +15,7 @@ from typing import Any
 import pytest
 import respx
 from capital_rig import make_rebalancer
+from core_rig import RIG_PINS, PinnedVehicles
 from fake_broker import EURUSD, FakeBroker
 from order_rig import build_rig
 from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market
@@ -21,10 +23,10 @@ from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
 from obliskiq.config.schema_runtime import CapitalConfig
-from obliskiq.decision.rebalance_basic import (
-    BasicRebalancer,
+from obliskiq.decision.core_rebalancer import (
+    CoreRebalancer,
     RebalancePlan,
-    confirm_targets,
+    confirm_vehicles,
     minimum_trade,
 )
 from obliskiq.domain.capital import Adjustment, AdjustmentKind, Deposit
@@ -40,6 +42,7 @@ from obliskiq.domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
+from obliskiq.domain.portfolio import TargetStatus
 from obliskiq.errors import TaxError
 from obliskiq.execution.executor import RETRY_NEXT_WINDOW
 from obliskiq.execution.instruments import UniverseDirectory
@@ -79,7 +82,7 @@ async def rig(
         await built.aclose()
 
 
-def rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> BasicRebalancer:
+def rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> CoreRebalancer:
     return make_rebalancer(rig, settings, **kw)
 
 
@@ -93,6 +96,19 @@ def with_capital(settings: ObliskConfig, **values: Any) -> ObliskConfig:
 
 def with_trading(settings: ObliskConfig, **values: Any) -> ObliskConfig:
     return settings.model_copy(update={"trading": settings.trading.model_copy(update=values)})
+
+
+def with_bands(settings: ObliskConfig, absolute: str, relative: str) -> ObliskConfig:
+    bands = settings.core.bands.model_copy(
+        update={"absolute": Decimal(absolute), "relative": Decimal(relative)}
+    )
+    return settings.model_copy(update={"core": settings.core.model_copy(update={"bands": bands})})
+
+
+#: A contract the rig quotes besides the three funds: it fills the cash role in the tests that
+#: need one (iShares Core MSCI Europe, EXV1, in euros).
+CASH_LINE = 89005163
+WITH_CASH = {**RIG_PINS, "cash": (CASH_LINE, None)}
 
 
 #: What one unit of each vehicle is worth in euros at the skeleton market's quotes.
@@ -162,29 +178,63 @@ async def test_buys_stop_at_what_the_book_may_spend(rig: Any) -> None:
     assert "below the minimum trade 50.00" in roles["em_equity"].reason
 
 
-async def test_a_book_inside_its_bands_holds_and_an_overweight_sells(rig: Any) -> None:
-    await hold(rig, IBGM, "4", "EUR")  # 710: 30 above 680, the band is 20
-    await hold(rig, EMIM, "3", "EUR")  # 139.26 against 140: inside
-    await hold(rig, IWDA, "1", "USD")  # 126 against 180: 54 short, less than a unit
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
+async def test_inside_the_outer_bands_only_new_cash_is_spent_and_nothing_is_sold(rig: Any) -> None:
+    wide = with_bands(rig.settings, "0.5", "0.9")
+    await hold(rig, IBGM, "5", "EUR")  # 887.50 against 646: far over, inside a wide band
+    await hold(rig, EMIM, "3", "EUR")  # 139.26 against 133
+    await hold(rig, IWDA, "1", "USD")  # 126 against 171: 45 short, less than a unit
+    plan = await rebalancer(rig, wide).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert not plan.portfolio.rebalance
+    roles = by_role(plan)
+    assert roles["euro_govt_intermediate"].action == "hold"
+    assert "a sale waits for the outer band" in roles["euro_govt_intermediate"].reason
     assert roles["em_equity"].action == "hold"
     assert roles["world_equity"].action == "skip"
     assert "less than one whole unit" in roles["world_equity"].reason
-    # 30 over is less than one IBGM: nothing to sell.
+    assert "only new cash is spent" in plan.render()
+
+
+async def test_new_cash_buys_the_vehicle_furthest_under_its_target(rig: Any) -> None:
+    wide = with_bands(rig.settings, "0.5", "1")
+    await hold(rig, IBGM, "3", "EUR")  # 532.50 against 646
+    plan = await rebalancer(rig, wide).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert not plan.portfolio.rebalance
+    roles = by_role(plan)
+    assert (roles["world_equity"].action, roles["world_equity"].quantity) == ("buy", 1)
+    assert (roles["em_equity"].action, roles["em_equity"].quantity) == ("buy", 2)
+    # 113.50 short of 646 is inside the inner band's reach but less than one unit.
     assert roles["euro_govt_intermediate"].action == "skip"
-    await hold(rig, IBGM, "5", "EUR")  # 887.50: 207.50 over, one unit to sell
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
+
+
+async def test_beyond_an_outer_band_every_vehicle_goes_back_to_its_target(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # 887.50: 93 % of the book against a target of 68 %
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.rebalance
+    roles = by_role(plan)
+    # The target is 646, three units: the simulator's delta execution sells two.
     assert (roles["euro_govt_intermediate"].action, roles["euro_govt_intermediate"].quantity) == (
         "sell",
-        1,
+        2,
     )
+    # The sale's proceeds are not spent in the cycle that makes it: what is left of the book's
+    # cash (112.50 less the floor) cannot buy a unit of IWDA or two of EMIM.
+    assert roles["world_equity"].action == "skip"
+    assert "no cash for one unit" in roles["world_equity"].reason
+    assert roles["em_equity"].action == "skip"
+    assert "every vehicle goes to its target" in plan.render()
 
 
 async def test_a_holding_the_targets_no_longer_name_is_sold(rig: Any) -> None:
     rig.broker.quote(89005163, bid="20.00", ask="20.02", last="20.01")  # EXV1
     await hold(rig, 89005163, "10", "EUR")
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
-    unlisted = roles["unlisted 89005163"]
+    plan = await rebalancer(rig).survey(ExecutionMode.PAPER)
+    assert plan.portfolio is not None
+    assert plan.portfolio.rebalance
+    assert any("no role names it" in reason for reason in plan.portfolio.reasons)
+    unlisted = by_role(plan)["unlisted 89005163"]
     assert (unlisted.action, unlisted.quantity, unlisted.weight) == ("sell", 10, 0)
 
 
@@ -242,7 +292,7 @@ async def test_a_role_whose_listing_maps_to_no_venue_waits(rig: Any) -> None:
 
 
 async def test_a_role_without_a_price_has_no_commission(rig: Any) -> None:
-    from obliskiq.decision.rebalance_basic import _Role
+    from obliskiq.decision.core_rebalancer import _Role
 
     unpriced = _Role("r", IBGM, Decimal("0.5"), None, Decimal(0), None, None)
     assert rebalancer(rig)._commission(unpriced, Decimal(1), "XAMS") is None
@@ -270,23 +320,47 @@ async def test_a_role_an_intent_works_on_waits(rig: Any) -> None:
     assert all(d.action == "buy" for d in roles.values())
 
 
-async def test_a_role_without_a_price_or_an_instrument_is_skipped(rig: Any) -> None:
+async def test_a_role_without_a_price_is_held_in_cash(rig: Any) -> None:
+    rig.broker.quote(CASH_LINE, bid="20.00", ask="20.02", last="20.01")
+    cash = PinnedVehicles(WITH_CASH)
     del rig.broker.quotes[EMIM]
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    assert (roles["em_equity"].action, roles["em_equity"].reason) == ("skip", "no price")
+    plan = await rebalancer(rig, vehicles=cash).survey(ExecutionMode.SHADOW)
+    assert plan.unfilled == {"em_equity": "its vehicle has no price"}
+    assert plan.portfolio is not None
+    em = next(r for r in plan.portfolio.roles if r.role == "em_equity")
+    assert em.weight == 0
+    assert "held in the cash role" in em.reason
+    roles = by_role(plan)
+    assert roles["cash"].weight > Decimal("0.13")  # the role's 14 % went to cash
+    assert "unfilled em_equity" in plan.render()
+
+
+async def test_a_book_the_variant_cannot_fill_is_not_evaluable(rig: Any) -> None:
+    del rig.broker.quotes[EMIM]
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert plan.portfolio is not None
+    assert plan.portfolio.status is TargetStatus.NOT_EVALUABLE
+    assert plan.blocked is not None
+    assert plan.blocked.startswith("the core's target is not evaluable")
+    assert "the cash role cash has no vehicle" in plan.blocked
+    assert plan.decisions == []
+
+
+async def test_a_vehicle_without_an_instrument_is_not_priced(rig: Any) -> None:
     directory = UniverseDirectory(
         i for i in UniverseDirectory.from_settings(rig.settings).instruments() if i.conid != IBGM
     )
-    roles = by_role(await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW))
-    assert roles["euro_govt_intermediate"].reason == "no instrument describes the conid"
-    assert roles["euro_govt_intermediate"].symbol == "?"
+    plan = await rebalancer(rig, directory=directory).survey(ExecutionMode.SHADOW)
+    assert plan.unfilled["euro_govt_intermediate"] == "its vehicle has no price"
 
 
 async def test_a_role_not_confirmed_by_ibkr_is_skipped(rig: Any) -> None:
     survey = rebalancer(rig)
     survey.refuse({IWDA: "IBKR resolves IWDA on LSEETF to conid 1"})
-    roles = by_role(await survey.survey(ExecutionMode.SHADOW))
+    plan = await survey.survey(ExecutionMode.SHADOW)
+    roles = by_role(plan)
     assert roles["world_equity"].reason == "not confirmed: IBKR resolves IWDA on LSEETF to conid 1"
+    assert plan.refused == {IWDA: "IBKR resolves IWDA on LSEETF to conid 1"}
 
 
 async def test_a_dollar_line_is_valued_by_the_pairs_quote_without_a_ledger_rate(
@@ -301,11 +375,11 @@ async def test_a_dollar_line_is_valued_by_the_pairs_quote_without_a_ledger_rate(
     plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
     assert plan.blocked == "the USD cash cannot be valued in EUR"
     rig.broker.cash = {"EUR": (Decimal(10000), None)}
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    assert roles["world_equity"].reason == "no price"
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert plan.unfilled["world_equity"] == "its vehicle has no price"
     rig.broker.unavailable.add("snapshot")
-    roles = by_role(await rebalancer(rig).survey(ExecutionMode.SHADOW))
-    assert all(d.reason == "no price" for d in roles.values())
+    plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
+    assert set(plan.unfilled) == {"cash", "world_equity", "em_equity", "euro_govt_intermediate"}
     rig.broker.unavailable.clear()
     rig.broker.cash["GBP"] = (Decimal(100), None)  # no ledger rate and no configured pair
     plan = await rebalancer(rig).survey(ExecutionMode.SHADOW)
@@ -427,23 +501,76 @@ async def test_a_trade_whose_rules_cannot_be_read_is_left(rig: Any) -> None:
     assert await survey.apply(plan) == []
 
 
-# ── confirming the targets ──
+# ── confirming the vehicles ──
 
 
-async def test_each_target_is_confirmed_through_the_contract_search(rig: Any) -> None:
+async def test_each_vehicle_is_confirmed_through_the_contract_search(rig: Any) -> None:
     directory = UniverseDirectory.from_settings(rig.settings)
-    assert await confirm_targets(rig.settings, directory, rig.ibkr.secdef) == {}
+    conids = [IWDA, EMIM, IBGM]
+    assert await confirm_vehicles(directory, rig.ibkr.secdef, conids) == {}
     rig.broker.contracts[IWDA] = ("IWDA", "LSEETF", "USD")
     rig.broker.contracts[1] = ("EMIM", "AEB", "EUR")
     del rig.broker.contracts[EMIM]
     rig.broker.contracts.pop(IBGM)
-    refused = await confirm_targets(rig.settings, directory, rig.ibkr.secdef)
+    refused = await confirm_vehicles(directory, rig.ibkr.secdef, conids)
     assert refused[EMIM] == "IBKR resolves EMIM on AEB to conid 1, not the pinned 153454120"
     assert refused[IBGM].startswith("its identity cannot be confirmed")
     empty = UniverseDirectory(())
-    assert set((await confirm_targets(rig.settings, empty, rig.ibkr.secdef)).values()) == {
+    assert set((await confirm_vehicles(empty, rig.ibkr.secdef, conids)).values()) == {
         "no instrument describes it"
     }
+
+
+async def test_a_survey_confirms_each_chosen_contract_once_and_refuses_what_is_not(
+    rig: Any,
+) -> None:
+    survey = rebalancer(rig, secdef=rig.ibkr.secdef)
+    assert (await survey.survey(ExecutionMode.SHADOW)).refused == {}
+    rig.broker.contracts[1] = ("EMIM", "AEB", "EUR")
+    del rig.broker.contracts[EMIM]
+    # Confirmed once: a contract the search stopped finding is not asked about again.
+    assert (await survey.survey(ExecutionMode.SHADOW)).refused == {}
+    fresh = rebalancer(rig, secdef=rig.ibkr.secdef)
+    plan = await fresh.survey(ExecutionMode.SHADOW)
+    assert set(plan.refused) == {EMIM}
+    assert by_role(plan)["em_equity"].reason.startswith("not confirmed: IBKR resolves EMIM")
+
+
+async def test_a_search_the_broker_refuses_leaves_the_vehicles_unconfirmed(rig: Any) -> None:
+    rig.broker.contracts.clear()
+    survey = rebalancer(rig, secdef=rig.ibkr.secdef)
+    plan = await survey.survey(ExecutionMode.SHADOW)
+    assert set(plan.refused) == {IWDA, EMIM, IBGM}
+    assert all(why.startswith("its identity cannot be confirmed") for why in plan.refused.values())
+    assert all(d.action == "skip" for d in plan.decisions)
+
+
+async def test_a_search_that_breaks_confirms_nothing_this_survey_and_is_tried_again(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from obliskiq.decision import core_rebalancer
+
+    async def broken(*args: Any) -> Any:
+        raise RuntimeError("the search broke")
+
+    survey = rebalancer(rig, secdef=rig.ibkr.secdef)
+    monkeypatch.setattr(core_rebalancer, "confirm_vehicles", broken)
+    plan = await survey.survey(ExecutionMode.SHADOW)
+    assert set(plan.refused) == {IWDA, EMIM, IBGM}
+    assert all(why == "the confirmation failed: RuntimeError" for why in plan.refused.values())
+    monkeypatch.undo()
+    assert (await survey.survey(ExecutionMode.SHADOW)).refused == {}
+
+
+async def test_a_tilting_variant_without_stored_closes_is_not_evaluable(rig: Any) -> None:
+    b = next(v for v in rig.settings.core.variants if v.name == "B")
+    assert b.kind == "risk_balance"
+    core = rig.settings.core.model_copy(update={"variant": "B"})
+    plan = await rebalancer(rig, rig.settings.model_copy(update={"core": core})).survey(
+        ExecutionMode.SHADOW
+    )
+    assert plan.portfolio is not None
+    assert plan.portfolio.status is TargetStatus.NOT_EVALUABLE
 
 
 def test_a_capped_book_names_its_cap(shipped_settings: ObliskConfig) -> None:
@@ -479,3 +606,86 @@ async def test_without_readable_lots_buys_proceed_unchecked_by_the_two_month_rul
     plan = await survey.survey(ExecutionMode.SHADOW)
     assert plan.blocked is None
     assert len(plan.trades) == 3
+
+
+# ── the last branches ──
+
+
+async def test_a_vehicle_inside_the_no_trade_band_of_its_target_is_held(rig: Any) -> None:
+    await hold(rig, IBGM, "5", "EUR")  # beyond the outer band: every vehicle goes to target
+    await hold(rig, IWDA, "1", "USD")  # 126 against 171: one unit is the floor of 1.36
+    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
+    assert roles["euro_govt_intermediate"].action == "sell"
+    assert (roles["world_equity"].action, roles["world_equity"].reason) == (
+        "hold",
+        "inside its band",
+    )
+
+
+async def test_new_cash_leaves_a_vehicle_inside_the_inner_band_alone(rig: Any) -> None:
+    wide = with_bands(rig.settings, "0.5", "1")
+    inner = rig.settings.trading.inner_band.model_copy(
+        update={"absolute": Decimal("0.5"), "relative": Decimal("1")}
+    )
+    await hold(rig, EMIM, "2", "EUR")  # 92.84 against 133: 40 short, inside a wide inner band
+    plan = await rebalancer(rig, with_trading(wide, inner_band=inner)).survey(ExecutionMode.PAPER)
+    assert by_role(plan)["em_equity"].action == "hold"
+
+
+async def test_a_sale_waits_while_an_open_reservation_is_not_covered(rig: Any) -> None:
+    from obliskiq.domain.capital import WithdrawalReservation
+
+    await hold(rig, IBGM, "5", "EUR")
+    await rig.store(
+        capital_repo.record_reservation,
+        WithdrawalReservation(
+            amount=Decimal(900),
+            currency="EUR",
+            due_date=OPEN.date() + timedelta(days=30),
+            reason="a test withdrawal",
+            created_at=OPEN,
+            created_by="owner",
+            updated_at=OPEN,
+        ),
+    )
+    roles = by_role(await rebalancer(rig).survey(ExecutionMode.PAPER))
+    assert roles["euro_govt_intermediate"].action == "skip"
+    assert "the reservation planner chooses those sales" in roles["euro_govt_intermediate"].reason
+
+
+async def test_a_vehicle_without_an_instrument_or_a_price_is_skipped_with_why(rig: Any) -> None:
+    from obliskiq.capital.valuation import UnitValue
+    from obliskiq.decision.core_rebalancer import _Role
+    from obliskiq.domain.portfolio import TargetPortfolio
+
+    survey = rebalancer(rig)
+    unknown = _Role.valued("a", Decimal("0.5"), Decimal(0), UnitValue(1, None, None, None))
+    portfolio = TargetPortfolio(
+        variant="rig", as_of=OPEN.date(), trend_as_of=None, status=TargetStatus.READY,
+        rebalance=True, roles=(), vehicles=(), reasons=(),
+    )  # fmt: skip
+    (row,) = survey._decide(
+        portfolio, [unknown], set(), Decimal(950), Decimal(1000), Decimal(900), OPEN,
+        refused={}, hooks=None, sells_paused=False,
+    )  # fmt: skip
+    assert (row.action, row.reason) == ("skip", "no instrument describes the conid")
+
+
+def test_a_partner_without_a_price_is_not_used_and_a_primary_without_one_unfills_its_role() -> None:
+    from core_rig import vehicle
+
+    from obliskiq.capital.valuation import UnitValue
+    from obliskiq.decision.core_vehicles import RoleChoice, VehicleChoice
+
+    priced = UnitValue(1, None, Decimal(10), Decimal(1))
+    unpriced = UnitValue(2, None, None, None)
+    choice = VehicleChoice(
+        {
+            "a": RoleChoice("a", vehicle(1), vehicle(2), ""),
+            "b": RoleChoice("b", vehicle(2), None, ""),
+        }
+    )
+    plan = RebalancePlan(mode=ExecutionMode.SHADOW, at=OPEN)
+    vehicles = CoreRebalancer._priced(choice, {1: priced, 2: unpriced}, plan)
+    assert {role: (v.primary, v.partner) for role, v in vehicles.items()} == {"a": ("1", None)}
+    assert plan.unfilled == {"b": "its vehicle has no price"}

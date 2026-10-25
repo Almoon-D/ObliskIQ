@@ -13,7 +13,7 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
   protective stops, reconciles with the broker, rewrites the health file and pings
   `OBLISK_HEALTH_PING_URL` when set;
 - four **decision cycles** each trading day, each an hour after a venue's open (Tokyo, Xetra, New
-  York) and one an hour before New York's close: the skeleton's targets are compared with the
+  York) and one an hour before New York's close: the core engine's target is compared with the
   book and the gaps become orders;
 - the **daily digest** half an hour after New York's close;
 - each **data source** besides IBKR at the moments `config/sources.yaml` gives it (the macro
@@ -24,9 +24,13 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
   universe is not traded until it resumes; its venue and the venue's other instruments are.
 
 Times follow each venue's own calendar, daylight saving and holidays included
-(`config/defaults/runtime.yaml`). The **skeleton** book is three UCITS funds of the core's variant
-A (`config/defaults/core.yaml`): world equity on the LSE in dollars, emerging-market equity and euro
-government bonds on Amsterdam in euros. It is a walking skeleton: Session 13 replaces it.
+(`config/defaults/runtime.yaml`). The **core** is the variant `core.variant` names (A, the static
+risk balance with wide bands, by the owner's point on the frontier, DECISIONS D91). Each cycle the
+vehicle selector fills the roles (a vehicle already held stays), the core engine forms the target,
+and the rebalancer turns it into orders: inside the wide bands it only spends new cash; beyond them
+it trades every vehicle back to its target. A role no vehicle fills is held in cash, and the digest
+and an alert say so (today gold and broad commodities, until the probe verifies their venues).
+`uv run obliskiq universe vehicles <role>` shows what the selector sees.
 
 Only one obliskiq process may talk to the broker. `serve`, `run-cycle`, `preflight`, `reconcile`
 and `flatten` take a lock in the data directory; while the service runs, the others refuse.
@@ -109,7 +113,7 @@ systemctl --user start obliskiq
 
 - **Stop the service**: `systemctl --user stop obliskiq` (SIGTERM) or Ctrl-C. The job in hand
   finishes, the health file says `stopped`. Resting orders stay at IBKR: day limits expire at the
-  close, protective stops (none on the skeleton) keep resting.
+  close, protective stops (none on the core) keep resting.
 - **Kill switch**: `uv run obliskiq kill on --reason "…"` blocks every order that adds risk at
   once, even with the configuration broken; the running service's sweep cancels working buys and
   conversions within seconds and keeps protective exits. `kill off --reason "…"` lifts it.
@@ -131,7 +135,9 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 | `session.competing_session` | Another login took the paper username: stop it (a Claude session, a browser). |
 | `service.downgraded` | Three cycles in a row failed; the mode is shadow. Read the run log (`status`, the digest's errors), fix the cause, then `mode set paper` again. |
 | `service.stuck_intent` | An order with no answer, or open past its expiry. `uv run obliskiq intents list`; compare with IBKR's open orders; `reconcile run`. |
-| `service.target_unconfirmed` | IBKR resolves a skeleton fund to another conid: that role is not traded. Report it; the conid in `config/universe.yaml` needs a correction (a corrected pin supersedes the old conid). |
+| `service.target_unconfirmed` | IBKR resolves a core vehicle to another conid: that vehicle is neither bought nor sold. Report it; the conid in `config/universe.yaml` needs a correction (a corrected pin supersedes the old conid). |
+| `core.role_unfilled` | No vehicle fills a core role (none proposable, or no price this cycle): its weight is held in the cash role. `uv run obliskiq universe vehicles <role>` says which gate refuses each candidate. |
+| `core.not_evaluable` | The core engine cannot form a target (the cash role has no vehicle, or a tilting variant lacks the month-end closes it reads): nothing is bought or sold for the core. The alert names what is missing; a tilt needs the daily bars the collectors backfill (and the research store's ECB rates for a vehicle not in euros). |
 | `order.warning_declined` | IBKR asked to confirm a warning the reply policy does not confirm; the order was cancelled. The alert and `intents list --all` carry IBKR's own words. |
 
 ## Read the digest

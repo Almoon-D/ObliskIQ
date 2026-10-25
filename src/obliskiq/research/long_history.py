@@ -30,13 +30,14 @@ from itertools import pairwise
 import numpy as np
 
 from ..domain.research import Observation
+from ..engines.core.mechanism import Bands
 from ..errors import SimulationError
 from ..quant.covariance import CovarianceSeries, portfolio_volatility, required
 from .daily import DrawdownStats, breach_within, drawdown_stats
 from .decide import AdequacyCheck
 from .prereg import MONTHS_PER_YEAR, LongHistorySpec, SeriesSumSpec
 from .stats import annualised_log_growth, block_bootstrap_indices, years_between
-from .strategies import Bands, TotalRisk
+from .strategies import TotalRisk
 
 
 @dataclass(frozen=True, slots=True)

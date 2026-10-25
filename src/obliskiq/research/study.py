@@ -55,6 +55,7 @@ import numpy as np
 from ..config.schema import ObliskConfig
 from ..domain.research import Observation, ResearchSeries
 from ..domain.tax import SecurityIdentity
+from ..engines.core.mechanism import Bands
 from ..errors import SimulationError
 from ..jurisdiction.profile import JurisdictionProfile
 from ..jurisdiction.tax_policies import TAX_POLICIES
@@ -117,7 +118,7 @@ from .stats import (
     sharpe_ratio,
     years_between,
 )
-from .strategies import Bands, TotalRisk, build_strategy, static_weights, tilt_rule, total_risk
+from .strategies import TotalRisk, build_strategy, static_weights, tilt_rule, total_risk
 from .structure import StructureResult, structure_check
 
 #: What the simulation itself cannot show, stated in every report (with the marks' note).

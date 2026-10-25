@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.17.0"
+version = "0.18.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -49,6 +49,7 @@ dev = [
     "pytest-cov>=7.0",
     "respx>=0.22",
     "ruff>=0.14",
+    "skfolio>=1.12.0",
     "types-PyYAML>=6.0.12",
 ]
 
@@ -98,6 +99,8 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT", "PTH", "ARG",
 
 [tool.mypy]
 python_version = "3.14"
+# The service runs on Linux and uses its APIs (flock, killpg): check as Linux wherever mypy runs.
+platform = "linux"
 strict = true
 files = ["src"]
 warn_unreachable = true

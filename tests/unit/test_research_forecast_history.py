@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from obliskiq.domain.research import Observation
+from obliskiq.engines.core.mechanism import Bands
 from obliskiq.errors import SimulationError
 from obliskiq.quant.covariance import EstimatorRule
 from obliskiq.research.daily import DailyPath
@@ -26,7 +27,7 @@ from obliskiq.research.long_history import (
     run_rule,
 )
 from obliskiq.research.prereg import LongHistorySpec
-from obliskiq.research.strategies import Bands, TotalRisk
+from obliskiq.research.strategies import TotalRisk
 
 D = Decimal
 FAST = EstimatorRule(half_life=3.0, window=None, ewma_share=1.0, shrinkage=False,

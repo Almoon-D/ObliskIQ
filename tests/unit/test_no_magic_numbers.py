@@ -136,7 +136,11 @@ ALLOWLISTED_PACKAGES = ("execution", "decision")
 #: The protocol and unit constants those packages hold, by module, with the fact each names.
 PROTOCOL_CONSTANTS: dict[str, dict[str, str]] = {
     "execution/quotes.py": {"SECONDS_PER_HOUR": "seconds in an hour (a unit)"},
-    "decision/rebalance_basic.py": {"ZERO": "the zero amount"},
+    "decision/core_rebalancer.py": {"ZERO": "the zero amount"},
+    "decision/core_book.py": {"ZERO": "the zero amount"},
+    "decision/core_closes.py": {},
+    "decision/core_value.py": {},
+    "decision/core_vehicles.py": {},
     "decision/gates.py": {"ZERO": "the zero amount"},
     "decision/vehicle_selector.py": {
         "ZERO": "the zero amount",

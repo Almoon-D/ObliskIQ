@@ -3,7 +3,7 @@
 The order path is the one the service runs (``execution.runtime.assemble``), over the order rig's
 read client, store and wall clock; the service is built by ``orchestration.assemble.build_service``.
 :class:`SimClock` jumps the wall clock to each moment the service sleeps until, so days of the
-service run in milliseconds. :func:`skeleton_market` gives the fake broker what the skeleton book
+service run in milliseconds. :func:`skeleton_market` gives the fake broker what the rig's book
 needs: quotes for its three vehicles and the EUR.USD pair, contract search rows, cash and a NAV.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from core_rig import EMIM, IBGM, IWDA, RIG_PINS, PinnedVehicles, rig_settings
 from fake_broker import EURUSD, FakeBroker
 from order_rig import WallClock, whatif_answer
 
@@ -30,8 +31,6 @@ from obliskiq.orchestration.service import AlertHooks, Service
 from obliskiq.reporting.alerts import AlertBook
 from obliskiq.reporting.reporter import Reporter
 
-#: The skeleton's vehicles (config/defaults/core.yaml, config/universe.yaml).
-IWDA, EMIM, IBGM = 78999785, 153454120, 43614383
 #: The venues the service's calendars cover: the universe directory's and the jobs' anchors.
 SERVICE_VENUES = ("XAMS", "XETR", "XLON", "XMIL", "XNAS", "XNYS", "XPAR", "XSWX", "XTKS", "XTSE")
 
@@ -140,10 +139,12 @@ def build_service_rig(
     notifier: RecordingNotifier | None = None,
     collect: bool = False,
     http: httpx.AsyncClient | None = None,
+    vehicles: PinnedVehicles | None = None,
 ) -> ServiceRig:
     """The service over ``rig``'s client and store, with ``settings`` and ``calendars``. Its
     collection jobs are off unless ``collect``: the fake broker serves no market history. With
     ``http`` it runs the sources and reads the halt feed through it (and reads no earnings)."""
+    settings = rig_settings(settings)
     if not collect:
         schedule = settings.collectors.schedule.model_copy(update={"enabled": False})
         collectors = settings.collectors.model_copy(update={"schedule": schedule})
@@ -180,5 +181,6 @@ def build_service_rig(
         clock=clock,
         http=http,
         earnings=lambda _symbol, _limit: [],
+        vehicles=vehicles or PinnedVehicles(RIG_PINS),
     )
     return ServiceRig(rig, path, service, notifier, reporter, hooks, clock)

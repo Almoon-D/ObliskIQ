@@ -4710,9 +4710,9 @@ universe:
     options_unavailable_reason: null
 
   # ── Added in Session 8 ──
-  # The skeleton core's funds (core.skeleton_targets), and one iShares country fund per grid market
+  # The funds the walking skeleton held (IWDA, EMIM, IBGM), and one iShares country fund per grid market
   # whose published holdings supply that market's stock candidates. Conids, listing venues and
-  # descriptions read in IBKR's contract search [MCP ✓ 2026-10-22] (the skeleton's on MCP
+  # descriptions read in IBKR's contract search [MCP ✓ 2026-10-22] (the first three on MCP
   # 2026-10-20); issuer facts from the iShares product pages and the US product screener, read
   # 2026-10-22. VERIFY-LIVE(universe conids on CP): `obliskiq universe pin` confirms each through
   # /iserver/contract/{conid}/info.

@@ -3,8 +3,8 @@
 **A decision cycle** is one run record of four guarded steps: ``nav`` (today's NAV row and the
 day's exchange rates, ``orchestration/nav.py``), ``reserve`` (the owner questions whose deadline
 passed take their default, then the reservation planner's survey, questions and today's sales,
-``capital/planner.py``), ``rebalance`` (the skeleton's targets against the book, as intents,
-``decision/rebalance_basic.py``) and ``execute`` (the executor's cycle: sync, settle exits, expire,
+``capital/planner.py``), ``rebalance`` (the core engine's target against the book, as intents,
+``decision/core_rebalancer.py``) and ``execute`` (the executor's cycle: sync, settle exits, expire,
 follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry run reads and
 plans, and writes nothing: no NAV row, no run record, no question, no intent, no order. The owner
 hears a run summary when a cycle did something or something failed, and every question the
@@ -35,7 +35,7 @@ from .. import __version__
 from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.schema import ObliskConfig
 from ..data.runner import source_health
-from ..decision.rebalance_basic import BasicRebalancer, RebalancePlan
+from ..decision.core_rebalancer import CoreRebalancer, RebalancePlan
 from ..domain.capital import OwnerQuestion
 from ..domain.orders import (
     TERMINAL_STATES,
@@ -45,6 +45,7 @@ from ..domain.orders import (
     OrderIntent,
     ReconcileStatus,
 )
+from ..domain.portfolio import TargetStatus
 from ..execution.executor import CycleReport
 from ..execution.runtime import OrderPath
 from ..logging_setup import get_logger
@@ -90,7 +91,7 @@ class Jobs:
         settings: ObliskConfig,
         *,
         path: OrderPath,
-        rebalancer: BasicRebalancer,
+        rebalancer: CoreRebalancer,
         capital: CapitalParts,
         nav: NavCollector,
         reporter: Reporter,
@@ -173,6 +174,7 @@ class Jobs:
             )
             if planned is not None:
                 result.plan, result.made = planned
+                self._core_alerts(planned[0])
             if dry_run:
                 record.outcomes.append(StepOutcome("execute", SKIPPED, "dry run"))
             else:
@@ -213,6 +215,44 @@ class Jobs:
             ),
             CYCLE,
         )
+
+    def _core_alerts(self, plan: RebalancePlan) -> None:
+        """What the owner must hear of the core's target: a contract IBKR does not confirm (that
+        vehicle is not traded), a role no vehicle fills, a target the engine cannot form."""
+        at = self._now()
+        for conid, why in sorted(plan.refused.items()):
+            self._reporter.push(
+                Alert(
+                    "service.target_unconfirmed",
+                    f"service.target_unconfirmed:{conid}",
+                    f"core vehicle conid {conid} is not traded: {why}",
+                    Severity.CRITICAL,
+                    at,
+                ),
+                CYCLE,
+            )
+        for role, why in sorted(plan.unfilled.items()):
+            self._reporter.push(
+                Alert(
+                    "core.role_unfilled",
+                    f"core.role_unfilled:{role}",
+                    f"core role {role} is held in cash: {why}",
+                    Severity.WARNING,
+                    at,
+                ),
+                CYCLE,
+            )
+        if plan.portfolio is not None and plan.portfolio.status is TargetStatus.NOT_EVALUABLE:
+            self._reporter.push(
+                Alert(
+                    "core.not_evaluable",
+                    "core.not_evaluable",
+                    plan.blocked or "the core's target is not evaluable",
+                    Severity.CRITICAL,
+                    at,
+                ),
+                CYCLE,
+            )
 
     def _reservation_alerts(self, plan: ReservationPlan, actions: PlannerActions) -> None:
         at = self._now()

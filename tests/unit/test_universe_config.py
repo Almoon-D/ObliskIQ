@@ -370,24 +370,6 @@ def test_the_configuration_refuses_what_the_universe_cannot_resolve(
         ObliskConfig.model_validate(data)
 
 
-def test_a_skeleton_target_must_be_a_described_tradable_candidate_of_its_role(
-    shipped_settings: ObliskConfig,
-) -> None:
-    data = shipped_settings.model_dump(mode="json")
-    world = data["core"]["skeleton_targets"][0]
-    spy = instrument(data["universe"], "SPY")
-    cases = [
-        (spy["conid"], "is not a tradable candidate of the universe"),
-        (instrument(data["universe"], "ASML")["conid"], "has no resolved description"),
-        (instrument(data["universe"], "FCX")["conid"], "does not declare the role"),
-    ]
-    for conid, match in cases:
-        mutated = copy.deepcopy(data)
-        mutated["core"]["skeleton_targets"][0] = {**world, "conid": conid}
-        with pytest.raises(ValidationError, match=match):
-            ObliskConfig.model_validate(mutated)
-
-
 def test_the_collectors_market_data_and_tenor_sections_refuse_their_own_contradictions(
     shipped_settings: ObliskConfig,
 ) -> None:

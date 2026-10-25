@@ -22,7 +22,7 @@ from obliskiq.capital.managed import CapitalView
 from obliskiq.capital.planner import ReservationLine, ReservationPlan
 from obliskiq.capital.twr import Period, TwrResult
 from obliskiq.config import ObliskConfig
-from obliskiq.decision.rebalance_basic import RebalancePlan, RoleDecision
+from obliskiq.decision.core_rebalancer import RebalancePlan, RoleDecision
 from obliskiq.domain.capital import (
     CashEvent,
     OptionEffect,

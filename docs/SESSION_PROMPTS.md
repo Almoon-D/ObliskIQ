@@ -1926,7 +1926,9 @@ into sized, gated, limit-capped OrderIntents over the whole book — trading fro
 with a fixed risk budget, and by evidence once a layer is calibrated.
 
 READ: legacy/lite/src/obliskiq/server/guards.py; decision/gates.py and the engines
-(Session 12 — reuse, don't duplicate); legacy/old/ObliskIQ/modules/execution/
+(Session 12 — reuse, don't duplicate); engines/core and decision/core_rebalancer.py (Session 13:
+the core's TargetPortfolio and the trades the rebalancer makes of it — this session absorbs the
+rebalancer); legacy/old/ObliskIQ/modules/execution/
 phase4_decision_engine.py (apply_quarter_kelly_clamp only), modules/data/
 crisis_database.py, research/validation/{stress_tester,monte_carlo}.py and
 test_crisis_database.py. Port lite's `positions` and `portfolio_circuit_breaker` keys you

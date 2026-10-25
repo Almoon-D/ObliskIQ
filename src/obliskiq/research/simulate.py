@@ -52,7 +52,7 @@ from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, localcontext
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from itertools import pairwise
 from operator import attrgetter
 from typing import Final, Protocol
@@ -62,12 +62,15 @@ import numpy as np
 from ..domain.enums import AssetClass
 from ..domain.research import Observation
 from ..domain.tax import ProposedTrade, SecurityIdentity, TaxYearSummary
+from ..engines.core.trades import plan_deltas
+from ..engines.core.view import aligned_trend
 from ..errors import SimulationError
 from ..jurisdiction.tax import TaxPolicy
 from ..quant.costs import CostBook, LegCost, OrderTerms
 from ..quant.covariance import CovarianceSeries, Estimate, EstimatorRule
-from ..quant.trend import TrendRule, TrendState, trend_state
+from ..quant.trend import TrendRule, TrendState
 from ..tax.lots import LotEngine
+from ..util.decimals import share, whole
 from .daily import DailyPath, Holding
 from .stats import annualised_log_growth, max_drawdown, years_between
 
@@ -79,36 +82,11 @@ EURO: Final = "EUR"
 SCALE_BISECTIONS: Final = 30
 #: Months in a year, for stepping through month ends.
 MONTHS_PER_YEAR: Final = 12
-#: A target weight's last decimal place. Weights at this quantum add up exactly in Decimal's 28
-#: significant digits, and rounded down they never sum above the values they came from. It is
-#: fine enough that one unit of a position worth a millionth of a percent of the account comes
-#: back as one unit (a quantum of 1e-20 lost it in a billion-euro account).
-WEIGHT_QUANTUM: Final = Decimal("1e-24")
-#: A unit count this close to a whole number is that number: what Decimal rounding leaves of a
-#: round trip from units to a weight and back, far below any quantity a venue trades.
-UNIT_RESIDUE: Final = Decimal("1e-9")
 
 
 def exact(value: float) -> Decimal:
     """A float as the decimal its shortest representation spells."""
     return Decimal(repr(value))
-
-
-def share(value: Decimal, total: Decimal) -> Decimal:
-    """``value / total`` rounded down to :data:`WEIGHT_QUANTUM`: shares of one total computed
-    this way never sum above 1, so a rounding residue is never read as leverage."""
-    with localcontext() as context:
-        context.rounding = ROUND_FLOOR
-        return (value / total).quantize(WEIGHT_QUANTUM)
-
-
-def whole(units: Decimal, rounding: str = ROUND_FLOOR) -> Decimal:
-    """``units`` as whole units, rounded by ``rounding``; a count within :data:`UNIT_RESIDUE` of
-    a whole number is that number, so a position kept at its weight is not sold by one unit."""
-    nearest = units.to_integral_value()
-    if abs(units - nearest) <= UNIT_RESIDUE:
-        return nearest
-    return units.to_integral_value(rounding=rounding)
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,12 +294,8 @@ class Pricing:
         (``quant.trend``); ``None`` while the history is shorter than the rule needs."""
         memo = (key, cash, rule, as_of)
         if memo not in self.index.trends:
-            bills = dict(self.month_end_closes(cash, as_of))
-            closes = [
-                (day, value) for day, value in self.month_end_closes(key, as_of) if day in bills
-            ]
-            self.index.trends[memo] = trend_state(
-                [value for _, value in closes], [bills[day] for day, _ in closes], rule
+            self.index.trends[memo] = aligned_trend(
+                self.month_end_closes(key, as_of), self.month_end_closes(cash, as_of), rule
             )
         return self.index.trends[memo]
 
@@ -913,20 +887,18 @@ class Simulator:
         for key in weights:
             prices.setdefault(key, self._base_price(key, on))
         investable = max(marked - liability, ZERO)
-        band = self._settings.no_trade_band
-        sells: list[tuple[str, Decimal]] = []
-        buys: list[tuple[str, Decimal]] = []
-        for key in sorted(set(weights) | set(state.units)):
-            target_value = investable * weights.get(key, ZERO)
-            target = self._units(target_value, prices[key])
-            delta = target - state.units.get(key, ZERO)
-            if delta == ZERO or (target > ZERO and abs(delta) * prices[key] < band * target_value):
-                continue
-            (sells if delta < ZERO else buys).append((key, abs(delta)))
-        for key, quantity in sells:
+        deltas = plan_deltas(
+            weights,
+            state.units,
+            prices,
+            investable,
+            band=self._settings.no_trade_band,
+            whole_units=self._settings.whole_units,
+        )
+        for key, quantity in deltas.sells:
             self._sell(key, quantity, on, engine, state)
         self._pay(liability, on, engine, state)
-        plan = self._affordable(buys, state.cash, on, prices)
+        plan = self._affordable(list(deltas.buys), state.cash, on, prices)
         for key, quantity in plan:
             self._buy(key, quantity, on, engine, state)
 

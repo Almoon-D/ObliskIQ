@@ -3265,3 +3265,66 @@ open a second reader of the curve.
 
 Rejected: each caller filtering with its own subset of the gates. The census would count contracts
 the sleeve refuses.
+
+### D140 · The core engine: the harness's mechanism, one class for the test and the account (§5.4, D61, D80, D91, D95)
+
+- **One mechanism.** `engines/core/mechanism.py` holds `CoreStrategy`: static role weights in wide
+  bands, the trend tilt, tax-aware execution. The research harness simulates that class and the
+  account runs it. The live decision path may not import research (D64), so the mechanism moved
+  out of `research/strategies.py`, and research imports it. What else both read is shared the same
+  way: the delta execution (`trades.plan_deltas`, which the simulator's `_rebalance` calls), the
+  alignment of a role's closes with cash's (`view.aligned_trend`), the month-end close
+  (`closes.month_end_closes`), the risk-balanced weights (`weights.risk_balanced`) and the weight
+  and unit rounding (`util/decimals.py`). `ScaledCoreStrategy` (total-risk scaling, D92) stays in
+  research: the account does not scale total risk (D95).
+- **Configuration.** `core.variant` is the owner's point on the frontier, A (D91). `core.variants`
+  registers the ten portfolios of Session 4c (the two references and eight candidates) with the
+  pre-registration's constants: environments, declared risk, bands, tilt, tax rule, budgets and
+  fractions. `tests/unit/test_core_config.py` holds them equal to the pre-registration, and the
+  weights the account computes equal to the harness's. `core.skeleton_targets` is gone.
+- **The target.** `CoreEngine.portfolio` answers with a `TargetPortfolio` (`domain/portfolio.py`):
+  each role's weight, scale, trend and reason; each vehicle's share of the core's budget; and
+  `rebalance`, whether a role left its outer band (or a held vehicle names no role) so that every
+  vehicle is traded to its target. Inside the bands the vehicle weights are where new cash goes.
+- **Honest degradation.** A role no vehicle fills is held in the cash role, and says so. A target
+  that needs what is missing is **not evaluable**, trades nothing and is alerted: the cash role's
+  vehicle, or a month-end close the tilt reads. An unfilled role today is gold and broad
+  commodities (D121): variant A holds their 16 % in cash until the probe verifies a venue.
+- **Rebalancing** (`decision/core_rebalancer.py`, in place of `rebalance_basic.py`). Inside the
+  outer bands only new cash is spent: a vehicle further under target than the inner band
+  (`trading.inner_band`) is bought, the largest shortfall first, and nothing is sold. Beyond an
+  outer band every vehicle goes to its target by the simulator's delta execution, with its
+  no-trade band (`research.simulation.no_trade_band_fraction`, one key for both). The sale's
+  proceeds are spent in a later cycle, not the one that sells. Minimum trade, commission floor,
+  cash floor, reservations and open buys are as D104 set them. Roles not held and not targeted are
+  not looked at; a core holding no role names is sold.
+- **Tax-aware execution on the live path.** `decision/core_book.py` answers from the lots where
+  they account for every unit held. Where they cannot, the book prices a sale at no benefit (an
+  infinite tax): the reduction is held, never made blind.
+- **Vehicles** (`decision/core_vehicles.py`): the selector's best fills a role; a vehicle already
+  held stays while the selector proposes it, so a better score moves nothing by itself; a tilting
+  variant takes a swap partner (the held one stays). The selector's inputs are read in
+  `orchestration/vehicle_inputs.py`, which the command-line `universe vehicles` shares, and a
+  choice is made once a day.
+- **The tilt's closes** (`decision/core_closes.py`): month-end closes in the base currency from the
+  market store's daily bars, to the last completed month end (the tilt is evaluated monthly), a
+  close not older than `research.simulation.max_price_age_days`, converted at the ECB rate of its
+  day from the research store. A month without a fresh close or rate leaves the vehicle without
+  closes and the target not evaluable, never a proxy. Limits, queued: a bar is not
+  dividend-adjusted, so a distributing fund's momentum reads its yield low (the registered
+  vehicles accumulate), and the history is as deep as the collectors' backfill, two years.
+- **The planner's view of the core** (`StrategyValue`, D108): `decision/core_value.py` implements
+  it from the latest target: a held vehicle the target does not name is one the core would sell
+  anyway, and the part of a vehicle above its target is what rebalancing would trim. The core
+  claims no protection and no expected return (its outcome is inconclusive, D91, D95).
+- **skfolio** (`dev` group, test-only, D96's exception for a test-time oracle): the weights of
+  `quant/risk_budget.py` are held to skfolio's `RiskBudgeting` within the library's solver
+  tolerance (1e-4 in a weight), beside the closed forms and Newton's method of Session 4c.
+- **Parity.** `tests/unit/test_core_parity.py` runs the engine and the harness's strategy on one
+  fixture history: the same weights, or the same decision to keep, at every month end for A, B, C
+  and D50, and the same trades up to the simulator's affordability scaling.
+
+Rejected: the engine importing research (D64); the account scaling total risk (D95); a role with
+no vehicle redistributed across the others (a changed variant; cash is the neutral place);
+substituting a proxy when the tilt's history is short; a trade that sells and buys in one cycle on
+proceeds not yet received.

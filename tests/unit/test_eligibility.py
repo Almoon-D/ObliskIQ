@@ -113,8 +113,6 @@ def test_the_skeletons_ucits_funds_and_shares_are_eligible(
     share = policy.assess(traded(universe, FCX), underlying=None)
     assert share.eligible
     assert "not a packaged product" in share.reason
-    for target in shipped_settings.core.skeleton_targets:
-        assert policy.assess(traded(universe, target.conid), underlying=None).eligible
 
 
 def test_every_tradable_candidate_with_a_verdict_of_ineligible_is_explained(

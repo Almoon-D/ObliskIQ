@@ -39,7 +39,7 @@ the owner answered are always read afresh.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
@@ -288,6 +288,7 @@ class ReservationPlanner:
         maker: IntentMaker,
         questions: OwnerQuestions,
         kill: KillSwitch,
+        core_weights: Callable[[], Mapping[int, Decimal] | None] = lambda: None,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._settings = settings
@@ -307,7 +308,7 @@ class ReservationPlanner:
         self._buffer = timedelta(days=config.reservations.buffer_days)
         self._postpone = timedelta(days=config.questions.postpone_days)
         self._budgets = SleeveBudgets(config)
-        self._weights = {t.conid: t.weight for t in settings.core.skeleton_targets}
+        self._core_weights = core_weights
 
     # ── the survey ──
 
@@ -411,6 +412,7 @@ class ReservationPlanner:
         # capital, which is the reservation itself.
         before = view.investable + view.reserved
         allocation = self._budgets.allocate(before, active={Sleeve.CORE})
+        core_weights = self._core_weights()
         found: list[_Candidate] = []
         for holding in view.holdings:
             unit, instrument = holding.unit.unit, holding.unit.instrument
@@ -433,8 +435,8 @@ class ReservationPlanner:
             if self._strategy.would_exit(facts, today=today):
                 slices.append(_Slice(rest, Category.EXIT_ANYWAY))
                 rest = ZERO
-            elif holding.sleeve is Sleeve.CORE:
-                target = self._weights.get(holding.conid, ZERO) * allocation.core
+            elif holding.sleeve is Sleeve.CORE and core_weights is not None:
+                target = core_weights.get(holding.conid, ZERO) * allocation.core
                 over = _whole(max(ZERO, holding.units - target / unit), ROUND_FLOOR)
                 if over > ZERO:
                     slices.append(_Slice(min(over, rest), Category.OVERWEIGHT))

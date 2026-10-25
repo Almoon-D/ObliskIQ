@@ -47,6 +47,8 @@ RUNTIME_KEYED = {
     "research.data.yahoo.suffixes": "IBKR exchange -> Yahoo suffix, by the listing's exchange",
     "research.data.yahoo.digits": "IBKR exchange -> Yahoo's code width, by the listing's",
     "core.roles": "role id -> its name and exposure series, by the exposure asked for",
+    "core.environments": "environment id -> its roles, by the variant's risk budgets",
+    "core.risk.volatilities": "role id -> declared volatility, by the roles of the environments",
     "numerics.implied_vol.solve.risk_free_series": (
         "currency -> discount-rate series, by the underlying's currency"
     ),
