@@ -112,6 +112,9 @@ There is no Session 14: the core's backtest and verdict are Session 4c (DECISION
 **Dependabot.** filelock 4.2.1 (#49) and virtualenv 21.14.13 (#50) were merged. The major
 cryptography 50 (#9, #5) stays in Follow-ups (D96).
 
+**SESSION_PROMPTS edits.** None: later prompts name the core's `TargetPortfolio` and
+`StrategyValue` as built.
+
 ### Session 12 — Engines and gates (2026-10-24, v0.17.0)
 
 **Landed.**

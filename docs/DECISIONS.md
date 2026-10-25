@@ -3364,8 +3364,9 @@ trend is evaluated monthly (D144).
 - **Held vehicles stay with their role:**
   - a held vehicle that is still proposable is bought before the primary (the tested rule), so
     a change in the ranking alone never churns the book;
-  - a held vehicle that is no longer proposable is closed: sold at the next band breach, never
-    bought;
+  - a held vehicle that is no longer proposable is closed: never bought, still counted in its
+    role's weight and sold when the role is reduced. It is never switched for the primary on its
+    own, which would realise its gain;
   - a held vehicle that no role names (`unlisted:`) has a target of zero, so it is outside its
     band and is sold.
 - **Unfilled roles.** A role with no vehicle that may be bought keeps at most what it holds
@@ -3410,8 +3411,8 @@ trend is evaluated monthly (D144).
 reservation planner reads it:
 - **Overweight.** A core position's target weight is its vehicle's weight in that portfolio,
   times the core's allocation. "Above its target" is measured against it.
-- **Exits.** A core position whose vehicle has a target of zero (closed, unlisted, or a role
-  held at zero) is an exit the strategy makes anyway.
+- **Exits.** A core position whose vehicle has a target of zero (unlisted, or its role's
+  target is zero) is an exit the strategy makes anyway.
 - **Protection and expected return.** The core has neither.
 - **The satellite** keeps the default's answers.
 - **Before the first survey** the core states no target and exits nothing.
