@@ -19,8 +19,8 @@ core:
     cash: {name: "Cash (CASH)", exposure_series: euro_cash.level}
 
   # The variant the core runs, one of `variants` below. The expert default is A, the static risk
-  # balance with wide bands, the most cautious registered variant. The owner's choice is an
-  # authorisation recorded in DECISIONS first and set in config/owner.yaml (D50 there, D147).
+  # balance with wide bands. The owner's choice is an authorisation recorded in DECISIONS first
+  # and set in config/owner.yaml (D50 there, D147).
   variant: A
 
   # Every constant below is Session 4c's pre-registration's, with its codes written as the role

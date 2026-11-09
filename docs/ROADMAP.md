@@ -48,7 +48,7 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Question | Answer so far | Source |
 |---|---|---|
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
-| Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, total-risk scaling insufficient | `research/pattern_registry.yaml` |
+| Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
 
