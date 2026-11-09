@@ -1,11 +1,11 @@
 """The variants Session 4c registered, built from ``core.variants`` (MASTER_PLAN §5.4, DECISIONS
-D60, D80, D91).
+D60, D80, D147).
 
 A variant's static weights come from ``engines.core.weights`` exactly as the research harness
 computes them, and its rules follow Session 4c's build (``research/strategies.py``): a variant
 that tilts trades tax-aware through its roles' swap partners; one that does not holds each role
 through the vehicles the book already holds and its primary. The equity reference buys once and
-holds. ``core.variant`` names the variant the core runs; the default is the owner's point (A).
+holds. ``core.variant`` names the variant the core runs; the expert default is A.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """

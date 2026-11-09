@@ -1,9 +1,9 @@
 # ObliskIQ — Session Prompts
 
-Committed by Session 1 as `docs/SESSION_PROMPTS.md`. Build sessions 1–20 (with 4a, 4b and
-19a; there is no Session 14), research sessions 4c, 4d, 4e and 21, and the owner's T1, run in
-order, one PR each (a pre-registration in a PR of its own), merged and released by the agent
-itself (protocol in `AGENTS.md`). The design lives in `docs/MASTER_PLAN.md`; this file says
+Committed by Session 1 as `docs/SESSION_PROMPTS.md`. One session is one PR (a pre-registration
+in a PR of its own), merged and released by the agent itself (protocol in `AGENTS.md`). Sessions
+1–13 are done; the run order from here is §C's: 22 to 26, then 18, 19 and 20, with 15, 16, 17,
+19a and 21 on the condition §C names for each (DECISIONS D150). There is no Session 14. The design lives in `docs/MASTER_PLAN.md`; this file says
 what each session does. Section F holds the templates for feature and maintenance sessions
 after the build.
 
@@ -236,14 +236,25 @@ records it.
 | 11 | Measurement store and views | Sonnet 5.5 | xhigh | Custom | — |
 | 12 | Engines and gates | Opus 5.5 | xhigh | Custom | — |
 | 13 | Core engine | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
-| 15 | Satellite engine | Opus 5.5 | xhigh | Custom | — |
-| 16 | LLM layer | Opus 5.5 | xhigh | Custom | — |
-| 17 | Decision layer | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
-| 18 | Scoreboard, patterns, capital and promotion | Opus 5.5 | xhigh | Custom | — |
-| 19 | Cockpit, settings and deployment | Sonnet 5.5 | xhigh | Custom | full preflight |
-| 19a | Capacity and scale | Opus 5.5 | xhigh | Custom | bond and fund capabilities (whatif only) |
+| 22 | Order path on paper | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
+| 23 | Hunter: data and power | Opus 5.5 | high | **Full** | — |
+| 24 | Hunter: verdict | Opus 5.5 | xhigh | **Full** | — |
+| 25 | Book breakers | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
+| 26 | Hunter engine | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
+| 18 | Scoreboard, capital and promotion | Opus 5.5 | xhigh | Custom | — |
+| 19 | Cockpit, settings and deployment | Sonnet 5.5 | high | Custom | full preflight |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
-| 21 | Research: second batch | Opus 5.5 | xhigh | **Full** | — |
+
+Run in that order; 22 and 23 can run side by side, and 25 beside 24. On a condition, not in
+sequence (MASTER_PLAN §10):
+
+| # | Session | Runs when | Model | Effort | Network |
+|---|---|---|---|---|---|
+| 15 | Event sleeve | a batch leaves one of its components sufficient or inconclusive-positive | Opus 5.5 | high | Custom |
+| 16 | LLM layer | H7 or another LLM-derived signal is sufficient | Opus 5.5 | high | Custom |
+| 17 | Decision layer, the rest | a funded layer needs the expression selector, calibrated sizing or expected shortfall | Fable 5.1 (else Opus 5.5) | xhigh | Custom |
+| 19a | Capacity and scale | managed capital reaches an activation condition it serves | Opus 5.5 | high | Custom |
+| 21 | Research: later batches | any time, for hypotheses with power of at least 0.5 | Opus 5.5 | xhigh | **Full** |
 
 The paper Gateway login does not complete from a cloud container (docs/knowledge/ibkr.md):
 until T1 succeeds, the live steps in this column are queued `VERIFY-LIVE`; from T1 on, each
@@ -251,8 +262,9 @@ is a command list the session writes for the owner to run on the machine (§A.5)
 no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 
 Only Session 1 needs attachments. Fable goes where a subtle mistake costs money; Opus on
-architecture and statistics; Sonnet on well-specified ports. Every session runs one
-effort level above what its work strictly needs, capped at `xhigh`; `max` is not used.
+architecture and statistics; Sonnet on well-specified ports. Effort is `high` by default and
+`xhigh` where a session touches a money path or produces a research verdict; `max` is not used
+(DECISIONS D152).
 
 ## D. Custom network allowlist
 
@@ -1761,7 +1773,232 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ---
 
-## Session 15 — Satellite engine
+## Session 22 — Order path on paper
+
+**Launcher:** `Execute Session 22 exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 22. AGENTS.md is your operating manual. Money paths fail
+closed. No IBKR call from this session. Finish with the end-of-session protocol.
+
+PRECONDITION: v0.19.0 or later on main. Otherwise STOP.
+
+GOAL: a fresh process can place an order on paper, and the owner has one ordered command list
+that takes the bot from the order test to `serve` running the reserve on paper.
+
+VERIFY FIRST: docs/knowledge/ibkr.md ("T1, second day"), docs/knowledge/ibkr-orders.md (live
+orders, the snapshot flag) and ROADMAP Follow-ups ("T1's order test"). Confirm in code that a
+session's first live-orders read without `snapshot: true` makes execution/pretrade.py refuse
+with ACCOUNT_UNREADABLE, ibkr/orders.py `find` raise LookupIncompleteError and
+execution/reconcile.py report an incomplete run. If main already handles it, say so in the
+pull request and go to deliverable 2.
+
+DELIVERABLES
+1. One pre-read of the live orders per brokerage session before the read that counts, through
+   the existing rate-limit group. If the read that counts is still incomplete, fail closed as
+   today.
+2. docs/RUNBOOK.md: one ordered list for the owner, each step with its expected output and
+   what to paste back: the order test inside both windows, the execution test, what the
+   reserve's trend brake needs on the machine (find in the code which stored history
+   engines/core/history.py and orchestration/correlations.py read and the commands that load
+   it), the reserve's paper cycle (variant D50, `run-cycle --dry-run` first), then `serve`
+   under the supervisor and the daily check for the ten shadow days of MASTER_PLAN §5.19.
+3. ROADMAP: the follow-up closed; the VERIFY-LIVE rows stay open until the owner's run.
+
+DO NOT BUILD: changes to order windows, the reply whitelist, the o10164 policy or retry
+counts; anything outside the order path and the runbook.
+
+TESTS (respx): first read incomplete and second complete → the gate proceeds; both incomplete
+→ ACCOUNT_UNREADABLE and no placement call; the pre-read errors → fail closed, no placement;
+the pre-read happens once per session, not once per order; the cOID lookup and `reconcile`
+take the same path.
+
+ACCEPTANCE: the pull request quotes the `make check` summary you obtained and claims nothing
+about a live step. Patch version.
+```
+
+---
+
+## Session 23 — Hunter: data and power
+
+**Launcher:** `Execute Session 23 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 23. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5, §5.9 and DECISIONS D62, D63, D84, D148, D150). Network is open. Buying data
+is the owner's step: do not buy. Finish with the end-of-session protocol.
+
+PRECONDITION: v0.19.0 or later on main. Otherwise STOP.
+
+GOAL: the owner knows which price history to buy for the Hunter's test, what it costs and
+which hypotheses that test can decide, before any return is computed.
+
+READ: research/reports/selection-data-audit.md; the `idea` entries of
+research/pattern_registry.yaml; how `obliskiq research power` computes power for a
+cross-section study (use it; extend it only if the stock book's design needs it).
+
+DELIVERABLES
+1. research/reports/hunter-feasibility.md, its recommendation in the first paragraph.
+2. Vendors of daily prices that keep delisted companies with their delisting returns, for US
+   small and micro caps first and for any other market the account trades: price, licence
+   terms for one private user, span, delivery format, how far down in size coverage goes.
+   Read on the vendors' own pages, each fact with its date.
+3. Point-in-time fundamentals and events from free sources (the SEC's XBRL data sets, Form 4,
+   8-K, Form 10 for spin-offs): span and filer coverage, measured as Session 4d's audit did.
+4. The universe floors computed from the account: for managed capital of 10,000, 50,000 and
+   250,000 euros and books of 20, 40 and 80 names, the position size, the share of a stock's
+   daily traded value it stays under, the commission as a share of the position, and how many
+   stocks pass on a recent date (counts only).
+5. Power before data for H2, H3, H4, H10, H11 and one composite: long-only, after costs at
+   the illiquid tier and `es` tax; theta per hypothesis justified by what it adds to the
+   whole book at 50 % of capital; the effect detectable at power 0.8. Every assumed
+   dispersion or correlation is cited from the literature, never estimated on candidate data.
+6. The decision rule, written in the report before any number: a hypothesis with power below
+   0.5 is not registered (D150); if none reaches it, the recommendation is not to buy, and
+   the report names the next cheapest route.
+7. One owner question in ROADMAP Follow-ups: buy this, at this price, yes or no.
+
+DO NOT BUILD: loaders for data not yet bought; any return, hit rate or correlation on
+candidate data; registry status changes; anything in src/ the power calculation does not need.
+
+ACCEPTANCE: the report answers "buy what, for how much, to decide which hypotheses"; every
+vendor fact carries its source and date; the pull request quotes the `make check` summary you
+obtained. No version change if only research/ and docs/ change.
+```
+
+---
+
+## Session 24 — Hunter: verdict
+
+**Launcher:** `Execute Session 24 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 24. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D85, D140, D148–D150). Network is
+open. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 23 merged, and the history it recommended is bought and reachable from
+this session. Otherwise STOP and say what is missing.
+
+GOAL: each registered Hunter hypothesis ends sufficient, insufficient, inconclusive or not
+evaluable, from one confirmation run of the book as it would trade.
+
+STEP 1 — the harness, its own pull request. Loaders for the bought history with delisting
+returns and for the point-in-time fundamentals and events, with adequacy checks. The
+stock-book strategy in the simulator: Session 23's universe floors, a score, the top names
+equally weighted within caps, the keep buffer, the registered rebalance dates, spreads by
+liquidity tier, integer shares, `es` tax lots. It lives where Session 26 can run it on the
+live book (D140). A toy study runs end to end. The bought data never enters the repository.
+
+STEP 2 — the pre-registration, its own pull request, no version change:
+research/preregistrations/hunter-us.md from the template. The hypotheses Session 23 kept,
+each alone, and one composite. Primary statistic: the book's annualised after-tax log growth
+minus the equity reference's, with the Fama–MacBeth series beside it. Theta, the development
+and confirmation samples, the trial budget. Robustness: subperiods, a placebo, the break-even
+cost multiplier, every spread doubled. D149's schedule: the looks, the minimum live months
+and closed positions, the steps from 50 % to 100 %. No owner_point (D147). Lock it.
+
+STEP 3 — exploration on the development sample with every trial registered; one confirmation
+run; research/reports/hunter-us.md; the registry's statuses.
+
+DO NOT BUILD: a live engine; a signal that is not registered; a second run with changed
+constants.
+
+ACCEPTANCE: the pre-registration is on main before the results pull request; the verdict
+reproduces with one command on a machine that holds the data; perturbing data after as_of
+changes no output (test); for each sufficient hypothesis the report states the capital at
+which a position reaches its liquidity floor.
+```
+
+---
+
+## Session 25 — Book breakers
+
+**Launcher:** `Execute Session 25 exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 25. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.11 "Breakers" and DECISIONS D51, D88's measurement paragraph, D147). Money
+paths fail closed. No IBKR call. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 22 merged. Otherwise STOP.
+
+GOAL: a falling managed book freezes its own new buys and then stands itself down to shadow,
+with no order to sell and no dependence on anything that may be failing.
+
+VERIFY FIRST: no portfolio drawdown breaker exists in src/ (the only `breaker` is the rate
+limiter's). Read store/nav.py, execution/modes.py, execution/killswitch.py,
+decision/rebalance_core.py and legacy/lite/config.yaml:145-155. If one has landed, STOP and
+report.
+
+DELIVERABLES
+1. Lite's `portfolio_circuit_breaker` keys in config/defaults/ with lite's values, and a hard
+   peak-to-trough threshold as a key of its own (a judgement, recorded in DECISIONS).
+2. The rolling-month breaker: freeze new buys and alert. The hard breaker: force mode
+   `shadow` and alert. Both on the daily peak of managed NAV (the day's last cycle; a value
+   read inside the day never raises it).
+3. decision/rebalance_core.py reads the freeze: no buy while frozen; sells stay allowed.
+4. The digest and `obliskiq status` show each breaker's state, `n/a` below the minimum
+   observations.
+
+DO NOT BUILD: expected shortfall, stress scenarios, calibrated sizing, the expression
+selector, anything for options.
+
+TESTS: a missing or stale NAV → the breaker is unreadable and new buys are refused; a tripped
+hard breaker survives a restart; the kill switch and a mode downgrade work with the store
+unreadable; an intraday NAV never raises the peak; no breaker creates a sell.
+
+ACCEPTANCE: an integration test drives a falling NAV series through the core's cycle and
+shows the freeze, then the forced shadow, in the run log. Session 17's prompt loses what this
+session built (log the edit).
+```
+
+---
+
+## Session 26 — Hunter engine
+
+**Launcher:** `Execute Session 26 exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 26. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5, §5.11, §5.19 and DECISIONS D140, D148–D151). Money paths fail closed.
+Finish with the end-of-session protocol.
+
+PRECONDITION: Sessions 22, 24 and 25 merged; the reserve's paper cycle is recorded in
+ROADMAP; the registry holds a Hunter hypothesis that is sufficient or inconclusive-positive.
+Otherwise STOP and report which is missing. If the registry holds none, the next step is
+Session 21's prompt with a new batch, not this session.
+
+GOAL: the Hunter's tested book runs on the paper book through the mechanism its test ran, in
+shadow or with capital as its outcome allows.
+
+DELIVERABLES
+1. engines/hunter/ (sleeve `satellite`): the strategy Session 24 registered, shared with the
+   simulator: the universe on a date, the score, the target book. A parity test as the core's.
+2. Collectors for what the score reads on the live side (fundamentals, events, daily bars for
+   the universe), point in time, each with a status.
+3. decision/rebalance_hunter.py: trades on the registered rebalance dates only (D151); the
+   live guards the core's rebalancer applies; the breakers' freeze; limit-capped orders; a
+   funding conversion first for a foreign currency; the registered exits.
+4. Capital: inconclusive-positive → shadow at zero weight, graded; sufficient → the budget
+   reader gives the Hunter its share, up to 50 %, and the reserve the rest
+   (`capital.satellite_ceiling` and the schema rule that reserves a fixed core budget change
+   with it, D149). The steps beyond 50 % are Session 18's.
+5. The Hunter's StrategyValue for the reservation planner; the digest shows the book, its
+   next rebalance date and each withheld trade with its reason.
+
+DO NOT BUILD: the event sleeve, the LLM layer, the expression selector, options, calibrated
+sizing.
+
+ACCEPTANCE: parity with the simulator on a fixture history at every rebalance date; between
+rebalance dates a cycle places no Hunter order except a registered exit (test); a frozen book
+buys nothing; failure branches for an unreadable universe, a stale score input, a delisted
+holding and an unaffordable lot.
+```
+
+---
+
+## Session 15 — Event sleeve (the Asymmetry Hunter)
 
 **Launcher:** `Execute Session 15 exactly as specified in docs/SESSION_PROMPTS.md on main.`
 
@@ -1770,7 +2007,9 @@ You are building ObliskIQ, session 15. AGENTS.md is your operating manual; MASTE
 the design (read §4, §5.2, §5.5, §5.6, §5.9, §6.4 and DECISIONS D62, D63, D71 carefully). Port from legacy/, never from
 memory. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–13 merged. Otherwise STOP.
+PRECONDITION: Sessions 22–26 merged, and the registry holds a component of this sleeve that
+a research batch left sufficient or inconclusive-positive (DECISIONS D148, D150). Otherwise
+STOP. The stock book is Session 26's; this session builds the event sleeve beside it.
 
 GOAL: the Asymmetry Hunter — deterministic components on typed point-in-time inputs,
 measured independence, entry rules per expression, a frozen thesis lifecycle with
@@ -1844,7 +2083,8 @@ You are building ObliskIQ, session 16. AGENTS.md is your operating manual; MASTE
 the design (read §5.10 and DECISIONS D66, D70 carefully). Tests use fakes; with any configured key, run the live
 probe and the evaluation. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–15 merged. Otherwise STOP.
+PRECONDITION: Sessions 22–26 merged, and H7 or another LLM-derived signal is sufficient
+(DECISIONS D150). Otherwise STOP.
 
 GOAL: a provider-agnostic, budgeted LLM layer where adding or removing a model is a
 configuration change, every model is evaluated before it is trusted, and the output is
@@ -1919,7 +2159,9 @@ the design (read §2, §4, §5.5, §5.6, §5.8, §5.11, §5.13 and DECISIONS D66
 carefully). Money paths fail
 closed. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–16 merged. Otherwise STOP.
+PRECONDITION: Sessions 22–26 merged, and a funded layer needs what remains here (DECISIONS
+D150). Otherwise STOP. Session 25 built the breakers and the freeze, Session 26 the Hunter's
+rebalancer: build on them, do not rebuild them.
 
 GOAL: turn the core TargetPortfolio, approved theses, fired triggers and cash reservations
 into sized, gated, limit-capped OrderIntents over the whole book — trading from day one
@@ -1976,11 +2218,9 @@ DELIVERABLES
    and external holdings (Session 7; stale external data makes the report UNRELIABLE,
    never a number); the optional exposure caps by asset class (D88), absent by default and
    read on look-through exposure.
-5. decision/breakers.py: rolling-month drawdown → freeze new buys and audit; hard
-   peak-to-trough → force shadow and alert. The peak is D88's: the managed NAV at the day's
-   last cycle, stored and raised once a day when that NAV exceeds it, with the drawdown from it
-   reported every cycle. Each threshold is a key of its own; the owner's drawdown tolerance
-   (D88) is not one of them and never orders a sale.
+5. The breakers are Session 25's (rolling-month drawdown → freeze new buys; hard
+   peak-to-trough → force shadow): wire the new sleeves' buys to their freeze and add the
+   audit the freeze opens. Do not rebuild them.
 6. decision/inertia.py: intents only for a band breach, an approved thesis, a share
    scale-up confirmation, a fired trigger, stop, zombie or mandatory close, a cash
    reservation, or a risk breach; monthly turnover and realised-gain budgets; tax hooks
@@ -2021,7 +2261,9 @@ the design (read §1, §5.5, §5.9, §5.11, §5.19 and DECISIONS D62, D63, D65 c
 from legacy/, never from memory.
 Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–17 merged. Otherwise STOP.
+PRECONDITION: Sessions 22–26 merged. Otherwise STOP. Grade and calibrate only the layers that
+exist: where a deliverable names the event sleeve's components, theses or LLM nominations,
+build the interface and leave the rest to the session that builds that layer.
 
 GOAL: the system measures itself honestly: research outcomes and live monitoring drive
 sizing trust, Hunter weights, pattern promotion and the satellite's capital, and operational
@@ -2063,9 +2305,11 @@ DELIVERABLES
    live-minus-twin gap and the twin against the backtest's predictive distribution,
    reviewed monthly against alpha-spending boundaries; a gap breach freezes the layer's new
    entries and alerts; a twin breach returns the layer to shadow at zero weight and
-   alerts; an exploration budget only for a sufficient layer, within the owner's ceiling,
-   raised only by the pooled re-test and an owner command; the core absorbs the rest.
-   Every change audited and reported.
+   alerts; capital only for a sufficient layer: up to 50 % of managed capital, then the
+   pre-registered steps to 100 %, each taken automatically when the pooled re-test is still
+   sufficient, the gap is inside its boundary and the minimum live record is met, and given
+   back the same way (DECISIONS D149); the reserve holds the rest. Every change audited and
+   reported.
 8. scoreboard/promotion.py: L0→L3 criteria (MASTER_PLAN §5.19 and config) including the
    breaker, kill and cash-flow drills; `obliskiq promotion status`; upgrades still need an
    owner command.
@@ -2090,7 +2334,7 @@ You are building ObliskIQ, session 19. AGENTS.md is your operating manual; MASTE
 the design (read §5.12, §5.15, §5.17, §5.20). Port from legacy/. Finish with the
 end-of-session protocol.
 
-PRECONDITION: Sessions 1–18 merged. Otherwise STOP.
+PRECONDITION: Session 18 merged. Otherwise STOP.
 
 GOAL: the owner can watch the bot, change settings, announce cash flows, answer its
 questions and stop it — from Claude, Telegram or a daily dashboard — and the bot deploys,
@@ -2163,7 +2407,8 @@ You are building ObliskIQ, session 19a. AGENTS.md is your operating manual; MAST
 the design (read §2, §5.3, §5.8, §5.11, §5.16 and DECISIONS D7, D66 carefully). Money paths
 fail closed. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–19 merged. Otherwise STOP.
+PRECONDITION: Session 19 merged, and managed capital has reached an activation condition this
+session serves (DECISIONS D150). Otherwise STOP.
 
 GOAL: the machine scales with capital: every capability that pays only at larger capital is
 built and turns on by its computed condition, so 1.0.0 serves a small account and a large one
@@ -2221,7 +2466,7 @@ Finish with the end-of-session protocol in AGENTS.md.
 You are building ObliskIQ, session 20. AGENTS.md is your operating manual; MASTER_PLAN.md
 the design. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 1–19a merged. Otherwise STOP.
+PRECONDITION: Sessions 18 and 19 merged. Otherwise STOP.
 
 GOAL: find the silent failures before money does, prove each guard by mutation, remove the
 legacy snapshot, leave the docs true, release 1.0.0.
@@ -2283,8 +2528,10 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 **Launcher:** `Execute Session 21 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
 
-Runs any time after Session 4d; the Hunter's components and their agreement rule need Session
-15. Later batches reuse this prompt with a new batch list.
+Runs any time after Session 4d, for a batch whose hypotheses each have power of at least 0.5
+before data (DECISIONS D150); the event sleeve's components and their agreement rule need
+Session 15. The stock-level hypotheses are Session 24's. Later batches reuse this prompt with a
+new batch list.
 
 ```
 You are building ObliskIQ, session 21. AGENTS.md is your operating manual; MASTER_PLAN.md
@@ -2298,13 +2545,12 @@ point-in-time data, so each hypothesis ends sufficient, insufficient, inconclusi
 evaluable — and only the sufficient ones can earn capital.
 
 STEP 1 — Data audit and pre-registration, in its own PR merged before Step 2 (AGENTS.md
-session workflow): research/preregistrations/batch-2.md from the template, covering H3
-(forced selling: spin-offs and index deletions), H6 (the core's risk conditioned on the
-variance risk premium, the excess bond premium and trend, with euro-area measures beside the US
-ones: research/reports/global-data-audit.md), H9 (COT hedging pressure for
-commodity ETCs), the Hunter's components each alone and their k-of-n agreement rule as a
-registered combination beside them, the batch-1 candidates Session 4d did not choose, and the
-§6.4 re-test group: exact definitions (respecified where the legacy logic misstated the
+session workflow): research/preregistrations/batch-2.md from the template, covering those of
+H6 (the reserve's risk conditioned on the variance risk premium, the excess bond premium and
+trend, with euro-area measures beside the US ones: research/reports/global-data-audit.md), H9
+(COT hedging pressure for commodity ETCs), the event sleeve's components each alone with their
+k-of-n agreement rule as a registered combination beside them, and the §6.4 re-test group
+whose power before data reaches 0.5 (the others stay `idea`, with the reason): exact definitions (respecified where the legacy logic misstated the
 cited paper), mechanisms, universe, span, point-in-time rules, horizons, θ per hypothesis
 with its justification, the primary statistic (an event study clustered by date, or a
 Fama–MacBeth series with Newey–West), power and the detectable effect, the development and

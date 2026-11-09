@@ -1,21 +1,21 @@
 # ObliskIQ
 
-An autonomous, risk-first portfolio manager for one Interactive Brokers account.
+An autonomous portfolio manager for one Interactive Brokers account.
 
-- **Core** — documented premia held for the long run, in the variant the owner picks from a
-  tested after-tax frontier: from global equities bought and held to a risk balance across
-  growth and inflation environments, with or without a slow, tax-aware trend tilt.
-- **Satellite** — the Asymmetry Hunter: rare, corroborated, defined-risk bets on
-  dislocations, sized by evidence.
-- **Discipline** — a hard decision, risk and execution layer; a scoreboard that grades every
-  proposal; capital that follows tested evidence. No leverage, no shorting, no written
-  options, limit-capped orders only.
+- **The Hunter** — the return engine: a systematic, diversified book of small- and micro-cap
+  stocks, the companies too small for institutional money, selected by signals that passed a
+  pre-registered test after costs and tax. It holds nothing until one does.
+- **The reserve** — everything the Hunter does not hold: global equities with a slow,
+  tax-aware trend brake.
+- **Discipline** — a hard risk and execution layer; capital that moves by tested evidence,
+  with no human in the loop. No leverage, no shorting, no written options, limit-capped
+  orders only.
 
 **Status: pre-alpha. It does not trade yet.** Built so far: configuration, the store and
-calendars, the IBKR read and order paths with the kill switch and the pre-trade rails (tested
-against fixtures; no order has reached IBKR yet), and the research harness with its first
-verdicts in [`research/reports/`](research/reports/). The build proceeds session by session,
-paper trading first.
+calendars, the IBKR read and order paths with the kill switch and the pre-trade rails, the
+collectors, the core engine and the research harness with its first verdicts in
+[`research/reports/`](research/reports/). No order has filled on paper yet and no signal has
+passed its test; [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 
 ## Start here
 

@@ -4,8 +4,8 @@
 variant Session 4c registered, with the constants its pre-registration fixed
 (``research/preregistrations/core-allocation.md``): the environments and the declared long-run risk
 a risk balance is solved on, the bands, the trend tilt and the benefit a tax-aware reduction must
-buy. ``core.variant`` names the one the core runs: the variant the owner's point on Session 4c's
-frontier selects (DECISIONS D60, D91).
+buy. ``core.variant`` names the one the core runs: the owner's authorisation, set in
+``config/owner.yaml`` (DECISIONS D60, D147).
 
 Each variant states its strategy:
 

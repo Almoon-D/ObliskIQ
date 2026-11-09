@@ -178,3 +178,30 @@ patterns:
       The weekly commercial and non-commercial positions of the commodity contracts (CFTC
       Commitments of Traders from 2006, collected from Session 10 dated by release) and the
       ETCs' daily closes; batch 2 (Session 21) pre-registers the test.
+  - id: selection-forced-selling
+    hypothesis: H3
+    title: "Forced selling: spin-offs and index deletions"
+    status: idea
+    data_needed: >-
+      The survivorship-free US price history H2 needs, and the events point in time: spin-offs
+      from the SEC's Form 10 and 8-K filings, index deletions from the index providers'
+      announcements with their announcement dates. Session 23 measures both; Session 24 tests it
+      if its power before data reaches 0.5 (DECISIONS D150).
+  - id: selection-cheap-quality
+    hypothesis: H10
+    title: Cheapness with quality among small and micro caps
+    status: idea
+    data_needed: >-
+      The survivorship-free US price history H2 needs and point-in-time fundamentals (the SEC's
+      XBRL data sets, every filer from mid-2011): earnings yield with return on capital
+      (Greenblatt 2005), the F-score among cheap stocks (Piotroski 2000), size once junk is
+      controlled (Asness et al. 2018). Session 23 measures coverage; Session 24 tests it.
+  - id: selection-earnings-drift
+    hypothesis: H11
+    title: Post-earnings-announcement drift among small and micro caps
+    status: idea
+    data_needed: >-
+      The survivorship-free US price history H2 needs and earnings announcements with their dates
+      and surprises, point in time (Bernard and Thomas 1989): the SEC's 8-K item 2.02 dates are
+      free, a consensus estimate is not, so the surprise is the announcement's own return or a
+      seasonal random walk. Session 23 measures coverage; Session 24 tests it.
