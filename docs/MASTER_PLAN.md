@@ -40,9 +40,13 @@ A global, autonomous portfolio manager for one IBKR account that:
    companies too small for institutional capital to the largest. A tested signal may be
    expressed with long options when the sleeve's own test allows (§5.6). The Hunter takes
    capital only on a test it passed, up to half of the account, and the rest by a live rule
-   (§5.19).
+   (§5.19). Beside that book the Hunter keeps a thesis book: a few concentrated positions on
+   ideas from the LLM analyst and, when he has one, from the owner. Every idea is written
+   down before it trades and graded afterwards, and the book's capital follows that forward
+   record (§5.5, DECISIONS D156).
 3. **Keeps the rest at work.** Capital the Hunter does not hold is the reserve: global
    equities with a slow, tax-aware trend brake that steps partly aside in a fall under way
+   while its embedded gain is small; after years of gains it is equities bought and held
    (§5.4, DECISIONS D147).
 4. **Measures itself.** Every hypothesis is pre-registered and tested on point-in-time
    history with a decision rule that says sufficient, insufficient, inconclusive or not
@@ -95,7 +99,7 @@ entry), the resolution is recorded in `DECISIONS.md` and the stricter risk outco
 | Activation | Every capability runs when a condition computed from configuration holds — evidence (§5.9), capital, a verified broker capability — never above a NAV threshold key; the bond rule (§5.3) is the model. What pays only at larger capital is built in Session 19a, when capital reaches it (DECISIONS D66, D150). | activation module + `obliskiq capabilities status` |
 | Capital flows | The owner announces deposits and dated withdrawals; the bot plans for them at once and honours them without breaking the strategy (§5.15). | cash-flow ledger |
 | Taxes | Pluggable tax policy per jurisdiction (§5.16). Not tax advice. | profile + `jurisdiction/` |
-| Autonomy | Fully autonomous: selection, allocation between the Hunter and the reserve, and execution need no owner command (D149). The owner's command moves the bot to the live account, and works the kill switch and `flatten`. An approval queue exists, off by default. | `execution.modes` |
+| Autonomy | Fully autonomous: selection, allocation between the Hunter and the reserve, and execution need no owner command (D149). The owner's command moves the bot to the live account, and works the kill switch and `flatten`. The owner may hand the engine an idea (§5.5, D156); it is evaluated as any other and the engine never waits for one. An approval queue exists, off by default. | `execution.modes` |
 | Existing holdings | Everything the bot did not open is `unmanaged`: counted in NAV and risk, never traded until the owner releases it. | holdings registry |
 
 ---
@@ -345,15 +349,22 @@ is `satellite`.
   through its own data audit). A stock is in the universe on a date when its price and traded
   value pass floors computed from the account: the position the book would hold is a small
   share of the stock's daily traded value and above the commission-derived minimum (D66).
-- **Size tiers.** Micro, small, mid and large are pre-registered. Each hypothesis is tested on
-  the whole universe and on each tier, and the book is built on the tiers its test left
-  sufficient (D153).
+- **Size tiers.** Micro, small, mid and large are pre-registered. One composite on the whole
+  universe is the confirmatory test; the tiers, then each hypothesis alone, follow in a fixed
+  sequence that stops at the first test that is not sufficient, so none costs the first its
+  power. The book is built on what that sequence left sufficient (D153, D154).
+- **The measure.** The book's after-tax log growth minus that of its own universe bought and
+  held, which is what selection adds. Its growth against the equity reference is reported
+  beside it and decides nothing: fifteen years cannot tell a size or country tilt from luck
+  (D154).
 - **Options.** A sufficient signal is expressed with long options when H8 finds the option
   beats the share for it, within the option budget (§5.6).
 - **Signals.** Only those a pre-registered test left sufficient (§5.9). The candidates are
   cheapness with quality, insider-purchase clusters, forced selling and spin-offs, momentum
-  and nearness to the 52-week high, and post-earnings drift, each alone and in one registered
-  composite.
+  and nearness to the 52-week high, and post-earnings drift, and the composite the sequence
+  starts with: H12, the owner's thesis as a rule, cheap companies of good quality in
+  industries whose trend is rising. The holding period is part of each registration; a
+  shorter one is allowed and pays its costs and tax in the test.
 - **The book.** The highest-ranked names by the tested score, equally weighted within caps per
   name, sector and country, with a keep buffer: a holding leaves only when it falls well below
   the entry rank. Selection is recomputed on the registered rebalance dates and on no other
@@ -366,6 +377,34 @@ is `satellite`.
 - **Capacity.** The book reports the capital at which a position would pass its liquidity
   floor; capital beyond it stays in the reserve.
 - **Until a test passes** the Hunter holds nothing and the reserve holds everything.
+
+**The thesis book** (DECISIONS D156). A few concentrated positions, each on a written idea.
+A judgement about the economy, a sector or a company has no history to replay, so its only
+honest test is forward: the book exists to produce that record and to trade on it.
+
+- **Sources.** The LLM analyst, which proposes theses on its own from a point-in-time fact
+  sheet (the macro board, the grid, events, positioning; §5.7, §5.10); the owner, through
+  `obliskiq idea add` and later the cockpit; a detector or pattern once its test is
+  sufficient. The engine runs without the owner.
+- **A thesis** names the instrument, what is expected and why, a target, a horizon and what
+  would prove it wrong, all fixed before the first order (the lifecycle of item 5 below). An
+  idea that lacks one of them is not traded.
+- **Evaluation.** Every idea passes the same deterministic gate: the mandate, eligibility,
+  liquidity, the position caps and a minimum ratio of the target's gain to the invalidation's
+  loss. The analyst writes a second opinion on an owner's idea, logged and graded, never a
+  veto. The LLM proposes; it never sizes, orders or overrides a gate.
+- **Conviction.** The owner marks his idea `normal`, `high` or `max`. `normal` is sized as
+  any other idea; `high` and `max` multiply the base size by configured factors within the
+  position cap. Each level is graded apart, so the record says whether his stronger
+  convictions are better.
+- **The book.** At most a configured number of positions (eight by default), equal base
+  sizes, slots filled in order of arrival among the ideas that pass. Exits are the thesis's
+  own: the target, the invalidation, the horizon's end, a protective stop.
+- **Capital** follows the forward record (§5.19): shadow and paper first; on the live account
+  an exploration share the owner sets; more only as the graded record earns it, by source.
+- **Expectation.** Nothing shows that such a book earns 50 % a year, and most lose to the
+  index. An edge that large shows in about two years of graded calls; a small or absent one
+  keeps the book at its exploration share or returns it to shadow.
 
 **The event sleeve — the Asymmetry Hunter.** Deferred: it is built when a research batch leaves
 one of its components sufficient or inconclusive-positive (DECISIONS D148, D150). Its design:
@@ -467,11 +506,18 @@ expression, a pattern — lives in `research/pattern_registry.yaml` with a lifec
   the horizon, θ (the smallest net effect worth the added risk; the owner can amend it
   before the merge), the
   power to detect θ and the effect detectable at power 0.8, the adjustment, robustness
-  checks and the trial budget. A test whose power at θ is below 0.5 is not run (D150).
+  checks and the trial budget. A test is not run when its probability of a sufficient
+  outcome (L ≥ θ), before data and at the effect the literature supports net of decay, costs
+  and tax, is below 0.5; θ is not raised to meet it (D150, D154). This is the power the plan
+  means wherever it asks for "power of at least 0.5".
 - **Test.** Exploration on a development sample, every trial recorded in the trial
   registry; one confirmation run on a locked sample (a later period and, where data allow,
   another region); Bonferroni across the confirmation run and the deflated Sharpe across
-  every trial. Dependence is explicit: cross-sectional effects as a monthly Fama–MacBeth
+  every trial. A hypothesis registered exactly as its source published it needs no
+  exploration: its whole sample is the confirmation sample. Tests ordered in a
+  pre-registered fixed sequence, each run only if the one before was sufficient, need no
+  adjustment among themselves (D154). Dependence is explicit: cross-sectional effects as a
+  monthly Fama–MacBeth
   series with Newey–West lags at least the horizon, events clustered by date, block
   bootstrap with blocks at least twice the longest lookback a strategy reads and a
   sensitivity over block lengths (D92); minimum samples in effective observations,
@@ -497,9 +543,9 @@ Hypotheses by batch (DECISIONS D71):
 | Batch | Hypotheses |
 |---|---|
 | 1 (Sessions 4c, 4d) | the core verdict (§5.4); one selection hypothesis chosen by a data audit among H1 cross-asset and country momentum through UCITS (Asness, Moskowitz & Pedersen 2013), H2 insider-purchase clusters in SEC Form 4 (Cohen, Malloy & Pomorski 2012) and H4 a stock-level composite — nearness to the 52-week high (George & Hwang 2004), 12-1 momentum with a crash guard (Jegadeesh & Titman 1993; Daniel & Moskowitz 2016), profitability (Novy-Marx 2013); H5, whether a volatility-scaled stop adds value to that signal (Kaminski & Lo 2014) |
-| Hunter (Sessions 23, 24) | On a US price history that keeps delisted companies, each alone and in one registered composite: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
+| Hunter (Sessions 23, 24) | On a US price history that keeps delisted companies, in a fixed sequence that starts with the composite H12, cheap companies of good quality in industries whose trend is rising (H10 with industry momentum, Moskowitz & Grinblatt 1999), then its size tiers, then each alone: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
 | Later (Session 21) | H6 conditioning the reserve's risk on the variance risk premium (Bollerslev, Tauchen & Zhou 2009), the excess bond premium (Gilchrist & Zakrajšek 2012) and trend; H9 hedging pressure in COT for commodity ETCs (de Roon, Nijman & Veld 2000); the event sleeve's components and their agreement rule; the §6.4 re-test group; each only with power of at least 0.5 |
-| Forward only | H7 LLM-extracted event features beyond the price signal (a minimal extractor from Session 10); H8 an option against a share with a stop for a sufficient signal, on option surfaces collected from Session 8 or bought |
+| Forward only | H7 LLM-extracted event features beyond the price signal (a minimal extractor from Session 10); H8 an option against a share with a stop for a sufficient signal, on option surfaces collected from Session 8 or bought; H13 the thesis book, ideas from the analyst and the owner against the equity reference (Sessions 27, 28) |
 | Ideas | carry in bonds and equities (Koijen et al. 2018); defensive/low beta (Frazzini & Pedersen 2014); low volatility (Ang et al. 2006); VIX term-structure inversion; dollar strength and EM stress; oil shocks (Hamilton 2009); pre-FOMC drift (Lucca & Moench 2015) |
 
 ### 5.10 LLM layer
@@ -517,6 +563,7 @@ latency, so a new model is compared before it replaces an old one.
 |---|---|---|
 | EventExtractor | `ExtractedEvent` (entities, region, sector, type, tone, novelty, sources) | each collector run |
 | HypothesisScout | `HypothesisDraft`, also feeding the pattern registry as ideas | weekly and on event spikes |
+| Analyst | `ThesisDraft` for the thesis book (instrument, expectation, target, horizon, invalidation, the dated facts it rests on) and a second opinion on an owner's idea (§5.5) | weekly and on event spikes |
 | ExposureMapper | `ExposureAssessment` (purity, channel, confidence) | on candidate |
 | DossierWriter | `Dossier` (readable, cites data) | on approval |
 | DevilsAdvocate | `ChallengeReport` | weekly |
@@ -814,9 +861,17 @@ proof. The allocation is automatic in both directions (DECISIONS D149):
 
 - A Hunter book with a sufficient outcome and its activation condition (§2) takes up to 50 %
   of managed capital.
-- It steps from there to 100 % at pre-registered looks, each when the pooled re-test (history
-  plus the live twin) is still sufficient, the live-minus-twin gap is inside its boundary and
-  the pre-registered minimum of live months and closed positions is met.
+- It steps from there to all investable capital (100 % less the cash floor) at pre-registered
+  looks, each when the re-test that pools history with the book's realised returns on the
+  live account is still sufficient, the live-minus-twin gap is inside its boundary and the
+  pre-registered minimum of live-account months and closed positions is met. Paper months
+  and the twin's own returns count for nothing here: both are simulations (D155).
+- The thesis book is funded by its forward record alone, under a pre-registration locked
+  before its first thesis (D156): nothing in shadow; on the live account the exploration
+  share the owner sets (a tenth of investable capital by default) while its paper record is
+  not below its boundary; more at pre-registered looks when its realised live-account growth
+  over the equity reference's clears a sequential boundary; back to shadow below one. A
+  source whose own record falls below its boundary is logged and no longer traded.
 - The reserve holds whatever the Hunter does not, less the cash floor.
 - No step needs an owner command. The steps beyond 50 % are slow unless the edge is large,
   because a live record adds evidence slowly.
@@ -1028,6 +1083,8 @@ subset and inserts an `Na` prompt for the remainder.
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates |
 | 13 | Core engine | the variants 4c registered (4e found none sufficient, D95), risk budgeting, the tax-aware trend tilt, rebalancing |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list: order test, execution test, the reserve's paper cycle, then `serve` |
+| 27 | Thesis book | the owner's idea intake, the thesis lifecycle, the deterministic gate, slots and conviction sizes, the thesis's own exits, forward grading; its pre-registration first |
+| 28 | LLM analyst | the point-in-time fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, the universe floors and size tiers, power before data for each hypothesis; the owner buys the data it recommends |
 | 24 | Hunter: verdict | loaders, the stock-book strategy in the simulator, the pre-registration in its own pull request, one confirmation run |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers |
@@ -1036,7 +1093,9 @@ subset and inserts an `Na` prompt for the remainder.
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 |
 
-They run in that order (DECISIONS D150). Session 26 starts only after the reserve's paper cycle
+They run in that order (DECISIONS D150, D156); 27 and 28 follow 22 at once and beside 23 and
+24, because the thesis book's evidence is forward only and a week it does not run is a week of
+record lost. Session 26 starts only after the reserve's paper cycle
 is recorded, and builds only what Session 24 left sufficient or inconclusive-positive; if it
 left nothing, the next research batch runs in its place. Built on a condition, not in sequence:
 
@@ -1060,7 +1119,7 @@ on L2.
 |---|---|---|
 | 1 | Account size, minimum ticket, core lines | Any size. `trading.min_trade` supports an absolute amount, a % of managed capital, or both combined; never below the commission floor. Core granularity follows capital. |
 | 2 | Capital budgets | The Hunter takes up to 50 % on a sufficient test and steps to 100 % by the live rule of §5.19, with no owner command (D149); the reserve holds the rest, less a cash floor of 5 %. Until a test passes the reserve holds 95, since an inactive sleeve's share stays in it. Option premium at most 5 once the sleeve's activation condition holds, with lite's penalty balance. |
-| 3 | Autonomy | Fully autonomous: selection, allocation and execution. The owner's command moves the bot to the live account and works the kill switch and `flatten`. |
+| 3 | Autonomy | Fully autonomous: selection, allocation and execution. The owner's command moves the bot to the live account and works the kill switch and `flatten`. He may hand the engine an idea; it never waits for one (row 22). |
 | 4 | LLM providers | Modular registry; expected a low-cost provider with a monthly budget and free Gemini as backup. |
 | 5 | Machine | Free tiers being sought; deployment is provider-agnostic. |
 | 6 | IBKR username | Paper: the paper account of the owner's main username, sharing his market data. Live: decided at promotion (a dedicated username avoids competing with the owner's own logins but needs its own subscriptions). |
@@ -1077,8 +1136,9 @@ on L2.
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89, D150) | A rule that times or reshapes the reserve joins it only after a pre-registered test with power of at least 0.5 finds it sufficient. Total-risk scaling was tested (Session 4e: none sufficient, D95). |
 | 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
-| 20 | The return engine (D148, D153) | The Hunter: a systematic, diversified book of stocks of any size, each signal tested by size tier; long options when the sleeve's test allows. The event sleeve and the LLM layer wait for evidence. |
+| 20 | The return engine (D148, D153) | The Hunter: a systematic, diversified book of stocks of any size, each signal tested by size tier; long options when the sleeve's test allows; and the thesis book beside it (row 22). The event sleeve's components and the rest of the LLM layer wait for evidence. |
 | 21 | Cadence (D151) | Four cycles a day at the venues' sessions; no cycle rebuilds the book; no intraday strategy. |
+| 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. At most eight positions. Capital: an exploration share on the live account (a tenth by default, the owner's to set), then by the forward record. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which

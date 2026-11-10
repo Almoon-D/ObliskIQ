@@ -3567,3 +3567,67 @@ have also moved far more than the market. The aspiration is 50 % a year or more.
 Rejected: restricting the universe by size before the data speak; an option sleeve that trades
 before a signal is sufficient; picking yesterday's largest movers (a move already made is no
 signal, and a rule that claims to foresee one is tested like any other).
+
+## Challenge review (2026-11-10)
+
+### D154 · A test is run for the outcome that funds; the Hunter's first test is one composite against its own universe (§5.5, §5.9; amends D150, D153)
+
+A read-only review of v0.19.1 found that D150's floor guarded the wrong event. The harness's power
+is the chance that the interval excludes zero at θ; capital needs `sufficient`, L ≥ θ, which an
+edge of exactly θ reaches with probability α over the tests. And Session 24's test as written (a
+40-name book minus the global equity reference, thirty tests, fifteen years) detected about 8 to
+11 % a year at power 0.5 (on an assumed tracking error of 10 to 14 %, which Session 23 cites),
+against the 0 to 3 % the literature supports after decay, costs and tax.
+
+- **The run rule.** A test is not run when its probability of a sufficient outcome, at the effect
+  the literature supports, is below 0.5. θ stays the smallest effect worth having.
+- **The measure.** The book minus its own universe bought and held: selection, not a size or
+  country tilt, which fifteen years cannot judge. The equity reference is reported beside it.
+- **One confirmatory test, then a fixed sequence.** H12 on the whole universe; its tiers and the
+  single hypotheses follow only while each is sufficient. D153's "size is tested" stands.
+- **H12** is the owner's thesis as a rule (cheap, good companies in industries whose trend is
+  rising). Holding periods are registered per test; short ones pay their costs and tax there.
+
+Rejected: reading assets that rose (gold, memory makers in 2026) as evidence, since choosing them
+before the rise is the claim under test; loosening `sufficient` to L > 0 (D62's bar stays).
+
+### D155 · Capital steps count live months; the Hunter's ceiling is investable capital (§5.19; amends D149)
+
+D149's steps beyond 50 % pooled history with the live twin, a simulation, so the rule could step
+on the backtest alone. The re-test now pools history with the book's realised returns on the live
+account, and the minimums count live-account months; paper months, whose fills the broker
+simulates, do not. "100 %" is all investable capital, the cash floor kept. The
+owner's ruling stands: 50 % on a sufficient test, no owner command. Rejected, and recorded as the
+reviewer's dissent: starting at 20 % (published effects shrink out of sample, and a first share of
+half the account rests on one backtest).
+
+## Owner ruling (2026-11-10): ideas and the thesis book
+
+### D156 · The thesis book: ideas from the analyst and the owner, traded small and graded forward (§1, §5.5, §5.19; amends D148, D150)
+
+The owner's ruling: the engine works alone, and when he has an idea he hands it over to be
+evaluated as any other, or weighted more by his choice. His belief is that returns come from
+judgement about the economy, a sector and a company. D148 had shut that out (picks "by the owner
+or an LLM": too few bets to tell skill from luck) and left the engine with published rules worth,
+on the evidence, a few points a year. It could not reach his aim even working perfectly, and his
+belief was never tested.
+
+- **A second book in the Hunter.** At most eight positions, each a written thesis whose target,
+  horizon and invalidation are fixed before it trades; one deterministic gate; the thesis's exits.
+- **Sources.** The LLM analyst proposes on its own from dated facts; the owner adds an idea when
+  he has one, marked normal, high or max, which scales its size inside the cap. Each source and
+  level is graded apart. The LLM still never sizes, orders or overrides a gate.
+- **Evidence is forward**, under a pre-registration locked before the first thesis: a judgement
+  has no history to replay. D150 is amended: a forward-only hypothesis gets the least machinery
+  that produces its record, in shadow.
+- **Capital.** None in shadow; on the live account an exploration share the owner sets (a tenth
+  by default), an authorisation and not evidence; then steps by the live record at registered
+  looks, and back to shadow below its boundary. D148's objection is answered by size.
+- **What to expect.** An edge of 50 % a year shows in about two years of graded calls
+  (t ≈ IR·√years, an information ratio near 1.5); a small one never earns more than the
+  exploration share. Most concentrated books lose to the index, and the plan says so.
+
+Rejected: a book of the owner's ideas alone (the engine must run without him); the model's stated
+probability as a size or a rank (uncalibrated until graded, §5.11); the stock book's 50 % for it
+(no test supports any share); waiting for the event sleeve's components (no test of them
+concludes soon, D148).

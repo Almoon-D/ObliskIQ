@@ -5,6 +5,28 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.20.0] - 2026-11-10
+
+An owner ruling and a challenge review: the engine trades written ideas of its own and the
+owner's and grades them, and a test is run only for the outcome that funds.
+
+### Added
+
+- The thesis book in the plan: at most eight positions on written ideas from the LLM analyst
+  and the owner, one deterministic gate, capital by the forward record (DECISIONS D156).
+- Sessions 27 (thesis book, with `obliskiq idea add`) and 28 (LLM analyst); H12 and H13 in the
+  registry.
+
+### Changed
+
+- A test is not run when its probability of a sufficient outcome, at the effect the literature
+  supports, is below 0.5; θ is never raised to meet it (D154, amending D150).
+- The Hunter's stock test starts with one composite, H12, measured against its own universe;
+  tiers and single hypotheses follow in a fixed sequence (D154, amending D153).
+- Capital steps beyond 50 % count live-account months only (D155, amending D149).
+- Sessions 22 to 26: the conversion's `o10164` gets an owner, the run's place and the data's
+  licence are stated, and dividends, splits and mergers reconcile without the owner.
+
 ## [0.19.1] - 2026-11-10
 
 An owner ruling: the Hunter hunts on every size and instrument, and the aspiration is 50 % a

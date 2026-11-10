@@ -27,11 +27,13 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (parity with the simulator on a fixture history; the owner's variant is D50 since v0.19.0, D147; the live cycle a command list for the owner) | v0.18.0 |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | **next** | |
+| 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | after 22 | |
+| 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | **next** (beside 22) | |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after 23 and the purchase | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | after 22 (beside 24) | |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | after 22, 24, 25, the reserve's paper cycle and a sufficient or inconclusive-positive outcome | |
-| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 26 | |
+| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25, 27 and 24's verdict | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
@@ -50,9 +52,37 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
+| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward | Sessions 27, 28 |
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
+| Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
 
 ## Session log
+
+### Owner ruling: ideas and the thesis book (2026-11-10, v0.20.0)
+
+- **Ruling** (D156): the engine proposes and trades written ideas on its own; the owner hands
+  one in when he has it, as any other or weighted by his conviction. All are graded forward.
+- **Design:** the thesis book in MASTER_PLAN §5.5 (at most eight positions, one gate, the
+  thesis's own exits), its capital in §5.19 (an exploration share, then the live record).
+- **Path:** Sessions 27 (thesis book) and 28 (LLM analyst) written; they follow 22, beside 23
+  and 24. Session 18 carries the thesis book's capital rule. H13 added as an idea.
+- **Owner:** an LLM key before Session 28; the exploration share when the live account nears.
+- **Live findings.** None: no IBKR call.
+
+### Challenge review (2026-11-10, v0.20.0)
+
+- **Review** of v0.19.1, read-only, then its fixes by the owner's instruction (D154, D155).
+- **Research:** the run rule is the probability of a sufficient outcome at the literature's net
+  effect; the Hunter's first test is the composite H12 (the owner's thesis) against its own
+  universe, tiers and single hypotheses after it in a fixed sequence. H12 added as an idea.
+- **Capital:** steps beyond 50 % count live-account months only; the ceiling is investable capital.
+- **Prompts edited:** 22 (the owner pastes `o10164`'s text and the snapshot flags; the conversion's
+  policy is decided from it), 23 (the sequence, the probability of sufficient, where the data can
+  be read), 24 (the measure, no development sample for a published specification, the run's
+  place), 25 (thresholds against D147), 26 (a filled conversion first; dividends, splits, mergers
+  and delistings reconcile without the owner).
+- **Not changed:** the reserve (D50), the 50 % first share and the aspiration, the owner's rulings.
+- **Live findings.** None: no IBKR call.
 
 ### Owner ruling: every size and instrument, 50 % or more (2026-11-10, v0.19.1)
 
@@ -326,14 +356,31 @@ settles it.
   waits (D70); whether a hedge inside a UCITS share class fits the mandate (D69); a deep
   emergency limit for protective exits (off by default, D67); buying option-surface history for
   H8 (D71).
-- **Owner:** Almoon-D/ObliskIQ#53 is a second copy of Session 13's pull request, already merged
-  as #52: close it. The paused Session 15 chat is not resumed (D150); its branch can be deleted.
+- **Owner:** the paused Session 15 chat is not resumed (D150). Three branches belong to no open
+  pull request and can be deleted once checked: `s13-core-engine` (merged as #52),
+  `claude/blissful-lamport-8in96f` and `claude/session-4d-execution-ahadas`. The repository's
+  description on GitHub still names the earlier design (reflexivity, risk parity, an AI that
+  decides); it should say what README.md says.
+- The session that records the owner's paste from Session 22's runbook decides `o10164` on a
+  conversion from IBKR's text (D101): until a conversion fills on paper no order in a foreign
+  currency can be funded, and Session 26 waits for it.
+- The reconciliation freeze passes while no run exists, and a green run never ages
+  (`execution/pretrade.py: _guards`, `execution/executor.py: _stage`,
+  `decision/rebalance_core.py: survey`). Decide a maximum age, with failure-branch tests, before
+  live-small (Session 20 at the latest).
+- Session 20: `grid/`, `data/events`, `data/insiders`, `data/positioning` and `llm/` feed the
+  analyst's fact sheet from Session 28 (D156). What still serves no order, verdict or fact line
+  then (`engines/commodity`, `engines/fx`, parts of `engines/options_sleeve`) is kept or deleted
+  by whether a layer reads it.
+- **Owner:** an LLM provider key and its monthly budget before Session 28 (the analyst runs on
+  fixtures without it and proposes nothing live); the thesis book's exploration share before the
+  live account (a tenth of investable capital unless set).
 - Session 22: with D50 the trend brake needs twelve month ends of the equity and cash vehicles'
   history on the machine, or the reserve says `untilted` and holds its equity whole.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
   ceiling, so the owner's 50 % (D149) cannot be written until the budget reader lets the reserve
   shrink. Until then the defaults stand: the Hunter is inactive and its share stays in the reserve.
-- Maintenance session (SESSION_PROMPTS §F.2): Almoon-D/ObliskIQ#54 and Almoon-D/ObliskIQ#56
+- Maintenance session (SESSION_PROMPTS §F.2): Almoon-D/ObliskIQ#54 and Almoon-D/ObliskIQ#58
   (Dependabot, minor and patch).
 - Research harness: the moving-block bootstrap draws a sample's first and last months less often
   than the others, so on a short sample its interval can sit beside the mean (Session 4e's

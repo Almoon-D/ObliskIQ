@@ -237,6 +237,8 @@ records it.
 | 12 | Engines and gates | Opus 5.5 | xhigh | Custom | — |
 | 13 | Core engine | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 22 | Order path on paper | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
+| 27 | Thesis book | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
+| 28 | LLM analyst | Opus 5.5 | high | **Full** | — |
 | 23 | Hunter: data and power | Opus 5.5 | high | **Full** | — |
 | 24 | Hunter: verdict | Opus 5.5 | xhigh | **Full** | — |
 | 25 | Book breakers | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
@@ -245,7 +247,8 @@ records it.
 | 19 | Cockpit, settings and deployment | Sonnet 5.5 | high | Custom | full preflight |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 
-Run in that order; 22 and 23 can run side by side, and 25 beside 24. On a condition, not in
+Run in that order; 22 and 23 can run side by side, 27 and then 28 follow 22 beside 23 and 24
+(the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. On a condition, not in
 sequence (MASTER_PLAN §10):
 
 | # | Session | Runs when | Model | Effort | Network |
@@ -1798,12 +1801,16 @@ DELIVERABLES
    the existing rate-limit group. If the read that counts is still incomplete, fail closed as
    today.
 2. docs/RUNBOOK.md: one ordered list for the owner, each step with its expected output and
-   what to paste back: the order test inside both windows, the execution test, what the
+   what to paste back (among it, masked: IBKR's own text of `o10164` on the conversion, kept
+   in the intent's history, and the `snapshot` flag of a session's first and second
+   live-orders reads): the order test inside both windows, the execution test, what the
    reserve's trend brake needs on the machine (find in the code which stored history
    engines/core/history.py and orchestration/correlations.py read and the commands that load
    it), the reserve's paper cycle (variant D50, `run-cycle --dry-run` first), then `serve`
    under the supervisor and the daily check for the ten shadow days of MASTER_PLAN §5.19.
-3. ROADMAP: the follow-up closed; the VERIFY-LIVE rows stay open until the owner's run.
+3. ROADMAP: the follow-up closed; the VERIFY-LIVE rows stay open until the owner's run. The
+   session that records the owner's paste decides `o10164` on a conversion from IBKR's text
+   (a money path: its own pull request); Session 26 waits for a conversion filled on paper.
 
 DO NOT BUILD: changes to order windows, the reply whitelist, the o10164 policy or retry
 counts; anything outside the order path and the runbook.
@@ -1825,7 +1832,7 @@ about a live step. Patch version.
 
 ```
 You are building ObliskIQ, session 23. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.9 and DECISIONS D62, D63, D84, D148, D150, D153). Network is open. Buying data
+design (read §5.5, §5.9 and DECISIONS D62, D63, D84, D148, D150, D153, D154). Network is open. Buying data
 is the owner's step: do not buy. Finish with the end-of-session protocol.
 
 PRECONDITION: v0.19.0 or later on main. Otherwise STOP.
@@ -1835,13 +1842,16 @@ which hypotheses that test can decide, before any return is computed.
 
 READ: research/reports/selection-data-audit.md; the `idea` entries of
 research/pattern_registry.yaml; how `obliskiq research power` computes power for a
-cross-section study (use it; extend it only if the stock book's design needs it).
+cross-section study and research/decide.py's rule for sufficient (extend the command with
+the probability of a sufficient outcome, tested; nothing else unless the design needs it).
 
 DELIVERABLES
 1. research/reports/hunter-feasibility.md, its recommendation in the first paragraph.
 2. Vendors of daily prices that keep delisted companies with their delisting returns, for US
    stocks of every size first and for any other market the account trades: price, licence
-   terms for one private user, span, delivery format, how far down in size coverage goes.
+   terms for one private user, span, delivery format, how far down in size coverage goes,
+   and where it can be read (a cloud session, or only the owner's machine: Session 24 runs
+   there).
    Beside them, the price and span of option-surface history for H8. Read on the vendors'
    own pages, each fact with its date.
 3. Point-in-time fundamentals and events from free sources (the SEC's XBRL data sets, Form 4,
@@ -1851,14 +1861,19 @@ DELIVERABLES
    daily traded value it stays under, the commission as a share of the position, and how many
    stocks pass on a recent date, in all and per size tier (micro, small, mid, large, their
    bounds stated; counts only).
-5. Power before data for H2, H3, H4, H10, H11 and one composite, on the whole universe and
-   per size tier with every tier a test in the adjustment: long-only, after costs at each
-   tier's own cost tier and `es` tax; theta per hypothesis justified by what it adds to the
-   whole book at 50 % of capital; the effect detectable at power 0.8. Every assumed
-   dispersion or correlation is cited from the literature, never estimated on candidate data.
-6. The decision rule, written in the report before any number: a hypothesis with power below
-   0.5 is not registered (D150); if none reaches it, the recommendation is not to buy, and
-   the report names the next cheapest route.
+5. Power before data (D154), for a fixed sequence: first the composite H12 on the whole
+   universe, the one confirmatory test; then H12 per size tier; then H2, H3, H4, H10 and H11
+   each alone. A test runs only if the one before it was sufficient, so the first carries no
+   adjustment. The effect is the book's after-tax log growth minus that of its own universe
+   bought and held: long-only, a broad book, costs at each tier's own cost tier, `es` tax.
+   For each test: theta (the smallest effect worth having, never raised to gain power), the
+   net effect the literature supports after publication decay, costs and tax, with its
+   citations, and the probability of a sufficient outcome (L >= theta) at that effect; beside
+   it the classic power at theta and the effect detectable at 0.8. Every assumed dispersion
+   or correlation is cited from the literature, never estimated on candidate data.
+6. The decision rule, written in the report before any number: a test whose probability of
+   a sufficient outcome is below 0.5 is not registered (D154); if the first test does not
+   reach it, the recommendation is not to buy, and the report names the next cheapest route.
 7. One owner question in ROADMAP Follow-ups: buy this, at this price, yes or no.
 
 DO NOT BUILD: loaders for data not yet bought; any return, hit rate or correlation on
@@ -1877,11 +1892,12 @@ obtained. No version change if only research/ and docs/ change.
 
 ```
 You are building ObliskIQ, session 24. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D85, D140, D148–D150, D153). Network is
+design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D85, D140, D148–D150, D153–D155). Network is
 open. Finish with the end-of-session protocol.
 
-PRECONDITION: Session 23 merged, and the history it recommended is bought and reachable from
-this session. Otherwise STOP and say what is missing.
+PRECONDITION: Session 23 merged, and the history it recommended is bought and reachable where
+Session 23 said the run happens: this session, or the owner's machine, for which steps 1 and
+3 end in one command the owner runs and pastes. Otherwise STOP and say what is missing.
 
 GOAL: each registered Hunter hypothesis ends sufficient, insufficient, inconclusive or not
 evaluable, from one confirmation run of the book as it would trade.
@@ -1894,16 +1910,19 @@ liquidity tier, integer shares, `es` tax lots. It lives where Session 26 can run
 live book (D140). A toy study runs end to end. The bought data never enters the repository.
 
 STEP 2 — the pre-registration, its own pull request, no version change:
-research/preregistrations/hunter-us.md from the template. The hypotheses Session 23 kept,
-each alone, and one composite, on the whole universe and on the size tiers Session 23 kept,
-every one a test in the adjustment. Primary statistic: the book's annualised after-tax log growth
-minus the equity reference's, with the Fama–MacBeth series beside it. Theta, the development
-and confirmation samples, the trial budget. Robustness: subperiods, a placebo, the break-even
+research/preregistrations/hunter-us.md from the template. The fixed sequence Session 23 kept
+(D154): the composite H12 on the whole universe, then its size tiers, then each hypothesis
+alone; a test runs only if the one before it was sufficient. Primary statistic: the book's
+annualised after-tax log growth minus that of its own universe bought and held; beside it,
+deciding nothing, the difference from the equity reference and the Fama–MacBeth series.
+Theta; the holding period and rebalance dates; the samples (a specification taken as
+published has no development sample); the trial budget. Robustness: subperiods, a placebo, the break-even
 cost multiplier, every spread doubled. D149's schedule: the looks, the minimum live months
-and closed positions, the steps from 50 % to 100 %. No owner_point (D147). Lock it.
+and closed positions, counted on the live account only (D155), the steps from 50 % to all
+investable capital. No owner_point (D147). Lock it.
 
-STEP 3 — exploration on the development sample with every trial registered; one confirmation
-run; research/reports/hunter-us.md; the registry's statuses.
+STEP 3 — exploration only where a specification is not the published one, on its development
+sample with every trial registered; one confirmation run; research/reports/hunter-us.md; the registry's statuses.
 
 DO NOT BUILD: a live engine; a signal that is not registered; a second run with changed
 constants.
@@ -1937,7 +1956,11 @@ report.
 
 DELIVERABLES
 1. Lite's `portfolio_circuit_breaker` keys in config/defaults/ with lite's values, and a hard
-   peak-to-trough threshold as a key of its own (a judgement, recorded in DECISIONS).
+   peak-to-trough threshold as a key of its own (a judgement, recorded in DECISIONS). The
+   same entry says how each threshold sits with D147: global equity fell more than lite's
+   15 % in a month in 2008 and 2020, falls the owner accepts, and a freeze then leaves
+   deposits uninvested. If a breaker is to catch a fault and not a market, it measures the
+   managed book's fall beyond the equity reference's over the same window.
 2. The rolling-month breaker: freeze new buys and alert. The hard breaker: force mode
    `shadow` and alert. Both on the daily peak of managed NAV (the day's last cycle; a value
    read inside the day never raises it).
@@ -1968,8 +1991,8 @@ You are building ObliskIQ, session 26. AGENTS.md is your operating manual; MASTE
 design (read §5.5, §5.11, §5.19 and DECISIONS D140, D148–D151, D153). Money paths fail closed.
 Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 22, 24 and 25 merged; the reserve's paper cycle is recorded in
-ROADMAP; the registry holds a Hunter hypothesis that is sufficient or inconclusive-positive.
+PRECONDITION: Sessions 22, 24 and 25 merged; the reserve's paper cycle and a conversion filled
+on paper are recorded in ROADMAP; the registry holds a Hunter hypothesis that is sufficient or inconclusive-positive.
 Otherwise STOP and report which is missing. If the registry holds none, the next step is
 Session 21's prompt with a new batch, not this session.
 
@@ -1984,6 +2007,9 @@ DELIVERABLES
 3. decision/rebalance_hunter.py: trades on the registered rebalance dates only (D151); the
    live guards the core's rebalancer applies; the breakers' freeze; limit-capped orders; a
    funding conversion first for a foreign currency; the registered exits.
+   execution/reconcile.py explains a held stock's dividend, split, merger and delisting from
+   IBKR's own records (read at the source first; unobserved shapes stay VERIFY-LIVE and
+   freeze as today), so none stops new buys until the owner classifies it by hand.
 4. Capital: inconclusive-positive → shadow at zero weight, graded; sufficient → the budget
    reader gives the Hunter its share, up to 50 %, and the reserve the rest
    (`capital.satellite_ceiling` and the schema rule that reserves a fixed core budget change
@@ -1997,7 +2023,111 @@ sizing.
 ACCEPTANCE: parity with the simulator on a fixture history at every rebalance date; between
 rebalance dates a cycle places no Hunter order except a registered exit (test); a frozen book
 buys nothing; failure branches for an unreadable universe, a stale score input, a delisted
-holding and an unaffordable lot.
+holding, a dividend, a split that IBKR's records do not explain, and an unaffordable lot.
+```
+
+---
+
+## Session 27 — Thesis book
+
+**Launcher:** `Execute Session 27 exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 27. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book" and item 5, §5.11, §5.12, §5.19 and DECISIONS D62, D63,
+D65, D67, D108, D156). Money paths fail closed. No IBKR call. Finish with the end-of-session
+protocol.
+
+PRECONDITION: Session 22 merged. Otherwise STOP.
+
+GOAL: the owner hands the engine an idea with one command; the engine evaluates it like any
+other, trades it on paper inside its rails and grades it. With no idea the book holds nothing.
+
+STEP 1 — the forward pre-registration, its own pull request, no version change:
+research/preregistrations/thesis-book.md (H13) from the template, locked before any thesis
+exists. Primary statistic: the book's after-tax log growth minus the equity reference's on
+the same capital. The looks (every six months), a one-sided sequential boundary whose
+false-step probability over all looks is the registered alpha, the minimum of closed theses
+per look, the steps of capital up, the boundary that returns the book to shadow, and the
+same per source and per conviction level. Stated limit: paper fills are simulated.
+
+STEP 2 — the book.
+1. Domain and store: Thesis (source, conviction, instrument, expectation, target, horizon,
+   invalidation, entry rule, state) with §5.5 item 5's lifecycle: text and triggers immutable
+   once approved (SQL trigger), changes appended to a re-underwrite log.
+2. Intake: `obliskiq idea add|list|show|withdraw` for the owner (conviction normal, high or
+   max; a missing target, horizon or invalidation is refused with its reason). One function
+   takes a draft from any source; Session 28 calls it.
+3. engines/thesis/: the deterministic gate with reason codes (the mandate and eligibility
+   through the existing policies, the liquidity floor, position, sector and currency caps, the
+   minimum gain-to-loss ratio; an instrument another book holds is refused), slots in order
+   of arrival, base size = the book's capital over `max_positions`, conviction multipliers
+   inside the position cap. Every number a config key with its reason in DECISIONS.
+4. decision/rebalance_thesis.py: entries and the thesis's own exits (target, invalidation,
+   horizon, the protective stop of execution/protective.py) through the pre-trade gate and
+   the executor, as the core's rebalancer does; a funding conversion first.
+5. Grading: each closed thesis against what it wrote (reached, payoff, days), per source and
+   conviction. The digest shows open theses, withheld ideas with reasons, and the record.
+6. Capital: shadow by default, paper in paper mode. The live share is Session 18's.
+
+DO NOT BUILD: an LLM call; ranking or sizing by a model's probability; calibrated sizing;
+options; the event sleeve's components or agreement rule; Telegram or MCP intake (Session 19).
+
+TESTS: failure branches for an incomplete idea, an ineligible or illiquid instrument, a full
+book, a conid another book holds, a stale quote at entry, a missing stop at exit and a failed
+conversion; an approved thesis's text cannot change; no idea → a cycle places nothing; max
+conviction never passes the position cap.
+
+ACCEPTANCE: an integration test takes one owner idea from `idea add` to a shadow fill, its
+exit at the invalidation and its grade in the digest. docs/RUNBOOK.md gains the owner's
+commands. Minor version.
+```
+
+---
+
+## Session 28 — LLM analyst
+
+**Launcher:** `Execute Session 28 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 28. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.7, §5.10 and DECISIONS D70, D127, D128, D156).
+Network is open for the provider. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 27 merged. With no LLM key configured (ROADMAP, the owner's open item),
+build against recorded fixtures and queue VERIFY-LIVE; never invent a model's output.
+
+GOAL: with no owner present the engine proposes its own theses, each resting on dated facts,
+and writes a second opinion on the owner's; all of it graded forward.
+
+DELIVERABLES
+1. The fact sheet: one point-in-time text from the measurement store (the macro board, the
+   equity grid and rankings, events, positioning, insiders), bounded by as_of, each line with
+   its date and status, carrying no account identifier or balance (test). The scheduled
+   compute step that refreshes those views (ROADMAP Follow-ups, "runs no compute step").
+2. llm/analyst.py on the existing transport: role Analyst → ThesisDraft (an instrument of the
+   universe, the expectation, target, horizon, invalidation, the fact-sheet lines it rests
+   on), Pydantic-validated, temperature 0, one retry, then nothing. A draft that cites no
+   fact line, names an instrument outside the universe or lacks a field is dropped and
+   logged. At most `max_drafts_per_week` (config).
+3. The second opinion on an owner's idea: a critique and a stated probability of reaching the
+   target, stored with the thesis, graded (Brier) and shown in the digest. Never a veto.
+4. Drafts enter Session 27's intake as source `analyst`; its gate decides. The service hands
+   them across: llm/ still imports nothing from decision/ or execution/.
+5. One stored series per model and prompt hash; a change of either starts a new segment of
+   the forward record (D128).
+6. Budget: config/llm.yaml's monthly cap; once spent there are no drafts and the book runs
+   on its exits.
+
+DO NOT BUILD: the provider registry and the other roles (Session 16); sizing or ranking by
+the model's probability; any path by which a model's text reaches an order unvalidated.
+
+TESTS (respx): malformed, empty and hostile output (an instruction inside a news item) is
+dropped; a draft citing a fact dated after as_of is dropped; no key → no call and a status;
+the trading path runs with the LLM unreachable.
+
+ACCEPTANCE: from a fixture store one scheduled run yields validated drafts that become shadow
+theses; the pull request shows one real draft if a key was configured. Minor version.
 ```
 
 ---
@@ -2261,12 +2391,11 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 ```
 You are building ObliskIQ, session 18. AGENTS.md is your operating manual; MASTER_PLAN.md
-the design (read §1, §5.5, §5.9, §5.11, §5.19 and DECISIONS D62, D63, D65 carefully). Port
-from legacy/, never from memory.
-Finish with the end-of-session protocol.
+the design (read §1, §5.5, §5.9, §5.11, §5.19 and DECISIONS D62, D63, D65, D149, D155, D156).
+Port from legacy/, never from memory. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 22–26 merged. Otherwise STOP. Grade and calibrate only the layers that
-exist: where a deliverable names the event sleeve's components, theses or LLM nominations,
+PRECONDITION: Sessions 22, 25 and 27 merged and Session 24's verdict recorded. Otherwise
+STOP. Grade and calibrate only the layers that exist: where a deliverable names the event sleeve's components, theses or LLM nominations,
 build the interface and leave the rest to the session that builds that layer.
 
 GOAL: the system measures itself honestly: research outcomes and live monitoring drive
@@ -2274,9 +2403,8 @@ sizing trust, Hunter weights, pattern promotion and the satellite's capital, and
 evidence drives mode promotion.
 
 READ: legacy/old/ObliskIQ/modules/analytics/{ai_scoreboard,forecast_panel}.py,
-docs/AI_SCOREBOARD.md, docs/PAPER_TRADING_GATE.md, modules/execution/paper_gate.py and
-their tests (test_ai_scoreboard, test_scoreboard_statistics, test_forecast_panel,
-test_paper_gate).
+docs/AI_SCOREBOARD.md, docs/PAPER_TRADING_GATE.md, modules/execution/paper_gate.py and their
+tests (test_ai_scoreboard, test_scoreboard_statistics, test_forecast_panel, test_paper_gate).
 
 DELIVERABLES
 1. research/preregistrations/scoreboard.md first, in its own PR merged before the rest
@@ -2306,25 +2434,22 @@ DELIVERABLES
    active by a sufficient outcome and its activation condition, logged, reported;
    retirement only by a new pre-registered test.
 7. scoreboard/monitor.py and capital/allocation.py (D65): a twin per active layer; the
-   live-minus-twin gap and the twin against the backtest's predictive distribution,
-   reviewed monthly against alpha-spending boundaries; a gap breach freezes the layer's new
-   entries and alerts; a twin breach returns the layer to shadow at zero weight and
-   alerts; capital only for a sufficient layer: up to 50 % of managed capital, then the
-   pre-registered steps to 100 %, each taken automatically when the pooled re-test is still
-   sufficient, the gap is inside its boundary and the minimum live record is met, and given
-   back the same way (DECISIONS D149); the reserve holds the rest. Every change audited and
-   reported.
+   live-minus-twin gap and the twin against the backtest's predictive distribution, reviewed
+   monthly against alpha-spending boundaries; a gap breach freezes the layer's new entries
+   and alerts; a twin breach returns it to shadow at zero weight and alerts. Capital exactly
+   as MASTER_PLAN §5.19 states it, automatic both ways: the stock book's 50 % and its steps
+   on the live-account record (D149, D155); the thesis book's exploration share, steps and
+   return to shadow by its own pre-registration, per source (D156); the reserve holds the
+   rest. Every change audited and reported.
 8. scoreboard/promotion.py: L0→L3 criteria (MASTER_PLAN §5.19 and config) including the
-   breaker, kill and cash-flow drills; `obliskiq promotion status`; upgrades still need an
-   owner command.
+   breaker, kill and cash-flow drills; `obliskiq promotion status`; upgrades need an owner
+   command.
 9. reporting/: a weekly report (markdown plus a Telegram summary) and a monthly report.
 
 ACCEPTANCE: hand-computed Newey–West, Brier, n_eff and TWR tests; promotion cannot pass on
 missing data; a gap-breach drill, a twin-breach drill and a budget step drill; repeated
 monthly looks hold the pre-registered false-alarm rate (simulation test); weight updates,
-calibration, budget steps and pattern promotion impossible before the minimum sample
-(tests).
-Finish with the end-of-session protocol in AGENTS.md.
+calibration, budget steps and pattern promotion are impossible before the minimum sample.
 ```
 
 ---
