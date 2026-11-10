@@ -18,7 +18,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "cryptography>=46,<47",
+    "cryptography>=46,<51",
     "exchange-calendars>=4.13.2,<5",
     "httpx>=0.28,<0.29",
     "numpy>=2.3,<3",
