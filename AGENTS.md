@@ -1,13 +1,13 @@
 # AGENTS.md — ObliskIQ
 
-A global, autonomous portfolio manager for one IBKR account: a core (the variant the owner picks from Session 4c's after-tax frontier, MASTER_PLAN §5.4), a satellite (the Asymmetry Hunter, defined risk) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
+A global, autonomous portfolio manager for one IBKR account: the Hunter (a systematic book of small- and micro-cap stocks, funded only by a test it passed, MASTER_PLAN §5.5), a reserve that holds the rest (global equity with a trend brake, §5.4) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
 
 ## Read first — your slice, not whole files
 
 1. Your task: `make prompt S=<N>` prints the common header and your section of `docs/SESSION_PROMPTS.md`.
 2. `docs/MASTER_PLAN.md` — the design. Do not re-derive or relitigate it. Read the §§ your prompt names, in full, before writing code; other §§ when a question sends you there.
 3. `docs/DECISIONS.md` — why things are as they are; what was rejected. The entries that cite your §§ or touch your modules, and the previous session's.
-4. `docs/ROADMAP.md` — the latest session-log entry, and the Follow-ups and Live verification queue (act on the items that name your session or a condition it meets, such as the first session with a working login).
+4. `docs/ROADMAP.md` — the session table, "Where the evidence stands" and the latest session-log entry. Search the Follow-ups and the Live verification queue for your session's number and for a condition it meets (such as the first session with a working login); do not read them whole.
 5. `docs/knowledge/` — observed broker and data-source behaviour, tagged by route and date: the files your work touches.
 
 Find sections with `grep -n '^#'` and read them by line range. If the code contradicts the plan or your prompt, stop and report it in the PR description before writing code around it.
@@ -21,6 +21,14 @@ Read what the work in front of you needs, when it needs it.
   Large data files (a universe, fixtures, CSVs) are inspected by script, `head` or `grep`.
 - Read at the source yourself what you port or edit, and every money-path mechanic: broker replies and message ids, order types, failure modes, guards.
 - Never poll. Background subagents and CI report when they finish.
+- `docs/archive/` is searched, never read whole.
+
+## Build for evidence (DECISIONS D150)
+
+- An engine is built only for a hypothesis whose test left it sufficient or inconclusive-positive, as the mechanism the test ran. Nothing is built "for later".
+- A test whose power before data is below 0.5 at its θ is not run.
+- A prompt's `DO NOT BUILD` list is part of its scope. If the work seems to need something on it, stop and report.
+- A session ends with something observable: a verdict, a command the owner can run, or a behaviour a test shows.
 
 ## Hard rules (money and safety)
 
@@ -55,16 +63,16 @@ Read what the work in front of you needs, when it needs it.
 - `make check` = `ruff format --check`, `ruff check`, `mypy --strict src`, `lint-imports`, `pytest` with the coverage floor. Green before opening a PR and before merging.
 - No network in tests: HTTP mocked with `respx`; fixtures in `tests/fixtures/` with a sidecar note of source and date. Live probes are separate commands, never tests.
 - Money paths (sizing, gates, intents, orders, replies, reconciliation, currency conversion, cash flows, tax lots, modes, kill switch) need failure-branch tests, not only the happy path.
-- The coverage floor only ratchets up.
+- The coverage floor is fixed in `pyproject.toml` (DECISIONS D152).
 - Research: code whose output can move capital lives in `src/obliskiq/research/` under every rule above, with tests of data correctness, point in time (perturbing data after `as_of` changes no output), computation and reproducibility. Scripts in `research/explore/` are outside the coverage floor and are never evidence: only a harness run on a merged, locked pre-registration counts (DECISIONS D64).
 - Software tests are not evidence of returns. A strategy claim needs a pre-registered test and its outcome under the decision rule (DECISIONS D62).
 
 ## Session workflow
 
-1. Read the files above. Merge the open Dependabot patch and minor pull requests whose CI is green; fix a red one or add it to Follow-ups. A major one, or one that changes the Gateway's or the browser's runtime, follows DECISIONS D96. Branch `s<NN>-<short-slug>` (feature sessions: `f-<short-slug>`) from an up-to-date `main`.
+1. Read the files above. Dependabot pull requests belong to the maintenance session (SESSION_PROMPTS §F.2, DECISIONS D96), not to a build session. Branch `s<NN>-<short-slug>` (feature sessions: `f-<short-slug>`) from an up-to-date `main`.
 2. Put your plan (5–15 bullets) at the top of the PR description. Do not wait for approval unless a stop condition applies.
 3. Keep to your prompt's scope; anything else goes to "Follow-ups" in the PR and ROADMAP.
-4. In the same PR update `docs/ROADMAP.md` (session log: landed, deferred, live findings, VERIFY-LIVE items), `docs/DECISIONS.md` (real decisions only), `CHANGELOG.md` (a section for the new version) and the version in `pyproject.toml` (minor per build session or feature, patch for fixes). Never create or push tags: the release workflow publishes
+4. In the same PR update `docs/ROADMAP.md` (session log: landed, deferred, live findings, VERIFY-LIVE items), `docs/DECISIONS.md` (real decisions only), `CHANGELOG.md` (a section for the new version) and the version in `pyproject.toml` (minor per build session or feature, patch for fixes). Records are short (DECISIONS D152): a session-log entry at most 15 lines, a decision at most 12 (an owner ruling that redirects the plan may run longer), a changelog section at most 8 bullets; no test inventory and no file-by-file account, which the PR and git hold. Never create or push tags: the release workflow publishes
    the release when the version change reaches `main`.
 5. A pre-registration is merged in its own PR (no version change) before any PR that tests it, and its lock file records the file's SHA-256 and that merge commit. Squash merges would otherwise put the hypothesis and its result in one commit.
 6. You may correct later prompts in `docs/SESSION_PROMPTS.md` only to fix facts, paths or dependencies your work changed — never to add scope. Log each edit.
@@ -75,7 +83,7 @@ Read what the work in front of you needs, when it needs it.
 Where `gh` is missing or unauthenticated, the environment's GitHub tools do the same steps.
 
 1. **PR.** Push and open it with `gh pr create` using `.github/pull_request_template.md`.
-2. **Self-review and clean.** Wait for CI (`gh pr checks <n> --watch`) and carefully analyse the PR and the full diff (`git diff origin/main...HEAD`) against the prompt (`make prompt S=<N>`) yourself. Check for: any mistakes or bugs; incomplete, stubbed or lazily implemented modules that do not genuinely work end-to-end; money-path safety, mandate and eligibility violations; hardcoded values; point-in-time leaks; missing failure-branch tests; cleanliness (dead code, debug prints, stray files, TODOs without an issue, commented-out code, version narratives, secrets); and docs consistency. Tick the template checklist yourself.
+2. **Self-review and clean.** Wait for CI (`gh pr checks <n> --watch`) and analyse the PR against the prompt (`make prompt S=<N>`) yourself: every changed money-path file in full (`git diff origin/main...HEAD -- <path>`), the rest from `git diff --stat` and the hunks it points you to. Check for: any mistakes or bugs; incomplete, stubbed or lazily implemented modules that do not genuinely work end-to-end; money-path safety, mandate and eligibility violations; hardcoded values; point-in-time leaks; missing failure-branch tests; cleanliness (dead code, debug prints, stray files, TODOs without an issue, commented-out code, version narratives, secrets); and docs consistency. Tick the template checklist yourself.
 3. **Fix.** If your self-review found any issue or CI is red → fix, run `make check` locally, commit and push. At most three fix attempts. Record any out-of-scope items under Follow-ups.
 4. **Merge.** Only with green CI and all issues resolved: `gh pr merge <n> --squash`; if the proxy refuses, `gh api -X PUT repos/{owner}/{repo}/pulls/<n>/merge -f merge_method=squash`. Never delete branches yourself (GitHub deletes merged heads). Then `git checkout main && git pull` and run `make check` on `main`; if it is red, open a fix PR at once under this same protocol.
 5. **Release.** Confirm the release workflow run on `main` succeeded

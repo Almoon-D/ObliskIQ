@@ -3422,3 +3422,125 @@ portfolio, one cycle stale.
 
 Rejected: the planner re-running the engine. It would read the store and the quotes a second
 time for the same answer.
+
+## Owner rulings and the build path (2026-11-09)
+
+### D147 · Growth first: the drawdown point is withdrawn and the reserve runs D50 (§1, §5.4, §11; D60, D88, D91)
+
+The owner withdrew D88's tolerance and D91's point. They resolved to A, whose median after-tax
+growth was 3.22 % a year against 7.13 % for the equity reference
+(`research/reports/core-allocation.md`), and the owner will not hold a book built for that.
+
+- **The objective** stays D60's after-tax log growth. No drawdown limit filters a candidate; every
+  study and the digest still report the drawdown. A pre-registration's `owner_point` is optional
+  and new ones leave it out.
+- **The reserve.** Capital the Hunter does not hold (D148) sits in the core engine running `D50`:
+  global equity with the trend tilt as an overlay to cash, set in `config/owner.yaml`. In Session
+  4c D50's median was 6.49 % a year, which the test cannot tell apart from the reference. It
+  reached a 30 % fall on 58.5 % of 20-year paths, 40 % on 22.7 % and 50 % on 5.8 % (the reference:
+  72.3 %, 37.3 %, 13.4 %), on month-end marks, which err low. The owner accepts falls of that size.
+- **What the tilt is.** It reacts to a fall under way and forecasts nothing. Its tax-aware rule
+  holds a reduction whose tax exceeds `core.tax_aware.benefit_fraction`, so after years of gains
+  the reserve behaves like buy and hold (Session 4c's reading of D50 from 2016).
+- **Unchanged:** the mandate (§2), the breakers and their own keys (§5.11), the variants A–D as
+  registered.
+
+Rejected: keeping A; buy and hold as the reserve (the owner wants a rule that steps aside in a
+fall it can see, and the evidence favours neither); an LLM's or the owner's call on when to hold
+equities, and sizing the equity share by a forecast of falls: Session 4e found no such rule
+sufficient, and one that passes a test is added by D150's rule.
+
+### D148 · The return engine is the Hunter: a systematic book of small and micro caps (§1, §5.2, §5.5)
+
+The owner's aim is a return far above the market's. Inside the mandate, the one place where that
+is arguable is where the account's size is an advantage: companies too small or illiquid for
+institutional capital. The Hunter is that: a diversified, rule-based, long-only book of small- and
+micro-cap stocks, selected by signals with a documented mechanism and held with low turnover.
+
+- **Signals to test** (`research/pattern_registry.yaml`): cheapness with quality (Greenblatt 2005;
+  Piotroski 2000; size once junk is controlled, Asness et al. 2018), insider-purchase clusters
+  (H2), forced selling and spin-offs (H3), momentum and the 52-week high (H4), post-earnings drift
+  (Bernard & Thomas 1989).
+- **Why it can be tested when the allocation ideas could not:** breadth. A month holds thousands
+  of stocks against nine roles, so a large effect shows in fifteen years of cross-sections. A
+  small one is not worth the build.
+- **What the admired investors lend.** Buffett's remark about 50 % a year concerned hand-picked
+  tiny companies with small sums: the hunting ground and the capacity advantage transfer, the
+  figure does not. Medallion's record rests on short horizons, leverage and infrastructure the
+  mandate excludes: validation before trust transfers. Neither is evidence; the aspiration (D60)
+  stays a distance reports show, and the Hunter's test decides what it earns.
+- **The event sleeve.** The component-agreement design of §5.5 (crowding, volatility, events, the
+  LLM's vote) is deferred: its signals fire on few independent events, so no test of them
+  concludes soon. It is built when a batch leaves one of them sufficient or inconclusive-positive.
+
+Rejected: intraday trading (delayed quotes, four cycles a day, costs); a handful of discretionary
+picks, by the owner or an LLM (too few bets to tell skill from luck); a published backtest read as
+evidence without our own run after costs and tax.
+
+### D149 · Hunter capital: 50 % on a sufficient test, then to 100 % by a live rule, no owner command (§5.19, §11; amends D65)
+
+The owner's ruling: allocation is fully automatic.
+
+- A Hunter book with a sufficient outcome and its activation condition takes up to 50 % of
+  managed capital.
+- Beyond that it steps to 100 % at pre-registered looks, when the pooled re-test (history plus the
+  live twin) is still sufficient, the live-minus-twin gap is inside its boundary and the
+  pre-registered minimum of live months and closed positions is met. Steps, looks and minimums are
+  fixed in the pre-registration before its run.
+- The same rule takes capital back: a twin below its boundary returns the book to shadow (D65).
+- The owner's command remains for the move to the live account (`AGENTS.md`), the kill switch and
+  `flatten`.
+
+A live record confirms an edge slowly (t ≈ IR·√years), so the steps beyond 50 % are slow unless
+the edge is large. That is the rule working. Rejected: 100 % on the backtest alone (published
+effects shrink out of sample, McLean & Pontiff 2016); an owner approval per step.
+
+### D150 · The build order: paper orders first, the Hunter's verdict second, engines only for what a verdict funds (§10; amends D61, D66, D89)
+
+At v0.18.0, after thirteen build sessions, no order had filled: each live contact found a fault the
+fixtures could not (a 503 on a conversion's preview, a declined `o10164` whose cancel failed, a
+first live-orders read without `snapshot: true`). The registry held no sufficient signal, and the
+sequence built the satellite, the LLM layer and the sizing before testing them.
+
+- **Order:** 22 (order path), 23 (Hunter data and power), 24 (Hunter verdict), 25 (book breakers),
+  26 (Hunter engine), then 18, 19, 20. Sessions 15, 16, the rest of 17, 19a and 21 wait for the
+  condition §10 names for each.
+- **Paper gates engines.** Session 26 starts only after the core's paper cycle is recorded.
+- **An engine follows a verdict.** One is built for a hypothesis whose outcome is sufficient or
+  inconclusive-positive, as the mechanism its test ran (D140).
+- **Power before a run.** A test whose power before data is below 0.5 at its θ is not run.
+  Sessions 4c and 4e ran at 0.02 to 0.07 and could only be inconclusive.
+- **D89 amended.** Adaptation is no longer a requirement. An allocation rule is tested only where
+  a longer history or a cross-section gives that power; the 2004–2026 sample is not read again.
+- **D66 amended.** Session 19a is built when managed capital reaches an activation condition it
+  serves, not before 1.0.0.
+
+Rejected: finishing Session 15 as written (machinery for a layer no test funds); testing more
+allocation rules first (no power).
+
+### D151 · Continuity across cycles (§5.11, §5.14)
+
+The four daily cycles stay anchored to venue sessions, since an order is useful only while its
+venue trades. A cycle never rebuilds the book. The Hunter recomputes its selection on its
+registered rebalance dates only; between them a cycle works pending intents, exits and cash flows.
+A holding leaves on a registered exit, a fall below the keep buffer at a rebalance, or a corporate
+event. Rejected: a fixed six-hour clock; re-ranking every cycle (turnover, and tax on every
+change of mind).
+
+### D152 · Session economy (AGENTS.md)
+
+In seventeen days the build wrote 75,000 lines of source, 73,000 of tests, 3,400 of decisions and
+a 1,700-line session log, every session at the highest effort.
+
+- **Records are short.** A session-log entry is at most 15 lines, a decision 12 (an owner
+  ruling that redirects the plan may run longer), a changelog section 8 bullets. The pull
+  request holds the detail.
+- **Reading by search.** ROADMAP keeps its latest entries; older ones are in
+  `docs/archive/ROADMAP_LOG.md`. Follow-ups and the live queue are searched by session id.
+- **Effort by risk.** `high` by default; `xhigh` for money paths and research verdicts.
+- **Dependabot** belongs to the maintenance session (SESSION_PROMPTS §F.2).
+- **The coverage floor is fixed** at 99.5 %; it no longer ratchets.
+- **A prompt** is at most 60 lines and names what it must not build.
+
+Rejected: lowering the floor (the tests are the only check a cloud session has on a money path);
+deleting finished prompts (`make prompt` prints one section, so they cost nothing).

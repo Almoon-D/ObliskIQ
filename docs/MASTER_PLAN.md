@@ -30,18 +30,18 @@ edit to this file in the same PR. Sessions do not re-derive the plan.
 
 A global, autonomous portfolio manager for one IBKR account that:
 
-1. **Survives first.** A diversified, regime-agnostic core that cannot blow up: no
-   leverage, no short premium, no shorting, nothing the owner's jurisdiction forbids.
-2. **Compounds second.** The core carries documented premia — multi-asset exposure and
-   systematic trend following — and adapts its allocation within the owner's limits through
-   rules that pass a pre-registered test; until one does, it holds the variant the owner's
-   tolerance picks from the after-tax frontier that the objective below scores (§5.4,
-   DECISIONS D89).
-3. **Hunts asymmetry third.** A satellite that searches every market IBKR reaches for the
-   few stocks, sectors and assets that move far more than the market — dislocations,
-   reflexive loops, crowded positioning, forced selling, informed buying — corroborates them
-   with independent data and expresses them with capped loss: shares with volatility-scaled
-   stops, or long vanilla options when they beat the shares for the same signal.
+1. **Survives first.** A mandate that cannot blow up the account: no leverage, no short
+   premium, no shorting, nothing the owner's jurisdiction forbids, and breakers that freeze
+   new risk and stand the bot down (§5.11).
+2. **Hunts second.** The Hunter is the return engine: a diversified, rule-based, long-only
+   book of small- and micro-cap stocks, the companies too small or illiquid for institutional
+   capital, selected by signals with a documented mechanism — cheapness with quality, informed
+   buying, forced selling, momentum, earnings drift — and held with low turnover (§5.5,
+   DECISIONS D148). It takes capital only on a test it passed, up to half of the account, and
+   the rest by a live rule (§5.19).
+3. **Keeps the rest at work.** Capital the Hunter does not hold is the reserve: global
+   equities with a slow, tax-aware trend brake that steps partly aside in a fall under way
+   (§5.4, DECISIONS D147).
 4. **Measures itself.** Every hypothesis is pre-registered and tested on point-in-time
    history with a decision rule that says sufficient, insufficient, inconclusive or not
    evaluable (§5.9); every proposal, from a detector, a pattern or an LLM, is logged and
@@ -49,15 +49,17 @@ A global, autonomous portfolio manager for one IBKR account that:
    its live results are monitored against that evidence (§5.19).
 
 **Objective.** Maximise the long-run growth of after-tax wealth: the annualised log growth of
-the account's liquidation value, net of costs, within the owner's drawdown limit (§11,
-DECISIONS D60). Tax is simulated as it arises — realised gains through the lot engine, each
+the account's liquidation value, net of costs (DECISIONS D60). The owner sets no drawdown limit
+and accepts falls as deep as global equities' and deeper (§11, D147). Tax is simulated as it arises — realised gains through the lot engine, each
 year's tax paid at the profile's payment date — and at the horizon the remaining positions are
-sold and their tax paid. Research reports a frontier across drawdown limits; the owner's
-tolerance picks the point that receives capital. Two references are scored under the same
+sold and their tax paid. Research reports each candidate's drawdowns beside its growth. Two
+references are scored under the same
 rule, in the base currency: a global accumulating UCITS equity ETF bought and held,
-and a global 60/40. They are yardsticks and a possible outcome, not the destination. No
+and a global 60/40. They are yardsticks and a possible outcome, not the destination. The owner's
+aspiration is 30–50 % a year or more: a distance every report shows, never a forecast. No
 system knows with high certainty what markets will do: returns come from documented premia
-and from asymmetric bets sized by evidence, with costs and taxes treated as costs.
+and from a selection edge that must be shown on data before it is funded, with costs and
+taxes treated as costs.
 
 ---
 
@@ -88,10 +90,10 @@ entry), the resolution is recorded in `DECISIONS.md` and the stricter risk outco
 | Orders | Limit-capped only: patient limits, IBKR algos with a limit cap, stop-limit protective exits. Never a plain market order. | execution policy |
 | AI | Modular providers and models (§5.10) within a monthly budget. The LLM never sizes, never places orders, never overrides a gate. | `config/llm.yaml` + import contracts |
 | Account size | Any size. Minimum trade configurable as an absolute amount, a % of managed capital, or both combined; never below the commission-derived floor. | `config/owner.yaml: trading.min_trade` |
-| Activation | Every capability runs when a condition computed from configuration holds — evidence (§5.9), capital, a verified broker capability — never above a NAV threshold key; the bond rule (§5.3) is the model. What pays only at larger capital is built in Session 19a (DECISIONS D66). | activation module + `obliskiq capabilities status` |
+| Activation | Every capability runs when a condition computed from configuration holds — evidence (§5.9), capital, a verified broker capability — never above a NAV threshold key; the bond rule (§5.3) is the model. What pays only at larger capital is built in Session 19a, when capital reaches it (DECISIONS D66, D150). | activation module + `obliskiq capabilities status` |
 | Capital flows | The owner announces deposits and dated withdrawals; the bot plans for them at once and honours them without breaking the strategy (§5.15). | cash-flow ledger |
 | Taxes | Pluggable tax policy per jurisdiction (§5.16). Not tax advice. | profile + `jurisdiction/` |
-| Autonomy | Paper trading is fully autonomous across all sleeves. Live autonomy per sleeve is set by the owner at promotion. An approval queue exists, off by default. | `execution.modes` |
+| Autonomy | Fully autonomous: selection, allocation between the Hunter and the reserve, and execution need no owner command (D149). The owner's command moves the bot to the live account, and works the kill switch and `flatten`. An approval queue exists, off by default. | `execution.modes` |
 | Existing holdings | Everything the bot did not open is `unmanaged`: counted in NAV and risk, never traded until the owner releases it. | holdings registry |
 
 ---
@@ -158,10 +160,9 @@ Both investing projects spent most of their effort on documentation and process 
 neither placed an automated order; the one that tested its strategy learned it had no edge
 only at the end. ObliskIQ inverts both: evidence comes first — a research harness, the
 core's after-tax verdict and one selection hypothesis run before the execution mechanics are
-finished (§10) — and a walking skeleton trades on the IBKR paper account by Session 6, on
-the deployment machine the owner brings up first (T1). Every later session replaces a stub
-with a real engine, built for what the evidence supports. Docs stay lean: this file, a short
-`DECISIONS.md`, a `ROADMAP.md` session log, knowledge files.
+finished (§10) — the order path is proven on the IBKR paper account before another engine is
+built, and an engine is built only for what a verdict funds (DECISIONS D150). Docs stay lean:
+this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D152).
 
 ---
 
@@ -172,7 +173,7 @@ with a real engine, built for what the evidence supports. Docs stay lean: this f
 | "With high certainty about the future, investing is easy." | Edge = calibrated probability × asymmetric payoff. | Certainty is not available; overstated edges are what ruin a Kelly-sized account. |
 | Simons as microstructure trading: market making, intraday arbitrage, order micro-blocks, multi-asset option baskets. | Rejected. Simons here is statistical discipline: validation before trust, cost-aware execution, evidence-based sizing, a hard risk engine, the scoreboard. | Not achievable on a REST API at retail size; the atomic unit of an option position at this size is one contract. |
 | A daily macro regime model setting the allocation. | Rejected. The core is regime-agnostic; its dynamic element is trend following. | The legacy classifier was wrong for a decade; trend has the stronger evidence. |
-| A core that only follows bands, no trend. | Kept as a variant (A); the after-tax verdict decides, and variants it cannot tell apart resolve to the simplest. | Bands alone give no crash protection; an unlevered risk-balanced core with long-duration bonds fell sharply in 2022, when stocks and bonds dropped together. The after-tax backtest decides (§5.4). |
+| A core that only follows bands, no trend. | Kept as a registered variant (A). The reserve runs D50, global equity with the trend brake (D147). | Bands alone give no crash protection; an unlevered risk-balanced core with long-duration bonds fell sharply in 2022, when stocks and bonds dropped together. The after-tax backtest decides (§5.4). |
 | Trend as an on/off switch at the 200-day average. | Rejected. Trend is a partial, slow, hysteretic tilt with tax-aware execution. | Whipsaw and realised gains are costly, especially in Spain, where ETF switches are taxable. |
 | Adding to long options after the move confirms. | Rejected. Options are bought in one block when implied vol is cheap; exits are scaled. Pyramiding applies to shares only. | Adding later pays a higher premium for the same convexity. |
 | Kelly with probabilities shrunk toward 0.5. | Rejected. Probabilities shrink toward the **base rate** (market-implied or random-walk), and until a layer is calibrated it sizes by a fixed risk budget (§5.11). | A 3:1 target is rarely a coin flip; anchoring at 0.5 overstates the edge, while anchoring at the base rate with no evidence gives Kelly ≈ 0 and would freeze the satellite. |
@@ -182,15 +183,19 @@ with a real engine, built for what the evidence supports. Docs stay lean: this f
 | Delayed quotes for everything. | Rejected for options (real-time quotes on the option and its underlying are required); accepted for stocks, ETFs, funds and bonds with safeguards (§5.13). | Option spreads are wide and stale mids misprice. |
 | One authentication route only. | Two transports behind one client: the Client Portal Gateway with automated login for paper, OAuth 1.0a for the live account where IBKR grants it (§5.12, DECISIONS D42). | IBKR told the owner (2026-10-08) that OAuth 1.0a is for institutional clients and retail accounts use the Gateway, although lite ran OAuth live on 2026-09-10. Paper logins have no second factor, so the Gateway can run unattended in paper. |
 | "A grid by region or by sector." | One long-format measurement store with three views (§5.7). | Different questions need different axes; one store keeps them consistent. |
-| Assuming the satellite will pick winners most of the time. | The satellite is built to find them; pre-registered evidence decides how much capital it earns (§5.9, §5.19). | 58% of US stocks returned less than one-month T-bills over their lifetimes and 4.3% of firms created all the market's net wealth 1926–2016 (Bessembinder 2018): winners exist but are rare, so a selection that misses them lags the index, and skill must be shown before it is funded. |
+| Assuming the Hunter will pick winners most of the time. | The Hunter is built to find them; pre-registered evidence decides how much capital it earns (§5.9, §5.19). | 58% of US stocks returned less than one-month T-bills over their lifetimes and 4.3% of firms created all the market's net wealth 1926–2016 (Bessembinder 2018): winners exist but are rare, so a selection that misses them lags the index, and skill must be shown before it is funded. |
 | Mining many patterns. | Rejected. Hypotheses come with an economic mechanism, are pre-registered, tested point-in-time out of sample with multiple-testing control, then shadow-graded live before receiving weight (§5.9). | The factor zoo (Harvey, Liu & Zhu 2016); published anomalies decay (McLean & Pontiff 2016). |
 | Social-media sentiment. | Dropped. Market-implied sentiment, positioning and graded LLM event extraction instead; VADER only as an offline fallback. | Paid or restricted APIs, noise. |
 | "The AI chooses sectors, then companies, then decides." | "LLM nominates, data disposes": the LLM may nominate; deterministic corroboration and scoring decide; rules size and gate. | Keeps the owner's original idea without letting the LLM own risk. |
-| A risk-balanced core chosen for its Sharpe ratio. | Rejected as the default. The core's variant is picked from an after-tax frontier scored by the objective (§1), among risk-balanced, growth-tilted and equity-dominant variants (§5.4, DECISIONS D60). | Without leverage, risk balance weights by risk rather than growth (two assets of 16 % and 5 % volatility at equal risk hold about 24 % equity); a variant can beat a 60/40 on Sharpe and still compound less than the equity reference. |
+| A risk-balanced core chosen for its Sharpe ratio. | Rejected. The variants were scored after tax by the objective (§1); the owner's ruling for growth picks the equity-dominant D50 as the reserve (§5.4, DECISIONS D60, D147). | Without leverage, risk balance weights by risk rather than growth (two assets of 16 % and 5 % volatility at equal risk hold about 24 % equity); a variant can beat a 60/40 on Sharpe and still compound less than the equity reference. |
 | Live returns as the proof of skill ("capital follows demonstrated skill"). | Rejected. Capital follows pre-registered research outcomes; live results are monitored against them through a twin (§5.19, D65). | t ≈ IR·√years: a live record confirms a moderate edge only after a decade or more, but it can flag decay or an implementation fault much sooner. |
 | Testing each component alone before any combination. | Rejected. A few combinations with a stated mechanism are pre-registered and tested beside their components, every trial counted (§5.9, D63). | An edge may exist only conditionally; an unregistered search for combinations would multiply false discoveries. |
 | A market order to escalate a protective exit after a gap. | Rejected. Sizing by gap-adjusted loss, a stop spec that follows volatility and gaps, and a triggered stop repriced through the gate (§5.11, §5.12, D67). | AGENTS.md forbids plain market orders; a stop-limit's loss at the stop is not a maximum loss. |
 | Capabilities gated by account size. | Rejected. Each runs when a computed activation condition holds (§2); what pays only at larger capital is built in Session 19a (D66). | No magic NAV threshold; one codebase serves a small account and a large one. |
+| "Buffett made 50 % a year on small sums and Medallion more, so the system can." | The figures are an aspiration. What transfers is Buffett's hunting ground, companies too small for institutions, and Simons's validation before trust (D148). | Buffett picked tiny companies by hand; Medallion uses leverage, short horizons and infrastructure the mandate excludes, and is closed to outside money. Neither is evidence about this system. |
+| Holding equities only when no fall is expected. | The reserve's trend brake reacts to a fall under way; a rule that forecasts one earns weight only by passing a test (D147, D150). | Session 4e found no risk-timing rule sufficient; a forecast nobody has tested is a guess with a cost in tax and missed recoveries. |
+| Building every engine, then testing what it trades. | An engine is built for a hypothesis its test left sufficient or inconclusive-positive, as the mechanism the test ran (D150). | Thirteen build sessions produced no filled order and no sufficient signal. |
+| Rebuilding the book at every cycle. | A cycle works pending intents, exits and cash flows; selection changes on registered rebalance dates (D151). | Turnover and realised gains are costs; a change of mind six hours later is noise. |
 
 ---
 
@@ -209,10 +214,10 @@ with a real engine, built for what the evidence supports. Docs stay lean: this f
  compute (no network)
    views: equity grid · macro board · option surface · correlations · fx · curves
           ▼                                   ▼
- CORE                                  SATELLITE (Asymmetry Hunter)
- risk balance across four              components + patterns + LLM nominations →
- growth/inflation environments         measured-independence corroboration →
- + tax-aware trend tilt                frozen thesis → entry → monitor → exit
+ RESERVE (the core engine)             HUNTER (the return engine)
+ global equity with a slow,            small- and micro-cap stocks ranked by tested
+ tax-aware trend brake; holds          signals → a diversified book with a keep
+ what the Hunter does not              buffer → registered rebalances and exits
           └──────────────┬────────────────────┘
                          ▼
  DECISION: vehicle selector · expression selector · evidence-based sizing ·
@@ -231,14 +236,14 @@ with a real engine, built for what the evidence supports. Docs stay lean: this f
 
 | Pillar | Role | Why it earns a place |
 |---|---|---|
-| **Risk balance** (Dalio, All Weather) | Core allocation: equal risk to growth↑, growth↓, inflation↑, inflation↓. | Survives regimes without forecasting them. |
-| **Trend following** (the CTA tradition: Dennis and the Turtles, Seykota, Harding) | A slow, tax-aware tilt on the core; trend confirmation gates additions to share positions in the satellite. | The most robust systematic edge documented across a century of markets (Moskowitz, Ooi & Pedersen 2012; Hurst, Ooi & Pedersen 2017), and the cheapest crisis protection. |
-| **Reflexivity** (Soros) | The satellite: dislocations, crowded positioning, policy breaks, expressed with capped loss, graded. | The source of asymmetric upside; also the least systematic, hence evidence-gated capital and a monitoring rule that returns it to shadow (§5.19). |
-| **Statistical discipline** (Simons) | Validation, pattern research, cost-aware execution, evidence-based sizing, the risk engine, the scoreboard. | Not a strategy here; the reason the other three can be trusted. |
+| **Small-company inefficiency** (Graham and Schloss; the early Buffett partnerships; Greenblatt) | The Hunter: a diversified book of small- and micro-cap stocks that are cheap for their quality, bought by their insiders, sold by forced sellers or drifting after news. | The one ground where a small account has an advantage: institutions cannot deploy there, so mispricing lasts. Costs are also highest there, hence a test after costs and tax before any capital (§5.9). |
+| **Statistical discipline** (Simons; Thorp) | Validation before trust, multiple-testing control, cost-aware execution, sizing bounded by evidence, the scoreboard. | Not a strategy here; the reason the others can be trusted. |
+| **Trend following** (the CTA tradition: Dennis and the Turtles, Seykota, Harding) | The reserve's brake: a slow, tax-aware reduction of equities in a fall under way. | The most robust systematic effect documented across a century of markets (Moskowitz, Ooi & Pedersen 2012; Hurst, Ooi & Pedersen 2017), and the cheapest crisis protection. |
+| **Measured diversification** (Dalio) | Whole-book risk: concentration, correlation clusters and stress scenarios measured on the book, never assumed (§5.11). The risk-balanced variants stay registered. | Small caps across markets fall together in a liquidity shock; the book must know its own exposure. |
+| **Reflexivity** (Soros) | The event sleeve: dislocations, crowded positioning, policy breaks, expressed with capped loss. Deferred (§5.5). | The least systematic source, with few independent events to test; it waits for a test that can conclude. |
 
-Not pillars: value investing (kept as a quality/valuation factor in stock selection),
-permanent tail hedging (systematic put buying bleeds the variance risk premium; trend
-protects more cheaply), FX carry (needs forwards).
+Not pillars: permanent tail hedging (systematic put buying bleeds the variance risk premium;
+trend protects more cheaply), FX carry (needs forwards), intraday trading (D148).
 
 ### 5.3 Universe and vehicles
 
@@ -251,7 +256,7 @@ issuer publishes them (DECISIONS D69).
 
 | Asset class | Use | Notes |
 |---|---|---|
-| Single stocks, any IBKR venue the account is permitted on | satellite (the main hunting ground); stock baskets for a core equity role when the basket rule's computed condition holds (Session 19a) | lot sizes (e.g. Japan 100 shares, Hong Kong board lots), transaction taxes, trading hours |
+| Single stocks, any IBKR venue the account is permitted on | the Hunter (§5.5); stock baskets for a core equity role when the basket rule's computed condition holds (Session 19a) | lot sizes (e.g. Japan 100 shares, Hong Kong board lots), transaction taxes, trading hours |
 | ETFs and ETCs, UCITS (incl. physically backed and futures-tracking ETCs) | core roles; satellite sector, country and commodity expressions | listed mostly in Europe and London, with exposure anywhere; futures-tracking wrappers subject to lite's contango limit |
 | Government bonds and bills | core duration and cash roles when the bond rule passes | rule: minimum increment ≤ a configured share of the role's amount, per-order minimum commission (IBKR: US Treasuries 0.002% of face, minimum USD 5; EUR bonds 0.1% up to EUR 8,500, minimum EUR 1) within the cost band, enough bonds to hold the duration target, and all-in cost below the best fund; Web API trading verified in Session 19a |
 | Mutual funds (UCITS) | core roles where cheaper, or where trend runs inside the fund | daily NAV, cut-off times, cash-quantity orders; Web API support verified in Session 19a; Spanish tax-free fund switches apply only if IBKR supports the regime (unverified; assumed not) |
@@ -278,27 +283,26 @@ cycles. All of these live in config with a source per value.
   accounts; regional equity roles for larger ones). The vehicle selector fills each role; a
   foreign role may be filled by a currency-hedged share class, if the owner rules that a
   hedge inside a UCITS fund fits the mandate (§11).
-- **Variants.** The engine builds the variants Session 4c registers and runs the one the
-  owner picks from its frontier (`core.variant`): A static risk balance with wide bands; B A + the trend
-  tilt; C a growth-tilted risk budget + the tilt; D an equity-dominant book with the tilt as
-  an overlay to cash, sized to each drawdown limit of the pre-registered grid. The two
-  references of §1 are on the frontier too, so either can be the owner's pick (DECISIONS
-  D60, D79).
-- **Adaptation** (DECISIONS D89). The allocation adapts within the owner's limits: the
-  neutral allocation for the owner's risk level, plus each adaptation a pre-registered test
-  found sufficient, weighted by its evidence; one not yet sufficient runs in shadow. The
-  static variants are the fallback and the benchmark. Mechanisms are tested one at a time —
-  total-risk scaling on a re-estimated volatility (Session 4e), re-estimated risk-balance
-  weights, return timing (trend, value, carry, macro) — each with its parameters in
-  configuration. An adaptation is sufficient on the objective (§1) against static A at the
-  owner's point, never on a forecast's accuracy (DECISIONS D92).
+- **The reserve.** The core engine holds the capital the Hunter does not (§5.19). It runs
+  `core.variant`, which the owner set to **D50**: global developed equity with the trend tilt
+  as an overlay to cash (DECISIONS D147). Session 4c measured D50's median after-tax growth
+  at 6.49 % a year against 7.13 % for equities bought and held, a difference the test cannot
+  tell from zero, with a 50 % fall on 5.8 % of 20-year paths against 13.4 %.
+- **Variants.** The engine builds every variant Session 4c registered: A static risk balance
+  with wide bands; B A + the trend tilt; C a growth-tilted risk budget + the tilt; D an
+  equity-dominant book with the tilt as an overlay to cash, at five equity shares (D10 to
+  D50); and the two references of §1 (DECISIONS D60, D79).
+- **Adaptation** (DECISIONS D89, D150). A rule that changes the allocation, such as total-risk
+  scaling (Session 4e, nothing sufficient), re-estimated weights or return timing, joins the
+  reserve only after a pre-registered test finds it sufficient on the objective (§1), and is
+  tested only where a longer history or a cross-section gives the test power of at least 0.5.
 - **Risk balance** (A–C). 25% of risk per environment in A and B; equal risk contribution
   inside a basket. No leverage, so risk comes from duration, not borrowing.
 - **Covariance.** The variants 4c registered hold static risk-balance weights computed from a
   declared long-run covariance in the base currency (DECISIONS D80, D90). Session 4e tested
   scaling total risk with an estimate (an EWMA, alone or blended with a year's window, Ledoit–Wolf
   shrinkage toward the declared matrix), fully specified in its pre-registration. No
-  specification was sufficient or respected the owner's point, so the core does not scale total
+  specification was sufficient or respected the drawdown point then in force (D91), so the core does not scale total
   risk (DECISIONS D95). A blend with a multi-year window was not tested. Re-estimated
   risk-balance weights are a later test (DECISIONS D92).
 - **Optimizer.** The legacy `_risk_parity` compared absolute risk contributions to 1/n
@@ -317,18 +321,47 @@ cycles. All of these live in config with a source per value.
   Spanish rules are in §5.16.
 - **Rebalancing.** Monthly evaluation, daily drift check, wide inner/outer bands, minimum
   trade, integer shares, cash flows first, sells beyond the outer band only.
-- **Exits.** Core positions carry no stop orders: their downside control is risk balance
-  and the trend tilt. Resting stop-limit exits protect satellite share positions (§5.12).
+- **Exits.** Core positions carry no stop orders: their downside control is the trend tilt.
+  A resting stop-limit exit protects a Hunter position when its test registered one (§5.5,
+  §5.12).
 - **Validation.** Session 4c's pre-registered walk-forward test, **after tax** under the
   active profile and scored by the objective (§1): the two references and variants A–D, tax
   paid as it arises and the rest at liquidation; base-currency index proxies with documented
   bias; the decision rule of §5.9. It reports a frontier: for each drawdown limit on a
   pre-registered grid, the variant with the highest median after-tax log growth that
   respects it; variants the test cannot tell apart resolve to the simplest, lowest-turnover
-  one. The owner's drawdown tolerance picks the point that goes to config (an
-  authorisation, D60).
+  one. The owner's ruling picks the variant that goes to config (an authorisation, D60,
+  D147).
 
-### 5.5 Satellite engine — the Asymmetry Hunter
+### 5.5 The Hunter
+
+**The stock book** is the return engine (DECISIONS D148). In configuration and code its sleeve
+is `satellite`.
+
+- **Hunting ground.** Small- and micro-cap stocks on venues the account may trade, in markets
+  with a price history that keeps delisted companies (the United States first; another market
+  joins through its own data audit). A stock is in the universe on a date when its price and
+  traded value pass floors computed from the account: the position the book would hold is a
+  small share of the stock's daily traded value and above the commission-derived minimum (D66).
+- **Signals.** Only those a pre-registered test left sufficient (§5.9). The candidates are
+  cheapness with quality, insider-purchase clusters, forced selling and spin-offs, momentum
+  and nearness to the 52-week high, and post-earnings drift, each alone and in one registered
+  composite.
+- **The book.** The highest-ranked names by the tested score, equally weighted within caps per
+  name, sector and country, with a keep buffer: a holding leaves only when it falls well below
+  the entry rank. Selection is recomputed on the registered rebalance dates and on no other
+  (D151).
+- **One mechanism.** The engine is the code its test ran in the simulator, as the core's is
+  (D140): spreads by liquidity tier, commissions, integer shares, tax lots, delisting returns.
+- **Exits.** The registered ones: the rebalance, a delisting or corporate event, and a
+  protective stop only if the test showed it adds value for the signal (Session 4d's stop cost
+  5.46 % a year on country momentum).
+- **Capacity.** The book reports the capital at which a position would pass its liquidity
+  floor; capital beyond it stays in the reserve.
+- **Until a test passes** the Hunter holds nothing and the reserve holds everything.
+
+**The event sleeve — the Asymmetry Hunter.** Deferred: it is built when a research batch leaves
+one of its components sufficient or inconclusive-positive (DECISIONS D148, D150). Its design:
 
 1. **Components**, typed and point-in-time: crowding (COT percentile and velocity); vol
    mispricing (IV percentile, IV versus a realised-vol forecast); IV term-structure
@@ -427,7 +460,7 @@ expression, a pattern — lives in `research/pattern_registry.yaml` with a lifec
   the horizon, θ (the smallest net effect worth the added risk; the owner can amend it
   before the merge), the
   power to detect θ and the effect detectable at power 0.8, the adjustment, robustness
-  checks and the trial budget.
+  checks and the trial budget. A test whose power at θ is below 0.5 is not run (D150).
 - **Test.** Exploration on a development sample, every trial recorded in the trial
   registry; one confirmation run on a locked sample (a later period and, where data allow,
   another region); Bonferroni across the confirmation run and the deflated Sharpe across
@@ -457,7 +490,8 @@ Hypotheses by batch (DECISIONS D71):
 | Batch | Hypotheses |
 |---|---|
 | 1 (Sessions 4c, 4d) | the core verdict (§5.4); one selection hypothesis chosen by a data audit among H1 cross-asset and country momentum through UCITS (Asness, Moskowitz & Pedersen 2013), H2 insider-purchase clusters in SEC Form 4 (Cohen, Malloy & Pomorski 2012) and H4 a stock-level composite — nearness to the 52-week high (George & Hwang 2004), 12-1 momentum with a crash guard (Jegadeesh & Titman 1993; Daniel & Moskowitz 2016), profitability (Novy-Marx 2013); H5, whether a volatility-scaled stop adds value to that signal (Kaminski & Lo 2014) |
-| 2 (Session 21) | H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H6 conditioning the core's risk on the variance risk premium (Bollerslev, Tauchen & Zhou 2009), the excess bond premium (Gilchrist & Zakrajšek 2012) and trend; H9 hedging pressure in COT for commodity ETCs (de Roon, Nijman & Veld 2000); the Hunter's components and their agreement rule; the batch-1 candidates not chosen; the §6.4 re-test group |
+| Hunter (Sessions 23, 24) | On a US price history that keeps delisted companies, each alone and in one registered composite: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
+| Later (Session 21) | H6 conditioning the reserve's risk on the variance risk premium (Bollerslev, Tauchen & Zhou 2009), the excess bond premium (Gilchrist & Zakrajšek 2012) and trend; H9 hedging pressure in COT for commodity ETCs (de Roon, Nijman & Veld 2000); the event sleeve's components and their agreement rule; the §6.4 re-test group; each only with power of at least 0.5 |
 | Forward only | H7 LLM-extracted event features beyond the price signal (a minimal extractor from Session 10); H8 an option against a share with a stop for a sufficient signal, on option surfaces collected from Session 8 or bought |
 | Ideas | carry in bonds and equities (Koijen et al. 2018); defensive/low beta (Frazzini & Pedersen 2014); low volatility (Ang et al. 2006); VIX term-structure inversion; dollar strength and EM stress; oil shocks (Hamilton 2009); pre-FOMC drift (Lucca & Moench 2015) |
 
@@ -525,9 +559,8 @@ decision only when its activation condition holds (§2).
   the owner holds elsewhere, entered by hand and flagged stale after a configured age).
 - **Breakers.** Rolling-month drawdown → freeze new buys and audit; hard peak-to-trough →
   force `shadow` and alert; the peak is D88's (the managed NAV at the day's last cycle). Their
-  thresholds are keys of their own: the owner's drawdown
-  tolerance (§11, DECISIONS D88) is a research and selection limit, neither a breaker threshold
-  nor an order to sell.
+  thresholds are keys of their own, and the owner sets no drawdown limit beside them (§11,
+  DECISIONS D147).
 - **Inertia.** Intents only for a band breach, an approved thesis, a scale-up confirmation,
   a fired trigger, stop, zombie or mandatory close, a cash-flow reservation or a risk breach;
   monthly turnover and realised-gain budgets.
@@ -635,7 +668,7 @@ earns them. The vehicle selector prefers venues the plan covers.
 One asyncio service (`obliskiq serve`): a heartbeat every few minutes (health, kill switch,
 broker session, trigger evaluation, intents whose venue is open); four decision cycles per
 trading day anchored to venue sessions (Asia, Europe, US, US-late), computed from
-calendars; collectors per venue after the close and per source cadence; monthly core
+calendars, none of which rebuilds the book (DECISIONS D151); collectors per venue after the close and per source cadence; monthly core
 evaluation; weekly grading, DevilsAdvocate and digest. Crash-safe through run records;
 idempotent intents.
 
@@ -770,12 +803,16 @@ rule consumes it (§2).
 **Capital follows evidence** (DECISIONS D65). A live record confirms a moderate edge only
 slowly (t ≈ IR·√years: about 16 years at an information ratio of 0.5 for t = 2), so a layer's
 capital follows its research outcome (§5.9) and its live results are monitored, not used as
-proof. A layer earns an exploration budget only with a sufficient outcome and its activation
-condition (§2), within the owner's ceiling; the budget is the owner's tolerance for a bet not
-yet confirmed live, recorded as a risk decision. An increase needs the pre-registered pooled
-re-test (history plus the live twin) to remain sufficient, and an owner command. The core
-absorbs whatever the satellite does not hold; budgets keep their defaults (§11 row 2) until
-evidence moves them.
+proof. The allocation is automatic in both directions (DECISIONS D149):
+
+- A Hunter book with a sufficient outcome and its activation condition (§2) takes up to 50 %
+  of managed capital.
+- It steps from there to 100 % at pre-registered looks, each when the pooled re-test (history
+  plus the live twin) is still sufficient, the live-minus-twin gap is inside its boundary and
+  the pre-registered minimum of live months and closed positions is met.
+- The reserve holds whatever the Hunter does not, less the cash floor.
+- No step needs an owner command. The steps beyond 50 % are slow unless the edge is large,
+  because a live record adds evidence slowly.
 
 **Monitoring.** Each active layer has a twin: the same signals on the same dates simulated
 with the cost model. The live-minus-twin gap measures implementation and cost; the twin
@@ -909,7 +946,7 @@ memory. Session 20 deletes `legacy/`.
   we use directly). ibind (Apache-2.0) is read as a reference for order and reply
   handling, with attribution on anything copied.
 - Tooling: `uv` (lockfile, uv-managed Python), `ruff`, `mypy --strict`, a coverage floor
-  that only ratchets up, `make check`.
+  that is fixed, `make check`.
 - Money: `Decimal` at the order boundary. Time: timezone-aware UTC; local time through
   `zoneinfo`.
 - Licence: AGPL-3.0-or-later (already in the repository; all three source repositories
@@ -973,7 +1010,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant Session 13 builds |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it |
-| 4e | Total-risk scaling | the core's risky share scaled by a re-estimated volatility, against static A on the objective at the owner's point: estimators, a bootstrap that respects lookbacks, a long-history check, pre-registration, one confirmation run (DECISIONS D89, D90, D92) |
+| 4e | Total-risk scaling | the core's risky share scaled by a re-estimated volatility, against static A on the objective at the drawdown point then in force (D91): estimators, a bootstrap that respects lookbacks, a long-history check, pre-registration, one confirmation run (DECISIONS D89, D90, D92) |
 | 5 | Execution mechanics | currency manager, pricing, resting stops with gap handling and attached orders, executor, reconciliation |
 | 6 | Walking skeleton | service, cycles, skeleton targets → intents → paper → reconcile → digest, on the T1 machine |
 | 7 | Capital, cash flows and tax | managed capital, cash-flow ledger, reservation planner, owner questions, lots wired to fills, currency lots, TWR |
@@ -983,20 +1020,30 @@ subset and inserts an `Na` prompt for the remainder.
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates |
 | 13 | Core engine | the variants 4c registered (4e found none sufficient, D95), risk budgeting, the tax-aware trend tilt, rebalancing |
-| 15 | Satellite engine | Hunter components in shadow, measured independence, entry rules, lifecycle, triggers, selection, pattern registry |
-| 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles on Session 10's stamped series |
-| 17 | Decision layer | expression selection, sizing by gap-adjusted loss, activation conditions, whole-book risk, breakers, inertia, intents |
-| 18 | Scoreboard, patterns, capital and promotion | TWR attribution, TCA, grading, calibration, twins and monitoring, capital by evidence, promotion |
+| 22 | Order path on paper | the live-orders pre-read; the owner's command list: order test, execution test, the reserve's paper cycle, then `serve` |
+| 23 | Hunter: data and power | vendors of survivorship-free small-cap history, the universe floors, power before data for each hypothesis; the owner buys the data it recommends |
+| 24 | Hunter: verdict | loaders, the stock-book strategy in the simulator, the pre-registration in its own pull request, one confirmation run |
+| 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers |
+| 26 | Hunter engine | the mechanism Session 24 tested, on the live book: universe, ranking, the book with its keep buffer, rebalancer, capacity |
+| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule (§5.19), promotion |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates |
-| 19a | Capacity and scale | bonds, baskets, mutual funds, capacity limits, venues and currencies, tax at scale, every activation condition |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 |
-| 21 | Research: second batch | H3, H6, H9, the Hunter's components and agreement rule, batch-1 candidates not chosen |
 
-Sessions 4b–4d put evidence before machinery (DECISIONS D61); the core's backtest lives in
-4c, so there is no Session 14. After Session 20 (owner steps): `obliskiq preflight` on the
-machine, L0 → L1 (autonomous paper), observe ≥ 8 weeks, then decide on L2. Session 21 can
-run any time after Session 4d (its Hunter components after Session 15), and later batches
-reuse its prompt.
+They run in that order (DECISIONS D150). Session 26 starts only after the reserve's paper cycle
+is recorded, and builds only what Session 24 left sufficient or inconclusive-positive; if it
+left nothing, the next research batch runs in its place. Built on a condition, not in sequence:
+
+| # | Session | Runs when |
+|---|---|---|
+| 15 | Event sleeve | a batch leaves one of its components sufficient or inconclusive-positive |
+| 16 | LLM layer | H7's forward test, or another LLM-derived signal, is sufficient |
+| 17 | Decision layer, the rest | a funded layer needs the expression selector, calibrated sizing or whole-book expected shortfall |
+| 19a | Capacity and scale | managed capital reaches an activation condition it serves |
+| 21 | Research: later batches | any time, for hypotheses with power of at least 0.5 |
+
+The core's backtest lives in 4c, so there is no Session 14. After Session 20 (owner steps):
+`obliskiq preflight` on the machine, L0 → L1 (autonomous paper), observe ≥ 8 weeks, then decide
+on L2.
 
 ---
 
@@ -1005,8 +1052,8 @@ reuse its prompt.
 | # | Question | Decision |
 |---|---|---|
 | 1 | Account size, minimum ticket, core lines | Any size. `trading.min_trade` supports an absolute amount, a % of managed capital, or both combined; never below the commission floor. Core granularity follows capital. |
-| 2 | Capital budgets | In `config/owner.yaml` (defaults: core 70, equity satellite 20, option premium 5, cash ≥ 5), moved by the capital allocation rule (§5.19) up to an owner-set ceiling; option premium at most 5, with lite's penalty balance (DECISIONS D88). |
-| 3 | Autonomy | Fully autonomous in paper, all sleeves. Live autonomy set at promotion. |
+| 2 | Capital budgets | The Hunter takes up to 50 % on a sufficient test and steps to 100 % by the live rule of §5.19, with no owner command (D149); the reserve holds the rest, less a cash floor of 5 %. Until a test passes the reserve holds 95, since an inactive sleeve's share stays in it. Option premium at most 5 once the sleeve's activation condition holds, with lite's penalty balance. |
+| 3 | Autonomy | Fully autonomous: selection, allocation and execution. The owner's command moves the bot to the live account and works the kill switch and `flatten`. |
 | 4 | LLM providers | Modular registry; expected a low-cost provider with a monthly budget and free Gemini as backup. |
 | 5 | Machine | Free tiers being sought; deployment is provider-agnostic. |
 | 6 | IBKR username | Paper: the paper account of the owner's main username, sharing his market data. Live: decided at promotion (a dedicated username avoids competing with the owner's own logins but needs its own subscriptions). |
@@ -1017,16 +1064,19 @@ reuse its prompt.
 | 11 | Base currency | Selectable; EUR today; other currencies held as working balances. |
 | 12 | Withdrawals | Planned as soon as announced; the bot asks before cutting protected positions. |
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
-| 14 | Objective (DECISIONS D60) | After-tax log growth of liquidation value within a drawdown limit, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
-| 15 | Scale (D66) | Capabilities that pay only at larger capital are built in Session 19a, before 1.0.0, and run by computed activation conditions. |
-| 16 | Drawdown tolerance (D88) | 30 % from the previous peak of the value the bot manages (unmanaged holdings do not count), the peak taken once a day at the last cycle's NAV: the limit the research holds candidates to and the core's variant is chosen by, not a guaranteed maximum loss and not an order to sell. Reached on at most 5 % of 20-year paths (D91), which resolves to A on Session 4c's frontier. |
+| 14 | Objective (DECISIONS D60, D147) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
+| 15 | Scale (D66, D150) | Capabilities that pay only at larger capital are built in Session 19a, when capital reaches them, and run by computed activation conditions. |
+| 16 | Drawdown (D147) | No limit. The owner accepts falls as deep as global equities' and deeper while the Hunter holds capital; the reserve runs D50. The peak for the breakers and the digest is taken once a day at the last cycle's managed NAV (unmanaged holdings do not count). |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
-| 18 | Adaptation (D89) | A requirement: the allocation adapts within the owner's limits through rules a pre-registered test found sufficient on the objective at the owner's point (D92); the static variants are the fallback and the benchmark. Total-risk scaling was tested first (Session 4e: none sufficient, D95); the other mechanisms are untested. |
+| 18 | Adaptation (D89, D150) | A rule that times or reshapes the reserve joins it only after a pre-registered test with power of at least 0.5 finds it sufficient. Total-risk scaling was tested (Session 4e: none sufficient, D95). |
 | 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
+| 20 | The return engine (D148) | The Hunter: a systematic, diversified book of small- and micro-cap stocks. The event sleeve and the LLM layer wait for evidence. |
+| 21 | Cadence (D151) | Four cycles a day at the venues' sessions; no cycle rebuilds the book; no intraday strategy. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
-holdings to release; the paper managed-capital cap; the satellite budget ceiling; whether
+holdings to release; the paper managed-capital cap; buying the price history Session 23
+recommends; whether
 IBKR supports Spanish tax-free fund switches; whether a hedge inside a UCITS share class fits
 the mandate; a deep emergency limit for protective exits (off by default); buying
 option-surface history for H8; the transport fallback if T1 fails (TWS API with IBC, or a
@@ -1049,4 +1099,6 @@ probability of reaching a target. **Unmanaged** holdings the bot counts but neve
 (§5.9). **n_eff** the effective number of independent observations. **Twin** a layer's
 signals simulated on the same dates with the cost model, against which live results are
 monitored. **Activation condition** the computed rule under which a capability runs.
-**T1** the owner's first run on the deployment machine.
+**T1** the owner's first run on the deployment machine. **Hunter** the stock book of small and
+micro caps (§5.5); its sleeve is `satellite` in configuration. **Reserve** the core engine holding
+the capital the Hunter does not (§5.4). **Event sleeve** the deferred Asymmetry Hunter (§5.5).

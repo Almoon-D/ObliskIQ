@@ -14,16 +14,16 @@ capital:
 
   # The sleeve budgets, as shares of investable capital (managed less reserved less unmanaged).
   # MASTER_PLAN §11 row 2: core 70, equity satellite 20, option premium 5 (at most 5, D88), cash at
-  # least 5. A sleeve with no active layer leaves its budget in the core (Session 17's rule); the
-  # cash floor stays cash. QUOTED.
+  # least 5. A sleeve with no active layer leaves its budget in the core, so until a Hunter test
+  # passes the reserve holds 95 (capital/budgets.py). The cash floor stays cash. QUOTED.
   budgets:
     core: "0.70"
     equity_satellite: "0.20"
     option_premium: "0.05"
     cash_floor: "0.05"
   # The most the capital allocation rule (Session 18) may move the equity satellite's budget to.
-  # The owner's decision, open (MASTER_PLAN §11): until it is set the ceiling is the budget itself,
-  # so nothing moves. QUOTED.
+  # Until that rule is built the ceiling is the budget itself, so nothing moves; the owner's ruling
+  # for it is D149 (50 % on a sufficient test, then to 100 % by the live rule). QUOTED.
   satellite_ceiling: "0.20"
 
   deployment:

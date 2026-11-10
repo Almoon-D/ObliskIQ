@@ -5,6 +5,29 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.19.0] - 2026-11-09
+
+Owner rulings and the build path: growth first, the Hunter as the return engine, and a shorter
+road to a bot that trades and a test that can say yes.
+
+### Changed
+
+- The reserve runs `D50`, global equity with the trend brake, by the owner's ruling in
+  `config/owner.yaml`; the drawdown point of D88 and D91 is withdrawn (DECISIONS D147).
+- The Hunter is a systematic book of small- and micro-cap stocks; the event sleeve and the LLM
+  layer wait for evidence (D148). Its capital is automatic: 50 % on a sufficient test, then to
+  100 % by a live rule (D149).
+- The session order: 22 to 26, then 18, 19 and 20; Sessions 15, 16, 17's rest, 19a and 21 run
+  on a condition (D150). Prompts for Sessions 22 to 26 in `docs/SESSION_PROMPTS.md`.
+- `AGENTS.md`: build for evidence, short records, effort by risk, Dependabot in the maintenance
+  session; the coverage floor is fixed (D152).
+- `docs/ROADMAP.md` holds the latest log entries and "Where the evidence stands"; older entries
+  are in `docs/archive/ROADMAP_LOG.md`.
+
+### Added
+
+- H3, H10 and H11 as ideas in `research/pattern_registry.yaml`.
+
 ## [0.18.0] - 2026-10-25
 
 Session 13, the core engine: the variants Session 4c registered, built from configuration on the

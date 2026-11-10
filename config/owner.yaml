@@ -29,3 +29,9 @@ vehicles:
     # A swap partner may track the same index as the vehicle it replaces, provided it comes from
     # another issuer (Spain's rule, RIRPF art. 8). Your ruling of 2026-10-23 (DECISIONS D123).
     same_index: true
+
+core:
+  # The reserve: what the core engine holds with the capital the Hunter does not. D50 is global
+  # equity with a slow, tax-aware trend brake. Your ruling of 2026-11-09 (DECISIONS D147); the
+  # expert default stays A, the static risk balance.
+  variant: D50

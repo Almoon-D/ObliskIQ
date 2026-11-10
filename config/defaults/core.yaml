@@ -18,10 +18,9 @@ core:
     broad_commodities: {name: "Broad commodities (COMMOD)", exposure_series: crsox.adj_close}
     cash: {name: "Cash (CASH)", exposure_series: euro_cash.level}
 
-  # The variant the core runs, one of `variants` below. The owner's point on Session 4c's frontier,
-  # a 30 % drawdown reached on at most 5 % of 20-year paths, resolves to A, the static risk balance
-  # with wide bands (DECISIONS D88, D91); Session 4e found no total-risk scaling sufficient (D95).
-  # Another point is the owner's authorisation, recorded in DECISIONS first.
+  # The variant the core runs, one of `variants` below. The expert default is A, the static risk
+  # balance with wide bands. The owner's choice is an authorisation recorded in DECISIONS first
+  # and set in config/owner.yaml (D50 there, D147).
   variant: A
 
   # Every constant below is Session 4c's pre-registration's, with its codes written as the role

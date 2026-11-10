@@ -130,7 +130,7 @@ async def test_every_registered_variant_produces_a_target_portfolio(
         assert f"variant {name}: start" in plan.render()
 
 
-async def test_the_chosen_variant_holds_its_risk_balance_on_the_proposable_roles(
+async def test_variant_a_holds_its_risk_balance_on_the_proposable_roles(
     rig: Any, shipped_settings: ObliskConfig
 ) -> None:
     plan = await make_rebalancer(rig, sized(shipped_settings, "A", "1000000")).survey(
@@ -139,7 +139,7 @@ async def test_the_chosen_variant_holds_its_risk_balance_on_the_proposable_roles
     portfolio = plan.portfolio
     assert portfolio is not None
     weights = {v.conid: v.weight for v in portfolio.vehicles}
-    variant = make_rebalancer(rig, shipped_settings).variant
+    variant = make_rebalancer(rig, sized(shipped_settings, "A", "1000000")).variant
     # Each filled role's best-ranked vehicle carries the role's static weight; gold's and broad
     # commodities' 16 % stays in cash rather than being spread over the other roles.
     world = weights[355720826]

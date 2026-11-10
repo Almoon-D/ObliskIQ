@@ -25,7 +25,8 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
 
 Times follow each venue's own calendar, daylight saving and holidays included
 (`config/defaults/runtime.yaml`). The **core** runs the variant `core.variant` names
-(`config/defaults/core.yaml`; A, the static risk balance, by default). Each role is held in the fund
+(`config/owner.yaml` sets D50, global equity with the trend brake; the expert default in
+`config/defaults/core.yaml` is A, the static risk balance). Each role is held in the fund
 the vehicle selector ranks first (`uv run obliskiq universe vehicles <role>` shows the ranking).
 The core trades when it starts, when a role leaves its outer band (the only time it sells), and
 when the book holds cash beyond its targets of at least the minimum trade. A role without a
@@ -204,11 +205,11 @@ London are all open):
 2. No service running (`systemctl --user stop obliskiq`; `uv run obliskiq status` shows no fresh
    heartbeat).
 3. `uv run obliskiq mode set paper --reason "core live cycle"`
-4. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan. It shows `variant A: start`,
+4. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan. It shows `variant D50: start`,
    then each role with its fund, its target and why. No role says `IBKR did not confirm`.
-   Under an 800-euro cap the minimum trade is 50 euros, so the plan buys only the roles whose
-   target is worth at least that and at least one unit; it says why for each of the others.
-   Gold and broad commodities keep their weight in cash until their venues are verified.
+   A role that says `untilted` has too little stored history for the trend brake and is held
+   whole. Under an 800-euro cap the minimum trade is 50 euros, so the plan buys only the roles
+   whose target is worth at least that and at least one unit; it says why for each of the others.
 5. `uv run obliskiq run-cycle --mode paper`: the buys. If a chosen fund trades in another
    currency, the conversion comes first. Expect `o10164` on it: the reply policy declines it
    (D101) and that buy waits. The intent history (`uv run obliskiq intents list --all`) and the
