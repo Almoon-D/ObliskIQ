@@ -29,6 +29,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | **next** | |
 | 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | after 22 | |
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
+| 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | **next** (beside 22) | |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after 23 and the purchase | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | after 22 (beside 24) | |
@@ -57,6 +58,19 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
 
 ## Session log
+
+### Owner questions: instruments, bearish views and options (2026-11-10, v0.20.1)
+
+- **Plan:** the thesis book takes any eligible instrument (stocks on any venue, funds, ETCs on
+  commodities and metals); a bearish view is a defensive instrument or a long put; the position
+  count grows with capital by configuration (MASTER_PLAN §5.5).
+- **Decision** (D157): a thesis may be a long call or put, paid from the book's capital inside the
+  option budget and graded beside its underlying. H8's activation could never have been met.
+- **Prompts:** 27 resolves an instrument outside the universe file and admits every eligible asset
+  class; 29 (options for theses) written, after 27.
+- **Owner:** the price history of Session 23 serves the systematic stock test only; the thesis
+  book and its options need none.
+- **Live findings.** None: no IBKR call.
 
 ### Owner ruling: ideas and the thesis book (2026-11-10, v0.20.0)
 
