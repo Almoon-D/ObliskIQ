@@ -186,7 +186,7 @@ patterns:
       The survivorship-free US price history H2 needs, and the events point in time: spin-offs
       from the SEC's Form 10 and 8-K filings, index deletions from the index providers'
       announcements with their announcement dates. Session 23 measures both; Session 24 tests it
-      if its power before data reaches 0.5 (DECISIONS D150).
+      if its probability of a sufficient outcome reaches 0.5 (DECISIONS D154).
   - id: selection-cheap-quality
     hypothesis: H10
     title: Cheapness with quality, by size tier

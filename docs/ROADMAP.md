@@ -51,7 +51,7 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
-| Can the Hunter's test decide? | As first written, no: it detected about 8 to 11 % a year. Redesigned (one composite against its own universe); Session 23 computes its chance of a sufficient outcome before any purchase | DECISIONS D154 |
+| Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
 
 ## Session log
 
@@ -342,8 +342,11 @@ settles it.
   waits (D70); whether a hedge inside a UCITS share class fits the mandate (D69); a deep
   emergency limit for protective exits (off by default, D67); buying option-surface history for
   H8 (D71).
-- **Owner:** Almoon-D/ObliskIQ#53 is a second copy of Session 13's pull request, already merged
-  as #52: close it. The paused Session 15 chat is not resumed (D150); its branch can be deleted.
+- **Owner:** the paused Session 15 chat is not resumed (D150). Three branches belong to no open
+  pull request and can be deleted once checked: `s13-core-engine` (merged as #52),
+  `claude/blissful-lamport-8in96f` and `claude/session-4d-execution-ahadas`. The repository's
+  description on GitHub still names the earlier design (reflexivity, risk parity, an AI that
+  decides); it should say what README.md says.
 - The session that records the owner's paste from Session 22's runbook decides `o10164` on a
   conversion from IBKR's text (D101): until a conversion fills on paper no order in a foreign
   currency can be funded, and Session 26 waits for it.
@@ -360,7 +363,7 @@ settles it.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
   ceiling, so the owner's 50 % (D149) cannot be written until the budget reader lets the reserve
   shrink. Until then the defaults stand: the Hunter is inactive and its share stays in the reserve.
-- Maintenance session (SESSION_PROMPTS §F.2): Almoon-D/ObliskIQ#54 and Almoon-D/ObliskIQ#56
+- Maintenance session (SESSION_PROMPTS §F.2): Almoon-D/ObliskIQ#54 and Almoon-D/ObliskIQ#58
   (Dependabot, minor and patch).
 - Research harness: the moving-block bootstrap draws a sample's first and last months less often
   than the others, so on a short sample its interval can sit beside the mean (Session 4e's

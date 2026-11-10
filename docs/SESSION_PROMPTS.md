@@ -2333,9 +2333,10 @@ DELIVERABLES
    reviewed monthly against alpha-spending boundaries; a gap breach freezes the layer's new
    entries and alerts; a twin breach returns the layer to shadow at zero weight and
    alerts; capital only for a sufficient layer: up to 50 % of managed capital, then the
-   pre-registered steps to 100 %, each taken automatically when the pooled re-test is still
-   sufficient, the gap is inside its boundary and the minimum live record is met, and given
-   back the same way (DECISIONS D149); the reserve holds the rest. Every change audited and
+   pre-registered steps to all investable capital, each taken automatically when the re-test
+   that pools history with the book's realised live-account returns is still sufficient, the
+   gap is inside its boundary and the minimum live-account record is met (paper months do
+   not count), and given back the same way (DECISIONS D149, D155); the reserve holds the rest. Every change audited and
    reported.
 8. scoreboard/promotion.py: L0→L3 criteria (MASTER_PLAN §5.19 and config) including the
    breaker, kill and cash-flow drills; `obliskiq promotion status`; upgrades still need an
