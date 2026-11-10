@@ -1,6 +1,6 @@
 # AGENTS.md — ObliskIQ
 
-A global, autonomous portfolio manager for one IBKR account: the Hunter (a systematic book of stocks of any size, each signal tested by size tier and funded only by a test it passed, MASTER_PLAN §5.5), a reserve that holds the rest (global equity with a trend brake, §5.4) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
+A global, autonomous portfolio manager for one IBKR account: the Hunter (a systematic book of stocks of any size, each signal tested by size tier and funded only by a test it passed, and a small thesis book of written ideas from the LLM analyst and the owner, graded forward, MASTER_PLAN §5.5), a reserve that holds the rest (global equity with a trend brake, §5.4) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
 
 ## Read first — your slice, not whole files
 
@@ -25,7 +25,7 @@ Read what the work in front of you needs, when it needs it.
 
 ## Build for evidence (DECISIONS D150)
 
-- An engine is built only for a hypothesis whose test left it sufficient or inconclusive-positive, as the mechanism the test ran. Nothing is built "for later".
+- An engine is built only for a hypothesis whose test left it sufficient or inconclusive-positive, as the mechanism the test ran. Nothing is built "for later". A hypothesis that can only be tested forward (the thesis book, D156) gets the least machinery that produces its record, in shadow.
 - A test is not run when its probability of a sufficient outcome, before data and at the effect
   the literature supports net of decay, costs and tax, is below 0.5 (DECISIONS D154). θ is never
   raised to meet it.

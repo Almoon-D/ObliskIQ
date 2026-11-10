@@ -3600,3 +3600,34 @@ simulates, do not. "100 %" is all investable capital, the cash floor kept. The
 owner's ruling stands: 50 % on a sufficient test, no owner command. Rejected, and recorded as the
 reviewer's dissent: starting at 20 % (published effects shrink out of sample, and a first share of
 half the account rests on one backtest).
+
+## Owner ruling (2026-11-10): ideas and the thesis book
+
+### D156 · The thesis book: ideas from the analyst and the owner, traded small and graded forward (§1, §5.5, §5.19; amends D148, D150)
+
+The owner's ruling: the engine works alone, and when he has an idea he hands it over to be
+evaluated as any other, or weighted more by his choice. His belief is that returns come from
+judgement about the economy, a sector and a company. D148 had shut that out (picks "by the owner
+or an LLM": too few bets to tell skill from luck) and left the engine with published rules worth,
+on the evidence, a few points a year. It could not reach his aim even working perfectly, and his
+belief was never tested.
+
+- **A second book in the Hunter.** At most eight positions, each a written thesis whose target,
+  horizon and invalidation are fixed before it trades; one deterministic gate; the thesis's exits.
+- **Sources.** The LLM analyst proposes on its own from dated facts; the owner adds an idea when
+  he has one, marked normal, high or max, which scales its size inside the cap. Each source and
+  level is graded apart. The LLM still never sizes, orders or overrides a gate.
+- **Evidence is forward**, under a pre-registration locked before the first thesis: a judgement
+  has no history to replay. D150 is amended: a forward-only hypothesis gets the least machinery
+  that produces its record, in shadow.
+- **Capital.** None in shadow; on the live account an exploration share the owner sets (a tenth
+  by default), an authorisation and not evidence; then steps by the live record at registered
+  looks, and back to shadow below its boundary. D148's objection is answered by size.
+- **What to expect.** An edge of 50 % a year shows in about two years of graded calls
+  (t ≈ IR·√years, an information ratio near 1.5); a small one never earns more than the
+  exploration share. Most concentrated books lose to the index, and the plan says so.
+
+Rejected: a book of the owner's ideas alone (the engine must run without him); the model's stated
+probability as a size or a rank (uncalibrated until graded, §5.11); the stock book's 50 % for it
+(no test supports any share); waiting for the event sleeve's components (no test of them
+concludes soon, D148).

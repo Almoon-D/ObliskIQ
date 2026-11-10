@@ -27,11 +27,13 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (parity with the simulator on a fixture history; the owner's variant is D50 since v0.19.0, D147; the live cycle a command list for the owner) | v0.18.0 |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | **next** | |
+| 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | after 22 | |
+| 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | **next** (beside 22) | |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after 23 and the purchase | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | after 22 (beside 24) | |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | after 22, 24, 25, the reserve's paper cycle and a sufficient or inconclusive-positive outcome | |
-| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 26 | |
+| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25, 27 and 24's verdict | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
@@ -50,12 +52,24 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
+| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward | Sessions 27, 28 |
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
 | Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
 
 ## Session log
 
-### Challenge review (2026-11-10, v0.19.2)
+### Owner ruling: ideas and the thesis book (2026-11-10, v0.20.0)
+
+- **Ruling** (D156): the engine proposes and trades written ideas on its own; the owner hands
+  one in when he has it, as any other or weighted by his conviction. All are graded forward.
+- **Design:** the thesis book in MASTER_PLAN §5.5 (at most eight positions, one gate, the
+  thesis's own exits), its capital in §5.19 (an exploration share, then the live record).
+- **Path:** Sessions 27 (thesis book) and 28 (LLM analyst) written; they follow 22, beside 23
+  and 24. Session 18 carries the thesis book's capital rule. H13 added as an idea.
+- **Owner:** an LLM key before Session 28; the exploration share when the live account nears.
+- **Live findings.** None: no IBKR call.
+
+### Challenge review (2026-11-10, v0.20.0)
 
 - **Review** of v0.19.1, read-only, then its fixes by the owner's instruction (D154, D155).
 - **Research:** the run rule is the probability of a sufficient outcome at the literature's net
@@ -354,10 +368,13 @@ settles it.
   (`execution/pretrade.py: _guards`, `execution/executor.py: _stage`,
   `decision/rebalance_core.py: survey`). Decide a maximum age, with failure-branch tests, before
   live-small (Session 20 at the latest).
-- Session 20: about 13,000 source lines serve no order and no verdict today (`grid/`,
-  `engines/options_sleeve`, `engines/commodity`, `engines/fx`, `engines/risk`, `llm/`,
-  `data/events`, `data/insiders`, `data/positioning`); keep or delete each by whether a funded
-  layer reads it.
+- Session 20: `grid/`, `data/events`, `data/insiders`, `data/positioning` and `llm/` feed the
+  analyst's fact sheet from Session 28 (D156). What still serves no order, verdict or fact line
+  then (`engines/commodity`, `engines/fx`, parts of `engines/options_sleeve`) is kept or deleted
+  by whether a layer reads it.
+- **Owner:** an LLM provider key and its monthly budget before Session 28 (the analyst runs on
+  fixtures without it and proposes nothing live); the thesis book's exploration share before the
+  live account (a tenth of investable capital unless set).
 - Session 22: with D50 the trend brake needs twelve month ends of the equity and cash vehicles'
   history on the machine, or the reserve says `untilted` and holds its equity whole.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
