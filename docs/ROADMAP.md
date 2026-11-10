@@ -27,7 +27,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (parity with the simulator on a fixture history; the owner's variant is D50 since v0.19.0, D147; the live cycle a command list for the owner) | v0.18.0 |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | **next** | |
-| 23 | Hunter: data and power | vendors of survivorship-free small-cap history, universe floors, power before data; the owner buys what it recommends | **next** (beside 22) | |
+| 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | **next** (beside 22) | |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after 23 and the purchase | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | after 22 (beside 24) | |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | after 22, 24, 25, the reserve's paper cycle and a sufficient or inconclusive-positive outcome | |
@@ -53,6 +53,15 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
 
 ## Session log
+
+### Owner ruling: every size and instrument, 50 % or more (2026-11-10, v0.19.1)
+
+- **Ruling** (D153): the Hunter's universe is stocks of any size, each hypothesis tested on the
+  whole universe and by size tier; long options through H8 and the sleeve; the aspiration is
+  50 % a year or more.
+- **Prompts:** Sessions 23, 24 and 26 read D153; 23 counts and powers each size tier and prices
+  option-surface history for H8; 24 registers the tiers as tests.
+- **Live findings.** None: no IBKR call.
 
 ### Owner rulings and the build path (2026-11-09, v0.19.0)
 

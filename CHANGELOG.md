@@ -5,6 +5,18 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.19.1] - 2026-11-10
+
+An owner ruling: the Hunter hunts on every size and instrument, and the aspiration is 50 % a
+year or more.
+
+### Changed
+
+- The Hunter's universe is stocks of any size; each hypothesis is tested on the whole universe
+  and by pre-registered size tier, and long options enter through H8 and the sleeve (DECISIONS
+  D153, amending D148 and D60's figure).
+- Sessions 23, 24 and 26 read D153: size tiers are counted, powered and registered as tests.
+
 ## [0.19.0] - 2026-11-09
 
 Owner rulings and the build path: growth first, the Hunter as the return engine, and a shorter

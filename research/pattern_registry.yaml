@@ -189,7 +189,7 @@ patterns:
       if its power before data reaches 0.5 (DECISIONS D150).
   - id: selection-cheap-quality
     hypothesis: H10
-    title: Cheapness with quality among small and micro caps
+    title: Cheapness with quality, by size tier
     status: idea
     data_needed: >-
       The survivorship-free US price history H2 needs and point-in-time fundamentals (the SEC's
@@ -198,7 +198,7 @@ patterns:
       controlled (Asness et al. 2018). Session 23 measures coverage; Session 24 tests it.
   - id: selection-earnings-drift
     hypothesis: H11
-    title: Post-earnings-announcement drift among small and micro caps
+    title: Post-earnings-announcement drift, by size tier
     status: idea
     data_needed: >-
       The survivorship-free US price history H2 needs and earnings announcements with their dates

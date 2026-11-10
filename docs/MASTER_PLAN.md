@@ -34,11 +34,13 @@ A global, autonomous portfolio manager for one IBKR account that:
    premium, no shorting, nothing the owner's jurisdiction forbids, and breakers that freeze
    new risk and stand the bot down (§5.11).
 2. **Hunts second.** The Hunter is the return engine: a diversified, rule-based, long-only
-   book of small- and micro-cap stocks, the companies too small or illiquid for institutional
-   capital, selected by signals with a documented mechanism — cheapness with quality, informed
-   buying, forced selling, momentum, earnings drift — and held with low turnover (§5.5,
-   DECISIONS D148). It takes capital only on a test it passed, up to half of the account, and
-   the rest by a live rule (§5.19).
+   book of stocks of any size, selected by signals with a documented mechanism — cheapness
+   with quality, informed buying, forced selling, momentum, earnings drift — and held with low
+   turnover (§5.5, DECISIONS D148, D153). Each signal is tested by size tier, from the
+   companies too small for institutional capital to the largest. A tested signal may be
+   expressed with long options when the sleeve's own test allows (§5.6). The Hunter takes
+   capital only on a test it passed, up to half of the account, and the rest by a live rule
+   (§5.19).
 3. **Keeps the rest at work.** Capital the Hunter does not hold is the reserve: global
    equities with a slow, tax-aware trend brake that steps partly aside in a fall under way
    (§5.4, DECISIONS D147).
@@ -56,7 +58,7 @@ sold and their tax paid. Research reports each candidate's drawdowns beside its 
 references are scored under the same
 rule, in the base currency: a global accumulating UCITS equity ETF bought and held,
 and a global 60/40. They are yardsticks and a possible outcome, not the destination. The owner's
-aspiration is 30–50 % a year or more: a distance every report shows, never a forecast. No
+aspiration is 50 % a year or more (D153): a distance every report shows, never a forecast. No
 system knows with high certainty what markets will do: returns come from documented premia
 and from a selection edge that must be shown on data before it is funded, with costs and
 taxes treated as costs.
@@ -215,8 +217,8 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
    views: equity grid · macro board · option surface · correlations · fx · curves
           ▼                                   ▼
  RESERVE (the core engine)             HUNTER (the return engine)
- global equity with a slow,            small- and micro-cap stocks ranked by tested
- tax-aware trend brake; holds          signals → a diversified book with a keep
+ global equity with a slow,            stocks of any size ranked by tested signals,
+ tax-aware trend brake; holds          by size tier → a diversified book with a keep
  what the Hunter does not              buffer → registered rebalances and exits
           └──────────────┬────────────────────┘
                          ▼
@@ -236,7 +238,7 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
 
 | Pillar | Role | Why it earns a place |
 |---|---|---|
-| **Small-company inefficiency** (Graham and Schloss; the early Buffett partnerships; Greenblatt) | The Hunter: a diversified book of small- and micro-cap stocks that are cheap for their quality, bought by their insiders, sold by forced sellers or drifting after news. | The one ground where a small account has an advantage: institutions cannot deploy there, so mispricing lasts. Costs are also highest there, hence a test after costs and tax before any capital (§5.9). |
+| **Company-level inefficiency** (Graham and Schloss; the early Buffett partnerships; Greenblatt) | The Hunter: a diversified book of stocks of any size that are cheap for their quality, bought by their insiders, sold by forced sellers or drifting after news. | Mispricing is expected to last longest in small companies, where institutions cannot deploy and a small account can; costs are also highest there. The test reports each size tier after costs and tax, and the book goes where it passed (§5.9, D153). |
 | **Statistical discipline** (Simons; Thorp) | Validation before trust, multiple-testing control, cost-aware execution, sizing bounded by evidence, the scoreboard. | Not a strategy here; the reason the others can be trusted. |
 | **Trend following** (the CTA tradition: Dennis and the Turtles, Seykota, Harding) | The reserve's brake: a slow, tax-aware reduction of equities in a fall under way. | The most robust systematic effect documented across a century of markets (Moskowitz, Ooi & Pedersen 2012; Hurst, Ooi & Pedersen 2017), and the cheapest crisis protection. |
 | **Measured diversification** (Dalio) | Whole-book risk: concentration, correlation clusters and stress scenarios measured on the book, never assumed (§5.11). The risk-balanced variants stay registered. | Small caps across markets fall together in a liquidity shock; the book must know its own exposure. |
@@ -338,11 +340,16 @@ cycles. All of these live in config with a source per value.
 **The stock book** is the return engine (DECISIONS D148). In configuration and code its sleeve
 is `satellite`.
 
-- **Hunting ground.** Small- and micro-cap stocks on venues the account may trade, in markets
-  with a price history that keeps delisted companies (the United States first; another market
-  joins through its own data audit). A stock is in the universe on a date when its price and
-  traded value pass floors computed from the account: the position the book would hold is a
-  small share of the stock's daily traded value and above the commission-derived minimum (D66).
+- **Hunting ground.** Stocks of any size on venues the account may trade, in markets with a
+  price history that keeps delisted companies (the United States first; another market joins
+  through its own data audit). A stock is in the universe on a date when its price and traded
+  value pass floors computed from the account: the position the book would hold is a small
+  share of the stock's daily traded value and above the commission-derived minimum (D66).
+- **Size tiers.** Micro, small, mid and large are pre-registered. Each hypothesis is tested on
+  the whole universe and on each tier, and the book is built on the tiers its test left
+  sufficient (D153).
+- **Options.** A sufficient signal is expressed with long options when H8 finds the option
+  beats the share for it, within the option budget (§5.6).
 - **Signals.** Only those a pre-registered test left sufficient (§5.9). The candidates are
   cheapness with quality, insider-purchase clusters, forced selling and spin-offs, momentum
   and nearness to the 52-week high, and post-earnings drift, each alone and in one registered
@@ -1021,7 +1028,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates |
 | 13 | Core engine | the variants 4c registered (4e found none sufficient, D95), risk budgeting, the tax-aware trend tilt, rebalancing |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list: order test, execution test, the reserve's paper cycle, then `serve` |
-| 23 | Hunter: data and power | vendors of survivorship-free small-cap history, the universe floors, power before data for each hypothesis; the owner buys the data it recommends |
+| 23 | Hunter: data and power | vendors of survivorship-free stock history, the universe floors and size tiers, power before data for each hypothesis; the owner buys the data it recommends |
 | 24 | Hunter: verdict | loaders, the stock-book strategy in the simulator, the pre-registration in its own pull request, one confirmation run |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers |
 | 26 | Hunter engine | the mechanism Session 24 tested, on the live book: universe, ranking, the book with its keep buffer, rebalancer, capacity |
@@ -1064,13 +1071,13 @@ on L2.
 | 11 | Base currency | Selectable; EUR today; other currencies held as working balances. |
 | 12 | Withdrawals | Planned as soon as announced; the bot asks before cutting protected positions. |
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
-| 14 | Objective (DECISIONS D60, D147) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. Aspiration: 30–50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
+| 14 | Objective (DECISIONS D60, D147, D153) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. Aspiration: 50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
 | 15 | Scale (D66, D150) | Capabilities that pay only at larger capital are built in Session 19a, when capital reaches them, and run by computed activation conditions. |
 | 16 | Drawdown (D147) | No limit. The owner accepts falls as deep as global equities' and deeper while the Hunter holds capital; the reserve runs D50. The peak for the breakers and the digest is taken once a day at the last cycle's managed NAV (unmanaged holdings do not count). |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89, D150) | A rule that times or reshapes the reserve joins it only after a pre-registered test with power of at least 0.5 finds it sufficient. Total-risk scaling was tested (Session 4e: none sufficient, D95). |
 | 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
-| 20 | The return engine (D148) | The Hunter: a systematic, diversified book of small- and micro-cap stocks. The event sleeve and the LLM layer wait for evidence. |
+| 20 | The return engine (D148, D153) | The Hunter: a systematic, diversified book of stocks of any size, each signal tested by size tier; long options when the sleeve's test allows. The event sleeve and the LLM layer wait for evidence. |
 | 21 | Cadence (D151) | Four cycles a day at the venues' sessions; no cycle rebuilds the book; no intraday strategy. |
 
 Open: the LLM
@@ -1099,6 +1106,6 @@ probability of reaching a target. **Unmanaged** holdings the bot counts but neve
 (§5.9). **n_eff** the effective number of independent observations. **Twin** a layer's
 signals simulated on the same dates with the cost model, against which live results are
 monitored. **Activation condition** the computed rule under which a capability runs.
-**T1** the owner's first run on the deployment machine. **Hunter** the stock book of small and
-micro caps (§5.5); its sleeve is `satellite` in configuration. **Reserve** the core engine holding
+**T1** the owner's first run on the deployment machine. **Hunter** the stock book
+(§5.5); its sleeve is `satellite` in configuration. **Reserve** the core engine holding
 the capital the Hunter does not (§5.4). **Event sleeve** the deferred Asymmetry Hunter (§5.5).
