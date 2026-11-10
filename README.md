@@ -2,9 +2,9 @@
 
 An autonomous portfolio manager for one Interactive Brokers account.
 
-- **The Hunter** — the return engine: a systematic, diversified book of small- and micro-cap
-  stocks, the companies too small for institutional money, selected by signals that passed a
-  pre-registered test after costs and tax. It holds nothing until one does.
+- **The Hunter** — the return engine: a systematic, diversified book of stocks of any size,
+  selected by signals that passed a pre-registered test after costs and tax, each tested by
+  size tier; long options when their own test allows. It holds nothing until a test passes.
 - **The reserve** — everything the Hunter does not hold: global equities with a slow,
   tax-aware trend brake.
 - **Discipline** — a hard risk and execution layer; capital that moves by tested evidence,

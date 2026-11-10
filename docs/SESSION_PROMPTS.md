@@ -1825,7 +1825,7 @@ about a live step. Patch version.
 
 ```
 You are building ObliskIQ, session 23. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.9 and DECISIONS D62, D63, D84, D148, D150). Network is open. Buying data
+design (read §5.5, §5.9 and DECISIONS D62, D63, D84, D148, D150, D153). Network is open. Buying data
 is the owner's step: do not buy. Finish with the end-of-session protocol.
 
 PRECONDITION: v0.19.0 or later on main. Otherwise STOP.
@@ -1840,17 +1840,20 @@ cross-section study (use it; extend it only if the stock book's design needs it)
 DELIVERABLES
 1. research/reports/hunter-feasibility.md, its recommendation in the first paragraph.
 2. Vendors of daily prices that keep delisted companies with their delisting returns, for US
-   small and micro caps first and for any other market the account trades: price, licence
+   stocks of every size first and for any other market the account trades: price, licence
    terms for one private user, span, delivery format, how far down in size coverage goes.
-   Read on the vendors' own pages, each fact with its date.
+   Beside them, the price and span of option-surface history for H8. Read on the vendors'
+   own pages, each fact with its date.
 3. Point-in-time fundamentals and events from free sources (the SEC's XBRL data sets, Form 4,
    8-K, Form 10 for spin-offs): span and filer coverage, measured as Session 4d's audit did.
 4. The universe floors computed from the account: for managed capital of 10,000, 50,000 and
    250,000 euros and books of 20, 40 and 80 names, the position size, the share of a stock's
    daily traded value it stays under, the commission as a share of the position, and how many
-   stocks pass on a recent date (counts only).
-5. Power before data for H2, H3, H4, H10, H11 and one composite: long-only, after costs at
-   the illiquid tier and `es` tax; theta per hypothesis justified by what it adds to the
+   stocks pass on a recent date, in all and per size tier (micro, small, mid, large, their
+   bounds stated; counts only).
+5. Power before data for H2, H3, H4, H10, H11 and one composite, on the whole universe and
+   per size tier with every tier a test in the adjustment: long-only, after costs at each
+   tier's own cost tier and `es` tax; theta per hypothesis justified by what it adds to the
    whole book at 50 % of capital; the effect detectable at power 0.8. Every assumed
    dispersion or correlation is cited from the literature, never estimated on candidate data.
 6. The decision rule, written in the report before any number: a hypothesis with power below
@@ -1874,7 +1877,7 @@ obtained. No version change if only research/ and docs/ change.
 
 ```
 You are building ObliskIQ, session 24. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D85, D140, D148–D150). Network is
+design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D85, D140, D148–D150, D153). Network is
 open. Finish with the end-of-session protocol.
 
 PRECONDITION: Session 23 merged, and the history it recommended is bought and reachable from
@@ -1892,7 +1895,8 @@ live book (D140). A toy study runs end to end. The bought data never enters the 
 
 STEP 2 — the pre-registration, its own pull request, no version change:
 research/preregistrations/hunter-us.md from the template. The hypotheses Session 23 kept,
-each alone, and one composite. Primary statistic: the book's annualised after-tax log growth
+each alone, and one composite, on the whole universe and on the size tiers Session 23 kept,
+every one a test in the adjustment. Primary statistic: the book's annualised after-tax log growth
 minus the equity reference's, with the Fama–MacBeth series beside it. Theta, the development
 and confirmation samples, the trial budget. Robustness: subperiods, a placebo, the break-even
 cost multiplier, every spread doubled. D149's schedule: the looks, the minimum live months
@@ -1961,7 +1965,7 @@ session built (log the edit).
 
 ```
 You are building ObliskIQ, session 26. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.11, §5.19 and DECISIONS D140, D148–D151). Money paths fail closed.
+design (read §5.5, §5.11, §5.19 and DECISIONS D140, D148–D151, D153). Money paths fail closed.
 Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 22, 24 and 25 merged; the reserve's paper cycle is recorded in

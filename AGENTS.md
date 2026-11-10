@@ -1,6 +1,6 @@
 # AGENTS.md — ObliskIQ
 
-A global, autonomous portfolio manager for one IBKR account: the Hunter (a systematic book of small- and micro-cap stocks, funded only by a test it passed, MASTER_PLAN §5.5), a reserve that holds the rest (global equity with a trend brake, §5.4) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
+A global, autonomous portfolio manager for one IBKR account: the Hunter (a systematic book of stocks of any size, each signal tested by size tier and funded only by a test it passed, MASTER_PLAN §5.5), a reserve that holds the rest (global equity with a trend brake, §5.4) and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
 
 ## Read first — your slice, not whole files
 

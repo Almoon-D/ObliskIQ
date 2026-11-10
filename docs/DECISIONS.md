@@ -3544,3 +3544,26 @@ a 1,700-line session log, every session at the highest effort.
 
 Rejected: lowering the floor (the tests are the only check a cloud session has on a money path);
 deleting finished prompts (`make prompt` prints one section, so they cost nothing).
+
+## Owner ruling (2026-11-10)
+
+### D153 · The Hunter hunts on every size and instrument; size is tested, not assumed; the aspiration is 50 % or more (§1, §5.5, §11; amends D60, D148)
+
+The owner's aim is inefficiency wherever it is found, not a size or a product: large companies
+have also moved far more than the market. The aspiration is 50 % a year or more.
+
+- **Stocks.** The Hunter's universe is every listed stock that passes the liquidity floors,
+  whatever its size. Size tiers (micro, small, mid, large) are pre-registered; each hypothesis is
+  tested on the whole universe and on each tier, every one a test in the adjustment, and the book
+  is built on the tiers its test left sufficient. D148's expectation, that mispricing lasts
+  longest where institutions cannot deploy, becomes a result the test reports.
+- **Other instruments.** ETFs, ETCs on commodities and metals, bonds and funds enter through the
+  reserve's roles and Session 21's hypotheses. Long options enter through the sleeve: H8 decides
+  whether an option beats the share for a sufficient signal, within the option budget.
+- **The aspiration** is a distance reports show (D60), never a gate or a forecast. No documented
+  unlevered long-only premium approaches it; convexity bought with the option budget is the one
+  lever inside the mandate that could, and it loses its premium when the signal has no edge.
+
+Rejected: restricting the universe by size before the data speak; an option sleeve that trades
+before a signal is sufficient; picking yesterday's largest movers (a move already made is no
+signal, and a rule that claims to foresee one is tested like any other).
