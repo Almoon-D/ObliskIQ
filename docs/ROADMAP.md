@@ -51,8 +51,24 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
+| Can the Hunter's test decide? | As first written, no: it detected about 8 to 11 % a year. Redesigned (one composite against its own universe); Session 23 computes its chance of a sufficient outcome before any purchase | DECISIONS D154 |
 
 ## Session log
+
+### Challenge review (2026-11-10, v0.19.2)
+
+- **Review** of v0.19.1, read-only, then its fixes by the owner's instruction (D154, D155).
+- **Research:** the run rule is the probability of a sufficient outcome at the literature's net
+  effect; the Hunter's first test is the composite H12 (the owner's thesis) against its own
+  universe, tiers and single hypotheses after it in a fixed sequence. H12 added as an idea.
+- **Capital:** steps beyond 50 % count live-account months only; the ceiling is investable capital.
+- **Prompts edited:** 22 (the owner pastes `o10164`'s text and the snapshot flags; the conversion's
+  policy is decided from it), 23 (the sequence, the probability of sufficient, where the data can
+  be read), 24 (the measure, no development sample for a published specification, the run's
+  place), 25 (thresholds against D147), 26 (a filled conversion first; dividends, splits, mergers
+  and delistings reconcile without the owner).
+- **Not changed:** the reserve (D50), the 50 % first share and the aspiration, the owner's rulings.
+- **Live findings.** None: no IBKR call.
 
 ### Owner ruling: every size and instrument, 50 % or more (2026-11-10, v0.19.1)
 
@@ -328,6 +344,17 @@ settles it.
   H8 (D71).
 - **Owner:** Almoon-D/ObliskIQ#53 is a second copy of Session 13's pull request, already merged
   as #52: close it. The paused Session 15 chat is not resumed (D150); its branch can be deleted.
+- The session that records the owner's paste from Session 22's runbook decides `o10164` on a
+  conversion from IBKR's text (D101): until a conversion fills on paper no order in a foreign
+  currency can be funded, and Session 26 waits for it.
+- The reconciliation freeze passes while no run exists, and a green run never ages
+  (`execution/pretrade.py: _guards`, `execution/executor.py: _stage`,
+  `decision/rebalance_core.py: survey`). Decide a maximum age, with failure-branch tests, before
+  live-small (Session 20 at the latest).
+- Session 20: about 13,000 source lines serve no order and no verdict today (`grid/`,
+  `engines/options_sleeve`, `engines/commodity`, `engines/fx`, `engines/risk`, `llm/`,
+  `data/events`, `data/insiders`, `data/positioning`); keep or delete each by whether a funded
+  layer reads it.
 - Session 22: with D50 the trend brake needs twelve month ends of the equity and cash vehicles'
   history on the machine, or the reserve says `untilted` and holds its equity whole.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the

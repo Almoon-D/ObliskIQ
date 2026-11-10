@@ -205,3 +205,14 @@ patterns:
       and surprises, point in time (Bernard and Thomas 1989): the SEC's 8-K item 2.02 dates are
       free, a consensus estimate is not, so the surprise is the announcement's own return or a
       seasonal random walk. Session 23 measures coverage; Session 24 tests it.
+  - id: selection-cheap-quality-rising-industry
+    hypothesis: H12
+    title: Cheap companies of good quality in industries whose trend is rising
+    status: idea
+    data_needed: >-
+      What H10 needs, and each company's industry point in time (the SIC code of its SEC
+      filings): H10's cheapness and quality within the industries whose own return over the
+      past months is highest (industry momentum, Moskowitz and Grinblatt 1999). The owner's
+      thesis as a rule: the rising trend stands in for "a sector about to go up", which no rule
+      observes. The Hunter's one confirmatory test; Session 23 computes its probability of a
+      sufficient outcome, Session 24 tests it first (DECISIONS D154).

@@ -43,6 +43,7 @@ A global, autonomous portfolio manager for one IBKR account that:
    (§5.19).
 3. **Keeps the rest at work.** Capital the Hunter does not hold is the reserve: global
    equities with a slow, tax-aware trend brake that steps partly aside in a fall under way
+   while its embedded gain is small; after years of gains it is equities bought and held
    (§5.4, DECISIONS D147).
 4. **Measures itself.** Every hypothesis is pre-registered and tested on point-in-time
    history with a decision rule that says sufficient, insufficient, inconclusive or not
@@ -345,15 +346,22 @@ is `satellite`.
   through its own data audit). A stock is in the universe on a date when its price and traded
   value pass floors computed from the account: the position the book would hold is a small
   share of the stock's daily traded value and above the commission-derived minimum (D66).
-- **Size tiers.** Micro, small, mid and large are pre-registered. Each hypothesis is tested on
-  the whole universe and on each tier, and the book is built on the tiers its test left
-  sufficient (D153).
+- **Size tiers.** Micro, small, mid and large are pre-registered. One composite on the whole
+  universe is the confirmatory test; the tiers, then each hypothesis alone, follow in a fixed
+  sequence that stops at the first test that is not sufficient, so none costs the first its
+  power. The book is built on what that sequence left sufficient (D153, D154).
+- **The measure.** The book's after-tax log growth minus that of its own universe bought and
+  held, which is what selection adds. Its growth against the equity reference is reported
+  beside it and decides nothing: fifteen years cannot tell a size or country tilt from luck
+  (D154).
 - **Options.** A sufficient signal is expressed with long options when H8 finds the option
   beats the share for it, within the option budget (§5.6).
 - **Signals.** Only those a pre-registered test left sufficient (§5.9). The candidates are
   cheapness with quality, insider-purchase clusters, forced selling and spin-offs, momentum
-  and nearness to the 52-week high, and post-earnings drift, each alone and in one registered
-  composite.
+  and nearness to the 52-week high, and post-earnings drift, and the composite the sequence
+  starts with: H12, the owner's thesis as a rule, cheap companies of good quality in
+  industries whose trend is rising. The holding period is part of each registration; a
+  shorter one is allowed and pays its costs and tax in the test.
 - **The book.** The highest-ranked names by the tested score, equally weighted within caps per
   name, sector and country, with a keep buffer: a holding leaves only when it falls well below
   the entry rank. Selection is recomputed on the registered rebalance dates and on no other
@@ -467,11 +475,18 @@ expression, a pattern — lives in `research/pattern_registry.yaml` with a lifec
   the horizon, θ (the smallest net effect worth the added risk; the owner can amend it
   before the merge), the
   power to detect θ and the effect detectable at power 0.8, the adjustment, robustness
-  checks and the trial budget. A test whose power at θ is below 0.5 is not run (D150).
+  checks and the trial budget. A test is not run when its probability of a sufficient
+  outcome (L ≥ θ), before data and at the effect the literature supports net of decay, costs
+  and tax, is below 0.5; θ is not raised to meet it (D150, D154). This is the power the plan
+  means wherever it asks for "power of at least 0.5".
 - **Test.** Exploration on a development sample, every trial recorded in the trial
   registry; one confirmation run on a locked sample (a later period and, where data allow,
   another region); Bonferroni across the confirmation run and the deflated Sharpe across
-  every trial. Dependence is explicit: cross-sectional effects as a monthly Fama–MacBeth
+  every trial. A hypothesis registered exactly as its source published it needs no
+  exploration: its whole sample is the confirmation sample. Tests ordered in a
+  pre-registered fixed sequence, each run only if the one before was sufficient, need no
+  adjustment among themselves (D154). Dependence is explicit: cross-sectional effects as a
+  monthly Fama–MacBeth
   series with Newey–West lags at least the horizon, events clustered by date, block
   bootstrap with blocks at least twice the longest lookback a strategy reads and a
   sensitivity over block lengths (D92); minimum samples in effective observations,
@@ -497,7 +512,7 @@ Hypotheses by batch (DECISIONS D71):
 | Batch | Hypotheses |
 |---|---|
 | 1 (Sessions 4c, 4d) | the core verdict (§5.4); one selection hypothesis chosen by a data audit among H1 cross-asset and country momentum through UCITS (Asness, Moskowitz & Pedersen 2013), H2 insider-purchase clusters in SEC Form 4 (Cohen, Malloy & Pomorski 2012) and H4 a stock-level composite — nearness to the 52-week high (George & Hwang 2004), 12-1 momentum with a crash guard (Jegadeesh & Titman 1993; Daniel & Moskowitz 2016), profitability (Novy-Marx 2013); H5, whether a volatility-scaled stop adds value to that signal (Kaminski & Lo 2014) |
-| Hunter (Sessions 23, 24) | On a US price history that keeps delisted companies, each alone and in one registered composite: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
+| Hunter (Sessions 23, 24) | On a US price history that keeps delisted companies, in a fixed sequence that starts with the composite H12, cheap companies of good quality in industries whose trend is rising (H10 with industry momentum, Moskowitz & Grinblatt 1999), then its size tiers, then each alone: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
 | Later (Session 21) | H6 conditioning the reserve's risk on the variance risk premium (Bollerslev, Tauchen & Zhou 2009), the excess bond premium (Gilchrist & Zakrajšek 2012) and trend; H9 hedging pressure in COT for commodity ETCs (de Roon, Nijman & Veld 2000); the event sleeve's components and their agreement rule; the §6.4 re-test group; each only with power of at least 0.5 |
 | Forward only | H7 LLM-extracted event features beyond the price signal (a minimal extractor from Session 10); H8 an option against a share with a stop for a sufficient signal, on option surfaces collected from Session 8 or bought |
 | Ideas | carry in bonds and equities (Koijen et al. 2018); defensive/low beta (Frazzini & Pedersen 2014); low volatility (Ang et al. 2006); VIX term-structure inversion; dollar strength and EM stress; oil shocks (Hamilton 2009); pre-FOMC drift (Lucca & Moench 2015) |
@@ -814,9 +829,11 @@ proof. The allocation is automatic in both directions (DECISIONS D149):
 
 - A Hunter book with a sufficient outcome and its activation condition (§2) takes up to 50 %
   of managed capital.
-- It steps from there to 100 % at pre-registered looks, each when the pooled re-test (history
-  plus the live twin) is still sufficient, the live-minus-twin gap is inside its boundary and
-  the pre-registered minimum of live months and closed positions is met.
+- It steps from there to all investable capital (100 % less the cash floor) at pre-registered
+  looks, each when the re-test that pools history with the book's realised returns on the
+  live account is still sufficient, the live-minus-twin gap is inside its boundary and the
+  pre-registered minimum of live-account months and closed positions is met. Paper months
+  and the twin's own returns count for nothing here: both are simulations (D155).
 - The reserve holds whatever the Hunter does not, less the cash floor.
 - No step needs an owner command. The steps beyond 50 % are slow unless the edge is large,
   because a live record adds evidence slowly.

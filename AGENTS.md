@@ -26,7 +26,9 @@ Read what the work in front of you needs, when it needs it.
 ## Build for evidence (DECISIONS D150)
 
 - An engine is built only for a hypothesis whose test left it sufficient or inconclusive-positive, as the mechanism the test ran. Nothing is built "for later".
-- A test whose power before data is below 0.5 at its θ is not run.
+- A test is not run when its probability of a sufficient outcome, before data and at the effect
+  the literature supports net of decay, costs and tax, is below 0.5 (DECISIONS D154). θ is never
+  raised to meet it.
 - A prompt's `DO NOT BUILD` list is part of its scope. If the work seems to need something on it, stop and report.
 - A session ends with something observable: a verdict, a command the owner can run, or a behaviour a test shows.
 
