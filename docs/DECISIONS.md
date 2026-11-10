@@ -3631,3 +3631,20 @@ Rejected: a book of the owner's ideas alone (the engine must run without him); t
 probability as a size or a rank (uncalibrated until graded, §5.11); the stock book's 50 % for it
 (no test supports any share); waiting for the event sleeve's components (no test of them
 concludes soon, D148).
+
+### D157 · A thesis may be held as a long call or put, inside the book's capital (§5.5, §5.6; amends D66, D71, D153)
+
+The option budget was never dropped, but its activation could not be met: H8 is forward only,
+and one or two contracts at a time take decades to conclude. The sleeve would never have traded,
+and a long-only book had no way to act on a bearish thesis.
+
+- A thesis of the thesis book may be a long call or a long put. The premium comes out of the
+  book's own capital, at most the option budget (5 %) in all; the loss is the premium.
+- Evidence is forward, as the book's: each option is graded beside the same thesis in its
+  underlying, and that pair is H8's record. For any other signal activation stays H8 sufficient.
+- Expect a cost: without an edge in the theses, options lose faster than shares (spreads, and
+  lottery-like payoffs earn the worst returns, Boyer & Vorkink 2014). The budget and lite's
+  penalty balance bound it.
+
+Rejected: options outside the thesis book; an option share on top of the book's (the exploration
+share is the whole authorisation); shorts or inverse products for a bearish view (§2).

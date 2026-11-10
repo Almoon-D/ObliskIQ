@@ -5,6 +5,18 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.20.1] - 2026-11-10
+
+The thesis book's instruments, bearish views and options, from the owner's questions.
+
+### Changed
+
+- The thesis book takes any eligible instrument, and a bearish view is a defensive instrument
+  or a long put; its position count grows with capital by configuration.
+- A thesis may be held as a long call or put, paid from the book's capital inside the option
+  budget and graded beside its underlying (DECISIONS D157); Session 29 builds the link.
+- Session 27 resolves an instrument outside the universe file before it trades.
+
 ## [0.20.0] - 2026-11-10
 
 An owner ruling and a challenge review: the engine trades written ideas of its own and the

@@ -239,6 +239,7 @@ records it.
 | 22 | Order path on paper | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
 | 27 | Thesis book | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
 | 28 | LLM analyst | Opus 5.5 | high | **Full** | — |
+| 29 | Options for theses | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 23 | Hunter: data and power | Opus 5.5 | high | **Full** | — |
 | 24 | Hunter: verdict | Opus 5.5 | xhigh | **Full** | — |
 | 25 | Book breakers | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
@@ -247,8 +248,8 @@ records it.
 | 19 | Cockpit, settings and deployment | Sonnet 5.5 | high | Custom | full preflight |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 
-Run in that order; 22 and 23 can run side by side, 27 and then 28 follow 22 beside 23 and 24
-(the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. On a condition, not in
+Run in that order; 22 and 23 can run side by side, 27, then 28 and 29, follow 22 beside 23 and
+24 (the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. On a condition, not in
 sequence (MASTER_PLAN §10):
 
 | # | Session | Runs when | Model | Effort | Network |
@@ -2057,9 +2058,13 @@ STEP 2 — the book.
    once approved (SQL trigger), changes appended to a re-underwrite log.
 2. Intake: `obliskiq idea add|list|show|withdraw` for the owner (conviction normal, high or
    max; a missing target, horizon or invalidation is refused with its reason). One function
-   takes a draft from any source; Session 28 calls it.
+   takes a draft from any source; Session 28 calls it. An instrument outside
+   config/universe.yaml is resolved through ibkr/identity.py, pinned and described to the
+   order path's directory (ROADMAP Follow-ups, "a pinned stock candidate"); unresolved, or
+   on a venue without a calendar → refused.
 3. engines/thesis/: the deterministic gate with reason codes (the mandate and eligibility
-   through the existing policies, the liquidity floor, position, sector and currency caps, the
+   through the existing policies for every asset class they admit: stock, fund, ETF, ETC; a
+   bearish idea only as a defensive instrument, never a short; the liquidity floor, position, sector and currency caps, the
    minimum gain-to-loss ratio; an instrument another book holds is refused), slots in order
    of arrival, base size = the book's capital over `max_positions`, conviction multipliers
    inside the position cap. Every number a config key with its reason in DECISIONS.
@@ -2128,6 +2133,60 @@ the trading path runs with the LLM unreachable.
 
 ACCEPTANCE: from a fixture store one scheduled run yields validated drafts that become shadow
 theses; the pull request shows one real draft if a key was configured. Minor version.
+```
+
+---
+
+## Session 29 — Options for theses
+
+**Launcher:** `Execute Session 29 exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 29. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.6, §5.11 "Expression selector", §5.13 and DECISIONS
+D66, D67, D71, D135–D139, D156, D157). Money paths fail closed. No IBKR call. Finish with the
+end-of-session protocol.
+
+PRECONDITION: Session 27 merged. Otherwise STOP.
+
+GOAL: a thesis, bullish or bearish, can be held on paper as a long call or a long put, inside
+the book's capital and the option budget, and every such option is graded beside the same
+thesis held in its underlying.
+
+VERIFY FIRST: what engines/options_sleeve does in shadow today (candidates, gates, penalty,
+zombie, dates, activation) and ROADMAP Follow-ups ("Session 17 hands the options sleeve",
+"the options the chain collector records"). Build only the link from a thesis to that
+sleeve. If the sleeve cannot take a thesis's target, horizon and direction as it stands,
+STOP and report.
+
+DELIVERABLES
+1. A thesis's expression: `shares`, `option` or `auto` (the owner's flag on `idea add`; an
+   analyst's draft is `auto`). `auto` takes the option only by the sleeve's deterministic
+   rules (the payoff at the thesis's target, the IV percentile, liquidity, a tenor that
+   covers the horizon, affordability), otherwise the underlying. A bearish thesis is a long
+   put or nothing: never a short, never an inverse product.
+2. Capital: premiums come out of the thesis book's capital, in all at most
+   `capital.budgets.option_premium` of investable capital; one block per thesis, integer
+   contracts, the friction gate, the penalty balance. Activation for a thesis is D157's (the
+   book trades and the premium is affordable); for any other signal it stays H8 sufficient.
+   The registry gains H8 with its forward grading rule.
+3. Entries become intents through the pre-trade gate (real-time quotes for the option and
+   its underlying, the mandatory close for an option on an ineligible ETP) and the executor.
+   Exits are the sleeve's (target, scaled exit, zombie, mandatory close) and the thesis's
+   invalidation; an option is closed before expiry by the sleeve's dates.
+4. Grading: each option beside its twin in the underlying at the base size (shadow), per
+   direction. The digest shows premium at risk, the penalty balance and the record.
+
+DO NOT BUILD: written options, spreads, futures options, calibrated sizing, an option for a
+signal that is not a thesis, the rest of Session 17.
+
+TESTS: failure branches for no real-time quote, an illiquid chain, a premium above the budget
+or the book's capital, a horizon no tenor covers, a put on an instrument without options
+(nothing, with its reason), an expiry inside the mandatory-close window, a zombie, and the
+penalty balance blocking a new block; no path can write an option.
+
+ACCEPTANCE: an integration test takes one bearish owner idea from `idea add` to a shadow long
+put, its exit and its grade beside the underlying twin. Minor version.
 ```
 
 ---

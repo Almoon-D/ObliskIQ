@@ -389,6 +389,18 @@ honest test is forward: the book exists to produce that record and to trade on i
 - **A thesis** names the instrument, what is expected and why, a target, a horizon and what
   would prove it wrong, all fixed before the first order (the lifecycle of item 5 below). An
   idea that lacks one of them is not traded.
+- **Instruments.** Whatever the jurisdiction profile lets the account buy, on any venue it
+  trades: a stock, a fund or ETF, an ETC on a commodity or a metal, bonds through a fund. An
+  instrument outside the universe file is resolved through IBKR's contract search and joins
+  the order path's directory before it trades; one that cannot be resolved, or whose venue
+  has no calendar, is refused.
+- **Direction.** Long only (§2). A bearish view is a thesis on what holds or gains in a fall
+  (a cash fund, government bonds, gold) or a long put; the book never shorts and holds no
+  inverse product. A slot without a thesis holds nothing: its capital stays in the reserve.
+- **Options.** A thesis may be held as a long call or a long put when the options sleeve's
+  gates pass (§5.6). Premiums are paid from the book's own capital, never above the option
+  budget, and each option is graded beside the same thesis held in its underlying
+  (DECISIONS D157).
 - **Evaluation.** Every idea passes the same deterministic gate: the mandate, eligibility,
   liquidity, the position caps and a minimum ratio of the target's gain to the invalidation's
   loss. The analyst writes a second opinion on an owner's idea, logged and graded, never a
@@ -397,8 +409,9 @@ honest test is forward: the book exists to produce that record and to trade on i
   any other idea; `high` and `max` multiply the base size by configured factors within the
   position cap. Each level is graded apart, so the record says whether his stronger
   convictions are better.
-- **The book.** At most a configured number of positions (eight by default), equal base
-  sizes, slots filled in order of arrival among the ideas that pass. Exits are the thesis's
+- **The book.** At most a configured number of positions (eight by default; the owner
+  raises it as capital grows), equal base sizes, slots filled in order of arrival among the
+  ideas that pass. The caps per sector, country and currency keep them from being one bet. Exits are the thesis's
   own: the target, the invalidation, the horizon's end, a protective stop.
 - **Capital** follows the forward record (§5.19): shadow and paper first; on the live account
   an exploration share the owner sets; more only as the graded record earns it, by source.
@@ -456,6 +469,9 @@ its activation condition holds (§2): H8 — an option against a share with a st
 signal the research pipeline found sufficient — is sufficient, and the budget buys the
 pre-registered number of median premiums within the friction gate. Until then it runs in
 shadow, and the chain collector stores option surfaces forward for H8 (DECISIONS D66, D71).
+A thesis of the thesis book is the exception (§5.5, DECISIONS D157): its long call or put
+trades whenever that book trades, the premium paid from the book's capital, and the option
+beside the same thesis in its underlying is H8's forward record.
 Additions:
 
 - **Integer contracts.** At small NAV the budget buys one or two contracts; concurrency
@@ -1085,6 +1101,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list: order test, execution test, the reserve's paper cycle, then `serve` |
 | 27 | Thesis book | the owner's idea intake, the thesis lifecycle, the deterministic gate, slots and conviction sizes, the thesis's own exits, forward grading; its pre-registration first |
 | 28 | LLM analyst | the point-in-time fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas |
+| 29 | Options for theses | a thesis held as a long call or a long put through the existing sleeve, inside the book's capital and the option budget, graded beside its underlying |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, the universe floors and size tiers, power before data for each hypothesis; the owner buys the data it recommends |
 | 24 | Hunter: verdict | loaders, the stock-book strategy in the simulator, the pre-registration in its own pull request, one confirmation run |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers |
@@ -1093,8 +1110,8 @@ subset and inserts an `Na` prompt for the remainder.
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 |
 
-They run in that order (DECISIONS D150, D156); 27 and 28 follow 22 at once and beside 23 and
-24, because the thesis book's evidence is forward only and a week it does not run is a week of
+They run in that order (DECISIONS D150, D156); 27, 28 and 29 follow 22 at once and beside 23
+and 24, because the thesis book's evidence is forward only and a week it does not run is a week of
 record lost. Session 26 starts only after the reserve's paper cycle
 is recorded, and builds only what Session 24 left sufficient or inconclusive-positive; if it
 left nothing, the next research batch runs in its place. Built on a condition, not in sequence:
@@ -1138,7 +1155,7 @@ on L2.
 | 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
 | 20 | The return engine (D148, D153) | The Hunter: a systematic, diversified book of stocks of any size, each signal tested by size tier; long options when the sleeve's test allows; and the thesis book beside it (row 22). The event sleeve's components and the rest of the LLM layer wait for evidence. |
 | 21 | Cadence (D151) | Four cycles a day at the venues' sessions; no cycle rebuilds the book; no intraday strategy. |
-| 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. At most eight positions. Capital: an exploration share on the live account (a tenth by default, the owner's to set), then by the forward record. |
+| 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. Any eligible instrument, a long call or put included (D157); bearish only through a defensive instrument or a put. At most eight positions, more as capital grows. Capital: an exploration share on the live account (a tenth by default, the owner's to set), then by the forward record. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
