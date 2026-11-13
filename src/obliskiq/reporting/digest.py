@@ -1,6 +1,7 @@
 """The daily digest: mode, NAV and its time-weighted return, capital, positions, targets, the
-reservation plan and its reasons, open owner questions, unexplained cash, intents, fills, errors,
-venue status and health.
+thesis book (open theses, withheld ideas with their reasons, the graded record), the reservation
+plan and its reasons, open owner questions, unexplained cash, intents, fills, errors, venue status
+and health.
 
 The service gathers it after the day's last cycle (``runtime.digest``) and sends it through the
 notifier; ``obliskiq status`` prints the same gathering on demand. Everything it shows is read
@@ -25,6 +26,7 @@ from ..capital.planner import ReservationPlan, ReservationPlanner
 from ..capital.twr import TwrResult, account_twr
 from ..config.schema import ObliskConfig
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
+from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
 from ..domain.calendar import PhaseKind
 from ..domain.capital import CashEvent, OwnerQuestion, QuestionState
 from ..domain.core import RoleStatus
@@ -34,6 +36,8 @@ from ..domain.orders import (
     IntentState,
     ReconcileRun,
 )
+from ..domain.thesis import ENDED_STATES, Thesis, ThesisLogEntry
+from ..engines.thesis.grading import GroupRecord, record
 from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
@@ -41,6 +45,8 @@ from ..store import capital as capital_repo
 from ..store import nav as nav_repo
 from ..store import orders as repo
 from ..store import runs as run_repo
+from ..store import theses as thesis_repo
+from ..store.db import Store
 from ..store.nav import NavReading
 from ..store.orders import StoredIntent
 from ..store.runs import RunRow
@@ -109,6 +115,10 @@ class Digest:
     twr: TwrResult | None = None
     plan: RebalancePlan | None = None
     reservations: ReservationPlan | None = None
+    theses: ThesisPlan | None = None
+    #: The theses that ended today, each with the last entry of its log (why).
+    ended: list[tuple[Thesis, ThesisLogEntry | None]] = field(default_factory=list)
+    record: list[GroupRecord] = field(default_factory=list)
     questions: list[OwnerQuestion] = field(default_factory=list)
     cash_events: list[CashEvent] = field(default_factory=list)
     intents: list[StoredIntent] = field(default_factory=list)
@@ -127,6 +137,7 @@ async def gather_digest(
     modes: Modes,
     kill: KillSwitch,
     rebalancer: CoreRebalancer,
+    thesis: ThesisRebalancer,
     planner: ReservationPlanner,
     calendars: Calendars,
     venues: Sequence[str],
@@ -158,6 +169,12 @@ async def gather_digest(
             digest.reservations = await planner.survey(digest.mode)
         except ObliskError as exc:
             digest.problems.append(f"the reservations cannot be planned: {exc}")
+        try:
+            digest.theses = await thesis.survey(digest.mode)
+        except ObliskError as exc:
+            digest.problems.append(f"the thesis book cannot be surveyed: {exc}")
+    digest.ended = await worker.run(_ended_today, day, start)
+    digest.record = record(await worker.run(thesis_repo.grades, as_of=day))
     digest.questions = await worker.run(
         lambda store: capital_repo.questions(store, states=[QuestionState.OPEN])
     )
@@ -174,6 +191,17 @@ async def gather_digest(
     ]
     digest.venues = [venue_line(calendars, mic, at) for mic in venues]
     return digest
+
+
+def _ended_today(
+    store: Store, day: date, start: datetime
+) -> list[tuple[Thesis, ThesisLogEntry | None]]:
+    ended = thesis_repo.theses(store, as_of=day, states=ENDED_STATES)
+    return [
+        (thesis, thesis_repo.latest_log(store, thesis.thesis_id))
+        for thesis in ended
+        if thesis.closed_at is not None and thesis.closed_at >= start
+    ]
 
 
 def _more(lines: list[str], items: Sequence[str], rows: int) -> None:
@@ -250,6 +278,7 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
                 f"  {decision.role} {decision.symbol}: held {decision.held} = {value}{weight}; "
                 f"target {decision.weight:.0%} = {decision.target:,.2f}; {decision.action}"
             )
+    lines += _thesis_lines(digest, rows)
     lines += _capital_lines(digest, rows)
     lines.append("")
     lines.append(f"Intents today ({len(digest.intents)}):")
@@ -297,6 +326,34 @@ def _run_line(run: RunRow) -> str:
     ]
     tail = "; ".join([*failing, str(error)] if error else failing)
     return f"  {run.started_at.strftime('%H:%M')} {run.command} {run.status}: {tail}"
+
+
+def _thesis_lines(digest: Digest, rows: int) -> list[str]:
+    """The thesis book: its open theses (a withheld idea with its reason), the ideas that ended
+    today and why, and the graded record per source and conviction."""
+    lines = ["", "Thesis book:"]
+    plan = digest.theses
+    if plan is None:
+        lines.append("  not surveyed")
+    else:
+        lines += [f"  {line.strip()}" for line in plan.render().splitlines()[1:]]
+    _more(
+        lines,
+        [
+            f"  {thesis.ref} {thesis.instrument.symbol} {thesis.state.value} today: "
+            f"{'no reason logged' if last is None else last.detail}"
+            for thesis, last in digest.ended
+        ],
+        rows,
+    )
+    if not digest.record:
+        lines.append("  record: no thesis has closed")
+    lines += [
+        f"  record, {group.group}: {group.closed} closed, {group.reached} reached their target, "
+        f"mean payoff {group.mean_payoff:.2%} against {group.mean_stated_payoff:.2%} stated"
+        for group in digest.record
+    ]
+    return lines
 
 
 def _capital_lines(digest: Digest, rows: int) -> list[str]:

@@ -67,6 +67,7 @@ class Reason(StrEnum):
     VENUE_NOT_TRADABLE = "venue_not_tradable"
     NO_CASH = "no_cash"
     WORKING = "working"
+    ENTRIES_BLOCKED = "entries_blocked"
     NOT_PRICED = "not_priced"
 
 
@@ -134,8 +135,7 @@ def screen(draft: ThesisDraft, *, today: date) -> list[Finding]:
     if draft.enter_by is not None and not today <= draft.enter_by <= horizon:
         fail(
             Reason.DATES,
-            f"its last entry day {draft.enter_by.isoformat()} is not between today and its "
-            "horizon",
+            f"its last entry day {draft.enter_by.isoformat()} is not between today and its horizon",
         )
     return found
 
@@ -222,8 +222,7 @@ def _cap(
         found.append(
             Finding(
                 code,
-                f"{what} {key} would hold {used + size:.2f} of the book, above its cap "
-                f"{limit:.2f}",
+                f"{what} {key} would hold {used + size:.2f} of the book, above its cap {limit:.2f}",
             )
         )
 
