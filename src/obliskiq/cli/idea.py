@@ -113,7 +113,7 @@ def _add(loaded: Loaded, out: TextIO) -> int:
             entry_max=_price(args.entry_max, "entry-max"),
             enter_by=_day(args.enter_by, "enter-by"),
         )
-        intake = ThesisIntake(loaded.config.settings, worker=worker)
+        intake = ThesisIntake(loaded.config.settings, worker=worker, now=utc_now)
         stored = await intake.submit(draft, actor=OWNER_ACTOR)
         if isinstance(stored, list):
             print(f"refused, nothing was stored: {describe(stored)}", file=out)
@@ -185,7 +185,7 @@ def _show(loaded: Loaded, out: TextIO) -> int:
 
 def _withdraw(loaded: Loaded, out: TextIO) -> int:
     async def work(worker: StoreWorker) -> int:
-        intake = ThesisIntake(loaded.config.settings, worker=worker)
+        intake = ThesisIntake(loaded.config.settings, worker=worker, now=utc_now)
         done = await intake.withdraw(_thesis_id(loaded), actor=OWNER_ACTOR)
         if isinstance(done, str):
             print(f"refused: {done}", file=out)
