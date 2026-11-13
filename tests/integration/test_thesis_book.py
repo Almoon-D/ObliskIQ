@@ -36,7 +36,9 @@ from obliskiq.domain.orders import (
     Sleeve,
 )
 from obliskiq.domain.thesis import Thesis, ThesisState
+from obliskiq.errors import CalendarError, ObliskError
 from obliskiq.execution.instruments import UniverseDirectory, describe_pinned
+from obliskiq.orchestration import jobs
 from obliskiq.orchestration.assemble import build_thesis_book
 from obliskiq.orchestration.parts import build_capital
 from obliskiq.store import open_database, repos
@@ -663,3 +665,59 @@ async def test_a_thesis_of_another_mode_s_record_is_left_alone(
     )
     live = await thesis_book.survey(ExecutionMode.LIVE)
     assert live.capital == D(0)  # the live share is the capital allocation rule's
+
+
+# ── what the cycle and the digest say ──
+
+
+async def test_a_venue_the_calendars_cannot_judge_withholds_the_entry(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+
+    class NoVenue:
+        def venue_for_ibkr(self, code: str) -> str:
+            raise CalendarError(f"IBKR exchange code {code!r} maps to no venue")
+
+    plan = await book(s, calendars=NoVenue()).survey(ExecutionMode.SHADOW)
+    assert codes(plan) == ["venue_not_tradable"]
+    assert "its venue cannot be judged" in only(plan).reason
+
+
+async def test_the_cycle_s_thesis_step_says_what_it_did(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    plan = await surveyed(s)
+    assert jobs._judge_theses((plan, []), dry_run=True).status == "ok"
+    unpriced = jobs._judge_theses((plan, []), dry_run=False)
+    assert (unpriced.status, unpriced.reason) == (
+        "degraded",
+        "1 planned trade(s) could not be priced",
+    )
+    plan.blocked = "the kill switch drill"
+    assert jobs._judge_theses((plan, []), dry_run=False).status == "skipped"
+    plan.blocked = "the account cannot be read: down"
+    assert jobs._judge_theses((plan, []), dry_run=False).status == "error"
+    dry = await s.service.jobs.cycle("test", MONDAY, dry_run=True)
+    assert dry.theses is not None
+    assert dry.made == []
+    assert (await state(s)).state is ThesisState.CANDIDATE  # a dry run writes nothing
+
+
+async def test_the_digest_says_when_the_book_cannot_be_surveyed(
+    make: Any, shipped_settings: ObliskConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = await started(make, shipped_settings)
+
+    async def broken(_mode: ExecutionMode) -> ThesisPlan:
+        raise ObliskError("the store is locked")
+
+    monkeypatch.setattr(s.service.jobs._thesis, "survey", broken)
+    await s.service.jobs.digest(MONDAY)
+    body = s.notifier.sent[-1][1]
+    assert "Thesis book:\n  not surveyed" in body
+    assert "record: no thesis has closed" in body
+    assert "cannot read: the thesis book cannot be surveyed: the store is locked" in body

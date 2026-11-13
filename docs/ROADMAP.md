@@ -514,6 +514,9 @@ settles it.
 - A pinned stock candidate's venue lot (Tokyo's board lot of 100) is not applied to a thesis's
   quantity: IBKR's contract rules refuse an odd lot at the order. A venue first used by a thesis
   has its calendar loaded at the service's next start.
+- Session 26: one conid belongs to one sleeve. An idea on an instrument the reserve holds is
+  refused; the reverse (a core role whose vehicle a thesis already holds) is refused on paper by
+  the gate's holdings check and is not told apart in shadow, where holdings are read from fills.
 - The thesis book's caps count a position at its approved size, not its market value, and a
   fund's sector and country are unstated, so no cap counts it (Session 17's look-through, D69).
 - Session 11: positions held outside the universe (lite's portfolio union) are not collected. The
