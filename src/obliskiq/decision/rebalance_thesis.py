@@ -499,15 +499,11 @@ class ThesisRebalancer:
                 f"{Reason.UNRESOLVED.value}: no stock candidate {key!r} any more",
             )
             return
-        try:
-            resolution = await resolve_candidate(
-                self._secdef, found[0], at=self._now(), pinned_for=thesis.ref
-            )
-        except ObliskError as exc:  # the broker could not be asked: the next cycle asks again
-            await self._note(
-                thesis, LogKind.WITHHELD, f"{Reason.UNRESOLVED.value}: not resolved yet: {exc}"
-            )
-            return
+        # A broker that cannot be read blocks the survey before this; a search that answers
+        # and finds no one contract is final.
+        resolution = await resolve_candidate(
+            self._secdef, found[0], at=self._now(), pinned_for=thesis.ref
+        )
         await self._worker.run(universe_repo.record_resolution, resolution)
         conid, symbol = resolution.conid, resolution.symbol
         exchange, currency = resolution.listing_exchange, resolution.currency

@@ -19,6 +19,8 @@ from thesis_rig import draft
 from obliskiq.cli import idea as idea_cli
 from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, run
 from obliskiq.config import ObliskConfig
+from obliskiq.data.candidates import parse_ishares
+from obliskiq.decision import rebalance_thesis
 from obliskiq.decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
 from obliskiq.decision.thesis_intake import ThesisIntake
 from obliskiq.domain.enums import AssetClass, InstrumentRole
@@ -34,12 +36,14 @@ from obliskiq.domain.orders import (
     Sleeve,
 )
 from obliskiq.domain.thesis import Thesis, ThesisState
-from obliskiq.execution.instruments import UniverseDirectory
+from obliskiq.execution.instruments import UniverseDirectory, describe_pinned
 from obliskiq.orchestration.assemble import build_thesis_book
 from obliskiq.orchestration.parts import build_capital
 from obliskiq.store import open_database, repos
 from obliskiq.store import orders as repo
 from obliskiq.store import theses as thesis_repo
+from obliskiq.store import universe as universe_repo
+from obliskiq.tax.book import identity_of
 
 D = Decimal
 #: SPPW on Xetra's ETF segment and FCX on the NYSE (config/universe.yaml).
@@ -476,3 +480,97 @@ async def test_a_universe_instrument_nobody_describes_waits(
     bare._capital = s.service.jobs._capital.capital  # the book is still valued
     plan = await bare.survey(ExecutionMode.SHADOW)
     assert (only(plan).action, codes(plan)) == ("wait", ["not_described"])
+
+
+# ── a share outside the universe file ──
+
+TOYOTA, TOYOTA_CONID, TOYOTA_ISIN = "jp:toyota_motor", 13976, "JP3633400001"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ishares"
+
+
+async def toyota(s: ServiceRig, **changes: Any) -> Thesis:
+    parsed = parse_ishares(
+        (FIXTURES / "ewj_us.csv").read_bytes(),
+        fund="EWJ",
+        url="u",
+        downloaded_at=s.clock.now() - timedelta(hours=1),
+        config=s.path.settings.collectors.candidates,
+    )
+    await s.rig.store(universe_repo.save_holdings, parsed.file, parsed.lines)
+    return await idea(
+        s, symbol=None, candidate=TOYOTA, isin=TOYOTA_ISIN, target=D(4000),
+        invalidation=D(2500), **changes,
+    )  # fmt: skip
+
+
+async def test_a_stock_candidate_is_resolved_pinned_and_described_then_judged(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await toyota(s)
+    s.broker.contracts[TOYOTA_CONID] = ("7203", "TSEJ", "JPY")
+    thesis_book = book(s)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, only(plan).reason) == (
+        "resolve",
+        "its stock candidate is not pinned yet",
+    )
+    assert s.path.directory.describe(TOYOTA_CONID) is None
+    await thesis_book.apply(plan)
+    pinned = (await state(s)).instrument
+    assert (pinned.conid, pinned.listing_exchange, pinned.currency) == (TOYOTA_CONID, "TSEJ", "JPY")
+    resolution = (await s.rig.store(universe_repo.candidate_resolutions))[TOYOTA]
+    assert (resolution.pinned, resolution.pinned_for) == (True, "T1")
+    described = s.path.directory.describe(TOYOTA_CONID)
+    assert described is not None
+    assert (described.asset_class, described.description) == (AssetClass.STOCK, "TOYOTA MOTOR")
+    assert (await log(s))[-1] == "resolved: pinned to conid 13976 (7203 on TSEJ, JPY)"
+    # The tax book knows the share by the ISIN its thesis carries.
+    parts = build_capital(s.path.settings, s.path, now=s.clock.now)
+    await parts.tax.engine()
+    assert identity_of(TOYOTA_CONID, s.path.directory, parts.tax._facts) is not None
+    # Judged like any other from the next cycle: a share is eligible; it waits for what is
+    # not measured yet (a quote in yen, its liquidity) and for Tokyo to open.
+    quote(s, TOYOTA_CONID, "3000")
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert only(plan).action == "wait"
+    assert "ineligible" not in codes(plan)
+    assert {"no_quote", "venue_not_tradable"} <= set(codes(plan))
+    # A path opened afresh describes it from the store.
+    fresh = UniverseDirectory.from_settings(s.path.settings)
+    await describe_pinned(fresh, s.rig.worker)
+    assert fresh.describe(TOYOTA_CONID) == described
+
+
+async def test_a_candidate_that_does_not_resolve_is_refused(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await toyota(s)
+    thesis_book = book(s)
+    await thesis_book.apply(await thesis_book.survey(ExecutionMode.SHADOW))
+    refused = await state(s)  # the search answers nothing for 7203
+    assert refused.state is ThesisState.REFUSED
+    assert (await log(s))[-1].startswith("state: unresolved: 7203 on TSEJ")
+    assert s.path.directory.describe(TOYOTA_CONID) is None
+
+
+async def test_a_candidate_that_left_the_holdings_or_ran_out_of_time_ends(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await toyota(s, enter_by=MONDAY)
+    thesis_book = book(s)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(rebalance_thesis, "find_candidate", lambda *_a, **_k: None)
+    await thesis_book.apply(plan)
+    monkey.undo()
+    assert (await log(s))[-1] == "state: unresolved: no stock candidate 'jp:toyota_motor' any more"
+    await toyota(s, enter_by=MONDAY)
+    s.clock.wall.now = EUROPE + timedelta(days=1)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, only(plan).reason) == (
+        "expire",
+        "its entry window ended before it resolved",
+    )
