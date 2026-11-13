@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import respx
-from capital_rig import make_rebalancer
+from capital_rig import make_rebalancer, reserve_alone
 from fake_broker import EURUSD, FakeBroker
 from order_rig import build_rig
 from service_rig import EMIM, IBGM, IWDA, SERVICE_VENUES, skeleton_market, three_fund_core
@@ -140,16 +140,16 @@ async def test_an_empty_book_buys_every_role_to_its_target(rig: Any) -> None:
     assert plan.capital is not None
     assert plan.capital.managed == Decimal(1000)
     assert plan.spendable == Decimal(975)  # the cap, less the cash floor of 25
-    # The core's budget is 950: its own 70 % with the inactive satellite's and options' shares;
-    # the cash floor of 5 % stays cash.
-    assert plan.core_capital == Decimal(950)
+    # The core's budget is 850: its own 70 % with the options' share and what the thesis book
+    # leaves of the satellite's; the thesis book's 10 % and the cash floor of 5 % stay cash.
+    assert plan.core_capital == Decimal(850)
     assert plan.portfolio is not None
     assert (plan.portfolio.variant, plan.portfolio.trigger) == ("three funds", Trigger.START)
     roles = by_role(plan)
     assert [(roles[r].action, roles[r].quantity) for r in roles] == [
-        ("buy", Decimal(1)),  # world_equity: 171 of target, one IWDA is 126.03 in euros
-        ("buy", Decimal(2)),  # em_equity: 133, two EMIM are 92.84
-        ("buy", Decimal(3)),  # euro_govt_intermediate: 646, three IBGM are 532.50
+        ("buy", Decimal(1)),  # world_equity: 153 of target, one IWDA is 126.03 in euros
+        ("buy", Decimal(2)),  # em_equity: 119, two EMIM are 92.84
+        ("buy", Decimal(3)),  # euro_govt_intermediate: 578, three IBGM are 532.50
     ]
     assert roles["world_equity"].notional == Decimal("126.0330")
     assert "world_equity" in plan.render()
@@ -584,7 +584,7 @@ async def test_a_bands_buys_beyond_the_cash_wait_for_its_sales_proceeds(rig: Any
 
 
 async def test_cash_beyond_the_targets_buys_without_selling(rig: Any) -> None:
-    capped = with_capital(rig.settings, cap_base=Decimal(10000))
+    capped = reserve_alone(with_capital(rig.settings, cap_base=Decimal(10000)))
     least = capped.trading.min_trade.model_copy(update={"fraction_of_managed": None})
     settings = with_trading(capped, min_trade=least)  # 50: every leg here is one unit
     rig.broker.cash = {"EUR": (Decimal(20000), None)}
@@ -607,7 +607,7 @@ async def test_cash_beyond_the_targets_buys_without_selling(rig: Any) -> None:
 
 
 async def test_a_book_inside_its_bands_without_spare_cash_holds(rig: Any) -> None:
-    settings = with_capital(rig.settings, cap_base=Decimal(10000))
+    settings = reserve_alone(with_capital(rig.settings, cap_base=Decimal(10000)))
     rig.broker.cash = {"EUR": (Decimal(20000), None)}
     await hold(rig, IBGM, "36", "EUR")  # 67.3 % against 68 %
     await hold(rig, EMIM, "28", "EUR")  # 13.7 % against 14 %

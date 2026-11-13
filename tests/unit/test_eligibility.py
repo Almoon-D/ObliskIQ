@@ -138,19 +138,32 @@ def test_an_unknown_fact_refuses_as_firmly_as_a_bad_one(
     assert not policy.assess_declared(measured_only).eligible  # a Japanese fund: no KID
 
 
-def test_an_index_and_an_undeclared_conid_are_never_eligible(
+def test_an_index_and_an_undeclared_packaged_product_are_never_eligible(
     policy: EuPriipsEligibility, shipped_settings: Any
 ) -> None:
     index = shipped_settings.universe.instrument("SPX")
     assert index is not None
     assert "an index" in policy.assess_declared(index).reason
-    stranger = policy.assess(instrument(424242), underlying=None)
+    stranger = policy.assess(
+        instrument(424242).model_copy(update={"asset_class": AssetClass.ETF}), underlying=None
+    )
     assert not stranger.eligible
     assert "attributes are unknown" in stranger.reason
     mismatched = traded(shipped_settings.universe, FCX).model_copy(
         update={"asset_class": AssetClass.ETF}
     )
     assert "the universe declares FCX a stock" in policy.assess(mismatched, underlying=None).reason
+
+
+def test_a_share_described_outside_the_universe_file_is_a_share(
+    policy: EuPriipsEligibility,
+) -> None:
+    """A stock candidate a thesis pinned: the rule for shares asks nothing of its attributes."""
+    share = instrument(424242)
+    assert share.asset_class is AssetClass.STOCK
+    verdict = policy.assess(share, underlying=None)
+    assert verdict.eligible
+    assert "a share outside the universe file" in verdict.reason
 
 
 def test_a_futures_tracking_etc_waits_for_the_contango_rule(shipped_settings: Any) -> None:

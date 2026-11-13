@@ -55,7 +55,7 @@ from ..domain.orders import (
 from ..domain.thesis import OPEN_STATES, SLOT_STATES, LogKind, Thesis, ThesisState
 from ..engines.thesis.book import Slot
 from ..engines.thesis.exits import OVERRIDE, exit_due
-from ..engines.thesis.gate import Finding, GateFacts, Reason, describe, evaluate
+from ..engines.thesis.gate import Finding, GateFacts, Reason, ThesisGate, describe
 from ..engines.thesis.grading import grade
 from ..errors import CalendarError, ObliskError
 from ..execution.account import CashRead
@@ -204,7 +204,8 @@ class ThesisRebalancer:
         self._eligibility = eligibility
         self._secdef = secdef
         self._now = now
-        self._config = settings.thesis
+        self._gate = ThesisGate(settings.thesis)
+        self._liquidity_sessions = settings.thesis.liquidity.sessions
         self._sleeve = Sleeve.SATELLITE
         self._cash = BookCash(
             settings, capital=capital, directory=directory, worker=worker, now=now
@@ -253,7 +254,7 @@ class ThesisRebalancer:
             fills=book_fills(await self._worker.run(repo.intent_fills), mode),
             busy=[i for i in busy if i.role in (IntentRole.ENTRY, IntentRole.EXIT)],
             market=await self._worker.run(
-                market_inputs, conids, as_of=today, sessions=self._config.liquidity.sessions
+                market_inputs, conids, as_of=today, sessions=self._liquidity_sessions
             ),
             owners={
                 a.conid: str(a.owner) for a in await self._worker.run(repo.holding_assignments)
@@ -387,7 +388,7 @@ class ThesisRebalancer:
             slots=slots,
             minimum=read.minimum,
         )
-        judged = evaluate(thesis, facts, self._config)
+        judged = self._gate.evaluate(thesis, facts)
         if judged.permanent:
             action = REFUSE if thesis.state is ThesisState.CANDIDATE else EXPIRE
             return ThesisDecision(thesis, action, describe(judged.permanent), judged.permanent)

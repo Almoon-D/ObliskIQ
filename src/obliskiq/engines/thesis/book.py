@@ -27,17 +27,17 @@ class Slot:
     currency: str | None
 
 
-def base_size(capital: Decimal, config: ThesisBookConfig) -> Decimal:
+def base_size(capital: Decimal, thesis: ThesisBookConfig) -> Decimal:
     """What a normal idea takes of ``capital``."""
-    return capital / config.max_positions
+    return capital / thesis.max_positions
 
 
-def position_size(capital: Decimal, conviction: Conviction, config: ThesisBookConfig) -> Decimal:
+def position_size(capital: Decimal, conviction: Conviction, thesis: ThesisBookConfig) -> Decimal:
     """What an idea of ``conviction`` takes of ``capital``: the base size times the conviction's
     multiple, inside the position cap."""
     multiple = {
-        Conviction.NORMAL: config.conviction.normal,
-        Conviction.HIGH: config.conviction.high,
-        Conviction.MAX: config.conviction.max,
+        Conviction.NORMAL: thesis.conviction.normal,
+        Conviction.HIGH: thesis.conviction.high,
+        Conviction.MAX: thesis.conviction.max,
     }[conviction]
-    return min(base_size(capital, config) * multiple, config.caps.position * capital)
+    return min(base_size(capital, thesis) * multiple, thesis.caps.position * capital)

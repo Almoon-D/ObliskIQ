@@ -227,148 +227,153 @@ def _cap(
         )
 
 
-def evaluate(thesis: Thesis, facts: GateFacts, config: ThesisBookConfig) -> Verdict:
-    """Judge ``thesis`` on ``facts``. An approved thesis keeps its slot and its size: only what
-    moves with the market is asked again."""
-    found: list[Finding] = []
-    instrument = thesis.instrument
-    symbol = instrument.symbol
-    found += [Finding(Reason.PROHIBITED_PRODUCT, why, permanent=True) for why in facts.prohibited]
-    if facts.ineligible is not None:
-        found.append(Finding(Reason.INELIGIBLE, facts.ineligible, permanent=True))
-    if facts.held_elsewhere is not None:
-        found.append(Finding(Reason.HELD_ELSEWHERE, facts.held_elsewhere, permanent=True))
-    price = facts.reference
-    if price is None:
-        found.append(Finding(Reason.NO_QUOTE, f"{symbol} has no fresh quote"))
-    elif price >= thesis.target:
-        found.append(
-            Finding(
-                Reason.TARGET_PASSED,
-                f"{symbol} at {price} is at or above the target {thesis.target}",
-                permanent=True,
-            )
-        )
-    elif price <= thesis.invalidation:
-        found.append(
-            Finding(
-                Reason.INVALIDATED,
-                f"{symbol} at {price} is at or below the invalidation {thesis.invalidation}",
-                permanent=True,
-            )
-        )
-    else:
-        ratio = gain_to_loss(thesis, price)
-        assert ratio is not None  # the price is inside the levels
-        if ratio < config.min_gain_to_loss:
+class ThesisGate:
+    """Judges a stored thesis on what the decision layer read, by ``thesis`` configuration."""
+
+    def __init__(self, thesis: ThesisBookConfig) -> None:
+        self._thesis = thesis
+
+    def evaluate(self, thesis: Thesis, facts: GateFacts) -> Verdict:
+        """Judge ``thesis`` on ``facts``. An approved thesis keeps its slot and its size: only what
+        moves with the market is asked again."""
+        found: list[Finding] = []
+        instrument = thesis.instrument
+        symbol = instrument.symbol
+        found += [
+            Finding(Reason.PROHIBITED_PRODUCT, why, permanent=True) for why in facts.prohibited
+        ]
+        if facts.ineligible is not None:
+            found.append(Finding(Reason.INELIGIBLE, facts.ineligible, permanent=True))
+        if facts.held_elsewhere is not None:
+            found.append(Finding(Reason.HELD_ELSEWHERE, facts.held_elsewhere, permanent=True))
+        price = facts.reference
+        if price is None:
+            found.append(Finding(Reason.NO_QUOTE, f"{symbol} has no fresh quote"))
+        elif price >= thesis.target:
             found.append(
                 Finding(
-                    Reason.GAIN_TO_LOSS,
-                    f"at {price} the target's gain is {ratio:.2f} times the invalidation's "
-                    f"loss, below {config.min_gain_to_loss}",
+                    Reason.TARGET_PASSED,
+                    f"{symbol} at {price} is at or above the target {thesis.target}",
+                    permanent=True,
                 )
             )
-        if thesis.entry_max is not None and price > thesis.entry_max:
+        elif price <= thesis.invalidation:
             found.append(
                 Finding(
-                    Reason.ABOVE_ENTRY_MAX,
-                    f"{symbol} at {price} is above its entry limit {thesis.entry_max}",
+                    Reason.INVALIDATED,
+                    f"{symbol} at {price} is at or below the invalidation {thesis.invalidation}",
+                    permanent=True,
                 )
             )
-    size = thesis.size_base
-    if size is None:
-        if facts.capital <= ZERO:
-            found.append(Finding(Reason.NO_CAPITAL, "the book has no capital in this mode"))
+        else:
+            ratio = gain_to_loss(thesis, price)
+            assert ratio is not None  # the price is inside the levels
+            if ratio < self._thesis.min_gain_to_loss:
+                found.append(
+                    Finding(
+                        Reason.GAIN_TO_LOSS,
+                        f"at {price} the target's gain is {ratio:.2f} times the invalidation's "
+                        f"loss, below {self._thesis.min_gain_to_loss}",
+                    )
+                )
+            if thesis.entry_max is not None and price > thesis.entry_max:
+                found.append(
+                    Finding(
+                        Reason.ABOVE_ENTRY_MAX,
+                        f"{symbol} at {price} is above its entry limit {thesis.entry_max}",
+                    )
+                )
+        size = thesis.size_base
+        if size is None:
+            if facts.capital <= ZERO:
+                found.append(Finding(Reason.NO_CAPITAL, "the book has no capital in this mode"))
+                return Verdict(tuple(found))
+            size = position_size(facts.capital, thesis.conviction, self._thesis)
+            self._book(found, instrument, size, facts)
+        if facts.rate is None:
+            found.append(Finding(Reason.NO_QUOTE, f"{instrument.currency} has no rate to the base"))
             return Verdict(tuple(found))
-        size = position_size(facts.capital, thesis.conviction, config)
-        _book(found, instrument, size, facts, config)
-    if facts.rate is None:
-        found.append(Finding(Reason.NO_QUOTE, f"{instrument.currency} has no rate to the base"))
-        return Verdict(tuple(found))
-    _liquidity(found, thesis, size / facts.rate, facts, config)
-    if found or price is None:
-        return Verdict(tuple(found))
-    quantity = (size / (price * facts.rate)).to_integral_value(rounding=ROUND_FLOOR)
-    if quantity < ONE or quantity * price * facts.rate < facts.minimum:
-        found.append(
-            Finding(
-                Reason.TOO_SMALL,
-                f"its size {size:.2f} buys {quantity} of {symbol} at {price}: less than one "
-                f"unit or below the minimum trade {facts.minimum:.2f}",
+        self._liquidity(found, thesis, size / facts.rate, facts)
+        if found or price is None:
+            return Verdict(tuple(found))
+        quantity = (size / (price * facts.rate)).to_integral_value(rounding=ROUND_FLOOR)
+        if quantity < ONE or quantity * price * facts.rate < facts.minimum:
+            found.append(
+                Finding(
+                    Reason.TOO_SMALL,
+                    f"its size {size:.2f} buys {quantity} of {symbol} at {price}: less than one "
+                    f"unit or below the minimum trade {facts.minimum:.2f}",
+                )
             )
-        )
-        return Verdict(tuple(found))
-    return Verdict((), size, quantity)
+            return Verdict(tuple(found))
+        return Verdict((), size, quantity)
 
-
-def _book(
-    found: list[Finding],
-    instrument: ThesisInstrument,
-    size: Decimal,
-    facts: GateFacts,
-    config: ThesisBookConfig,
-) -> None:
-    """A free slot, and the caps that keep the book from being one bet."""
-    slots = facts.slots
-    if len(slots) >= config.max_positions:
-        found.append(
-            Finding(Reason.BOOK_FULL, f"the book holds its {config.max_positions} positions")
-        )
-
-    def used(of: str, key: str | None) -> Decimal:
-        return sum((slot.size_base for slot in slots if getattr(slot, of) == key), ZERO)
-
-    caps, capital = config.caps, facts.capital
-    _cap(
-        found,
-        Reason.SECTOR_CAP,
-        "the sector",
-        instrument.sector,
-        used("sector", instrument.sector),
-        size,
-        caps.sector * capital,
-    )
-    _cap(
-        found,
-        Reason.COUNTRY_CAP,
-        "the country",
-        instrument.country,
-        used("country", instrument.country),
-        size,
-        caps.country * capital,
-    )
-    foreign = None if instrument.currency == facts.base_currency else instrument.currency
-    _cap(
-        found,
-        Reason.CURRENCY_CAP,
-        "the currency",
-        foreign,
-        used("currency", foreign),
-        size,
-        caps.foreign_currency * capital,
-    )
-
-
-def _liquidity(
-    found: list[Finding], thesis: Thesis, value: Decimal, facts: GateFacts, config: ThesisBookConfig
-) -> None:
-    """The liquidity floor: the position is a small share of the average daily traded value."""
-    floor = config.liquidity
-    symbol = thesis.instrument.symbol
-    if facts.daily_value is None or facts.sessions < floor.sessions:
-        found.append(
-            Finding(
-                Reason.LIQUIDITY_UNMEASURED,
-                f"{symbol} has {facts.sessions} of the {floor.sessions} sessions of traded "
-                "value its liquidity is measured on",
+    def _book(
+        self, found: list[Finding], instrument: ThesisInstrument, size: Decimal, facts: GateFacts
+    ) -> None:
+        """A free slot, and the caps that keep the book from being one bet."""
+        slots = facts.slots
+        if len(slots) >= self._thesis.max_positions:
+            found.append(
+                Finding(
+                    Reason.BOOK_FULL, f"the book holds its {self._thesis.max_positions} positions"
+                )
             )
+
+        def used(of: str, key: str | None) -> Decimal:
+            return sum((slot.size_base for slot in slots if getattr(slot, of) == key), ZERO)
+
+        capital = facts.capital
+        _cap(
+            found,
+            Reason.SECTOR_CAP,
+            "the sector",
+            instrument.sector,
+            used("sector", instrument.sector),
+            size,
+            self._thesis.caps.sector * capital,
         )
-    elif value > floor.max_share_of_daily_value * facts.daily_value:
-        found.append(
-            Finding(
-                Reason.ILLIQUID,
-                f"a position of {value:.2f} is above {floor.max_share_of_daily_value:.2%} of "
-                f"{symbol}'s average daily traded value {facts.daily_value:.2f}",
-                permanent=thesis.size_base is None,
+        _cap(
+            found,
+            Reason.COUNTRY_CAP,
+            "the country",
+            instrument.country,
+            used("country", instrument.country),
+            size,
+            self._thesis.caps.country * capital,
+        )
+        foreign = None if instrument.currency == facts.base_currency else instrument.currency
+        _cap(
+            found,
+            Reason.CURRENCY_CAP,
+            "the currency",
+            foreign,
+            used("currency", foreign),
+            size,
+            self._thesis.caps.foreign_currency * capital,
+        )
+
+    def _liquidity(
+        self, found: list[Finding], thesis: Thesis, value: Decimal, facts: GateFacts
+    ) -> None:
+        """The liquidity floor: the position is a small share of the average daily traded value."""
+        sessions = self._thesis.liquidity.sessions
+        share = self._thesis.liquidity.max_share_of_daily_value
+        symbol = thesis.instrument.symbol
+        if facts.daily_value is None or facts.sessions < sessions:
+            found.append(
+                Finding(
+                    Reason.LIQUIDITY_UNMEASURED,
+                    f"{symbol} has {facts.sessions} of the {sessions} sessions of traded "
+                    "value its liquidity is measured on",
+                )
             )
-        )
+        elif value > share * facts.daily_value:
+            found.append(
+                Finding(
+                    Reason.ILLIQUID,
+                    f"a position of {value:.2f} is above {share:.2%} of "
+                    f"{symbol}'s average daily traded value {facts.daily_value:.2f}",
+                    permanent=thesis.size_base is None,
+                )
+            )

@@ -290,6 +290,24 @@ SHAPE = {
         "delta:REAL, multiplier:REAL, currency:TEXT!, premium_base:TEXT, iv_percentile:REAL, "
         "market_data_status:TEXT, untested:TEXT!, activation:TEXT!, computed_at:TEXT!"
     ),
+    # 013_theses
+    "theses": (
+        "thesis_id:INTEGER*, source:TEXT!, conviction:TEXT!, view:TEXT!, symbol:TEXT!, "
+        "candidate_key:TEXT, conid:INTEGER, listing_exchange:TEXT, currency:TEXT, "
+        "asset_class:TEXT!, description:TEXT!, sector:TEXT, country:TEXT, defensive:INTEGER!, "
+        "isin:TEXT, expectation:TEXT!, target:TEXT!, invalidation:TEXT!, horizon:TEXT!, "
+        "entry_max:TEXT, enter_by:TEXT!, state:TEXT!, mode:TEXT, size_base:TEXT, "
+        "exit_reason:TEXT, created_at:TEXT!, approved_at:TEXT, opened_at:TEXT, closed_at:TEXT"
+    ),
+    "thesis_log": (
+        "thesis_id:INTEGER!*, seq:INTEGER!*, at:TEXT!, actor:TEXT!, kind:TEXT!, detail:TEXT!"
+    ),
+    "thesis_grades": (
+        "thesis_id:INTEGER*, graded_at:TEXT!, mode:TEXT!, source:TEXT!, conviction:TEXT!, "
+        "exit_reason:TEXT!, quantity:TEXT!, entry_price:TEXT!, exit_price:TEXT!, "
+        "reached:INTEGER!, payoff:TEXT!, stated_payoff:TEXT!, days_held:INTEGER!, "
+        "horizon_days:INTEGER!"
+    ),
 }
 
 INDEXES = {
@@ -346,6 +364,8 @@ INDEXES = {
     # 012_engines
     "ix_option_positions_open",
     "ix_option_ledger_position",
+    # 013_theses
+    "ix_theses_state",
 }
 
 STAMP = "2026-10-09T22:30:00Z"
