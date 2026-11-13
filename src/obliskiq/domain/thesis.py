@@ -29,13 +29,13 @@ from .orders import ExecutionMode
 from .tax import Isin
 
 
-def _finite_positive(value: Decimal) -> Decimal:
-    if not value.is_finite() or value <= 0:
-        raise ValueError("must be a positive, finite price")
+def _positive(value: Decimal) -> Decimal:
+    if value <= 0:
+        raise ValueError("must be a positive price")
     return value
 
 
-type Price = Annotated[Decimal, AfterValidator(_finite_positive)]
+type Price = Annotated[Decimal, AfterValidator(_positive)]
 
 
 class ThesisSource(StrEnum):
