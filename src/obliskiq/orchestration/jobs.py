@@ -5,11 +5,11 @@ day's exchange rates, ``orchestration/nav.py``), ``reserve`` (the owner question
 passed take their default, then the reservation planner's survey, questions and today's sales,
 ``capital/planner.py``), ``rebalance`` (the core engine's target portfolio against the book, as
 intents, ``decision/rebalance_core.py``), ``thesis`` (the thesis book's entries and exits, as
-intents, ``decision/rebalance_thesis.py``) and ``execute`` (the executor's cycle: sync, settle exits,
-expire, follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry run reads
-and plans, and writes nothing: no NAV row, no run record, no question, no intent, no order. The
-owner hears a run summary when a cycle did something or something failed, and every question the
-planner asks.
+intents, ``decision/rebalance_thesis.py``) and ``execute`` (the executor's cycle: sync, settle
+exits, expire, follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry
+run reads and plans, and writes nothing: no NAV row, no run record, no question, no intent, no
+order. The owner hears a run summary when a cycle did something or something failed, and every
+question the planner asks.
 
 **The heartbeat** (every ``runtime.heartbeat_seconds``): the executor's cycle over the intents
 already made, so reprices keep their pace, a staged intent goes out as its venue opens, a fill

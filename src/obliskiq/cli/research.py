@@ -46,7 +46,7 @@ from ..research.data import (
     universe_listings,
     yfinance_history,
 )
-from ..research.prereg import CrossSectionPrereg, ForwardTestPrereg, Prereg, load_any
+from ..research.prereg import FORWARD_KINDS, CrossSectionPrereg, Prereg, load_any
 from ..research.registry import Git, TrialRegistry, verify_lock, write_lock
 from ..research.report import write_report
 from ..research.stats import detectable_effect, effective_n, power
@@ -221,7 +221,7 @@ def _universe(loaded: Loaded) -> tuple[list[str], date, date]:
     args = loaded.args
     if args.prereg is not None:
         prereg = load_any(args.prereg)
-        if isinstance(prereg, ForwardTestPrereg):
+        if isinstance(prereg, FORWARD_KINDS):
             raise PreregistrationError(FORWARD_REFUSAL)
         if isinstance(prereg, CrossSectionPrereg):
             members = prereg.spec.study
@@ -271,7 +271,7 @@ def _prereg(loaded: Loaded, out: TextIO) -> Prereg | CrossSectionPrereg | None:
     except ObliskError as exc:
         print(f"refused: {exc}", file=out)
         return None
-    if isinstance(prereg, ForwardTestPrereg):
+    if isinstance(prereg, FORWARD_KINDS):
         print(f"refused: {FORWARD_REFUSAL}", file=out)
         return None
     return prereg

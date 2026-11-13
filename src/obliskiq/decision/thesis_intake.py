@@ -130,8 +130,8 @@ class ThesisIntake:
         if found is None:
             return _refused(
                 Reason.INSTRUMENT_UNKNOWN,
-                f"no stock candidate {key!r} as of {today.isoformat()} (obliskiq universe "
-                "candidates lists them)",
+                f"no stock candidate {key!r} as of {today.isoformat()} (obliskiq collect "
+                "candidates refreshes them)",
             )
         candidate, sector = found
         if all(source.startswith(SCANNER_SOURCE) for source in candidate.sources):

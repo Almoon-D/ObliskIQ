@@ -43,6 +43,11 @@ be produced live, such as an LLM's reading of news: the outputs of one model and
 close against the price signal (``controls``), up to an evaluation date fixed before any output
 existed. It has no development sample and no exploratory trial.
 
+A **forward book** (``kind: forward_book``, DECISIONS D156) tests a book whose evidence is the
+record it produces: its after-tax log growth minus a reference's on the same capital, read at
+pre-registered looks against one-sided boundaries (a step of capital, a return to shadow), the
+same per source and conviction level. The scoreboard computes the looks from it.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -60,8 +65,10 @@ from ..config.loader import strict_yaml
 from ..config.schema_costs import Fraction, Rate
 from ..domain.base import CountryCode, CurrencyCode, NonEmptyText
 from ..domain.enums import AssetClass
+from ..domain.orders import ExecutionMode
 from ..domain.research import PointInTime
 from ..domain.tax import Isin, SecurityKind
+from ..domain.thesis import Conviction, ThesisSource
 from ..errors import PreregistrationError
 from ..quant.covariance import EstimatorRule
 from .registry import file_sha256
@@ -1046,6 +1053,107 @@ class ForwardTestSpec(FrozenModel):
     power: ForwardPowerSpec
 
 
+class BookReferenceSpec(FrozenModel):
+    """What the book is measured against: a core role's vehicle, bought with every amount a
+    thesis's entry spends and sold with its exit."""
+
+    role: Key
+    strategy: Literal["matched_twin"]
+
+
+class LooksSpec(FrozenModel):
+    every_months: PositiveInt
+    count: PositiveInt
+
+
+class StepSpec(FrozenModel):
+    """The boundary that raises the book's capital, and what a step is."""
+
+    record: ExecutionMode
+    alpha: Rate
+    spending: Literal["equal"]
+    distribution: Literal["student_t"]
+    against: Literal["theta"]
+    min_closed_first: PositiveInt
+    min_closed_between: PositiveInt
+    without_best_thesis: Literal["above_zero"]
+    share_step: Share
+    share_ceiling: Share
+    steps_per_look: Literal[1]
+
+
+class BackToShadowSpec(FrozenModel):
+    """The boundary that returns the book to shadow."""
+
+    records: list[ExecutionMode] = Field(min_length=1)
+    alpha: Rate
+    spending: Literal["equal"]
+    distribution: Literal["student_t"]
+    against: Literal["zero"]
+    min_closed: PositiveInt
+
+
+class BookGroupsSpec(FrozenModel):
+    """The same statistic per group: its lower boundary acts, and no group steps capital."""
+
+    by: list[Literal["source", "conviction"]] = Field(min_length=1)
+    months_from: Literal["first_entry_of_group"]
+    back_to_shadow: Literal["same_boundary"]
+    step: Literal["none"]
+
+
+class BookAdequacySpec(FrozenModel):
+    max_mark_age_days: PositiveInt
+
+
+class BookPowerSpec(FrozenModel):
+    """What the power table was simulated on, stated before any thesis."""
+
+    tracking_error: Positive
+    paths: PositiveInt
+    seed: NonNegativeInt
+
+
+class ForwardBookSpec(FrozenModel):
+    """A forward test of a book (``kind: forward_book``, DECISIONS D156): its record against a
+    reference on the same capital, read at pre-registered looks."""
+
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]
+    title: NonEmptyText
+    kind: Literal["forward_book"]
+    hypothesis: Annotated[str, Field(pattern=r"^H[0-9]+$")]
+    mechanism: NonEmptyText
+    citation: NonEmptyText
+    universe: NonEmptyText
+    data_status: NonEmptyText
+    sources: list[ThesisSource] = Field(min_length=1)
+    convictions: list[Conviction] = Field(min_length=1)
+    records: list[ExecutionMode] = Field(min_length=1)
+    reference: BookReferenceSpec
+    primary_metric: Literal["log_growth_difference"]
+    period: Literal["month"]
+    theta: Positive
+    theta_justification: NonEmptyText
+    looks: LooksSpec
+    step: StepSpec
+    back_to_shadow: BackToShadowSpec
+    groups: BookGroupsSpec
+    adjustment: NonEmptyText
+    trial_budget: Literal[0]
+    adequacy: BookAdequacySpec
+    robustness: NonEmptyText
+    power: BookPowerSpec
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        if self.step.share_step > self.step.share_ceiling:
+            raise ValueError("step.share_step is above step.share_ceiling")
+        named = {self.step.record, *self.back_to_shadow.records}
+        if not named <= set(self.records):
+            raise ValueError("a boundary reads a record the registration does not keep")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class Prereg:
     path: Path
@@ -1068,6 +1176,19 @@ class ForwardTestPrereg:
     sha256: str
     spec: ForwardTestSpec
     body: str
+
+
+@dataclass(frozen=True, slots=True)
+class ForwardBookPrereg:
+    path: Path
+    sha256: str
+    spec: ForwardBookSpec
+    body: str
+
+
+type AnyPrereg = Prereg | CrossSectionPrereg | ForwardTestPrereg | ForwardBookPrereg
+#: The kinds whose evidence is produced live: the harness commands that read history refuse them.
+FORWARD_KINDS = (ForwardTestPrereg, ForwardBookPrereg)
 
 
 def front_matter(text: str) -> tuple[Any, str]:
@@ -1113,7 +1234,7 @@ def load_prereg(path: Path) -> Prereg:
     return Prereg(path=path, sha256=file_sha256(path), spec=spec, body=body)
 
 
-def load_any(path: Path) -> Prereg | CrossSectionPrereg | ForwardTestPrereg:
+def load_any(path: Path) -> AnyPrereg:
     """Read and validate a pre-registration of any kind, chosen by its ``kind``."""
     data, body = _read(path)
     if isinstance(data, dict) and data.get("kind") == "cross_section":
@@ -1122,6 +1243,9 @@ def load_any(path: Path) -> Prereg | CrossSectionPrereg | ForwardTestPrereg:
     if isinstance(data, dict) and data.get("kind") == "forward_test":
         forward = _validate(ForwardTestSpec, data, path)
         return ForwardTestPrereg(path=path, sha256=file_sha256(path), spec=forward, body=body)
+    if isinstance(data, dict) and data.get("kind") == "forward_book":
+        book = _validate(ForwardBookSpec, data, path)
+        return ForwardBookPrereg(path=path, sha256=file_sha256(path), spec=book, body=body)
     return Prereg(
         path=path, sha256=file_sha256(path), spec=_validate(PreregSpec, data, path), body=body
     )

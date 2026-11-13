@@ -12,7 +12,8 @@ configured instrument. ``obliskiq approvals list|approve|reject`` works the appr
 ``obliskiq serve``, ``run-cycle``, ``status``, ``intents list`` and ``holdings list|assign`` run
 and inspect the service (``cli/service.py``). ``obliskiq cash``, ``questions``, ``holdings
 external`` and ``tax report`` are the owner's cash flows, questions, external holdings and tax
-lots (``cli/capital.py``). Every command that opens a brokerage session takes
+lots (``cli/capital.py``). ``obliskiq idea add|list|show|withdraw`` are the owner's ideas for the
+thesis book (``cli/idea.py``). Every command that opens a brokerage session takes
 the service lock, so it refuses while the service runs.
 ``obliskiq research data load|coverage``, ``research power``, ``research run`` and
 ``research lock`` drive the research harness (``cli/research.py``).
@@ -62,6 +63,7 @@ from ..util.timeutil import utc_now
 from .capital import add_capital_commands
 from .collect import add_collect_commands
 from .compute import add_compute_commands
+from .idea import add_idea_commands
 from .llm import add_llm_commands
 from .research import add_research_commands
 from .service import add_service_commands
@@ -556,6 +558,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_service_commands(commands)
     add_capital_commands(commands)
+    add_idea_commands(commands)
     add_research_commands(commands)
     add_collect_commands(commands)
     add_compute_commands(commands)
