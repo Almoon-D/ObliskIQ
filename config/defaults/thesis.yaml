@@ -1,4 +1,4 @@
-# The thesis book (MASTER_PLAN §5.5; DECISIONS D156, D159): a few concentrated positions, each on
+# The thesis book (MASTER_PLAN §5.5; DECISIONS D156, D159, D161): a few concentrated positions, each on
 # a written idea from the owner or the LLM analyst, graded forward. Read by engines/thesis and
 # decision/rebalance_thesis.py. Shares and multiples are QUOTED.
 thesis:
@@ -20,7 +20,7 @@ thesis:
   # The most of the book's capital in one position, one sector, one country and one foreign
   # currency (the base currency is not a currency risk to this account). lite's `positions` caps
   # (0.25 initial size, 0.40 sector, 0.80 country, 0.80 single foreign currency), measured on the
-  # book instead of the NAV (D159).
+  # book instead of the NAV (D161).
   caps:
     position: "0.25"
     sector: "0.40"

@@ -5,6 +5,39 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.21.0] - 2026-11-13
+
+Session 27: the owner hands the engine an idea with one command; the engine judges it at one
+gate, trades it in shadow or on paper inside its rails and grades it.
+
+### Added
+
+- `obliskiq idea add|list|show|withdraw`. An idea names its instrument, what is expected, a
+  target, an invalidation and a horizon, with a conviction; one that lacks any of them is refused
+  with the reason and not stored.
+- The thesis book (`engines/thesis`, `decision/rebalance_thesis.py`): a deterministic gate with
+  reason codes, at most `thesis.max_positions` slots in order of arrival, conviction sizes inside
+  the position cap, the thesis's own exits (target, invalidation, horizon, a stop resting at the
+  invalidation) and a grade for every closed thesis, per source and conviction. With no idea the
+  book holds nothing.
+- H13 is pre-registered and locked (`research/preregistrations/thesis-book.md`): how the book's
+  forward record steps its capital on the live account or returns it to shadow.
+- A stock candidate outside `config/universe.yaml` is resolved through IBKR's contract search
+  when its thesis needs it, pinned, and described to the order path, the eligibility policy and
+  the tax book.
+- The digest shows the open theses, each withheld idea with its reason, and the graded record.
+
+### Changed
+
+- In shadow and paper the thesis book takes `thesis.capital_share` (a tenth) of investable
+  capital from the satellite's budget, so the reserve's budget there is 85 % (DECISIONS D159).
+- A decision cycle has a fifth step, `thesis`, between `rebalance` and `execute`.
+
+### Fixed
+
+- A sell could never be simulated in shadow: the pre-trade gate counted it against the broker's
+  position, which holds no simulated fill. It is now counted against the shadow book's own fills.
+
 ## [0.20.2] - 2026-11-13
 
 Session 22: a fresh process can place an order on paper, and the owner has one command list from

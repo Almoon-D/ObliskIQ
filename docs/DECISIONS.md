@@ -3665,3 +3665,39 @@ cOID lookup and the reconciliation refuse such a list, so a fresh process could 
 
 Rejected: reading again whenever a list is incomplete (a retry count the prompt excludes); using
 the pre-read's own list when it is marked complete (two paths for one read).
+
+## Session 27 — Thesis book (2026-11-13)
+
+### D159 · The thesis book's capital in shadow and paper (§5.5, §5.19; D140, D156)
+
+In shadow and paper the budget reader gives the book `thesis.capital_share` (0.10, D156's
+exploration share) out of the satellite's budget, so the reserve's budget there is 85 %. Idle
+thesis capital is cash, not the reserve as §5.5 had it: the core sells only on a band breach (the
+mechanism its test ran, D140), so capital it held could not fund an idea on demand. On the live
+account the book has no share until Session 18's allocation rule gives it one. The book's minimum
+trade is `trading.min_trade.absolute_base` alone: the share of managed capital beside it (2 %) is
+above a normal idea (1.25 %) at any capital. Rejected: a core engine that sells for an idea
+inside its bands (a change to a tested mechanism); a book with no capital in shadow (it would
+never fill, and produce no record).
+
+### D161 · The thesis book's numbers and what may enter it (§5.5; D66, D69, D156)
+
+- **Sizes.** `max_positions` 8 (D156); conviction 1, 1.5 and 2 times the base size; lite's caps
+  measured on the book, not the NAV: 0.25 a position, 0.40 a sector, 0.80 a country and a
+  foreign currency.
+- **Gate.** `min_gain_to_loss` 2 (an idea pays when right one time in three); a position at most
+  1 % of the average daily traded value of 20 stored sessions, unmeasured below that;
+  `entry_window_days` 20. Judgements, the owner's to change.
+- **Instruments.** A share outside the universe file enters as a stock candidate with an equity
+  line in a holdings file and an owner-given ISIN: IBKR's contract info is not known to tell a
+  share from a fund, and the tax lots are kept by ISIN. A fund enters by a reviewed universe entry.
+
+Rejected: the owner declaring an outside instrument's asset class; a model's probability as a size.
+
+### D160 · A simulated sell is counted against the shadow book (§5.12; D44, D103)
+
+The gate's no-short check (I2) counted every sell against the broker's position, which holds no
+simulated fill, so no sell was ever simulated: a shadow book could not exit. For a simulated
+check alone, the position is the sum of the instrument's simulated fills. No clearance is issued
+on that path, so nothing changes for an order that reaches the broker. Rejected: waiving I2 in
+shadow (a shadow book would then sell what it never bought).

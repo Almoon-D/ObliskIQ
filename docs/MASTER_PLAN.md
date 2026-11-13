@@ -396,7 +396,8 @@ honest test is forward: the book exists to produce that record and to trade on i
   has no calendar, is refused.
 - **Direction.** Long only (§2). A bearish view is a thesis on what holds or gains in a fall
   (a cash fund, government bonds, gold) or a long put; the book never shorts and holds no
-  inverse product. A slot without a thesis holds nothing: its capital stays in the reserve.
+  inverse product. A slot without a thesis holds nothing: in shadow and paper its capital is
+  cash, and how it is held on the live account is the allocation rule's (DECISIONS D159).
 - **Options.** A thesis may be held as a long call or a long put when the options sleeve's
   gates pass (§5.6). Premiums are paid from the book's own capital, never above the option
   budget, and each option is graded beside the same thesis held in its underlying
