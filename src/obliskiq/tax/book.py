@@ -54,6 +54,7 @@ from ..logging_setup import get_logger
 from ..store import fx as fx_repo
 from ..store import lots as lots_repo
 from ..store import orders as orders_repo
+from ..store import theses as thesis_repo
 from ..store.db import Store
 from ..store.fx import FxRate
 from ..store.lots import TakenFill, TaxState
@@ -268,7 +269,10 @@ class TaxBook:
         return engine
 
     async def engine(self) -> LotEngine:
-        """The engine as saved."""
+        """The engine as saved. The shares a thesis pinned outside the universe file are read
+        first: their theses carry the ISIN the lots are kept by."""
+        for share in await self._worker.run(thesis_repo.pinned_shares):
+            self._facts[share.conid] = TaxFacts(share.conid, share.isin, None, None)
         return self._engine_from(await self._worker.run(lots_repo.load_tax_state))
 
     async def hooks(self) -> TaxHooks:

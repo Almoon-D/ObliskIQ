@@ -45,7 +45,7 @@ from .currency import CurrencyManager
 from .executor import Executor
 from .exits import ExitCoordinator
 from .flatten import Flattener
-from .instruments import UniverseDirectory
+from .instruments import UniverseDirectory, describe_pinned
 from .killswitch import KillSwitch
 from .ledger import StoreClearanceLedger
 from .modes import Modes
@@ -126,8 +126,10 @@ def assemble(
     now: Callable[[], datetime] = utc_now,
     schedule: IbkrTradingSchedule | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    directory: UniverseDirectory | None = None,
 ) -> OrderPath:
-    """The order path over a started client (``sleep``: how a conversion's fill is waited for)."""
+    """The order path over a started client (``sleep``: how a conversion's fill is waited for;
+    ``directory``: the one the caller already built, else the universe's)."""
     guard = client.guard
     orders = OrderClient(
         client.session, settings, guard, StoreClearanceLedger(worker, now=now), now=now
@@ -146,7 +148,8 @@ def assemble(
         alert=alert,
         now=now,
     )
-    directory = UniverseDirectory.from_settings(settings)
+    if directory is None:
+        directory = UniverseDirectory.from_settings(settings)
     reader = IbkrAccountReader(client, orders, settings, now=now)
     gate = PretradeGate(
         settings,
@@ -303,6 +306,7 @@ async def open_order_path(
     worker = StoreWorker(lambda: open_store(settings, data_dir))
     try:
         directory = UniverseDirectory.from_settings(settings)
+        await describe_pinned(directory, worker)
         built: list[Calendars] = []
 
         def trading_weekday(venue: str, day: date) -> bool:
@@ -330,6 +334,7 @@ async def open_order_path(
             calendars=calendars,
             alert=alert,
             schedule=schedule,
+            directory=directory,
         )
     finally:
         await worker.aclose()

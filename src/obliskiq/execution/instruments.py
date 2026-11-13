@@ -5,7 +5,9 @@
   traded. :class:`UniverseDirectory` describes every tradable candidate and option underlying the
   universe pins with its resolved description, eligible or not, and the option contracts the
   chain collector recorded on them, so an option on an ineligible ETP and its underlying can both
-  be described; eligibility is the jurisdiction policy's to judge, never the directory's.
+  be described; eligibility is the jurisdiction policy's to judge, never the directory's. A
+  stock candidate a thesis pinned (a share outside the universe file, ``store/theses.py``) joins
+  it through :func:`describe_pinned`, which every opened order path runs.
 * **Prohibited categories** (lite's ``instruments.prohibited``): futures contracts, futures
   options (unless ``allow_futures_options``), and leveraged or inverse products, recognised by
   ``instruments.leveraged_inverse_markers`` in the resolved description (an option's
@@ -23,6 +25,9 @@ from ..config.schema import ObliskConfig
 from ..config.schema_universe import UniverseInstrument
 from ..domain.enums import AssetClass
 from ..domain.instrument import TradedInstrument, leveraged_inverse_marker
+from ..store import theses as thesis_repo
+from ..store.theses import PinnedShare
+from ..store.worker import StoreWorker
 
 #: What one unit of a share, fund or bond costs per unit of its price.
 UNIT_MULTIPLIER: Final = Decimal(1)
@@ -54,8 +59,24 @@ def traded_instrument(declared: UniverseInstrument) -> TradedInstrument | None:
     )
 
 
+def share_instrument(share: PinnedShare) -> TradedInstrument:
+    """A pinned stock candidate as an order trades it: a share, one unit per unit of price."""
+    return TradedInstrument(
+        conid=share.conid,
+        symbol=share.symbol,
+        listing_exchange=share.listing_exchange,
+        currency=share.currency,
+        asset_class=AssetClass.STOCK,
+        description=share.description,
+        multiplier=UNIT_MULTIPLIER,
+        underlying_conid=None,
+        expiry=None,
+    )
+
+
 class UniverseDirectory:
-    """The universe's pinned instruments and the option contracts recorded on them."""
+    """The universe's pinned instruments, the option contracts recorded on them and the stock
+    candidates a thesis pinned."""
 
     def __init__(self, instruments: Iterable[TradedInstrument]) -> None:
         self._instruments = {instrument.conid: instrument for instrument in instruments}
@@ -80,12 +101,22 @@ class UniverseDirectory:
     def describe(self, conid: int) -> TradedInstrument | None:
         return self._instruments.get(conid)
 
+    def add(self, instrument: TradedInstrument) -> None:
+        """Describe one more contract; one the directory already describes keeps its entry."""
+        self._instruments.setdefault(instrument.conid, instrument)
+
     def listing_exchanges(self) -> tuple[str, ...]:
         return tuple(sorted({i.listing_exchange for i in self._instruments.values()}))
 
     def instruments(self) -> tuple[TradedInstrument, ...]:
         """Every described instrument, by conid."""
         return tuple(self._instruments[conid] for conid in sorted(self._instruments))
+
+
+async def describe_pinned(directory: UniverseDirectory, worker: StoreWorker) -> None:
+    """Add to ``directory`` every share a thesis pinned outside the universe file."""
+    for share in await worker.run(thesis_repo.pinned_shares):
+        directory.add(share_instrument(share))
 
 
 def prohibited_reasons(

@@ -55,6 +55,7 @@ from .schema_runtime import (
     TradingConfig,
 )
 from .schema_sources import SourcesConfig
+from .schema_thesis import ThesisBookConfig
 from .schema_universe import UniverseConfig
 from .schema_vehicles import BrokerCapabilitiesConfig, VehiclesConfig
 
@@ -161,6 +162,7 @@ class ObliskConfig(FrozenModel):
     equity_risk: EquityRiskConfig
     fx_inflation: FxInflationConfig
     commodities: CommoditiesConfig
+    thesis: ThesisBookConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -233,9 +235,26 @@ class ObliskConfig(FrozenModel):
         problems += self._currency_problems()
         problems += self._source_problems()
         problems += self._grid_problems()
+        problems += self._thesis_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def _thesis_problems(self) -> list[str]:
+        """The thesis book's share comes out of the equity satellite's budget, and a defensive
+        role is one the core declares."""
+        thesis = self.thesis
+        problems: list[str] = []
+        if thesis.capital_share > self.capital.budgets.equity_satellite:
+            problems.append(
+                f"thesis.capital_share: {thesis.capital_share} is above the equity satellite's "
+                f"budget {self.capital.budgets.equity_satellite}"
+            )
+        problems += [
+            f"thesis.defensive_roles: {role} is not a role the core declares"
+            for role in sorted(set(thesis.defensive_roles) - set(self.core.roles))
+        ]
+        return problems
 
     def _grid_problems(self) -> list[str]:
         """The benchmark is a measured market; every grid market has a macro-board region of its

@@ -4,7 +4,8 @@
 The core holds the variant ``core.variant`` names (``engines/core/variants.py``) on its budget
 (``capital/budgets.py``): investable capital (managed less reserved less unmanaged,
 ``capital/managed.py``) times the core's share, which keeps the budgets of the sleeves that do not
-trade yet and leaves the cash floor as cash. At each decision cycle:
+trade yet, leaves the thesis book its share and leaves the cash floor as cash. At each decision
+cycle:
 
 1. every role's **vehicles** are chosen through the vehicle selector and the swap-partner rule
    (``decision/core_vehicles.py``), the book's held vehicles kept; a vehicle without a quote this
@@ -50,7 +51,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from ..calendars.service import Calendars
-from ..capital.budgets import SleeveBudgets
+from ..capital.budgets import book_allocation
 from ..capital.core_value import CoreStrategyValue
 from ..capital.deploy import held_back
 from ..capital.managed import BookHolding, CapitalReader, CapitalView
@@ -112,10 +113,6 @@ REASON = "rebalance"
 
 #: Actions a role's decision may take.
 HOLD, BUY, SELL, SKIP = "hold", "buy", "sell", "skip"
-
-#: The sleeves that trade in this build: the core alone, so the other budgets stay in it until a
-#: layer's activation condition holds (D65, D66; Sessions 12, 15 and 17).
-ACTIVE_SLEEVES = frozenset({Sleeve.CORE})
 
 #: What a correlation reads when no research history was handed in.
 NO_RESEARCH = "no research history was handed to the rebalancer"
@@ -300,7 +297,6 @@ class CoreRebalancer:
         self._trading = settings.trading
         self._floor = settings.execution.pretrade.cash_floor
         self._band = settings.research.simulation.no_trade_band_fraction
-        self._budgets = SleeveBudgets(settings.capital)
         self._variant: Variant = build_variant(settings)
         self._refused: dict[int, str] = {}
 
@@ -549,7 +545,7 @@ class CoreRebalancer:
             plan.blocked = view
             return plan
         plan.capital = view
-        budget = self._budgets.allocate(view.investable, active=ACTIVE_SLEEVES).core
+        budget = book_allocation(self._settings, view.investable, mode).core
         plan.core_capital = budget
         spendable = await self._spendable(mode, view, cash)
         if isinstance(spendable, str):

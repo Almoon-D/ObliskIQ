@@ -3,7 +3,9 @@
 Computed from the universe's attributes (``config/universe.yaml``), with the values the profile
 states (``eligibility`` in ``config/jurisdictions/<id>.yaml``):
 
-* **Shares** are not packaged products: eligible on any venue, whatever their domicile.
+* **Shares** are not packaged products: eligible on any venue, whatever their domicile. A share
+  the order path describes outside the universe file (a stock candidate a thesis pinned) is a
+  share all the same: the rule asks nothing of its attributes.
 * **ETFs, ETCs and funds** are packaged products (PRIIPs): bought only with a key information
   document available, and an ETF or fund only in the UCITS form. A US-domiciled ETF has neither,
   so it is data and an option underlying, never a purchase; the verdict says which facts refuse
@@ -16,8 +18,9 @@ states (``eligibility`` in ``config/jurisdictions/<id>.yaml``):
 * **Bonds**: government bonds by the profile's switch, corporate bonds off by default.
 * **Options**: eligible when their underlying is; on an ETF or ETC the policy refuses, held only
   under the mandatory close (or refused, by the profile's choice); on anything else refused.
-* An index is a level and a future is prohibited: never eligible. An instrument the universe
-  does not describe is never eligible: its attributes are unknown.
+* An index is a level and a future is prohibited: never eligible. A packaged product, a bond
+  or an option's underlying the universe does not pin is never eligible: its attributes are
+  unknown.
 
 Leveraged and inverse products are rejected at ingestion (``data/market/universe.py``) and by the
 gate's prohibited categories, before eligibility is asked.
@@ -101,6 +104,12 @@ class EuPriipsEligibility:
         if instrument.asset_class is AssetClass.OPTION:
             return self._option(instrument, underlying)
         declared = self._universe.pinned(instrument.conid)
+        if declared is None and instrument.asset_class is AssetClass.STOCK:
+            return self._verdict(
+                True,
+                f"{instrument.symbol} is a share outside the universe file: not a packaged "
+                "product, so PRIIPs does not apply",
+            )
         if declared is None:
             return self._verdict(
                 False,
