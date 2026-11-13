@@ -5,7 +5,8 @@
 ``obliskiq mode set``); ``--dry-run`` reads the broker and prints the plan and writes nothing.
 Both take the service lock: one process talks to the broker and runs the executor at a time.
 ``status`` reads the store, the heartbeat file and the alert state, and opens no broker session,
-so it is safe beside a running service; so are ``intents list`` and ``holdings``.
+so it is safe beside a running service; so are ``intents list`` (``--history``: each intent's
+recorded events beneath it, a declined warning's text among them) and ``holdings``.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -253,6 +254,11 @@ def _intents_list(loaded: Loaded, out: TextIO) -> int:
     )
     with open_store(settings, data_dir) as store:
         stored = repo.intents_in_states(store, states)
+        events = (
+            {s.intent.intent_id: repo.intent_history(store, s.intent.intent_id) for s in stored}
+            if loaded.args.history
+            else {}
+        )
     stored.sort(key=lambda s: s.intent.created_at)
     print(f"{len(stored)} intent(s){'' if loaded.args.all else ' open'}", file=out)
     for entry in stored:
@@ -269,6 +275,12 @@ def _intents_list(loaded: Loaded, out: TextIO) -> int:
             f"{intent.state.value}  ({intent.reason})",
             file=out,
         )
+        for event in events.get(intent.intent_id, []):
+            print(
+                f"      {event.at.strftime('%Y-%m-%d %H:%M:%S')}  {event.to_state.value}: "
+                f"{event.detail}",
+                file=out,
+            )
     return EXIT_OK
 
 
@@ -338,6 +350,11 @@ def add_service_commands(commands: argparse._SubParsersAction[argparse.ArgumentP
     intent_actions = intents.add_subparsers(dest="action", required=True, metavar="ACTION")
     listing = intent_actions.add_parser("list", help="open intents (--all: every intent)")
     listing.add_argument("--all", action="store_true", help="every intent, closed ones too")
+    listing.add_argument(
+        "--history",
+        action="store_true",
+        help="each intent's recorded history beneath it (a declined warning in IBKR's own words)",
+    )
     listing.set_defaults(handler=_intents_list)
 
     holdings = commands.add_parser("holdings", help="the holdings registry")
