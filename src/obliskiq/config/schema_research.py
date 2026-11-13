@@ -22,6 +22,7 @@ type DatasetId = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$")]
 class DecisionConfig(FrozenModel):
     alpha: Rate
     target_power: Rate
+    min_sufficient_probability: Rate
 
 
 class SimulationConfig(FrozenModel):

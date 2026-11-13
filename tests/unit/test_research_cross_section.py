@@ -49,6 +49,7 @@ from obliskiq.research.prereg import (
 )
 from obliskiq.research.registry import TrialRegistry
 from obliskiq.research.simulate import SimulationResult
+from obliskiq.research.stats import sufficient_probability
 from obliskiq.store import Store, open_research_store
 from obliskiq.store.research import replace_research_series, trials_for
 
@@ -602,6 +603,53 @@ def test_power_before_data_on_the_command_line(repo_root: Path, prereg_path: Pat
     assert "confirmation months     23" in out
     assert "country momentum" in out
     assert "stop" in out
+
+
+def test_power_states_the_probability_of_a_sufficient_outcome(repo_root: Path, tmp_path: Path):
+    def supported(data):
+        first, second = data["tests"]
+        first["supported_effect"] = "0.20"
+        first["supported_effect_source"] = "A toy citation."
+        second["supported_effect"] = "0.01"
+        second["supported_effect_source"] = "Another toy citation."
+
+    path = edited(tmp_path, supported)
+    spec = cross(path).spec
+    status, out, _ = cli(repo_root, "research", "power", str(path))
+    assert status == EXIT_OK
+    assert "P(sufficient)" in out
+    alpha, tests = 0.05, spec.tests_in_confirmation
+    for test in spec.tests:
+        assert test.supported_effect is not None
+        probability = sufficient_probability(
+            float(test.supported_effect),
+            float(test.theta),
+            declared_se(spec, test),
+            alpha=alpha,
+            tests=tests,
+        )
+        assert f"{float(test.supported_effect):>10.2%} {probability:>14.3f}" in out
+    first, second = spec.tests
+    assert f"{first.name}: the probability" not in out
+    assert f"{second.name}: the probability of a sufficient outcome is below 0.5" in out
+    assert "not to be registered (DECISIONS D154)" in out
+
+
+def test_a_test_without_a_supported_effect_reports_no_probability(
+    repo_root: Path, prereg_path: Path
+):
+    status, out, _ = cli(repo_root, "research", "power", str(prereg_path))
+    assert status == EXIT_OK
+    assert "not to be registered" not in out
+    assert out.rstrip().endswith("-")
+
+
+def test_a_supported_effect_needs_its_source(tmp_path: Path):
+    def unsourced(data):
+        data["tests"][0]["supported_effect"] = "0.02"
+
+    with pytest.raises(PreregistrationError, match="together with its source"):
+        load_any(edited(tmp_path, unsourced))
 
 
 def test_exploration_on_the_command_line_is_budgeted_and_labelled(

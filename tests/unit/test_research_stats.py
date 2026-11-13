@@ -33,6 +33,7 @@ from obliskiq.research.stats import (
     percentile_interval,
     power,
     sharpe_ratio,
+    sufficient_probability,
     years_between,
 )
 
@@ -136,6 +137,26 @@ def test_power_and_the_detectable_effect_are_inverses():
         power(0.01, 0, alpha=0.05, tests=1)
     with pytest.raises(ValueError, match="strictly between 0 and 1"):
         detectable_effect(se, alpha=0.05, tests=1, target_power=1)
+
+
+def test_the_probability_of_a_sufficient_outcome():
+    se = 0.01
+    # (0.04 - 0.02) / 0.01 - z_0.95 = 2 - 1.6449
+    assert sufficient_probability(0.04, 0.02, se, alpha=0.05, tests=1) == pytest.approx(
+        N.cdf(2 - 1.6448536)
+    )
+    # at an effect of exactly theta a sufficient outcome is as rare as a false positive (D154)
+    assert sufficient_probability(0.02, 0.02, se, alpha=0.05, tests=1) == pytest.approx(0.05)
+    # at theta = 0 it is the power at the effect
+    assert sufficient_probability(0.03, 0.0, se, alpha=0.05, tests=2) == pytest.approx(
+        power(0.03, se, alpha=0.05, tests=2)
+    )
+    # half the time exactly when the effect sits z above theta
+    effect = 0.02 + critical_value(0.05, 1) * se
+    assert sufficient_probability(effect, 0.02, se, alpha=0.05, tests=1) == pytest.approx(0.5)
+    assert sufficient_probability(-0.01, 0.02, se, alpha=0.05, tests=1) < 0.001
+    with pytest.raises(ValueError, match="positive standard error"):
+        sufficient_probability(0.03, 0.02, 0, alpha=0.05, tests=1)
 
 
 # ── dependence ──

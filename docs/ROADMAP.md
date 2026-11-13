@@ -30,8 +30,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | done (on fixtures, in shadow; H13 locked, #63; no IBKR call) | v0.21.0 |
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
-| 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | **next** (beside 22) | |
-| 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after 23 and the purchase | |
+| 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | done (no test reaches a probability of a sufficient outcome of 0.5: do not buy, D162) | v0.22.0 |
+| 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after the owner buys a history, which Session 23 advises against (D162) | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | after 22 (beside 24) | |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | after 22, 24, 25, the reserve's paper cycle and a sufficient or inconclusive-positive outcome | |
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25, 27 and 24's verdict | |
@@ -54,10 +54,27 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
 | Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule; no idea has been handed in | `research/preregistrations/thesis-book.md` |
-| What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
-| Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
+| What would the Hunter earn? | Unknown: no stock-level test has run; the literature supports less than θ net of decay, costs and tax for every candidate | `research/reports/hunter-feasibility.md` |
+| Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 23 — Hunter: data and power (2026-11-13, v0.22.0)
+
+- **Verdict** (`research/reports/hunter-feasibility.md`, D162): do not buy. H12 on the whole
+  universe has a probability of a sufficient outcome of at most 0.009 (the literature supports
+  −0.8 % to +0.8 % a year net of decay, costs and `es` tax, against θ = 2 %); every later test
+  stays at or below 0.04. The cheapest adequate history if bought anyway: Sharadar's Core US
+  Equities Bundle, US$499 a year (prices from 1997 with delisted names, point-in-time
+  fundamentals from 1998, a cloud-readable API); none sells a delisting return to one person.
+- **Measured:** 4,832 listed US common stocks; 3,100 to 3,700 pass the account's floors at
+  €50,000 and €250,000, none in 40 or 80 names at €10,000 (the US$1 commission minimum). XBRL
+  covers 95–99 % of today's listed stocks by tier; 8-K item 2.02 precedes 45–64 % of periodic
+  reports; 8 to 45 spin-off registrations a year.
+- **Landed:** `obliskiq research power` reports the probability of a sufficient outcome for a
+  test that states `supported_effect`, and names each below `min_sufficient_probability`.
+- **Not built:** loaders, any return or correlation on candidate data, registry changes.
+- **Live findings.** None: no IBKR call. **Prompts edited:** none.
 
 ### Session 27 — Thesis book (2026-11-13, v0.21.0)
 
@@ -326,6 +343,13 @@ settles it.
 
 ## Follow-ups
 
+- **Owner question (Session 23):** buy Sharadar's Core US Equities Bundle, full history, at
+  US$499 a year, for the Hunter's test: yes or no? The recommendation is no: no test in the
+  fixed sequence reaches a probability of a sufficient outcome of 0.5
+  (`research/reports/hunter-feasibility.md`, D162). Session 24 waits for the answer.
+- The cross-section harness Bonferroni-adjusts over every test of a confirmation run; a fixed
+  sequence (D154) needs none. A pre-registration of the Hunter's sequence would need the
+  adjustment named per test (Session 24, if it runs).
 - The service runs no compute step yet: `obliskiq compute all` by hand. A scheduled job after
   each region's collection lands with the first engine that reads the measurement store on its
   own (Session 17; the core reads the collected bars and the research store directly, D144,
@@ -393,8 +417,9 @@ settles it.
 - **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
-  (2026-10-17). Session 23 says which to buy and what its test can decide; buying it is the
-  owner's step, and Session 24 waits for it. The Hunter has no tested signal (D87).
+  (2026-10-17). Session 23 found that no test in the Hunter's sequence would reach a
+  probability of a sufficient outcome of 0.5 and advises against buying (D162); Session 24
+  waits for the owner's answer. The Hunter has no tested signal (D87).
 - **Owner:** the reserve runs D50 (D147). Open: an LLM provider key, or the minimal extractor
   waits (D70); whether a hedge inside a UCITS share class fits the mandate (D69); a deep
   emergency limit for protective exits (off by default, D67); buying option-surface history for

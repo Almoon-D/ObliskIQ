@@ -3701,3 +3701,18 @@ simulated fill, so no sell was ever simulated: a shadow book could not exit. For
 check alone, the position is the sum of the instrument's simulated fills. No clearance is issued
 on that path, so nothing changes for an order that reaches the broker. Rejected: waiving I2 in
 shadow (a shadow book would then sell what it never bought).
+
+## Session 23 — Hunter: data and power (2026-11-13)
+
+### D162 · No history is bought for the Hunter's test as registered (§5.5, §5.9; D84, D150, D154)
+
+`research/reports/hunter-feasibility.md` applied D154's rule before any data. The net effect the
+literature supports, gross in-sample premia (the Fama–French library before 1992, Cohen, Malloy
+and Pomorski 2012) times what survives publication (McLean and Pontiff 2016), halved for a long
+top group, less the cost tiers of `costs.yaml` at each holding period's turnover and the `es`
+tax, is below θ = 2 % for every test: −0.8 % to +0.8 % a year for H12 on the whole universe. A
+sufficient outcome therefore has probability at most 0.009 for the first test and 0.04 for any.
+The recommendation is not to buy; the owner decides, and Session 24 waits. The floor is the key
+`research.decision.min_sufficient_probability` (0.5), which `research power` reads. Rejected:
+lowering θ (the same fault as raising it); a shorter, cheaper history (fewer months, lower
+probability); counting the generous case alone.

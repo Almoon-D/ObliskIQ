@@ -5,6 +5,22 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.22.0] - 2026-11-13
+
+Session 23: before any purchase, the owner learns which price history the Hunter's test would
+need, what it costs, and that no test in its sequence can be expected to decide.
+
+### Added
+
+- `obliskiq research power` reports, for a cross-section test that states the net effect the
+  literature supports (`supported_effect` with its source), the probability of a sufficient
+  outcome at it, and names each test below `research.decision.min_sufficient_probability`
+  (0.5, DECISIONS D154).
+- `research/reports/hunter-feasibility.md`: vendors of US prices that keep delisted companies
+  and of option history, with prices and licences read 2026-11-13; the SEC's free filings,
+  measured; the universe floors computed from the account; power before data for the Hunter's
+  fixed sequence. Its recommendation: do not buy (DECISIONS D162).
+
 ## [0.21.0] - 2026-11-13
 
 Session 27: the owner hands the engine an idea with one command; the engine judges it at one

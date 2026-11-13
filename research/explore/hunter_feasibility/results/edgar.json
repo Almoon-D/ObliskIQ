@@ -1,0 +1,288 @@
+{
+ "2001": {
+  "quarters": 4,
+  "periodic_filers": 9970,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 9155,
+  "eight_k_filings": 35240,
+  "form10": {
+   "10-12B": 22,
+   "10-12G": 51
+  }
+ },
+ "2002": {
+  "quarters": 4,
+  "periodic_filers": 9410,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 10371,
+  "eight_k_filings": 45016,
+  "form10": {
+   "10-12B": 18,
+   "10-12G": 54
+  }
+ },
+ "2003": {
+  "quarters": 4,
+  "periodic_filers": 8824,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 11302,
+  "eight_k_filings": 67656,
+  "form10": {
+   "10-12B": 27,
+   "10-12G": 35
+  }
+ },
+ "2004": {
+  "quarters": 4,
+  "periodic_filers": 9017,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 12600,
+  "eight_k_filings": 91362,
+  "form10": {
+   "10-12B": 12,
+   "10-12G": 37
+  }
+ },
+ "2005": {
+  "quarters": 4,
+  "periodic_filers": 9505,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 13452,
+  "eight_k_filings": 116283,
+  "form10": {
+   "10-12B": 15,
+   "10-12G": 53
+  }
+ },
+ "2006": {
+  "quarters": 4,
+  "periodic_filers": 9347,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 13207,
+  "eight_k_filings": 106308,
+  "form10": {
+   "10-12B": 19,
+   "10-12G": 73
+  }
+ },
+ "2007": {
+  "quarters": 4,
+  "periodic_filers": 8999,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 11822,
+  "eight_k_filings": 101305,
+  "form10": {
+   "10-12B": 33,
+   "10-12G": 57
+  }
+ },
+ "2008": {
+  "quarters": 4,
+  "periodic_filers": 11455,
+  "periodic_filers_with_xbrl": 0,
+  "eight_k_filers": 10241,
+  "eight_k_filings": 90923,
+  "form10": {
+   "10-12B": 38,
+   "10-12G": 251
+  }
+ },
+ "2009": {
+  "quarters": 4,
+  "periodic_filers": 10242,
+  "periodic_filers_with_xbrl": 518,
+  "eight_k_filers": 9467,
+  "eight_k_filings": 81964,
+  "form10": {
+   "10-12B": 21,
+   "10-12G": 148
+  }
+ },
+ "2010": {
+  "quarters": 4,
+  "periodic_filers": 9572,
+  "periodic_filers_with_xbrl": 1547,
+  "eight_k_filers": 9130,
+  "eight_k_filings": 80442,
+  "form10": {
+   "10-12B": 19,
+   "10-12G": 204
+  }
+ },
+ "2011": {
+  "quarters": 4,
+  "periodic_filers": 9272,
+  "periodic_filers_with_xbrl": 7652,
+  "eight_k_filers": 8828,
+  "eight_k_filings": 78824,
+  "form10": {
+   "10-12B": 26,
+   "10-12G": 134
+  }
+ },
+ "2012": {
+  "quarters": 4,
+  "periodic_filers": 8805,
+  "periodic_filers_with_xbrl": 8184,
+  "eight_k_filers": 8427,
+  "eight_k_filings": 77353,
+  "form10": {
+   "10-12B": 21,
+   "10-12G": 116
+  }
+ },
+ "2013": {
+  "quarters": 4,
+  "periodic_filers": 8528,
+  "periodic_filers_with_xbrl": 7875,
+  "eight_k_filers": 8183,
+  "eight_k_filings": 76369,
+  "form10": {
+   "10-12B": 30,
+   "10-12G": 100
+  }
+ },
+ "2014": {
+  "quarters": 4,
+  "periodic_filers": 8457,
+  "periodic_filers_with_xbrl": 7729,
+  "eight_k_filers": 8040,
+  "eight_k_filings": 76930,
+  "form10": {
+   "10-12B": 38,
+   "10-12G": 93
+  }
+ },
+ "2015": {
+  "quarters": 4,
+  "periodic_filers": 8328,
+  "periodic_filers_with_xbrl": 7536,
+  "eight_k_filers": 7826,
+  "eight_k_filings": 76407,
+  "form10": {
+   "10-12B": 45,
+   "10-12G": 82
+  }
+ },
+ "2016": {
+  "quarters": 4,
+  "periodic_filers": 7866,
+  "periodic_filers_with_xbrl": 7074,
+  "eight_k_filers": 7463,
+  "eight_k_filings": 72621,
+  "form10": {
+   "10-12B": 33,
+   "10-12G": 78
+  }
+ },
+ "2017": {
+  "quarters": 4,
+  "periodic_filers": 7560,
+  "periodic_filers_with_xbrl": 6720,
+  "eight_k_filers": 7070,
+  "eight_k_filings": 70785,
+  "form10": {
+   "10-12B": 10,
+   "10-12G": 87
+  }
+ },
+ "2018": {
+  "quarters": 4,
+  "periodic_filers": 7330,
+  "periodic_filers_with_xbrl": 6483,
+  "eight_k_filers": 6909,
+  "eight_k_filings": 68181,
+  "form10": {
+   "10-12B": 25,
+   "10-12G": 83
+  }
+ },
+ "2019": {
+  "quarters": 4,
+  "periodic_filers": 7148,
+  "periodic_filers_with_xbrl": 6272,
+  "eight_k_filers": 6670,
+  "eight_k_filings": 66427,
+  "form10": {
+   "10-12B": 36,
+   "10-12G": 94
+  }
+ },
+ "2020": {
+  "quarters": 4,
+  "periodic_filers": 7103,
+  "periodic_filers_with_xbrl": 6197,
+  "eight_k_filers": 7012,
+  "eight_k_filings": 72329,
+  "form10": {
+   "10-12B": 16,
+   "10-12G": 76
+  }
+ },
+ "2021": {
+  "quarters": 4,
+  "periodic_filers": 7926,
+  "periodic_filers_with_xbrl": 7004,
+  "eight_k_filers": 7791,
+  "eight_k_filings": 74563,
+  "form10": {
+   "10-12B": 20,
+   "10-12G": 144
+  }
+ },
+ "2022": {
+  "quarters": 4,
+  "periodic_filers": 7965,
+  "periodic_filers_with_xbrl": 7067,
+  "eight_k_filers": 7404,
+  "eight_k_filings": 69685,
+  "form10": {
+   "10-12B": 20,
+   "10-12G": 82
+  }
+ },
+ "2023": {
+  "quarters": 4,
+  "periodic_filers": 7536,
+  "periodic_filers_with_xbrl": 6717,
+  "eight_k_filers": 7276,
+  "eight_k_filings": 72028,
+  "form10": {
+   "10-12B": 19,
+   "10-12G": 82
+  }
+ },
+ "2024": {
+  "quarters": 4,
+  "periodic_filers": 7060,
+  "periodic_filers_with_xbrl": 6227,
+  "eight_k_filers": 6797,
+  "eight_k_filings": 68462,
+  "form10": {
+   "10-12B": 17,
+   "10-12G": 59
+  }
+ },
+ "2025": {
+  "quarters": 4,
+  "periodic_filers": 6925,
+  "periodic_filers_with_xbrl": 6060,
+  "eight_k_filers": 6913,
+  "eight_k_filings": 67651,
+  "form10": {
+   "10-12B": 8,
+   "10-12G": 71
+  }
+ },
+ "2026": {
+  "quarters": 4,
+  "periodic_filers": 6919,
+  "periodic_filers_with_xbrl": 6014,
+  "eight_k_filers": 6415,
+  "eight_k_filings": 58351,
+  "form10": {
+   "10-12B": 19,
+   "10-12G": 56
+  }
+ }
+}

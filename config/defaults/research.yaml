@@ -15,6 +15,10 @@ research:
     alpha: "0.05"
     # The power a pre-registration targets to detect theta (D62).
     target_power: "0.8"
+    # A test is not registered when its probability of a sufficient outcome (L >= theta), before
+    # data and at the effect the literature supports net of decay, costs and tax, is below this
+    # (D154). Theta is never raised to meet it.
+    min_sufficient_probability: "0.5"
 
   simulation:
     # Delta execution: a position is traded only when the change exceeds this fraction of its

@@ -875,7 +875,10 @@ class CrossSectionStudySpec(FrozenModel):
 
 class CrossSectionTestSpec(FrozenModel):
     """One test: ``candidate``'s monthly excess log return over ``against``'s, with its theta
-    and the standard deviation per month the power calculation assumes before data."""
+    and the standard deviation per month the power calculation assumes before data. A test may
+    state the net effect a year the literature supports (after publication decay, costs and
+    tax) with its sources; the power before data then reports the probability of a sufficient
+    outcome at that effect (D154)."""
 
     name: NonEmptyText
     candidate: Key
@@ -883,6 +886,16 @@ class CrossSectionTestSpec(FrozenModel):
     theta: Positive
     theta_justification: NonEmptyText
     sd_per_period: Positive
+    supported_effect: Annotated[Decimal, Field(allow_inf_nan=False)] | None = None
+    supported_effect_source: NonEmptyText | None = None
+
+    @model_validator(mode="after")
+    def _a_sourced_effect(self) -> Self:
+        if (self.supported_effect is None) != (self.supported_effect_source is None):
+            raise ValueError(
+                f"test {self.name} states a supported effect together with its source, or neither"
+            )
+        return self
 
 
 class PlaceboSpec(FrozenModel):
