@@ -3648,3 +3648,20 @@ and a long-only book had no way to act on a bearish thesis.
 
 Rejected: options outside the thesis book; an option share on top of the book's (the exploration
 share is the whole authorisation); shorts or inverse products for a bearish view (§2).
+
+## Session 22 — Order path on paper (2026-11-13)
+
+### D158 · The live orders are read once per brokerage session before the read that counts (§5.12; D68, D101)
+
+A session's first live-orders answer carries no `snapshot: true` (T1, 2026-10-21); the gate, the
+cOID lookup and the reconciliation refuse such a list, so a fresh process could place nothing.
+
+- The order client reads the list once per brokerage session and discards the answer; the read
+  after it counts, through the same rate-limit group. A session is the span between two repairs
+  (a re-arm or a re-login): each starts it again.
+- A pre-read that fails raises and is not counted; a read after it that is still no snapshot is
+  refused as before. Either way nothing is placed.
+- The kill switch's sweep takes the pre-read, but a failed one does not stop its own read.
+
+Rejected: reading again whenever a list is incomplete (a retry count the prompt excludes); using
+the pre-read's own list when it is marked complete (two paths for one read).

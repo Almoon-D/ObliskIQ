@@ -136,7 +136,7 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 | `service.downgraded` | Three cycles in a row failed; the mode is shadow. Read the run log (`status`, the digest's errors), fix the cause, then `mode set paper` again. |
 | `service.stuck_intent` | An order with no answer, or open past its expiry. `uv run obliskiq intents list`; compare with IBKR's open orders; `reconcile run`. |
 | `service.target_unconfirmed` | IBKR does not confirm a core fund's conid (it resolves to another, or is not found): that fund is never bought, and the role uses the next-ranked vehicle or keeps its weight in cash. Report it; the conid in `config/universe.yaml` needs a correction (a corrected pin supersedes the old conid). |
-| `order.warning_declined` | IBKR asked to confirm a warning the reply policy does not confirm; the order was cancelled. The alert and `intents list --all` carry IBKR's own words. |
+| `order.warning_declined` | IBKR asked to confirm a warning the reply policy does not confirm; the order was cancelled. The alert and `intents list --all --history` carry IBKR's own words. |
 
 ## Read the digest
 
@@ -195,34 +195,158 @@ systemctl --user stop obliskiq
 
 and tell the session the bot is paused. Start the service again when the session is done.
 
-## The core's live paper cycle (owner, on the machine)
+## From the order test to the reserve on paper (owner, on the machine)
 
-One supervised paper cycle with a managed-capital cap of a few hundred euros, the cap this test is
-allowed. Inside the European order window (09:30 to 17:15 Madrid time, when Xetra, Amsterdam and
-London are all open):
+One list, in order: the paper order test, the execution test, the history the reserve's trend
+brake reads, the reserve's supervised paper cycle, then `serve` under the supervisor for the ten
+shadow days that open paper (MASTER_PLAN §5.19, L1). The ROADMAP's live verification queue calls
+part A "T1 (the paper order test)" and part D "the core's live paper cycle".
 
-1. `config/owner.yaml`: `capital: {mode: cap, cap_base: "800"}`; `uv run obliskiq config validate`.
-2. No service running (`systemctl --user stop obliskiq`; `uv run obliskiq status` shows no fresh
-   heartbeat).
-3. `uv run obliskiq mode set paper --reason "core live cycle"`
-4. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan. It shows `variant D50: start`,
-   then each role with its fund, its target and why. No role says `IBKR did not confirm`.
-   A role that says `untilted` has too little stored history for the trend brake and is held
-   whole. Under an 800-euro cap the minimum trade is 50 euros, so the plan buys only the roles
-   whose target is worth at least that and at least one unit; it says why for each of the others.
-5. `uv run obliskiq run-cycle --mode paper`: the buys. If a chosen fund trades in another
-   currency, the conversion comes first. Expect `o10164` on it: the reply policy declines it
-   (D101) and that buy waits. The intent history (`uv run obliskiq intents list --all`) and the
-   alert carry IBKR's own text of the warning.
-6. Ten minutes later, run `uv run obliskiq run-cycle --mode paper` again. It reprices or fills,
-   registers the holdings to the core, and reconciles.
-7. `uv run obliskiq status`, `uv run obliskiq holdings list`, `uv run obliskiq reconcile run`.
-8. With Telegram set, `uv run obliskiq serve` until the digest, then stop it. The digest comes
-   half an hour after New York's close: 22:30 Madrid time, or 21:30 while New York is on summer
-   time and Madrid is not. Without Telegram the digest is in the log.
-9. `uv run obliskiq mode set shadow --reason "core live cycle done"`
-10. Paste the masked outputs into a short session: *"Record the core's live paper cycle per
-    SESSION_PROMPTS §A.5."*
+Rules for every step:
+
+- The service is stopped (`systemctl --user stop obliskiq`) until part E, and no Claude session
+  is logged in to the paper username.
+- `preflight`, `collect`, `run-cycle` and `reconcile` each log in once: leave ten minutes between
+  the starts of two of them. A locked username or a refused password ends the day's logins.
+- Keep each command's printed report and its log (JSON lines on stderr) together. Reports mask
+  the account id; before pasting anything else, replace it with `DU*******`, and paste no
+  balance beyond what a report prints.
+- A step that does not match its expected output is pasted as it is. Do not repeat it, and do
+  not go on to the next part.
+
+### A. The paper order test, inside both order windows
+
+On a day Xetra and the NYSE are both open, between 16:00 and 17:15 Madrid time: the NYSE's order
+window opens 30 minutes after its open and Xetra's closes 15 minutes before its close
+(`calendars.order_offsets`).
+
+1. `uv run obliskiq mode set paper --reason "T1 paper order test"` prints the change to `paper`.
+2. `uv run obliskiq preflight --paper-order-test`. Expect `Every step passed.` under these lines:
+   - `mode: paper`;
+   - EXV1 (Xetra, euros): `identity`, `algos`, `quote`, `whatif`, `pre-trade: cleared`,
+     `place: placed` with the ids of IBKR's replies, `cOID: listed as order_ref`, `status`, and
+     `cancel: … then Cancelled`;
+   - FCX (NYSE, dollars): `identity`, `algos`, `quote`, `whatif`, then
+     `pre-trade: refused by the cash check, as expected` (the account holds no dollars);
+   - `live orders: the `snapshot` flag of this session's first reads: <first>, then true`. The
+     first is the pre-read's flag (`absent` on 2026-10-21); the second must be `true`, or the
+     gate has refused with `account_unreadable` and nothing was placed.
+
+   Paste the whole report, and from the log the two lines `live orders pre-read` and
+   `live orders, the read after the pre-read` with their `snapshot` values.
+3. `uv run obliskiq mode set shadow --reason "T1 paper order test done"`.
+4. The Java 21 and 25 side runs of SESSION_PROMPTS §A.5 item 6, each ten minutes after the
+   previous login: a second day adds those versions to the Gateway's list. Paste each masked
+   report with its `java -version`.
+
+### B. The execution test
+
+The same day or a later one, inside the NYSE's order window (16:00 to 21:45 Madrid time). It
+converts 100 euros into dollars, buys FCX's size increment at the touch and protects it with a
+stop-limit (`ibkr.preflight.execution_test`).
+
+5. `uv run obliskiq mode set paper --reason "execution test"`.
+6. `uv run obliskiq preflight --execution-test`. Expect `mode`, `FCX identity` and
+   `(a) conversion whatif` to pass. Then one of two outcomes:
+   - `[FAIL] (a) conversion: failed: declined: … (IBKR: '…')`, and the test stops. The reply
+     policy does not confirm `o10164` for a conversion (DECISIONS D101), so this is the outcome
+     expected today and not a fault of the machine. The quoted text is IBKR's own.
+   - the conversion fills: `(a) both balances`, `(c) attached orders: not probed`, then the
+     `(b)` lines (the buy, its fill, the stop placed and listed) and the `(d)` lines (how long
+     IBKR took to show the fill in the live orders, the trades and the positions).
+
+   Paste the whole report.
+7. `uv run obliskiq intents list --all --history` (no login). Under the conversion's intent, the
+   line that names `o10164` holds IBKR's text of the warning, kept in the intent's history.
+   Paste the conversion's intent and its history lines.
+8. Ten minutes later, `uv run obliskiq reconcile run`. Expect `green`. On 2026-10-20 IBKR kept
+   the declined conversion listed as `Inactive` and refused its cancel: if the run reports it,
+   paste the findings, do not `reconcile accept`, and run it again the next trading day. Part D
+   needs a green run first, because drift freezes new buys.
+9. Only if step 6 reached the `(b)` lines: the next trading day, inside the NYSE's window,
+   `uv run obliskiq preflight --execution-test --finish`. Expect the stop still listed after the
+   restart, the sale, and the position and the stop gone. Paste the report.
+10. `uv run obliskiq mode set shadow --reason "execution test done"`.
+
+### C. What the reserve's trend brake needs on the machine
+
+The reserve (`core.variant: D50`) scales its equity by a trend it reads from stored history.
+Without it a role says `untilted` and is held whole.
+
+- **The market store's daily bars** (`engines/core/history.py`): 13 month-end closes of the
+  equity vehicle and of the cash vehicle (`core.tilt`: 12-month momentum against the month
+  before it), each the last bar at most 7 days before its month end
+  (`research.simulation.max_price_age_days`). Today the vehicles are SPPW or XDWD and XEON, all
+  on Xetra in euros. The collectors' backfill holds two years of bars
+  (`collectors.backfill.window_years`). A vehicle in another currency would also need the ECB's
+  rate series (`uv run obliskiq sources run ecb`).
+- **The research store** (`orchestration/correlations.py`): each candidate's tracking of its
+  role's series and the swap partners' correlation. Without it the selector ranks without
+  tracking and the reserve has no swap partner.
+
+11. `uv run obliskiq collect universe --venue XETR`, then ten minutes later
+    `uv run obliskiq collect backfill --venue XETR` (read-only). Expect `universe: ok`, then
+    `backfill: ok`, each ending `run: ok`. Paste both.
+12. `uv run obliskiq research data load-universe` (Yahoo; no login, a few minutes). Expect
+    `loaded N of N listings`. Paste that line and any listing it names as failed.
+13. `uv run obliskiq universe vehicles world_equity` and `uv run obliskiq universe vehicles cash`
+    (no login). Expect a number on each `tracking` and `liquidity` line where they said
+    `unmeasured`, and under `swap partners of SPPW` either XDWD with its correlation or the
+    reason it is not one. Paste both.
+14. Optional, after New York's close: `uv run obliskiq collect daily` (every venue and step,
+    read-only, up to two hours). It is the collectors' live round of the verification queue;
+    paste its step lines.
+
+### D. The reserve's paper cycle
+
+One supervised paper cycle under a managed-capital cap of a few hundred euros, the cap this test
+is allowed. Inside Xetra's order window (09:30 to 17:15 Madrid time), after a green
+`reconcile run`.
+
+15. `config/owner.yaml`: `capital: {mode: cap, cap_base: "800"}`; `uv run obliskiq config
+    validate` passes.
+16. `uv run obliskiq mode set paper --reason "reserve paper cycle"`.
+17. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan, nothing written or sent.
+    It shows `variant D50: start`, then each role with its fund, its target and why:
+    `world_equity` in SPPW, `cash` in XEON. No role says `IBKR did not confirm`, and
+    `world_equity` does not say `untilted` (if it does, part C is incomplete: the reason names
+    the months it has). Under an 800-euro cap the minimum trade is 50 euros, so the plan buys
+    only the roles whose target is worth at least that and at least one unit, and says why for
+    each of the others. Paste the plan.
+18. Ten minutes later, `uv run obliskiq run-cycle --mode paper`: the buys, in euros, so no
+    conversion comes first. Paste the output.
+19. Ten minutes later, `uv run obliskiq run-cycle --mode paper` again: it reprices or fills,
+    registers the holdings to the core and reconciles. Paste the output.
+20. `uv run obliskiq status`, `uv run obliskiq holdings list`, `uv run obliskiq intents list
+    --all --history`, and ten minutes later `uv run obliskiq reconcile run`. Expect
+    `reconciliation: green`, the holdings owned by `core`, and each intent `filled` or still
+    working. Paste all four.
+21. With Telegram set, `uv run obliskiq serve` until the digest, then stop it with Ctrl-C. The
+    digest comes half an hour after New York's close: 22:30 Madrid time, or 21:30 while New York
+    is on summer time and Madrid is not. Without Telegram the digest is in the log. Paste the
+    digest.
+22. `uv run obliskiq mode set shadow --reason "reserve paper cycle done"`.
+23. Paste parts A to D into a short session: *"Record T1's order test, the execution test and
+    the core's live paper cycle per SESSION_PROMPTS §A.5."* That session decides `o10164` on a
+    conversion from IBKR's text, in a pull request of its own.
+
+### E. `serve` under the supervisor, and the ten shadow days
+
+24. `uv run obliskiq mode show` says `shadow`. Install the unit of "Run in shadow", then
+    `systemctl --user enable --now obliskiq` and `loginctl enable-linger`.
+25. Each trading day, for ten in a row, after the digest:
+    - `uv run obliskiq status`: `mode shadow · kill switch off`; the heartbeat under ten minutes
+      old, not `STALE`, `ok`; `reconciliation: green`; `open intents: 0`; `open alerts: 0`; no
+      run marked `!`.
+    - The digest's subject says `nothing needs attention`.
+    - `journalctl --user -u obliskiq --since yesterday | grep reauthenticat`: one
+      `reauthenticated` after IBKR's daily reset, and no `reauthentication_failed`.
+
+    A day that fails any line starts the count again: L1 asks for ten consecutive trading days
+    with no unhandled error, a clean reconciliation, no stuck intent and every daily reset
+    logged in again unattended. Keep each day's `status` output.
+26. After the tenth clean day, "Move to paper" above: `serve` then runs the reserve on paper.
+    Paste the ten `status` outputs into the session that records the promotion.
 
 ## Session 9's capability probe (owner, on the machine)
 

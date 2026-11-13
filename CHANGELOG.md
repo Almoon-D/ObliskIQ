@@ -5,6 +5,27 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.20.2] - 2026-11-13
+
+Session 22: a fresh process can place an order on paper, and the owner has one command list from
+the order test to `serve`.
+
+### Fixed
+
+- The order client reads the live orders once per brokerage session before the read that
+  counts: IBKR's first answer after a login is not a complete snapshot, and the pre-trade gate,
+  the cOID lookup and the reconciliation refused it (DECISIONS D158). A failed pre-read, or a
+  second read that is still incomplete, places nothing.
+
+### Added
+
+- `obliskiq preflight --paper-order-test` prints the `snapshot` flag of the session's first two
+  live-orders reads; `obliskiq intents list --history` prints each intent's recorded history, a
+  declined warning in IBKR's own words among it.
+- docs/RUNBOOK.md: one ordered list for the owner, from the paper order test and the execution
+  test through the history the reserve's trend brake reads and the reserve's paper cycle to
+  `serve` and the ten shadow days.
+
 ## [0.20.1] - 2026-11-10
 
 The thesis book's instruments, bearish views and options, from the owner's questions.
