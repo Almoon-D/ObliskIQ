@@ -574,3 +574,92 @@ async def test_a_candidate_that_left_the_holdings_or_ran_out_of_time_ends(
         "expire",
         "its entry window ended before it resolved",
     )
+
+
+# ── on paper ──
+
+
+def stock_orders(s: ServiceRig, conid: int) -> list[dict[str, Any]]:
+    return [body for body in s.placed() if body["conid"] == conid]
+
+
+async def test_a_failed_conversion_places_no_entry(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, paper=True)
+    s.clock.wall.now = NEW_YORK
+    s.broker.cash["USD"] = (D(0), D("0.86"))  # the dollars must be bought first
+    s.broker.reject_next = "the conversion is refused"
+    await idea(s, symbol="FCX")
+    plan = await cycle(s)
+    fcx = next(d for d in plan.decisions if d.thesis.instrument.symbol == "FCX")
+    assert fcx.action == "enter"
+    assert stock_orders(s, FCX) == []  # no buy without its funding
+    (entry,) = await thesis_intents(s)
+    assert entry.state is IntentState.STAGED
+    assert (await state(s)).state is ThesisState.APPROVED
+
+
+async def test_an_entry_on_paper_is_funded_placed_and_protected_and_leaves_without_its_stop(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, paper=True)
+    s.broker.settle_cash = True
+    await idea(s)
+    await cycle(s)
+    (buy,) = stock_orders(s, SPPW)
+    assert (buy["side"], buy["quantity"]) == ("BUY", 27)
+    s.fill_working()
+    await s.service.jobs.heartbeat()  # the fill is followed: the holding and its stop
+    assignment = await s.rig.store(repo.holding_assignment, SPPW)
+    assert assignment is not None
+    assert assignment.owner is Sleeve.SATELLITE
+    (stop,) = [o for o in s.broker.live() if o.conid == SPPW and o.side == "SELL"]
+    assert D(str(stop.aux_price)) == D(40)  # the stop rests at the invalidation
+    plan = await cycle(s)
+    held = next(d for d in plan.decisions if d.thesis.thesis_id == 1)
+    assert (held.action, held.held) == ("hold", D(27))
+    assert (await state(s)).state is ThesisState.ACTIVE
+    # The stop is missing when the target is reached: the exit goes all the same.
+    stop.status = "Cancelled"
+    quote(s, SPPW, "60.5")
+    plan = await cycle(s)
+    assert (only(plan).action, only(plan).reason) == ("exit", "target")
+    sells = [body for body in stock_orders(s, SPPW) if body["side"] == "SELL"]
+    assert [(b["orderType"], b["quantity"]) for b in sells][-1] == ("LMT", 27), sells
+
+
+async def test_a_position_its_stop_sold_is_closed_for_the_stop(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, paper=True)
+    s.broker.settle_cash = True
+    await idea(s)
+    await cycle(s)
+    s.fill_working()
+    await s.service.jobs.heartbeat()
+    await cycle(s)
+    (stop,) = [o for o in s.broker.live() if o.conid == SPPW and o.side == "SELL"]
+    quote(s, SPPW, "39.9")
+    s.broker.fill(stop.order_id, price="39.9")
+    await s.service.jobs.heartbeat()
+    plan = await cycle(s)
+    assert (only(plan).action, only(plan).reason) == ("close", "stop")
+    (graded,) = await s.rig.store(thesis_repo.grades, as_of=MONDAY)
+    assert (graded.exit_reason, graded.mode, graded.reached) == ("stop", ExecutionMode.PAPER, False)
+
+
+async def test_a_thesis_of_another_mode_s_record_is_left_alone(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    thesis_book = book(s)
+    await thesis_book.apply(await thesis_book.survey(ExecutionMode.SHADOW))
+    plan = await thesis_book.survey(ExecutionMode.PAPER)
+    assert (only(plan).action, only(plan).reason) == (
+        "hold",
+        "it belongs to the shadow record, not this mode's",
+    )
+    live = await thesis_book.survey(ExecutionMode.LIVE)
+    assert live.capital == D(0)  # the live share is the capital allocation rule's
