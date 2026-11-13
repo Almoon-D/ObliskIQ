@@ -21,8 +21,8 @@ universe: >-
   Every thesis the book trades from this merge on: an instrument the active jurisdiction profile
   lets the account buy, on a venue with a calendar, that passed the book's deterministic gate
   (MASTER_PLAN §5.5). No thesis exists at this merge, so none was chosen with its result known;
-  a thesis the gate refused, or one withdrawn before its first fill, is outside the record and
-  is counted beside it.
+  a thesis with no fill (refused by the gate, withdrawn, or never entered inside its entry
+  window) is outside the record and is counted beside it.
 data_status: >-
   The record is produced live and exists only from the first thesis. Fills are the account's own
   (the broker's executions on the live account; the broker's simulated ones on the paper
@@ -85,9 +85,8 @@ adequacy:
   max_mark_age_days: 7
 robustness: >-
   The statistic without its best thesis stays above zero (a condition of every step). Reported,
-  never decisive: the same statistic on the paper and shadow records, on the theses the gate
-  refused had they been held to their own exits in shadow, per half of the record, and with the
-  twin replaced by the reserve the capital would otherwise have been in.
+  never decisive: the same statistic on the paper and shadow records, and on each half of the
+  record.
 power:
   tracking_error: "0.15"
   paths: 400000
@@ -119,8 +118,8 @@ test is the owner's ruling, not a published effect.
 Every thesis the book trades after this merge, from any source (`owner` and `analyst` at this
 merge; a source added later is a group from its first thesis). The book's configuration (the
 number of positions, the caps, the conviction multipliers) is the owner's and may change: the
-record is of the book as it traded. A thesis the gate refuses and an idea withdrawn before its
-first fill are not in the record; their count is reported beside it.
+record is of the book as it traded. A thesis with no fill (refused by the gate, withdrawn, or
+never entered inside its entry window) is not in the record; their count is reported beside it.
 
 ## Data and their point-in-time status
 
@@ -145,8 +144,7 @@ For each record two accounts are kept in the base currency:
   is sold at that session's close. Each trade pays the cost model's spread, slippage and
   commission for that vehicle.
 
-Money that is in no thesis is in neither account: it stays in the reserve, and adds nothing to
-either side.
+Money that is in no thesis is in neither account and adds nothing to either side.
 
 Both accounts are valued **after tax, at liquidation**: at a month end an account's profit to
 date is its realised gains and losses, plus its open positions at their marks, less the tax the
@@ -282,9 +280,8 @@ step puts more capital at risk. The groups are not adjusted for one another.
 ## Robustness checks
 
 - A condition of every step: `x̄` without the best thesis and its twin is above zero.
-- Reported at every look, never decisive: the paper and shadow records; the theses the gate
-  refused, as if held in shadow to their own exits; each half of the record; the book against the
-  reserve in place of the twin.
+- Reported at every look, never decisive: the paper and shadow records, and each half of the
+  record.
 - The assumptions that are not checked: months are treated as independent and near normal, and a
   book of few positions has fat-tailed months. The minimum of closed theses and the condition
   without the best thesis are the guard; they are not a proof.
