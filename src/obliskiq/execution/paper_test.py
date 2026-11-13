@@ -54,9 +54,7 @@ EXPECTED_CASH_REFUSALS = frozenset({Reason.CURRENCY_NOT_HELD.value})
 #: The paper order test buys for the core sleeve: a label, the order is cancelled at once.
 TEST_SLEEVE = Sleeve.CORE
 
-#: The live-orders reads whose ``snapshot`` flag the report prints (the pre-read and the read
-#: after it), and the flag that marks a complete list.
-FIRST_READS = 2
+#: The ``snapshot`` flag that marks a complete live-orders list.
 COMPLETE_FLAG = "true"
 
 
@@ -134,7 +132,7 @@ class PaperOrderTest:
         if flags:
             report.add(
                 "live orders",
-                len(flags) == FIRST_READS and flags[-1] == COMPLETE_FLAG,
+                flags[1:] == (COMPLETE_FLAG,),  # the read after the pre-read is complete
                 f"the `snapshot` flag of this session's first reads: {', then '.join(flags)}",
             )
         return report
