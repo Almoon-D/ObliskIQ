@@ -12,7 +12,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 3 | IBKR read path | OAuth and Gateway transports, session lifecycle, client, rate limits, quote status, contract identity, trading schedules, preflight | done (live login blocked in the cloud) | v0.3.0, v0.3.1 |
 | 4 | Order path, kill switch and modes | intents, order client, reply and quote policy, clearance lock, state machine, paper guard, modes, kill switch | done (paper orders not yet placed live) | v0.4.0 |
 | 4a | Pre-trade rails | pre-trade checks with reason codes, eligibility skeleton, approval queue, flatten, paper order test | done (paper order test not yet run live) | v0.5.0 |
-| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | logins passed (owner, 2026-10-20 and 2026-10-21): both days' unattended login and read-only preflight passed under WSL2 Ubuntu with Java 11, and Java 21 and 25 passed once (21 Oct); the paper order test has placed no order (outside the windows on Xetra and the NYSE; on ASX inside its window the first live-orders read lacked `snapshot: true`); open: the order test, after the follow-up below | v0.12.1 |
+| T1 | Deployment machine (owner) | unattended login on two days, read-only preflight, paper order test, a Java 21 and 25 side test, on Ubuntu 26.04 (SESSION_PROMPTS §A.5) | logins passed (owner, 2026-10-20 and 2026-10-21): both days' unattended login and read-only preflight passed under WSL2 Ubuntu with Java 11, and Java 21 and 25 passed once (21 Oct); the paper order test has placed no order (outside the windows on Xetra and the NYSE; on ASX inside its window the first live-orders read lacked `snapshot: true`, pre-read since v0.20.2); open: the order test, part A of the owner's list in docs/RUNBOOK.md | v0.12.1 |
 | 4b | Research harness | point-in-time research data, simulator with costs and the `es` tax engine, statistics, decision rule, trial registry, European commissions | done (no real-data study: 4c, 4d) | v0.6.0 |
 | 4c | Core verdict | pre-registration, then one after-tax run of the core's variants against the references; a frontier from which the owner picks the variant | done (every candidate inconclusive; the owner's point resolves to A, D91) | v0.7.0, v0.7.1, v0.7.2 |
 | 4d | First selection hypothesis | data audit, choice among H1, H2, H4, pre-registration, one confirmation run, H5 beside it | done (the audit chose H1; H1 and H5 insufficient) | v0.7.3, v0.8.0, v0.8.1 |
@@ -26,7 +26,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 11 | Measurement store and views | measurement store, equity grid, macro board, rankings, correlations, IV solve, gap distributions | done (built and accepted on an offline fixture store; the census reports the gates untested until Session 12) | v0.16.0 |
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (parity with the simulator on a fixture history; the owner's variant is D50 since v0.19.0, D147; the live cycle a command list for the owner) | v0.18.0 |
-| 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | **next** | |
+| 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | done (on fixtures; the order test, the execution test and the reserve's paper cycle are the owner's list in docs/RUNBOOK.md) | v0.20.2 |
 | 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | after 22 | |
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
@@ -58,6 +58,22 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
 
 ## Session log
+
+### Session 22 — Order path on paper (2026-11-13, v0.20.2)
+
+- **Verified first:** main did not handle it. A session's first live-orders read without
+  `snapshot: true` made the gate refuse `account_unreadable`, `find` raise
+  `LookupIncompleteError` and `reconcile` report an incomplete run.
+- **Landed** (D158): the order client reads the live orders once per brokerage session before
+  the read that counts, through the `live_orders` rate-limit group; the gate, the cOID lookup,
+  `reconcile` and the kill switch's sweep read through it. A failed pre-read or a second
+  incomplete read places nothing. The order test's report prints both reads' `snapshot` flag.
+- **Runbook:** one ordered list, "From the order test to the reserve on paper": the order test,
+  the execution test, the trend brake's history (13 month ends of SPPW or XDWD and XEON from
+  `collect backfill`; the research store), the reserve's paper cycle, `serve`, ten shadow days.
+- **Found:** no command printed an intent's history, where IBKR's text of a declined warning is
+  kept; `intents list --history` prints it (read-only). **Prompts edited:** none.
+- **Live findings.** None: no IBKR call. The `snapshot` row stays open until the owner's run.
 
 ### Owner questions: instruments, bearish views and options (2026-11-10, v0.20.1)
 
@@ -245,7 +261,7 @@ settles it.
 | IBKR's attached orders: a whatif of an entry with a child stop-limit linked by `parentId`, then whether IBKR lists, reports and cancels the child (not adopted, D99) | review | a later session, before attached orders are designed |
 | A triggered stop-limit that does not fill through a gap on paper, and its repricing | review | the first gap on paper (Session 6 on) |
 | A fresh unattended Gateway login after IBKR's daily reset on the machine: settled, day 1 (2026-10-20) and day 2 (2026-10-21) passed under WSL2 Ubuntu with Java 11 [CP ✓ 2026-10-21]; the in-process re-login is Session 6's | review | settled (T1) |
-| The live orders' `snapshot: true` on a session's first read: absent on the first read after a login (the ASX order test, 2026-10-21; the execution test's first `reconcile run`); a pre-read before the read that counts, then the same read on a second call | review | the follow-up fix, then T1's order test |
+| The live orders' `snapshot: true` on a session's first read: absent on the first read after a login (the ASX order test, 2026-10-21; the execution test's first `reconcile run`); the order client pre-reads once per brokerage session (D158): whether the read after it carries `snapshot: true`, and whether a re-armed session's first read lacks it too | review, 22 | T1's order test (docs/RUNBOOK.md, part A: the report's `live orders` line) |
 | The stop-limit's `orderType`: ObliskIQ sends `STOP_LIMIT`, IBKR's order-types page writes `STP LMT` | 5 | the execution test |
 | A GTC stop listed in a later session's live orders, and its status readable by id (D99) | 5 | the execution test (`--finish` the next day) |
 | The spot-FX commission (0.20 bp, at least USD 2.00, charged in the base currency) against a conversion's trade | 5 | the execution test |
@@ -354,13 +370,6 @@ settles it.
   - The Gateway's Java list, and 2027-07-01 at the latest: Java 21 and 25 each passed one day
     (2026-10-21); a second day of side runs adds them, newest first (D96). Temurin builds Java 11 to
     at least October 2027.
-- **T1's order test (Session 22).** `preflight --paper-order-test` has placed no order (docs/knowledge/ibkr.md,
-  "T1, second day"). Before the rerun: the first live-orders read of a session lacks `snapshot: true`
-  and the pre-trade gate, the cOID lookup and `reconcile` all treat it as incomplete, so a fresh
-  process cannot place an order. A session reads the live orders once before the read that counts
-  (the endpoint's documented pre-flight) and fails closed if the second read is also incomplete;
-  failure-branch tests for both. It is a money path: its own session, not a patch inside a record.
-  Then the order test inside both windows, and the Java side runs on that day.
 - **Owner:** H2 (insider-purchase clusters) and H4 (the stock-level composite) are not evaluable
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
@@ -375,9 +384,10 @@ settles it.
   `claude/blissful-lamport-8in96f` and `claude/session-4d-execution-ahadas`. The repository's
   description on GitHub still names the earlier design (reflexivity, risk parity, an AI that
   decides); it should say what README.md says.
-- The session that records the owner's paste from Session 22's runbook decides `o10164` on a
-  conversion from IBKR's text (D101): until a conversion fills on paper no order in a foreign
-  currency can be funded, and Session 26 waits for it.
+- The session that records the owner's paste from docs/RUNBOOK.md ("From the order test to the
+  reserve on paper") decides `o10164` on a conversion from IBKR's text (D101), in a pull request
+  of its own: until a conversion fills on paper no order in a foreign currency can be funded,
+  and Session 26 waits for it.
 - The reconciliation freeze passes while no run exists, and a green run never ages
   (`execution/pretrade.py: _guards`, `execution/executor.py: _stage`,
   `decision/rebalance_core.py: survey`). Decide a maximum age, with failure-branch tests, before
@@ -389,8 +399,6 @@ settles it.
 - **Owner:** an LLM provider key and its monthly budget before Session 28 (the analyst runs on
   fixtures without it and proposes nothing live); the thesis book's exploration share before the
   live account (a tenth of investable capital unless set).
-- Session 22: with D50 the trend brake needs twelve month ends of the equity and cash vehicles'
-  history on the machine, or the reserve says `untilted` and holds its equity whole.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
   ceiling, so the owner's 50 % (D149) cannot be written until the budget reader lets the reserve
   shrink. Until then the defaults stand: the Hunter is inactive and its share stays in the reserve.
@@ -414,8 +422,6 @@ settles it.
 - Session 15: `StrategyValue` for the satellite (probes, pending catalysts, exits it makes
   anyway); Session 17 for the decision layer (D108). The core's is D146.
 - Session 19: Telegram and MCP answers to owner questions and the cash commands (D109).
-- The session that records the core's live paper cycle: decide `o10164` on a conversion from IBKR's
-  text, now kept in the intent's history and the declined warning's alert (D101, D105).
 - Session 19: the deployment's unit or container replaces docs/RUNBOOK.md's example systemd unit.
 - When IBKR's pacing binds (the first weeks of `serve` show it): the gate reads the live orders and
   the trades fresh for every clearance, and IBKR paces each at one request per 6 s here, so an

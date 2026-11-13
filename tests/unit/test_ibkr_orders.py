@@ -128,7 +128,7 @@ async def test_a_placement_is_looked_up_then_sent_once(order_rig: Any) -> None:
     assert result.order_id is not None
     assert len(order_rig.broker.placements) == 1
     assert order_rig.broker.placements[0]["cOID"] == stored.coid
-    assert order_rig.broker.live_order_reads == 1
+    assert order_rig.broker.live_order_reads == 2  # the session's pre-read, then the lookup
     assert order_rig.broker.trade_reads == 1
 
 
@@ -168,7 +168,7 @@ async def test_the_last_check_runs_after_the_lookup_and_can_stop_the_send(order_
     clearance = await order_rig.clear(stored.intent)
 
     async def refuse() -> None:
-        assert order_rig.broker.live_order_reads == 1  # after the lookup
+        assert order_rig.broker.live_order_reads == 2  # after the pre-read and the lookup
         raise WriteRefusedError("kill_switch_on", "test")
 
     with pytest.raises(WriteRefusedError):

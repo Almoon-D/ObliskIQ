@@ -183,11 +183,15 @@ declined until the policy changes. VERIFY-LIVE(warning ids on a stop-limit modif
 - **Live orders** list the account's orders of the day (cancelled, filled, working), at most
   1000. `snapshot: true` marks a complete list; ibind notes the endpoint "requires a
   pre-flight request", and `force=true` clears IBKR's cache and returns an empty list for that
-  call. ObliskIQ treats a list without `snapshot: true` as incomplete: an absent cOID proves
-  nothing, and the placement is refused. Fields read: `orderId`, `order_ref`, `conid`, `side`,
-  `secType` (`CASH` for a conversion), `orderType`, `status`, `totalSize`, `filledQuantity`,
-  `remainingQuantity`, `avgPrice`, `timeInForce`. VERIFY-LIVE(live-orders shape, snapshot flag
-  on the first call of a session). [DOC 2026-10-13] [ibind 0.2.2]
+  call. The first answer after a login carried no `snapshot: true` [CP ✓ 2026-10-21,
+  docs/knowledge/ibkr.md]. ObliskIQ reads the list once per brokerage session before the read
+  that counts and treats a list without `snapshot: true` as incomplete: an absent cOID proves
+  nothing, and the placement is refused. VERIFY-LIVE(the read after the pre-read carries
+  `snapshot: true`; whether a re-armed session's first read lacks it too). Fields read:
+  `orderId`, `order_ref`, `conid`, `side`, `secType` (`CASH` for a conversion), `orderType`,
+  `status`, `totalSize`, `filledQuantity`, `remainingQuantity`, `avgPrice`, `timeInForce`.
+  VERIFY-LIVE(live-orders shape, snapshot flag on the first call of a session).
+  [DOC 2026-10-13] [ibind 0.2.2]
 - **Order status** answers 503 for an order cancelled or filled before the session with no
   cached information; its side is `B`/`S`; it carries no cOID. [DOC 2026-10-13]
 - **Trades**: the current day and six before it (`days` ≤ 7); `side` `B`/`S` (the reference

@@ -77,6 +77,7 @@ def steps(report: Any) -> dict[str, Any]:
 
 async def test_each_instrument_is_placed_out_of_reach_and_cancelled(rig: Any) -> None:
     rig.broker.questions = deque([(["o10153"], "a cap price is mandatory")])
+    rig.broker.next_snapshots = deque([None])  # a session's first live-orders answer
     report = await PaperOrderTest(path_of(rig), now=rig.clock).run()
     found = steps(report)
     assert report.ok, report.render()
@@ -88,6 +89,8 @@ async def test_each_instrument_is_placed_out_of_reach_and_cancelled(rig: Any) ->
     assert found["EXV1 cOID"].ok
     assert "36 characters" in found["EXV1 cOID"].detail
     assert "Cancelled" in found["EXV1 cancel"].detail
+    assert found["live orders"].ok
+    assert found["live orders"].detail.endswith("first reads: absent, then true")
     placed = rig.broker.placements
     assert [p["side"] for p in placed] == ["BUY", "BUY"]
     assert all(p["price"] < 99.9 for p in placed)
@@ -201,3 +204,21 @@ def test_the_tick_is_the_rule_of_the_highest_edge_below_the_price() -> None:
 def test_the_passive_limit_rounds_down_to_the_tick() -> None:
     assert passive_limit(Decimal("99.9"), Decimal("0.05"), Decimal("0.01")) == Decimal("94.90")
     assert passive_limit(Decimal("0.01"), Decimal("0.5"), Decimal("0.01")) is None
+
+
+async def test_a_second_read_that_is_no_snapshot_fails_the_live_orders_step(rig: Any) -> None:
+    rig.broker.snapshot = False
+    report = await PaperOrderTest(path_of(rig), now=rig.clock).run()
+    found = steps(report)
+    assert not report.ok
+    assert "account_unreadable" in found["EXV1 pre-trade"].detail
+    assert not found["live orders"].ok
+    assert found["live orders"].detail.endswith("first reads: false, then false")
+    assert rig.broker.placements == []
+
+
+async def test_no_live_orders_step_when_the_gate_refused_before_reading(rig: Any) -> None:
+    await rig.kill.turn_on(actor="test", reason="drill")
+    report = await PaperOrderTest(path_of(rig), now=rig.clock).run()
+    assert rig.broker.live_order_reads == 0
+    assert "live orders" not in steps(report)

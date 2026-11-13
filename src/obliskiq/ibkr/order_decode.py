@@ -228,6 +228,17 @@ def _broker_order(row: Mapping[str, Any], observed_at: datetime, *, coid_key: st
         ) from None
 
 
+def snapshot_flag(body: Any) -> str:
+    """How a live-orders answer carries its ``snapshot`` flag: ``true``, ``false``, ``absent``
+    or, for anything else, ``unreadable``. Only ``true`` marks a complete list."""
+    if not isinstance(body, Mapping) or "snapshot" not in body:
+        return "absent"
+    value = body["snapshot"]
+    if value is True:
+        return "true"
+    return "false" if value is False else "unreadable"
+
+
 def decode_live_orders(body: Any, *, observed_at: datetime) -> LiveOrders:
     """``GET /iserver/account/orders``."""
     if not isinstance(body, Mapping) or not isinstance(body.get("orders", []), list):

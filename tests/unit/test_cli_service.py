@@ -284,13 +284,18 @@ def test_intents_are_listed_open_or_all(data_dir: Path, config_dir: Path) -> Non
         created_at=now,
         expires_at=now + timedelta(hours=8),
     )
+    said = "declined: no policy confirms o10164 (IBKR: 'a cash-quantity order is simulated')"
     with open_store(settings, data_dir) as store:
         repo.insert_intent(store, intent, coid=str(intent.intent_id), at=now)
+        repo.record_intent_fact(store, intent.intent_id, state=intent.state, at=now, detail=said)
     status, out, _ = _run("intents", "list")
     assert status == EXIT_OK
     assert "1 intent(s) open" in out
     assert "BUY 3 conid 43614383 limit 177" in out
+    assert said not in out
     assert "1 intent(s)\n" in _run("intents", "list", "--all")[1]
+    history = _run("intents", "list", "--all", "--history")[1]
+    assert f"{intent.state.value}: {said}" in history
 
 
 def test_holdings_are_assigned_and_listed(data_dir: Path) -> None:
