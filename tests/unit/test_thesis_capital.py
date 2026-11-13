@@ -3,6 +3,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from obliskiq.domain.thesis import Conviction, ThesisSource
 from obliskiq.errors import PreregistrationError
 from obliskiq.research.patterns import registered_hypothesis
 from obliskiq.research.prereg import FORWARD_KINDS, ForwardBookPrereg, load_any
-from obliskiq.research.registry import verify_lock
+from obliskiq.research.registry import lock_path
 
 D = Decimal
 
@@ -121,8 +122,11 @@ def test_h13_loads_as_a_forward_book_and_is_locked(
     assert spec.back_to_shadow.records == [ExecutionMode.PAPER, ExecutionMode.LIVE]
     # The step starts from the share the book works on and never passes the ceiling.
     assert shipped_settings.thesis.capital_share <= spec.step.share_ceiling
-    lock = verify_lock(h13(repo_root))
-    assert lock.sha256 == prereg.sha256
+    # The lock records the text merged in its own pull request; `verify_lock` also asks git for
+    # that commit, which a shallow checkout does not hold.
+    lock = json.loads(lock_path(h13(repo_root)).read_text(encoding="utf-8"))
+    assert (lock["file"], lock["sha256"]) == ("thesis-book.md", prereg.sha256)
+    assert len(lock["merge_commit"]) == 40
     registered = registered_hypothesis(repo_root / "research" / "pattern_registry.yaml", "H13")
     assert registered is not None
     assert registered.status == "pre-registered"
