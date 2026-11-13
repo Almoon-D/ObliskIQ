@@ -5,7 +5,9 @@ load-universe`` the universe's tradable candidates from Yahoo (``--candidates N`
 largest stock candidates of each grid cell), each with its first and last close;
 ``research data coverage`` reports, by year, the share of a universe without a price and who
 enters late or ends early; ``research power <prereg>`` states a pre-registration's power to
-detect theta and the effect detectable at its target power, before any data; ``research run
+detect theta and the effect detectable at its target power, before any data, and for a
+cross-section test that states the effect the literature supports, the probability of a
+sufficient outcome at it (D154); ``research run
 <prereg>`` runs a locked pre-registration (or, with ``--explore``, an exploratory trial that is
 never evidence) and writes its report; ``research lock <prereg> --commit <sha>`` writes the lock
 of a merged pre-registration.
@@ -49,7 +51,7 @@ from ..research.data import (
 from ..research.prereg import FORWARD_KINDS, CrossSectionPrereg, Prereg, load_any
 from ..research.registry import Git, TrialRegistry, verify_lock, write_lock
 from ..research.report import write_report
-from ..research.stats import detectable_effect, effective_n, power
+from ..research.stats import detectable_effect, effective_n, power, sufficient_probability
 from ..research.study import StudyResult, StudyRunner, declared_se
 from ..store import open_research_store, open_store
 from ..store import universe as universe_repo
@@ -287,7 +289,8 @@ def _power(loaded: Loaded, out: TextIO) -> int:
         prereg.spec.target_power if prereg.spec.target_power is not None else defaults.target_power
     )
     if isinstance(prereg, CrossSectionPrereg):
-        return _cross_section_power(prereg, alpha, target, out)
+        floor = float(defaults.min_sufficient_probability)
+        return _cross_section_power(prereg, alpha, target, floor, out)
     spec = prereg.spec
     inputs = spec.power
     per_period = effective_n(inputs.names_per_period, float(inputs.rho))
@@ -327,7 +330,7 @@ def _power(loaded: Loaded, out: TextIO) -> int:
 
 
 def _cross_section_power(
-    prereg: CrossSectionPrereg, alpha: float, target: float, out: TextIO
+    prereg: CrossSectionPrereg, alpha: float, target: float, floor: float, out: TextIO
 ) -> int:
     spec = prereg.spec
     tests = spec.tests_in_confirmation
@@ -337,16 +340,33 @@ def _cross_section_power(
     print(f"  alpha {alpha:g}, {tests} test(s) in the confirmation run", file=out)
     print(
         f"  {'test':<32} {'theta':>7} {'se a year':>10} {'power':>7} "
-        f"{f'detectable at {target:g}':>18}",
+        f"{f'detectable at {target:g}':>18} {'supported':>10} {'P(sufficient)':>14}",
         file=out,
     )
+    below: list[str] = []
     for test in spec.tests:
         se = cross_section_se(spec, test)
         detectable = detectable_effect(se, alpha=alpha, tests=tests, target_power=target)
         chance = power(float(test.theta), se, alpha=alpha, tests=tests)
+        if test.supported_effect is None:
+            supported, sufficient = f"{'-':>10}", f"{'-':>14}"
+        else:
+            effect = float(test.supported_effect)
+            probability = sufficient_probability(
+                effect, float(test.theta), se, alpha=alpha, tests=tests
+            )
+            supported, sufficient = f"{effect:>10.2%}", f"{probability:>14.3f}"
+            if probability < floor:
+                below.append(test.name)
         print(
             f"  {test.name:<32} {float(test.theta):>7.2%} {se:>10.4%} {chance:>7.3f} "
-            f"{detectable:>18.4%}",
+            f"{detectable:>18.4%} {supported} {sufficient}",
+            file=out,
+        )
+    for name in below:
+        print(
+            f"  {name}: the probability of a sufficient outcome is below {floor:g}; "
+            "not to be registered (DECISIONS D154)",
             file=out,
         )
     return EXIT_OK

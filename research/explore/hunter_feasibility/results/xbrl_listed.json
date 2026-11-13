@@ -1,0 +1,22 @@
+{
+ "micro": {
+  "stocks": 1795,
+  "with_cik": 1791,
+  "with_xbrl": 1734
+ },
+ "small": {
+  "stocks": 1241,
+  "with_cik": 1236,
+  "with_xbrl": 1173
+ },
+ "mid": {
+  "stocks": 998,
+  "with_cik": 995,
+  "with_xbrl": 987
+ },
+ "large": {
+  "stocks": 813,
+  "with_cik": 810,
+  "with_xbrl": 806
+ }
+}

@@ -1,0 +1,370 @@
+{
+ "stocks": 4832,
+ "eurusd": 1.1028,
+ "share_of_day": 0.01,
+ "all": {
+  "micro": 1790,
+  "small": 1237,
+  "mid": 995,
+  "large": 810
+ },
+ "rows": [
+  {
+   "capital_eur": 10000,
+   "share": 0.5,
+   "names": 20,
+   "position_usd": 276,
+   "daily_value_floor_usd": 27570,
+   "commission_at_min": 0.0036271309394269135,
+   "commission_at_tier_median_price": {
+    "micro": 0.003658447314607681,
+    "small": 0.0036603221492328575,
+    "mid": 0.0037446169631274134
+   },
+   "passing": {
+    "micro": 1100,
+    "small": 1200,
+    "mid": 879,
+    "large": 0
+   },
+   "passing_total": 3179
+  },
+  {
+   "capital_eur": 10000,
+   "share": 0.5,
+   "names": 40,
+   "position_usd": 138,
+   "daily_value_floor_usd": 13785,
+   "commission_at_min": 0.007254261878853827,
+   "commission_at_tier_median_price": {},
+   "passing": {
+    "micro": 0,
+    "small": 0,
+    "mid": 0,
+    "large": 0
+   },
+   "passing_total": 0
+  },
+  {
+   "capital_eur": 10000,
+   "share": 0.5,
+   "names": 80,
+   "position_usd": 69,
+   "daily_value_floor_usd": 6892,
+   "commission_at_min": 0.014508523757707654,
+   "commission_at_tier_median_price": {},
+   "passing": {
+    "micro": 0,
+    "small": 0,
+    "mid": 0,
+    "large": 0
+   },
+   "passing_total": 0
+  },
+  {
+   "capital_eur": 10000,
+   "share": 1.0,
+   "names": 20,
+   "position_usd": 551,
+   "daily_value_floor_usd": 55140,
+   "commission_at_min": 0.0018135654697134568,
+   "commission_at_tier_median_price": {
+    "micro": 0.0018216263526238121,
+    "small": 0.0018159366748472451,
+    "mid": 0.0019017191673594699
+   },
+   "passing": {
+    "micro": 961,
+    "small": 1214,
+    "mid": 988,
+    "large": 0
+   },
+   "passing_total": 3163
+  },
+  {
+   "capital_eur": 10000,
+   "share": 1.0,
+   "names": 40,
+   "position_usd": 276,
+   "daily_value_floor_usd": 27570,
+   "commission_at_min": 0.0036271309394269135,
+   "commission_at_tier_median_price": {
+    "micro": 0.003658447314607681,
+    "small": 0.0036603221492328575,
+    "mid": 0.0037446169631274134
+   },
+   "passing": {
+    "micro": 1100,
+    "small": 1200,
+    "mid": 879,
+    "large": 0
+   },
+   "passing_total": 3179
+  },
+  {
+   "capital_eur": 10000,
+   "share": 1.0,
+   "names": 80,
+   "position_usd": 138,
+   "daily_value_floor_usd": 13785,
+   "commission_at_min": 0.007254261878853827,
+   "commission_at_tier_median_price": {},
+   "passing": {
+    "micro": 0,
+    "small": 0,
+    "mid": 0,
+    "large": 0
+   },
+   "passing_total": 0
+  },
+  {
+   "capital_eur": 50000,
+   "share": 0.5,
+   "names": 20,
+   "position_usd": 1378,
+   "daily_value_floor_usd": 137850,
+   "commission_at_min": 0.0007254261878853826,
+   "commission_at_tier_median_price": {
+    "micro": 0.0012195122234882312,
+    "small": 0.0007309941520467836,
+    "mid": 0.0007349752783030836,
+    "large": 0.0007260898821187492
+   },
+   "passing": {
+    "micro": 765,
+    "small": 1206,
+    "mid": 991,
+    "large": 779
+   },
+   "passing_total": 3741
+  },
+  {
+   "capital_eur": 50000,
+   "share": 0.5,
+   "names": 40,
+   "position_usd": 689,
+   "daily_value_floor_usd": 68925,
+   "commission_at_min": 0.0014508523757707653,
+   "commission_at_tier_median_price": {
+    "micro": 0.0014587466073800817,
+    "small": 0.0014697237216102054,
+    "mid": 0.0015206812599139854
+   },
+   "passing": {
+    "micro": 920,
+    "small": 1212,
+    "mid": 989,
+    "large": 0
+   },
+   "passing_total": 3121
+  },
+  {
+   "capital_eur": 50000,
+   "share": 0.5,
+   "names": 80,
+   "position_usd": 345,
+   "daily_value_floor_usd": 34462,
+   "commission_at_min": 0.0029017047515415306,
+   "commission_at_tier_median_price": {
+    "micro": 0.0029040221095746562,
+    "small": 0.0029719447436674985,
+    "mid": 0.0029592801854390737
+   },
+   "passing": {
+    "micro": 1059,
+    "small": 1213,
+    "mid": 961,
+    "large": 0
+   },
+   "passing_total": 3233
+  },
+  {
+   "capital_eur": 50000,
+   "share": 1.0,
+   "names": 20,
+   "position_usd": 2757,
+   "daily_value_floor_usd": 275700,
+   "commission_at_min": 0.0003627130939426913,
+   "commission_at_tier_median_price": {
+    "micro": 0.0011160714832153579,
+    "small": 0.0003639645949797033,
+    "mid": 0.0003673620933038281,
+    "large": 0.00037705967900332336
+   },
+   "passing": {
+    "micro": 616,
+    "small": 1196,
+    "mid": 992,
+    "large": 805
+   },
+   "passing_total": 3609
+  },
+  {
+   "capital_eur": 50000,
+   "share": 1.0,
+   "names": 40,
+   "position_usd": 1378,
+   "daily_value_floor_usd": 137850,
+   "commission_at_min": 0.0007254261878853826,
+   "commission_at_tier_median_price": {
+    "micro": 0.0012195122234882312,
+    "small": 0.0007309941520467836,
+    "mid": 0.0007349752783030836,
+    "large": 0.0007260898821187492
+   },
+   "passing": {
+    "micro": 765,
+    "small": 1206,
+    "mid": 991,
+    "large": 779
+   },
+   "passing_total": 3741
+  },
+  {
+   "capital_eur": 50000,
+   "share": 1.0,
+   "names": 80,
+   "position_usd": 689,
+   "daily_value_floor_usd": 68925,
+   "commission_at_min": 0.0014508523757707653,
+   "commission_at_tier_median_price": {
+    "micro": 0.0014587466073800817,
+    "small": 0.0014697237216102054,
+    "mid": 0.0015206812599139854
+   },
+   "passing": {
+    "micro": 920,
+    "small": 1212,
+    "mid": 989,
+    "large": 0
+   },
+   "passing_total": 3121
+  },
+  {
+   "capital_eur": 250000,
+   "share": 0.5,
+   "names": 20,
+   "position_usd": 6892,
+   "daily_value_floor_usd": 689250,
+   "commission_at_min": 0.00014508523757707654,
+   "commission_at_tier_median_price": {
+    "micro": 0.001046572493946214,
+    "small": 0.00034387895551017477,
+    "mid": 0.0001459530208903546,
+    "large": 0.00014764680559098008
+   },
+   "passing": {
+    "micro": 400,
+    "small": 1174,
+    "mid": 993,
+    "large": 806
+   },
+   "passing_total": 3373
+  },
+  {
+   "capital_eur": 250000,
+   "share": 0.5,
+   "names": 40,
+   "position_usd": 3446,
+   "daily_value_floor_usd": 344625,
+   "commission_at_min": 0.0002901704751541531,
+   "commission_at_tier_median_price": {
+    "micro": 0.0010718113699649215,
+    "small": 0.00034904014426346414,
+    "mid": 0.0002920057664722736,
+    "large": 0.00029580722685003776
+   },
+   "passing": {
+    "micro": 556,
+    "small": 1192,
+    "mid": 992,
+    "large": 806
+   },
+   "passing_total": 3546
+  },
+  {
+   "capital_eur": 250000,
+   "share": 0.5,
+   "names": 80,
+   "position_usd": 1723,
+   "daily_value_floor_usd": 172312,
+   "commission_at_min": 0.0005803409503083062,
+   "commission_at_tier_median_price": {
+    "micro": 0.001176470588235294,
+    "small": 0.000582750574977796,
+    "mid": 0.000584211118651169,
+    "large": 0.0006014024682434219
+   },
+   "passing": {
+    "micro": 721,
+    "small": 1203,
+    "mid": 991,
+    "large": 798
+   },
+   "passing_total": 3713
+  },
+  {
+   "capital_eur": 250000,
+   "share": 1.0,
+   "names": 20,
+   "position_usd": 13785,
+   "daily_value_floor_usd": 1378500,
+   "commission_at_min": 7.254261878853827e-05,
+   "commission_at_tier_median_price": {
+    "micro": 0.0010683761075638704,
+    "small": 0.00033025098326402394,
+    "mid": 0.00011349449473077355,
+    "large": 7.317009834597243e-05
+   },
+   "passing": {
+    "micro": 247,
+    "small": 1103,
+    "mid": 988,
+    "large": 806
+   },
+   "passing_total": 3144
+  },
+  {
+   "capital_eur": 250000,
+   "share": 1.0,
+   "names": 40,
+   "position_usd": 6892,
+   "daily_value_floor_usd": 689250,
+   "commission_at_min": 0.00014508523757707654,
+   "commission_at_tier_median_price": {
+    "micro": 0.001046572493946214,
+    "small": 0.00034387895551017477,
+    "mid": 0.0001459530208903546,
+    "large": 0.00014764680559098008
+   },
+   "passing": {
+    "micro": 400,
+    "small": 1174,
+    "mid": 993,
+    "large": 806
+   },
+   "passing_total": 3373
+  },
+  {
+   "capital_eur": 250000,
+   "share": 1.0,
+   "names": 80,
+   "position_usd": 3446,
+   "daily_value_floor_usd": 344625,
+   "commission_at_min": 0.0002901704751541531,
+   "commission_at_tier_median_price": {
+    "micro": 0.0010718113699649215,
+    "small": 0.00034904014426346414,
+    "mid": 0.0002920057664722736,
+    "large": 0.00029580722685003776
+   },
+   "passing": {
+    "micro": 556,
+    "small": 1192,
+    "mid": 992,
+    "large": 806
+   },
+   "passing_total": 3546
+  }
+ ]
+}

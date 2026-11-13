@@ -160,6 +160,16 @@ def power(theta: float, se: float, *, alpha: float, tests: int) -> float:
     return _NORMAL.cdf(theta / se - critical_value(alpha, tests))
 
 
+def sufficient_probability(
+    effect: float, theta: float, se: float, *, alpha: float, tests: int
+) -> float:
+    """The probability that the interval's lower end reaches ``theta`` (a sufficient outcome,
+    D62) when the true effect is ``effect`` (D154)."""
+    if se <= 0:
+        raise ValueError(f"a positive standard error is needed, got {se}")
+    return _NORMAL.cdf((effect - theta) / se - critical_value(alpha, tests))
+
+
 def detectable_effect(se: float, *, alpha: float, tests: int, target_power: float) -> float:
     """The smallest effect detected with probability ``target_power``."""
     if not 0 < target_power < 1:

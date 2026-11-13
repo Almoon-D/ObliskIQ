@@ -75,6 +75,11 @@ tests:
     theta: "0.02"                # the smallest net effect worth the added risk, a year
     theta_justification: Why an effect below theta is not worth having.
     sd_per_period: "0.015"       # sd of one month's excess, for the power before data
+    supported_effect: "0.03"     # the net effect a year the literature supports, after decay,
+                                 # costs and tax: `research power` reports the probability of a
+                                 # sufficient outcome at it; below 0.5 the test is not
+                                 # registered (D154)
+    supported_effect_source: The studies the supported effect is read from, and its haircuts.
 placebo: null                    # {candidate, against, test}: must not reach the test's theta
 bootstrap:
   n_boot: 10000                  # moving-block resamples of each monthly series

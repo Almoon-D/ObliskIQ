@@ -1,0 +1,567 @@
+{
+ "theta": 0.02,
+ "alpha": 0.05,
+ "deferral_full_turnover": 0.004513942230993134,
+ "rows": [
+  {
+   "test": "H12 composite, whole universe",
+   "tier": "all",
+   "round_trip": 0.017317880794701986,
+   "turnover": 0.9,
+   "effect": {
+    "central": -0.007678640723125608,
+    "generous": 0.00786157382873077
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 2.5994453865446677e-06,
+       "generous": 0.0017401052885858404
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.000552192056500509,
+       "generous": 0.009279681487060706
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 7.043817367601883e-05,
+       "generous": 0.004758590853766341
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.002214739718589252,
+       "generous": 0.014945064308798666
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H12, micro caps",
+   "tier": "micro",
+   "round_trip": 0.02,
+   "turnover": 0.9,
+   "effect": {
+    "central": -0.01009254800789382,
+    "generous": 0.01764658707376388
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 7.526293821731457e-07,
+       "generous": 0.02921695648325823
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.0003325614533152594,
+       "generous": 0.03734240239097033
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 3.2325730381675164e-05,
+       "generous": 0.03372520024397803
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.0015859018393402236,
+       "generous": 0.04032136964709693
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H12, small caps",
+   "tier": "small",
+   "round_trip": 0.02,
+   "turnover": 0.9,
+   "effect": {
+    "central": -0.01009254800789382,
+    "generous": 0.01764658707376388
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 7.526293821731457e-07,
+       "generous": 0.02921695648325823
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.0003325614533152594,
+       "generous": 0.03734240239097033
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 3.2325730381675164e-05,
+       "generous": 0.03372520024397803
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.0015859018393402236,
+       "generous": 0.04032136964709693
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H12, mid caps",
+   "tier": "mid",
+   "round_trip": 0.02,
+   "turnover": 0.9,
+   "effect": {
+    "central": -0.01009254800789382,
+    "generous": 0.005954587073763881
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 7.526293821731457e-07,
+       "generous": 0.0008968964490224007
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.0003325614533152594,
+       "generous": 0.006836982543285009
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 3.2325730381675164e-05,
+       "generous": 0.0030548470578653313
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.0015859018393402236,
+       "generous": 0.012089028822203422
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H12, large caps",
+   "tier": "large",
+   "round_trip": 0.004,
+   "turnover": 0.9,
+   "effect": {
+    "central": 0.003402887073763882,
+    "generous": 0.017330587073763885
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 0.00034839325330845934,
+       "generous": 0.027072725444612037
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.004463380668882832,
+       "generous": 0.035862210362422986
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 0.0016350884854694514,
+       "generous": 0.031916717432212416
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.009014866600239048,
+       "generous": 0.03914627371688497
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H2 insider-purchase clusters",
+   "tier": "all",
+   "round_trip": 0.017317880794701986,
+   "turnover": 2.0,
+   "effect": {
+    "central": -0.018485703820397104,
+    "generous": -0.0027417038203971025
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 4.928376824633151e-05,
+       "generous": 0.0014699291732388684
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.12,
+      "se": 0.022814073018881203,
+      "power_at_theta": 0.22118366787022348,
+      "detectable": 0.05672661902761579,
+      "p_sufficient": {
+       "central": 0.0004314593394199849,
+       "generous": 0.004124779675861459
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.00045861093009909873,
+       "generous": 0.004248912145659374
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.12,
+      "se": 0.030728851183895033,
+      "power_at_theta": 0.16011155853001818,
+      "detectable": 0.07640651596155001,
+      "p_sufficient": {
+       "central": 0.0018820525380861294,
+       "generous": 0.008541180353541015
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H3 spin-offs and deletions",
+   "tier": "all",
+   "round_trip": 0.017317880794701986,
+   "turnover": 0.5,
+   "effect": {
+    "central": -0.01091591151284756,
+    "generous": 0.01476042990485043
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.0002785473796805145,
+       "generous": 0.02552422734285829
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.12,
+      "se": 0.022814073018881203,
+      "power_at_theta": 0.22118366787022348,
+      "detectable": 0.05672661902761579,
+      "p_sufficient": {
+       "central": 0.0013499945415283618,
+       "generous": 0.030429560951999026
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.001411860951623571,
+       "generous": 0.03058946820972829
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.12,
+      "se": 0.030728851183895033,
+      "power_at_theta": 0.16011155853001818,
+      "detectable": 0.07640651596155001,
+      "p_sufficient": {
+       "central": 0.004013392179629514,
+       "generous": 0.03473403924971936
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H4 52-week high, momentum, profitability",
+   "tier": "all",
+   "round_trip": 0.017317880794701986,
+   "turnover": 1.75,
+   "effect": {
+    "central": -0.01896523362172161,
+    "generous": 0.0017220154388399261
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 4.6252822966461795e-09,
+       "generous": 0.00018008817067738207
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 4.3887238802178724e-05,
+       "generous": 0.003333027811061127
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 1.3785261843520853e-06,
+       "generous": 0.0010616897764907558
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.00042562992578115764,
+       "generous": 0.007385604149929481
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H10 cheapness with quality",
+   "tier": "all",
+   "round_trip": 0.017317880794701986,
+   "turnover": 0.5,
+   "effect": {
+    "central": -0.003544911512847559,
+    "generous": 0.008914429904850425
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.009505863757867168,
+      "power_at_theta": 0.6769227297124849,
+      "detectable": 0.02363609126150658,
+      "p_sufficient": {
+       "central": 1.8801355046185552e-05,
+       "generous": 0.00246911354536567
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 0.0012601241885591983,
+       "generous": 0.010931699802203756
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.05,
+      "se": 0.012803687993289598,
+      "power_at_theta": 0.46700381680158287,
+      "detectable": 0.03183604831731251,
+      "p_sufficient": {
+       "central": 0.00024720207779548633,
+       "generous": 0.006025211052441295
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 0.003832578635612727,
+       "generous": 0.016757476963919472
+      }
+     }
+    }
+   }
+  },
+  {
+   "test": "H11 post-earnings drift",
+   "tier": "all",
+   "round_trip": 0.017317880794701986,
+   "turnover": 4.0,
+   "effect": {
+    "central": -0.07378546540980108,
+    "generous": -0.058985465409801076
+   },
+   "by_sample": {
+    "sharadar": {
+     "te_low": {
+      "tracking_error": 0.09,
+      "se": 0.017110554764160905,
+      "power_at_theta": 0.31704272674347,
+      "detectable": 0.04254496427071185,
+      "p_sufficient": {
+       "central": 5.166363428890511e-13,
+       "generous": 1.912123811978136e-10
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.12,
+      "se": 0.022814073018881203,
+      "power_at_theta": 0.22118366787022348,
+      "detectable": 0.05672661902761579,
+      "p_sufficient": {
+       "central": 4.313821103137949e-09,
+       "generous": 1.636642648049785e-07
+      }
+     }
+    },
+    "xbrl": {
+     "te_low": {
+      "tracking_error": 0.09,
+      "se": 0.023046638387921276,
+      "power_at_theta": 0.21856519407362918,
+      "detectable": 0.05730488697116251,
+      "p_sufficient": {
+       "central": 5.510065665934824e-09,
+       "generous": 1.9677153997178783e-07
+      }
+     },
+     "te_high": {
+      "tracking_error": 0.12,
+      "se": 0.030728851183895033,
+      "power_at_theta": 0.16011155853001818,
+      "detectable": 0.07640651596155001,
+      "p_sufficient": {
+       "central": 1.320785387150711e-06,
+       "generous": 1.2474834395809303e-05
+      }
+     }
+    }
+   }
+  }
+ ]
+}
