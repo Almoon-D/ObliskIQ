@@ -4,7 +4,8 @@ The rebalancer and the reservation planner decide what to trade; this turns one 
 proposed intent the executor clears, funds, places and reprices: the instrument's listing venue,
 a fresh quote, the contract's rules and algos, and ``Pricer.initial`` (a patient limit inside the
 mid, or an enabled algo with a limit cap), in whole units on IBKR's smart router, for the day.
-An entry buys; a sale is an exit with an allowed exit reason (``discipline``).
+An entry buys; a sale is an exit with an allowed exit reason (``discipline``). A thesis's trade
+carries its thesis, and its entry the protective stop its fills get.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -22,6 +23,7 @@ from ..domain.orders import (
     OrderIntent,
     OrderSide,
     OrderTerms,
+    ProtectiveSpec,
     Sleeve,
     TimeInForce,
 )
@@ -70,8 +72,11 @@ class IntentMaker:
         sleeve: Sleeve,
         reason: str,
         mode: ExecutionMode,
+        thesis_id: str | None = None,
+        protective: Callable[[float | None], ProtectiveSpec] | None = None,
     ) -> OrderIntent | str:
-        """The intent, added to the book; why, when it cannot be priced now."""
+        """The intent, added to the book; why, when it cannot be priced now. ``protective``
+        makes an entry's stop spec from the quote's volatility."""
         instrument = self._directory.describe(conid)
         if instrument is None:
             return "no instrument describes the conid"
@@ -115,6 +120,8 @@ class IntentMaker:
             approval_required=False,
             created_at=now,
             expires_at=now + self._ttl,
+            thesis_id=thesis_id,
+            protective=None if protective is None else protective(quote.sigma),
         )
         await self._book.add(intent)
         return intent

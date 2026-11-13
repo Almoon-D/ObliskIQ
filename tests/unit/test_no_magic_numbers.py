@@ -137,6 +137,8 @@ ALLOWLISTED_PACKAGES = ("execution", "decision")
 PROTOCOL_CONSTANTS: dict[str, dict[str, str]] = {
     "execution/quotes.py": {"SECONDS_PER_HOUR": "seconds in an hour (a unit)"},
     "decision/rebalance_core.py": {"ZERO": "the zero amount"},
+    "decision/book_cash.py": {"ZERO": "the zero amount"},
+    "decision/rebalance_thesis.py": {"ZERO": "the zero amount"},
     "decision/gates.py": {"ZERO": "the zero amount"},
     "decision/vehicle_selector.py": {
         "ZERO": "the zero amount",

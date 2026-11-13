@@ -1,0 +1,46 @@
+# The thesis book (MASTER_PLAN §5.5; DECISIONS D156, D159, D161): a few concentrated positions, each on
+# a written idea from the owner or the LLM analyst, graded forward. Read by engines/thesis and
+# decision/rebalance_thesis.py. Shares and multiples are QUOTED.
+thesis:
+  # The book's share of investable capital in shadow and in paper, taken from the equity
+  # satellite's budget (capital.budgets.equity_satellite) by the budget reader; "0" gives the
+  # book nothing and leaves it all in the reserve. On the live account the share is the capital
+  # allocation rule's (Session 18), and until that rule exists the book has none there. The
+  # owner's exploration share, a tenth (D156).
+  capital_share: "0.10"
+  # The most positions the book holds; the base size is the book's capital over it. The owner
+  # raises it as capital grows (D156).
+  max_positions: 8
+  # What the owner's conviction multiplies the base size by, inside caps.position. A judgement:
+  # a stronger conviction is worth more capital, never more than twice a normal idea's.
+  conviction:
+    normal: "1"
+    high: "1.5"
+    max: "2"
+  # The most of the book's capital in one position, one sector, one country and one foreign
+  # currency (the base currency is not a currency risk to this account). lite's `positions` caps
+  # (0.25 initial size, 0.40 sector, 0.80 country, 0.80 single foreign currency), measured on the
+  # book instead of the NAV (D161).
+  caps:
+    position: "0.25"
+    sector: "0.40"
+    country: "0.80"
+    foreign_currency: "0.80"
+  # An idea is traded only while its target's gain is at least this many times its
+  # invalidation's loss, at the price it would be entered at. A judgement: at 2 an idea pays
+  # when it is right one time in three.
+  min_gain_to_loss: "2"
+  liquidity:
+    # The sessions of stored daily bars the average daily traded value is taken over; with fewer
+    # bars carrying a volume the liquidity is unmeasured and the idea waits. A judgement.
+    sessions: 20
+    # A position is at most this share of that average, so it can leave within a session
+    # without being the market (§5.5). A judgement.
+    max_share_of_daily_value: "0.01"
+  # An idea that names no last day to enter may be entered for this many days after it is
+  # handed in; after them it expires unfilled and frees nothing it held. A judgement.
+  entry_window_days: 20
+  # A bearish idea is held as an instrument of one of these core roles (what holds or gains in a
+  # fall), never as a short or an inverse product (§2, §5.5).
+  defensive_roles: [cash, euro_govt_intermediate, euro_govt_long, us_treasuries,
+                    inflation_linked, gold]

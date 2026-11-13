@@ -52,7 +52,9 @@ expires with the earliest quote it rests on (and never after the intent).
 :meth:`PretradeGate.check` runs the same checks without issuing anything, counting named orders
 at an assumed size: an exit that needs its protective stop resized passes its other checks
 before the stop is touched (I5, ``execution/exits.py``). In shadow mode the executor asks it
-with ``simulated``: every check but the mode's refusal to write, for a fill it only simulates.
+with ``simulated``: every check but the mode's refusal to write, for a fill it only simulates; a
+simulated sell is counted against the shadow book's own simulated fills, since the broker holds
+none of them.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -60,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -110,6 +112,9 @@ from .state import BROKER_STATES
 log = get_logger("execution.pretrade")
 
 ZERO = Decimal(0)
+
+#: The earliest stamp: every fill is after it.
+_EPOCH = datetime.min.replace(tzinfo=UTC)
 
 #: The window the daily caps add up: the last 24 hours, not a calendar day.
 CAP_WINDOW = timedelta(days=1)
@@ -899,6 +904,18 @@ class PretradeGate:
         from_store = store_position(reads, fills, conid)
         broker = positions.quantity(conid)
         position = broker if from_store is None else min(broker, from_store)
+        if request.simulated:
+            # A shadow sell reaches no broker: the position it sells is the shadow book's own,
+            # every simulated fill of the instrument, and the broker holds none of it.
+            every = repo.fills_for_conid(store, conid, since=_EPOCH, as_of=now)
+            broker = from_store = position = (
+                sum(
+                    (f.quantity if f.side is OrderSide.BUY else -f.quantity)
+                    for f in every
+                    if f.simulated
+                )
+                or ZERO
+            )
         coids = {entry.coid for entry in clearances} | {
             order.coid for order in live.orders if order.coid is not None
         }

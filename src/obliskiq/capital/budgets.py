@@ -6,6 +6,11 @@ no sufficient research outcome and activation condition yet (D65, D66) — leave
 core, Session 17's rule, so an inactive satellite never strands capital as idle cash. Session 18's
 capital allocation moves the satellite's share, never above ``capital.satellite_ceiling``.
 
+**The thesis book** is the satellite's one layer that trades (MASTER_PLAN §5.5): in shadow and in
+paper it takes ``thesis.capital_share`` of investable capital out of the satellite's budget, and
+the rest of that budget stays in the core (:func:`book_allocation`, DECISIONS D159). On the live
+account its share is the capital allocation rule's; until that rule exists it has none there.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -13,8 +18,14 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from decimal import Decimal
 
+from ..config.schema import ObliskConfig
 from ..config.schema_runtime import CapitalConfig
-from ..domain.orders import Sleeve
+from ..domain.orders import ExecutionMode, Sleeve
+
+ZERO = Decimal(0)
+
+#: The modes in which the thesis book takes its configured share: no real money is at risk there.
+_THESIS_MODES = frozenset({ExecutionMode.SHADOW, ExecutionMode.PAPER})
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,16 +61,27 @@ class SleeveBudgets:
             Sleeve.SATELLITE: self._budgets.equity_satellite,
         }.get(sleeve, self._budgets.option_premium)
 
-    def allocate(self, investable: Decimal, *, active: Collection[Sleeve]) -> Allocation:
+    def allocate(
+        self,
+        investable: Decimal,
+        *,
+        active: Collection[Sleeve],
+        satellite_share: Decimal | None = None,
+    ) -> Allocation:
         """The amounts of ``investable`` each sleeve may use. ``active`` names the sleeves whose
-        layers trade; an inactive sleeve's share stays in the core. What no budget names stays
-        cash, the cash floor at least."""
+        layers trade; an inactive sleeve's share stays in the core. An active satellite whose
+        layers use only ``satellite_share`` of its budget leaves the rest in the core too. What
+        no budget names stays cash, the cash floor at least."""
         if Sleeve.CORE not in active:
             raise ValueError("the core is always active: inactive budgets stay in it")
         core = self.share(Sleeve.CORE)
-        satellite = options = Decimal(0)
+        satellite = options = ZERO
         if Sleeve.SATELLITE in active:
-            satellite = self.share(Sleeve.SATELLITE)
+            budget = self.share(Sleeve.SATELLITE)
+            satellite = budget if satellite_share is None else satellite_share
+            if satellite > budget:
+                raise ValueError("a satellite layer takes at most the satellite's budget")
+            core += budget - satellite
         else:
             core += self.share(Sleeve.SATELLITE)
         if Sleeve.OPTIONS in active:
@@ -73,3 +95,22 @@ class SleeveBudgets:
             options=investable * options,
             cash_floor=investable * self._budgets.cash_floor,
         )
+
+
+def thesis_share(settings: ObliskConfig, mode: ExecutionMode) -> Decimal:
+    """The thesis book's share of investable capital in ``mode``: ``thesis.capital_share`` in
+    shadow and in paper; nothing on the live account, where the capital allocation rule gives it
+    one (Session 18)."""
+    return settings.thesis.capital_share if mode in _THESIS_MODES else ZERO
+
+
+def book_allocation(settings: ObliskConfig, investable: Decimal, mode: ExecutionMode) -> Allocation:
+    """What each sleeve may use of ``investable`` in ``mode``: the core, and the satellite's one
+    trading layer, the thesis book, when it has a share."""
+    share = thesis_share(settings, mode)
+    budgets = SleeveBudgets(settings.capital)
+    if share > ZERO:
+        return budgets.allocate(
+            investable, active={Sleeve.CORE, Sleeve.SATELLITE}, satellite_share=share
+        )
+    return budgets.allocate(investable, active={Sleeve.CORE})

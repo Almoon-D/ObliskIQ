@@ -34,11 +34,12 @@ from ..domain.capital import (
     ReservationState,
 )
 from ..errors import ObliskError
-from ..execution.instruments import UniverseDirectory
+from ..execution.instruments import UniverseDirectory, describe_pinned
 from ..jurisdiction import TAX_POLICIES
 from ..store import capital as capital_repo
 from ..store import lots as lots_repo
 from ..store import open_store
+from ..store import theses as thesis_repo
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook, universe_tax_facts
 from ..tax.report import annual_csv, year_bounds
@@ -422,9 +423,9 @@ def _tax_report(loaded: Loaded, out: TextIO) -> int:
 
     async def work(worker: StoreWorker) -> str:
         policy = TAX_POLICIES.resolve(loaded.profile, settings)
-        book = TaxBook(
-            settings, policy, worker=worker, directory=UniverseDirectory.from_settings(settings)
-        )
+        directory = UniverseDirectory.from_settings(settings)
+        await describe_pinned(directory, worker)
+        book = TaxBook(settings, policy, worker=worker, directory=directory)
         engine = await book.engine()
         realisations = await worker.run(lots_repo.realisations_between, since=first, until=last)
         settled = {s.tax_year: s for s in engine.ledger.settled()}
@@ -432,6 +433,9 @@ def _tax_report(loaded: Loaded, out: TextIO) -> int:
         identities = {
             str(conid): facts.isin for conid, facts in universe_tax_facts(settings.universe).items()
         }
+        identities.update(
+            {str(s.conid): s.isin for s in await worker.run(thesis_repo.pinned_shares)}
+        )
         return annual_csv(
             year,
             realisations=realisations,

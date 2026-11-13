@@ -180,7 +180,7 @@ async def test_the_cash_line_meets_a_reservation_at_once_and_investable_drops(ri
     # The rebalancer spends nothing that is reserved, and recomputes its targets on 700.
     rebalance = await make_rebalancer(rig).survey(PAPER)
     assert rebalance.spendable == D(1000) - D(300) - D(25)
-    assert rebalance.core_capital == D(665)  # 95 % of 700
+    assert rebalance.core_capital == D(595)  # 85 % of 700: the thesis book keeps its 10 %
     assert "R1" in plan.render()
     assert "from the cash line" in plan.render()
 

@@ -27,7 +27,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 12 | Engines and gates | option surface, options sleeve (behind its activation condition), fx, commodity, risk engine, gates | done (built and accepted on an offline fixture store; the sleeve in shadow, H8 unregistered; the order path's contango check still fails closed, D137) | v0.17.0 |
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (parity with the simulator on a fixture history; the owner's variant is D50 since v0.19.0, D147; the live cycle a command list for the owner) | v0.18.0 |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | done (on fixtures; the order test, the execution test and the reserve's paper cycle are the owner's list in docs/RUNBOOK.md) | v0.20.2 |
-| 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | after 22 | |
+| 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | done (on fixtures, in shadow; H13 locked, #63; no IBKR call) | v0.21.0 |
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | **next** (beside 22) | |
@@ -53,11 +53,29 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
-| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward | Sessions 27, 28 |
+| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule; no idea has been handed in | `research/preregistrations/thesis-book.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run (no survivorship-free prices) | Sessions 23, 24 |
 | Can the Hunter's test decide? | Not known: Session 23 computes its chance of a sufficient outcome before any purchase (one composite against its own universe; the same book against the global equity reference would detect only about 8 to 11 % a year) | DECISIONS D154 |
 
 ## Session log
+
+### Session 27 — Thesis book (2026-11-13, v0.21.0)
+
+- **Pre-registered first** (#63, locked): H13 reads the book's after-tax log growth minus a
+  matched twin's in the equity reference at ten six-monthly looks; a step of 0.10 on the live
+  record (alpha 0.05 over all looks, theta 2 %), a return to shadow (alpha 0.10), the same per
+  source and conviction. At an edge of 1.5 tracking errors a step within two years has
+  probability 0.33, not the "about two years" §5.5 states.
+- **Landed** (D159, D161): `obliskiq idea add|list|show|withdraw`; one intake for any source; the gate
+  with reason codes; slots, conviction sizes, the thesis's exits and its stop at the
+  invalidation; grades per source and conviction; the digest's thesis section; a cycle's
+  `thesis` step. A stock candidate is resolved, pinned and described when its thesis needs it.
+- **Changed for it:** the reserve's budget in shadow and paper is 85 % (the book's tenth is cash
+  while idle, against §5.5's "stays in the reserve", D159).
+- **Found** (D160): no sell could be simulated in shadow; the gate now counts a simulated sell
+  against the shadow book's fills. **Prompts edited:** none.
+- **Not built:** the book's twin and its looks (Session 18).
+- **Live findings.** None: no IBKR call.
 
 ### Session 22 — Order path on paper (2026-11-13, v0.20.2)
 
@@ -288,6 +306,8 @@ settles it.
 | Pins for TOPIX, BARN, LISN and JDEP (`obliskiq universe pin`), and resolved descriptions for the 47 pinned instruments without one (an instrument without one is never ordered) | 8 | the collectors' live round |
 | Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`); Stocks: United States, Australia and Germany were held on the paper account by accepted previews [CP ✓ 2026-10-21] (`docs/knowledge/ibkr-capabilities.md`) | 8 | the capability probe (below), then each venue's first order |
 | A stock candidate's holdings ticker and exchange name to IBKR's symbol and code, per venue (`collectors.candidates.exchanges`; resolution on demand) | 8 | the first candidate a thesis pins |
+| Whether `/iserver/contract/{conid}/info` or `/trsrv/secdef` tells a share from an ETF and carries the ISIN: until read, a share outside the universe file needs a holdings-file equity line and an owner-given ISIN (D159) | 27 | the first candidate a thesis pins |
+| The thesis book on the paper account: an entry with its stop resting at the invalidation, a funded entry in dollars, an exit beside its stop (`decision/rebalance_thesis.py`, fixtures only) | 27 | the first owner idea after the reserve's paper cycle |
 | The capability probe on the paper account (`obliskiq universe capabilities --probe`, whatif only): search, quote, contract rules, algos and a preview per check, on every venue `capabilities.yaml` lists, US and Eurex options included; then the readings recorded in `capabilities.yaml` and `docs/knowledge/ibkr-capabilities.md` by a reviewed change | 9 | the first command list after T1's order test |
 | Order types and algos per asset class, by name (T1 counted 12 types and 10 algos for SPY, 9 types for BHP, without names) | 9 | the capability probe |
 | The trading-permission field 7768's values on a snapshot (IBKR's field table) | 9 | the capability probe |
@@ -487,10 +507,18 @@ settles it.
 - Session 12: the options the chain collector records join the order path's directory
   (`UniverseDirectory.from_settings(options=…)`, each with its multiplier) when the options sleeve
   orders one; Session 8 stores them.
-- Session 15: a pinned stock candidate is seeded and collected, but it is not in
-  `config/universe.yaml`, so the order path neither describes it nor judges it eligible (both
-  refuse, fail closed); its attributes (a share, its venue's lot) join the directory and the
-  policy when the satellite first orders one.
+- Session 18: the thesis book's twin, its looks and its live share by H13
+  (`research/preregistrations/thesis-book.md`); how its idle capital is held on the live account
+  (cash in shadow and paper, D159); a thesis left in another mode's record after a mode change
+  (held, never managed, today).
+- A pinned stock candidate's venue lot (Tokyo's board lot of 100) is not applied to a thesis's
+  quantity: IBKR's contract rules refuse an odd lot at the order. A venue first used by a thesis
+  has its calendar loaded at the service's next start.
+- Session 26: one conid belongs to one sleeve. An idea on an instrument the reserve holds is
+  refused; the reverse (a core role whose vehicle a thesis already holds) is refused on paper by
+  the gate's holdings check and is not told apart in shadow, where holdings are read from fills.
+- The thesis book's caps count a position at its approved size, not its market value, and a
+  fund's sector and country are unstated, so no cap counts it (Session 17's look-through, D69).
 - Session 11: positions held outside the universe (lite's portfolio union) are not collected. The
   vehicle selector ranks universe instruments only (D120), so a held instrument joins the universe
   by a reviewed entry; Session 11's views decide which ones to propose.

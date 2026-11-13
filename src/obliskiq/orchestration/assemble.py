@@ -27,6 +27,7 @@ from ..data.market.targets import collection_venues
 from ..data.runner import HEARTBEAT_SOURCES, SourceRunner, client_for
 from ..decision.core_vehicles import CoreVehicleChooser, CorrelationSource
 from ..decision.rebalance_core import CoreRebalancer
+from ..decision.rebalance_thesis import ThesisRebalancer
 from ..decision.swap_partners import SwapPartners
 from ..decision.vehicle_selector import VehicleSelector
 from ..env import Environment, secret_reader
@@ -154,6 +155,24 @@ def build_rebalancer(
     )
 
 
+def build_thesis_book(
+    settings: ObliskConfig, path: OrderPath, parts: CapitalParts, *, now: Callable[[], datetime]
+) -> ThesisRebalancer:
+    """The thesis book's rebalancer over an open order path, under the profile's eligibility."""
+    return ThesisRebalancer(
+        settings,
+        capital=parts.capital,
+        directory=path.directory,
+        calendars=path.calendars,
+        worker=path.worker,
+        maker=parts.maker,
+        kill=path.kill,
+        eligibility=ELIGIBILITY_POLICIES.resolve(path.profile, settings),
+        secdef=path.client.secdef,
+        now=now,
+    )
+
+
 def build_service(
     settings: ObliskConfig,
     *,
@@ -172,11 +191,13 @@ def build_service(
     core's vehicle selector its research correlations."""
     parts = build_capital(settings, path, now=clock.now)
     rebalancer = build_rebalancer(settings, path, parts, now=clock.now, correlations=correlations)
+    thesis = build_thesis_book(settings, path, parts, now=clock.now)
     venues = sorted({*calendar_venues(settings, path.directory), *anchor_venues(settings)})
     jobs = Jobs(
         settings,
         path=path,
         rebalancer=rebalancer,
+        thesis=thesis,
         capital=parts,
         nav=NavCollector(settings, reader=path.reader, worker=path.worker, now=clock.now),
         reporter=reporter,

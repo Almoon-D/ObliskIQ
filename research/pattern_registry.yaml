@@ -219,9 +219,6 @@ patterns:
   - id: thesis-book
     hypothesis: H13
     title: Written ideas from the LLM analyst and the owner, held in a concentrated book
-    status: idea
-    data_needed: >-
-      A forward record: no history can replay a judgement. Session 27 locks the pre-registration
-      before the first thesis and builds the book in shadow; Session 28 adds the analyst. Each
-      closed thesis is graded against what it wrote, per source and conviction level, and the
-      book against the equity reference at pre-registered looks (DECISIONS D156).
+    status: pre-registered
+    preregistration: research/preregistrations/thesis-book.md
+    lock: research/preregistrations/thesis-book.lock

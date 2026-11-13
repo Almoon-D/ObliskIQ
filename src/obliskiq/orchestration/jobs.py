@@ -1,14 +1,15 @@
 """The service's jobs: a decision cycle, the heartbeat and the daily digest (MASTER_PLAN §5.14).
 
-**A decision cycle** is one run record of four guarded steps: ``nav`` (today's NAV row and the
+**A decision cycle** is one run record of five guarded steps: ``nav`` (today's NAV row and the
 day's exchange rates, ``orchestration/nav.py``), ``reserve`` (the owner questions whose deadline
 passed take their default, then the reservation planner's survey, questions and today's sales,
 ``capital/planner.py``), ``rebalance`` (the core engine's target portfolio against the book, as
-intents, ``decision/rebalance_core.py``) and ``execute`` (the executor's cycle: sync, settle exits,
-expire, follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry run reads
-and plans, and writes nothing: no NAV row, no run record, no question, no intent, no order. The
-owner hears a run summary when a cycle did something or something failed, and every question the
-planner asks.
+intents, ``decision/rebalance_core.py``), ``thesis`` (the thesis book's entries and exits, as
+intents, ``decision/rebalance_thesis.py``) and ``execute`` (the executor's cycle: sync, settle
+exits, expire, follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry
+run reads and plans, and writes nothing: no NAV row, no run record, no question, no intent, no
+order. The owner hears a run summary when a cycle did something or something failed, and every
+question the planner asks.
 
 **The heartbeat** (every ``runtime.heartbeat_seconds``): the executor's cycle over the intents
 already made, so reprices keep their pace, a staged intent goes out as its venue opens, a fill
@@ -36,6 +37,7 @@ from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.schema import ObliskConfig
 from ..data.runner import source_health
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
+from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
 from ..domain.capital import OwnerQuestion
 from ..domain.orders import (
     TERMINAL_STATES,
@@ -62,7 +64,7 @@ from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcom
 log = get_logger("orchestration.jobs")
 
 #: The run log's names for the steps of a cycle and of the digest.
-CYCLE_STEPS = ("nav", "reserve", "rebalance", "execute")
+CYCLE_STEPS = ("nav", "reserve", "rebalance", "thesis", "execute")
 DIGEST_STEPS = ("digest",)
 #: Alert sources: the job whose rounds raise and clear a condition.
 HEARTBEAT = "heartbeat"
@@ -80,6 +82,7 @@ class CycleResult:
     nav: NavOutcome | None = None
     reservations: ReservationPlan | None = None
     planner: PlannerActions | None = None
+    theses: ThesisPlan | None = None
 
 
 class Jobs:
@@ -91,6 +94,7 @@ class Jobs:
         *,
         path: OrderPath,
         rebalancer: CoreRebalancer,
+        thesis: ThesisRebalancer,
         capital: CapitalParts,
         nav: NavCollector,
         reporter: Reporter,
@@ -103,6 +107,7 @@ class Jobs:
         self._settings = settings
         self._path = path
         self._rebalancer = rebalancer
+        self._thesis = thesis
         self._capital = capital
         self._nav = nav
         self._reporter = reporter
@@ -173,6 +178,17 @@ class Jobs:
             )
             if planned is not None:
                 result.plan, result.made = planned
+
+            async def theses() -> tuple[ThesisPlan, list[OrderIntent]]:
+                plan = await self._thesis.survey(mode)
+                return plan, [] if dry_run else await self._thesis.apply(plan)
+
+            booked = await record.step(
+                "thesis", theses, lambda done: _judge_theses(done, dry_run=dry_run)
+            )
+            if booked is not None:
+                result.theses = booked[0]
+                result.made = [*result.made, *booked[1]]
             if dry_run:
                 record.outcomes.append(StepOutcome("execute", SKIPPED, "dry run"))
             else:
@@ -462,6 +478,7 @@ class Jobs:
                 modes=path.modes,
                 kill=path.kill,
                 rebalancer=self._rebalancer,
+                thesis=self._thesis,
                 planner=self._capital.planner,
                 calendars=path.calendars,
                 venues=self._venues,
@@ -518,6 +535,20 @@ def _judge_plan(planned: tuple[RebalancePlan, list[OrderIntent]], *, dry_run: bo
     # A deliberate stop (the kill switch, a freeze) skips the step; a read that failed is an error.
     failed = plan.blocked.startswith(("the account cannot be read", "the account's net"))
     return StepOutcome("rebalance", ERROR if failed else SKIPPED, plan.blocked, detail)
+
+
+def _judge_theses(booked: tuple[ThesisPlan, list[OrderIntent]], *, dry_run: bool) -> StepOutcome:
+    plan, made = booked
+    detail = {"theses": len(plan.decisions), "trades": len(plan.trades), "intents": len(made)}
+    if plan.blocked is not None:
+        failed = plan.blocked.startswith(("the account cannot be read", "the account's net"))
+        return StepOutcome("thesis", ERROR if failed else SKIPPED, plan.blocked, detail)
+    if not dry_run and len(made) < len(plan.trades):
+        unpriced = len(plan.trades) - len(made)
+        return StepOutcome(
+            "thesis", DEGRADED, f"{unpriced} planned trade(s) could not be priced", detail
+        )
+    return StepOutcome("thesis", OK, f"{len(plan.trades)} trade(s) planned", detail)
 
 
 def _judge_cycle(report: CycleReport) -> StepOutcome:

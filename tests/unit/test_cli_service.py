@@ -125,7 +125,13 @@ def test_a_cycle_runs_and_records_itself(
     with open_store(_settings(config_dir), data_dir) as store:
         (record,) = run_repo.runs_since(store, since=date(2000, 1, 1))
     assert record.command == "cycle:manual"
-    assert [s["step"] for s in record.detail["steps"]] == ["nav", "reserve", "rebalance", "execute"]
+    assert [s["step"] for s in record.detail["steps"]] == [
+        "nav",
+        "reserve",
+        "rebalance",
+        "thesis",
+        "execute",
+    ]
 
 
 def test_a_command_that_opens_the_broker_refuses_while_another_holds_the_lock(

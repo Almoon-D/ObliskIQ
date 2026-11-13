@@ -5,6 +5,7 @@ them over an order path.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -110,3 +111,9 @@ def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -
         correlations=kw.pop("correlations", None),
         now=rig.clock,
     )
+
+
+def reserve_alone(settings: ObliskConfig) -> ObliskConfig:
+    """``settings`` whose thesis book has no share, so the core keeps the satellite's budget."""
+    thesis = settings.thesis.model_copy(update={"capital_share": Decimal(0)})
+    return settings.model_copy(update={"thesis": thesis})

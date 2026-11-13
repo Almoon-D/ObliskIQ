@@ -4,7 +4,8 @@
 The core holds the variant ``core.variant`` names (``engines/core/variants.py``) on its budget
 (``capital/budgets.py``): investable capital (managed less reserved less unmanaged,
 ``capital/managed.py``) times the core's share, which keeps the budgets of the sleeves that do not
-trade yet and leaves the cash floor as cash. At each decision cycle:
+trade yet, leaves the thesis book its share and leaves the cash floor as cash. At each decision
+cycle:
 
 1. every role's **vehicles** are chosen through the vehicle selector and the swap-partner rule
    (``decision/core_vehicles.py``), the book's held vehicles kept; a vehicle without a quote this
@@ -44,15 +45,14 @@ survey's portfolio is noted on the core's StrategyValue (``capital/core_value.py
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 
 from ..calendars.service import Calendars
-from ..capital.budgets import SleeveBudgets
+from ..capital.budgets import book_allocation
 from ..capital.core_value import CoreStrategyValue
-from ..capital.deploy import held_back
 from ..capital.managed import BookHolding, CapitalReader, CapitalView
 from ..config.schema import ObliskConfig
 from ..config.schema_runtime import TradingConfig
@@ -66,9 +66,7 @@ from ..domain.core import (
 )
 from ..domain.instrument import TradedInstrument
 from ..domain.orders import (
-    TERMINAL_STATES,
     ExecutionMode,
-    IntentState,
     OrderIntent,
     OrderSide,
     ReconcileStatus,
@@ -88,11 +86,11 @@ from ..ibkr.identity import resolve_identity
 from ..logging_setup import get_logger
 from ..quant.costs import CostBook
 from ..quant.costs import OrderTerms as CostTerms
-from ..store import capital as capital_repo
 from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook, TaxHooks
 from ..util.timeutil import utc_now
+from .book_cash import BookCash
 from .core_vehicles import (
     CoreVehicleChooser,
     CoreVehicles,
@@ -112,10 +110,6 @@ REASON = "rebalance"
 
 #: Actions a role's decision may take.
 HOLD, BUY, SELL, SKIP = "hold", "buy", "sell", "skip"
-
-#: The sleeves that trade in this build: the core alone, so the other budgets stay in it until a
-#: layer's activation condition holds (D65, D66; Sessions 12, 15 and 17).
-ACTIVE_SLEEVES = frozenset({Sleeve.CORE})
 
 #: What a correlation reads when no research history was handed in.
 NO_RESEARCH = "no research history was handed to the rebalancer"
@@ -296,11 +290,11 @@ class CoreRebalancer:
         self._correlations = correlations
         self._now = now
         self._sleeve = Sleeve.CORE
-        self._base = settings.account.base_currency
         self._trading = settings.trading
-        self._floor = settings.execution.pretrade.cash_floor
+        self._cash = BookCash(
+            settings, capital=capital, directory=directory, worker=worker, now=now
+        )
         self._band = settings.research.simulation.no_trade_band_fraction
-        self._budgets = SleeveBudgets(settings.capital)
         self._variant: Variant = build_variant(settings)
         self._refused: dict[int, str] = {}
 
@@ -325,49 +319,10 @@ class CoreRebalancer:
         held = await self._capital.holdings(mode)
         return {conid: units for conid, (sleeve, units) in held.items() if sleeve is self._sleeve}
 
-    async def _pending(self, mode: ExecutionMode) -> tuple[set[int], list[OrderIntent]]:
-        """Conids an intent of this mode still works on (a cancelled one waiting to be retried
-        at the next window included), and every open buy of this mode."""
-        now = self._now()
-        busy: set[int] = set()
-        buys: list[OrderIntent] = []
-        open_states = [state for state in IntentState if state not in TERMINAL_STATES]
-        for stored in await self._worker.run(repo.intents_in_states, open_states):
-            intent = stored.intent
-            if intent.mode is not mode:
-                continue
-            busy.add(intent.conid)
-            if intent.side is OrderSide.BUY and not intent.terms.conversion:
-                buys.append(intent)
-        for stored in await self._worker.run(repo.intents_in_states, [IntentState.CANCELLED]):
-            intent = stored.intent
-            if intent.mode is mode and intent.expires_at > now and not intent.terms.conversion:
-                busy.add(intent.conid)
-        return busy, buys
-
-    async def _committed(self, buys: Sequence[OrderIntent], cash: CashRead) -> Decimal | None:
-        """What the open buys still commit, in the base currency (``None``: one is unvalued)."""
-        total = ZERO
-        for intent in buys:
-            instrument = self._directory.describe(intent.conid)
-            rate = (
-                None
-                if instrument is None
-                else await self._capital.valuer.rate(instrument.currency, cash)
-            )
-            quantity = intent.terms.quantity
-            if instrument is None or rate is None or quantity is None:
-                return None
-            fills = await self._worker.run(repo.fills_for_intent, intent.intent_id)
-            left = max(ZERO, quantity - sum((fill.quantity for fill in fills), ZERO))
-            total += left * intent.terms.price.limit * instrument.multiplier * rate
-        return total
-
-    async def _held_back(self, cash: CashRead) -> Decimal | None:
-        """The part of the deposits not released for deployment yet, in the base currency."""
-        flows = await self._worker.run(capital_repo.cash_flows)
-        held = held_back(flows, self._settings.capital, today=self._now().date())
-        return await self._capital.valuer.cash_value(held, cash)
+    async def _pending(self, mode: ExecutionMode) -> set[int]:
+        """Conids an intent of this mode still works on."""
+        busy, _ = await self._cash.pending(mode)
+        return {intent.conid for intent in busy}
 
     async def _hooks(self) -> TaxHooks | None:
         try:
@@ -375,26 +330,6 @@ class CoreRebalancer:
         except TaxError as exc:
             log.warning("the tax lots cannot be read", extra={"error": str(exc)})
             return None
-
-    async def _spendable(
-        self, mode: ExecutionMode, view: CapitalView, cash: CashRead
-    ) -> Decimal | str:
-        """What the book may spend now, or why it cannot be said."""
-        _, buys = await self._pending(mode)
-        committed = await self._committed(buys, cash)
-        if committed is None:
-            return "an open buy cannot be valued in the base currency"
-        account_cash = ZERO
-        for line in cash.lines:
-            rate = await self._capital.valuer.rate(line.currency, cash)
-            if rate is None:
-                return f"the {line.currency} cash cannot be valued in {self._base}"
-            account_cash += line.cash * rate
-        held_back_now = await self._held_back(cash)
-        if held_back_now is None:
-            return f"a deposit cannot be valued in {self._base}"
-        book_cash = view.book_cash - view.reserved - held_back_now
-        return max(ZERO, min(account_cash, book_cash) - committed - self._floor)
 
     async def _measured(self, today: date) -> Correlations:
         """The research correlations handed in, read for today; unmeasured, with why, when there
@@ -549,9 +484,9 @@ class CoreRebalancer:
             plan.blocked = view
             return plan
         plan.capital = view
-        budget = self._budgets.allocate(view.investable, active=ACTIVE_SLEEVES).core
+        budget = book_allocation(self._settings, view.investable, mode).core
         plan.core_capital = budget
-        spendable = await self._spendable(mode, view, cash)
+        spendable = await self._cash.spendable(mode, view, cash)
         if isinstance(spendable, str):
             plan.blocked = spendable
             return plan
@@ -611,7 +546,7 @@ class CoreRebalancer:
         plan.portfolio = portfolio
         if self._value is not None:
             self._value.note(portfolio)
-        busy, _ = await self._pending(mode)
+        busy = await self._pending(mode)
         plan.decisions = self._decide(
             portfolio,
             priced,

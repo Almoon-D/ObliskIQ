@@ -73,7 +73,8 @@ async def test_cycle_one_fills_in_shadow_and_cycle_two_does_nothing(make: Any) -
     filled = await intents(s, IntentState.FILLED)
     assert len(filled) == 3, [(i.intent.conid, i.intent.state) for i in made]
     quantities = {i.intent.conid: i.intent.terms.quantity for i in made}
-    # The core's budget is 95 % of the book (the cash floor stays cash): 171, 133 and 646 euros.
+    # The core's budget is 85 % of the book (the thesis book's share and the cash floor stay
+    # cash): 153, 119 and 578 euros.
     assert quantities == {IBGM: Decimal(3), IWDA: Decimal(1), EMIM: Decimal(2)}
     assert s.broker.placements == []  # nothing reached the broker
     # The NAV row of the day was written by the cycle's first step.
@@ -85,6 +86,7 @@ async def test_cycle_one_fills_in_shadow_and_cycle_two_does_nothing(make: Any) -
         "nav",
         "reserve",
         "rebalance",
+        "thesis",
         "execute",
     ]
 

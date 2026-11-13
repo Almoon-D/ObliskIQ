@@ -153,6 +153,9 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
   disagrees, ❔ not covered.
 - **Health and open alerts**: the last heartbeat, the broker session, the last cycle, and the
   conditions still holding (each was sent once when it began).
+- **Thesis book**: its capital, each open idea with what the plan does (`enter`, `hold`, `exit`,
+  `close`, or `wait` with the reason it is withheld), the ideas that ended today and why, and the
+  record of the closed ones for the book, each source and each conviction level.
 - **Withdrawals, questions, unexplained cash**: each open reservation and how it is met, the
   questions waiting for your answer, and any cash change the bot could not explain (new buys are
   frozen until you classify it).
@@ -181,6 +184,46 @@ uv run obliskiq tax report --year 2026 --out tax-2026.csv   # not tax advice
 
 A reservation lowers investable capital at once; the bot raises the cash before the date and asks
 before selling a protected position. Without an answer by the deadline, the withdrawal wins.
+
+## Your ideas (the thesis book)
+
+None of these opens a brokerage session, so all are safe beside the running service. An idea is
+judged at the service's next cycle; with no idea the book holds nothing.
+
+```
+uv run obliskiq idea add FCX --expect "copper tightens as mines close" \
+    --target 60 --invalidation 38 --horizon 2027-06-30       # a symbol of config/universe.yaml
+uv run obliskiq idea add SGLD --bearish --expect "equities fall" \
+    --target 400 --invalidation 300 --horizon 2027-03-31     # a bearish view: a defensive instrument
+uv run obliskiq idea add --candidate jp:toyota_motor --isin JP3633400001 --expect "..." \
+    --target 4000 --invalidation 2500 --horizon 2027-06-30   # a share outside the universe file
+uv run obliskiq idea list                                    # open ideas (--all: every idea)
+uv run obliskiq idea show T1                                 # one idea, its log and its grade
+uv run obliskiq idea withdraw T1                             # before its first fill only
+```
+
+- **What an idea needs.** The instrument, what you expect and why, a target price, an
+  invalidation price (what proves it wrong) and a horizon. Without one of them it is refused and
+  nothing is stored. The target lies above the invalidation: the book never shorts. Prices are in
+  the instrument's own currency.
+- **Options.** `--conviction high` or `max` multiplies the size (1.5 and 2 times a normal idea)
+  inside the position cap. `--entry-max` enters only at or below a price. `--enter-by` is the last
+  day to enter; without it the idea may be entered for `thesis.entry_window_days` (20).
+- **A share outside the universe file** is named by its stock candidate's key (the holdings files
+  `obliskiq collect candidates` reads) with its ISIN, which the tax lots are kept by. The service
+  resolves it through IBKR's contract search at its next cycle. A fund, ETF or ETC enters through
+  a reviewed entry in `config/universe.yaml`, because its eligibility is judged on its declared
+  attributes.
+- **What happens next.** The gate judges it: the mandate, eligibility, liquidity, the caps, the
+  ratio of the target's gain to the invalidation's loss (at least `thesis.min_gain_to_loss`), a
+  free slot. A refusal is final and says why; anything else withholds the idea, with the reason
+  in the digest, until its entry window ends. Once approved its text never changes. It leaves at
+  its target, its invalidation or its horizon; on paper a stop rests at the broker at the
+  invalidation. A closed idea is graded against what it wrote.
+- **Capital.** In shadow and on paper the book works on `thesis.capital_share` of investable
+  capital (a tenth), an eighth of it for a normal idea; set it to `"0"` in `config/owner.yaml` to
+  give the reserve everything. On the live account the book has no capital until the capital
+  allocation rule exists.
 
 ## Before a Claude session with live IBKR checks
 
