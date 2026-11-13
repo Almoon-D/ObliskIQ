@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eligibility_double import AllowlistEligibility
 from service_rig import CURRENCY, EMIM, ServiceRig
 from thesis_rig import draft
 
@@ -23,8 +24,17 @@ from obliskiq.decision.thesis_intake import ThesisIntake
 from obliskiq.domain.enums import AssetClass, InstrumentRole
 from obliskiq.domain.instrument import Instrument
 from obliskiq.domain.market import Bar
-from obliskiq.domain.orders import ExecutionMode, IntentRole, IntentState, Sleeve
+from obliskiq.domain.orders import (
+    ExecutionMode,
+    IntentRole,
+    IntentState,
+    ReconcileFinding,
+    ReconcileRun,
+    ReconcileStatus,
+    Sleeve,
+)
 from obliskiq.domain.thesis import Thesis, ThesisState
+from obliskiq.execution.instruments import UniverseDirectory
 from obliskiq.orchestration.assemble import build_thesis_book
 from obliskiq.orchestration.parts import build_capital
 from obliskiq.store import open_database, repos
@@ -266,3 +276,203 @@ async def test_an_owner_idea_goes_from_idea_add_to_a_shadow_fill_an_exit_and_its
         "order",
         "state",
     ]
+
+
+# ── the gate's failure branches, in shadow ──
+
+XEON = 46041702
+CURRENCY[XEON] = "EUR"
+
+
+async def surveyed(s: ServiceRig, **kw: Any) -> ThesisPlan:
+    return await book(s, **kw).survey(ExecutionMode.SHADOW)
+
+
+async def test_an_ineligible_instrument_is_refused(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    strict = book(s, eligibility=AllowlistEligibility([]))
+    plan = await strict.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, codes(plan)) == ("refuse", ["ineligible"])
+    assert await strict.apply(plan) == []
+    assert (await state(s)).state is ThesisState.REFUSED
+    assert (await log(s))[-1] == f"state: ineligible: conid {SPPW} is not in the allowlist"
+    assert (await surveyed(s)).decisions == []
+
+
+async def test_an_illiquid_instrument_is_refused_and_an_unmeasured_one_waits(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    quote(s, XEON, "45")
+    await seed_bars(s, XEON, 45.0, volume=None)  # bars without a volume measure nothing
+    await idea(s, symbol="XEON")
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["liquidity_unmeasured"])
+    await seed_bars(s, XEON, 45.0, volume=10)  # 450 a day: 1,250 is far above 1 % of it
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("refuse", ["illiquid"])
+
+
+async def test_a_full_book_withholds_the_next_idea_in_order_of_arrival(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, max_positions=1)
+    quote(s, XEON, "45")
+    await seed_bars(s, XEON, 45.0)
+    await idea(s)
+    await idea(s, symbol="XEON")
+    thesis_book = book(s)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    first, second = plan.decisions
+    # One slot: with one position the base size is the whole book, held to the position cap.
+    assert (first.action, first.size_base) == ("enter", D(2500))
+    assert (second.action, [f.code.value for f in second.findings]) == ("wait", ["book_full"])
+    (made,) = await thesis_book.apply(plan)
+    assert made.thesis_id == "T1"
+    assert (await log(s, 2))[-1].startswith("withheld: book_full: the book holds its 1 positions")
+    await thesis_book.apply(await thesis_book.survey(ExecutionMode.SHADOW))
+    assert len(await log(s, 2)) == 2  # the same reason is not logged again every cycle
+
+
+async def test_a_conid_another_book_or_thesis_holds_is_refused(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await cycle(s)
+    await work(s)  # the reserve's shadow fills: it holds EMIM now
+    await seed_bars(s, EMIM, 46.42)
+    await idea(s, symbol="EMIM")
+    await idea(s)
+    await idea(s)
+    await idea(s, symbol="XEON")
+    quote(s, XEON, "45")
+    await seed_bars(s, XEON, 45.0)
+    await s.rig.assign(XEON, Sleeve.CORE)
+    plan = await surveyed(s)
+    core, first, twin, assigned = plan.decisions
+    assert (core.action, core.reason) == ("refuse", "held_elsewhere: the core book holds EMIM")
+    assert first.action == "enter"
+    assert (twin.action, twin.reason) == (
+        "refuse",
+        "held_elsewhere: another thesis already holds a slot on SPPW",
+    )
+    assert assigned.reason == (
+        "held_elsewhere: XEON is assigned to core, not to the thesis book's sleeve"
+    )
+
+
+async def test_a_stale_quote_at_entry_withholds_the_idea_and_no_order_is_made(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    del s.broker.quotes[SPPW]
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["no_quote"])
+    # The quote is lost between the plan and the order: approved, nothing made, tried again.
+    quote(s, SPPW, "45")
+    thesis_book = book(s)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert only(plan).action == "enter"
+    del s.broker.quotes[SPPW]
+    assert await thesis_book.apply(plan) == []
+    assert (await state(s)).state is ThesisState.APPROVED
+    assert (await log(s))[-1] == "withheld: not_priced: entry not made: it has no quote"
+    assert await thesis_intents(s) == []
+    quote(s, SPPW, "45")
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, only(plan).size_base) == ("enter", D(1250))
+    (made,) = await thesis_book.apply(plan)
+    assert made.terms.quantity == D(27)
+    # Its entry order works: nothing more is decided on it.
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, codes(plan)) == ("wait", ["working"])
+
+
+async def test_entries_wait_for_the_kill_switch_a_freeze_the_venue_and_cash(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    await idea(s, symbol="FCX")
+    await s.path.kill.turn_on(actor="test", reason="drill")
+    plan = await surveyed(s)
+    europe, new_york = plan.decisions
+    assert plan.entries_blocked == "the kill switch is on"
+    assert [f.code.value for f in europe.findings] == ["entries_blocked"]
+    assert [f.code.value for f in new_york.findings] == ["entries_blocked", "venue_not_tradable"]
+    assert "no entry now: the kill switch is on" in plan.render()
+    await s.path.kill.turn_off(actor="test", reason="over")
+    await s.rig.store(
+        repo.record_reconciliation,
+        ReconcileRun(
+            at=s.clock.now(),
+            status=ReconcileStatus.DRIFT,
+            findings=(ReconcileFinding(kind="position", detail="x", freezes=True),),
+        ),
+    )
+    plan = await surveyed(s)
+    assert plan.entries_blocked == "reconciliation is drift: new risk is frozen"
+    s.broker.cash = {"EUR": (D(1000), None)}
+    assert "no_cash" in [f.code.value for f in (await surveyed(s)).decisions[0].findings]
+
+
+async def test_an_idea_expires_when_its_window_ends_or_its_levels_pass_first(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s, enter_by=MONDAY)
+    await idea(s, symbol="XEON")
+    quote(s, XEON, "61")
+    await seed_bars(s, XEON, 45.0)
+    thesis_book = book(s)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert [d.action for d in plan.decisions] == ["enter", "refuse"]
+    assert plan.decisions[1].findings[0].code.value == "target_passed"
+    del s.broker.quotes[SPPW]
+    await thesis_book.apply(plan)  # approved, its entry not priced
+    quote(s, SPPW, "39")
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, codes(plan)) == ("expire", ["invalidated"])
+    await thesis_book.apply(plan)
+    assert (await state(s)).state is ThesisState.EXPIRED
+    await idea(s, enter_by=MONDAY)
+    s.clock.wall.now = EUROPE + timedelta(days=1)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, only(plan).reason) == (
+        "expire",
+        "its entry window ended without a fill",
+    )
+
+
+async def test_a_book_without_capital_or_an_unreadable_account_enters_nothing(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, capital_share=D(0))
+    await idea(s)
+    plan = await surveyed(s)
+    assert (plan.capital, codes(plan)) == (D(0), ["no_capital"])
+    s.broker.nav = None
+    blocked = await surveyed(s)
+    assert blocked.blocked is not None
+    assert "net liquidation value cannot be read" in blocked.blocked
+    assert "nothing is decided" in blocked.render()
+    s.broker.unavailable.add("ledger")
+    assert (await surveyed(s)).blocked.startswith("the account cannot be read")  # type: ignore[union-attr]
+    result = await s.service.jobs.cycle("test", MONDAY)
+    assert result.theses is not None
+    assert result.theses.blocked is not None
+
+
+async def test_a_universe_instrument_nobody_describes_waits(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    bare = book(s, directory=UniverseDirectory([]))
+    bare._capital = s.service.jobs._capital.capital  # the book is still valued
+    plan = await bare.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, codes(plan)) == ("wait", ["not_described"])
