@@ -78,7 +78,6 @@ from ..store.orders import IntentFill
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
-from .rebalance_core import minimum_trade
 from .thesis_intake import find_candidate
 from .vehicle_inputs import market_inputs
 from .vehicle_selector import VehicleMarket
@@ -211,6 +210,9 @@ class ThesisRebalancer:
             settings, capital=capital, directory=directory, worker=worker, now=now
         )
         self._sessions = Decimal(settings.execution.collar.sessions_per_year)
+        # The absolute minimum trade alone: the share of managed capital beside it is the core's
+        # inertia, and a normal idea is a smaller share of the book than that by construction.
+        self._minimum = settings.trading.min_trade.absolute_base or ZERO
 
     # ── the survey ──
 
@@ -250,7 +252,7 @@ class ThesisRebalancer:
             cash=cash,
             capital=allocation.satellite,
             spendable=max(ZERO, spendable - allocation.cash_floor),
-            minimum=minimum_trade(self._settings.trading, view.managed),
+            minimum=self._minimum,
             fills=book_fills(await self._worker.run(repo.intent_fills), mode),
             busy=[i for i in busy if i.role in (IntentRole.ENTRY, IntentRole.EXIT)],
             market=await self._worker.run(
