@@ -6,7 +6,8 @@ algos offered, read a quote, preview the order (whatif), then make an entry inte
 minimum quantity at a limit that cannot fill (``limit_offset_fraction`` below the bid, rounded down
 to the contract's tick), clear it through the pre-trade gate, place it through the write boundary,
 read its status and the live orders (is the cOID listed?), and cancel it. Every reply message id
-is recorded.
+is recorded, and so is the ``snapshot`` flag of the session's first two live-orders reads (the
+pre-read and the read after it, which must be a complete list).
 
 An instrument quoted in a currency the account does not hold is refused by the gate's cash check
 (``currency_not_held``): that refusal is the expected, recorded outcome, not a failure. The test
@@ -52,6 +53,11 @@ EXPECTED_CASH_REFUSALS = frozenset({Reason.CURRENCY_NOT_HELD.value})
 
 #: The paper order test buys for the core sleeve: a label, the order is cancelled at once.
 TEST_SLEEVE = Sleeve.CORE
+
+#: The live-orders reads whose ``snapshot`` flag the report prints (the pre-read and the read
+#: after it), and the flag that marks a complete list.
+FIRST_READS = 2
+COMPLETE_FLAG = "true"
 
 
 @dataclass
@@ -124,6 +130,13 @@ class PaperOrderTest:
                 await self._one(instrument, report)
             except ObliskError as exc:
                 report.add(f"{instrument.symbol} stopped", False, str(exc))
+        flags = self._path.orders.first_live_orders_flags
+        if flags:
+            report.add(
+                "live orders",
+                len(flags) == FIRST_READS and flags[-1] == COMPLETE_FLAG,
+                f"the `snapshot` flag of this session's first reads: {', then '.join(flags)}",
+            )
         return report
 
     async def _terms(

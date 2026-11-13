@@ -179,6 +179,12 @@ class BrokerSession:
         return self._authenticated
 
     @property
+    def generation(self) -> int:
+        """How many repairs (a re-arm or a re-login) have finished. What IBKR keeps per brokerage
+        session, the live orders' pre-flight among it, starts again with each."""
+        return self._repairs
+
+    @property
     def lost_for(self) -> float | None:
         """Seconds until a deferred repair may run (the session is lost meanwhile), or ``None``."""
         if self._deferred_until is None:

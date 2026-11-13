@@ -111,6 +111,12 @@ class FakeBroker:
         self.listing_delay = 0
         #: Whether the live-orders answer is a complete snapshot.
         self.snapshot = True
+        #: The ``snapshot`` flag of the next live-orders answers, in order (``None``: the answer
+        #: carries no flag, as a brokerage session's first one); ``snapshot`` after them.
+        self.next_snapshots: deque[bool | None] = deque()
+        #: The next live-orders reads are answered with these responses instead (not counted
+        #: in ``live_order_reads``).
+        self.next_live_answers: deque[httpx.Response] = deque()
         #: Rewrites the live-orders rows before they are answered (malformed rows, for tests).
         self.rewrite_live_rows: Callable[[list[Any]], list[Any]] | None = None
         #: The next cancel arrives after the order has filled.
@@ -465,6 +471,8 @@ class FakeBroker:
         down = self._down("orders")
         if down is not None:
             return down
+        if self.next_live_answers:
+            return self.next_live_answers.popleft()
         self.live_order_reads += 1
         rows = []
         for order in self.orders.values():
@@ -475,7 +483,11 @@ class FakeBroker:
         answer: list[Any] = rows
         if self.rewrite_live_rows is not None:
             answer = self.rewrite_live_rows(rows)
-        return httpx.Response(200, json={"orders": answer, "snapshot": self.snapshot})
+        flag = self.next_snapshots.popleft() if self.next_snapshots else self.snapshot
+        body: dict[str, Any] = {"orders": answer}
+        if flag is not None:
+            body["snapshot"] = flag
+        return httpx.Response(200, json=body)
 
     def _trades(self, request: httpx.Request) -> httpx.Response:
         down = self._down("trades")

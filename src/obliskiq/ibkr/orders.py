@@ -13,8 +13,10 @@ What it guarantees on its own, whoever calls it:
 * **Never twice.** The cOID is the intent id (or its deterministic short form when
   ``execution.orders.coid_max_length`` is shorter). Before any placement the cOID is looked up in
   the live orders, which must be a complete snapshot, and in the trades; a found order is not
-  placed again. A write is sent once (``retry=False``): one that may have reached the broker is
-  reported as ``unknown``, and the next attempt looks the cOID up first.
+  placed again. A brokerage session's first live-orders answer is not a snapshot, so each
+  session reads the list once before the read that counts; a failed pre-read places nothing.
+  A write is sent once (``retry=False``): one that may have reached the broker is reported as
+  ``unknown``, and the next attempt looks the cOID up first.
 * **Warnings are answered by policy.** Each warning (``/iserver/reply``) is put to the caller's
   decider; anything it does not confirm is declined, the cOID is looked up and any listed order
   cancelled. IBKR requires the answer before any other request, so one placement runs at a time.
@@ -76,6 +78,7 @@ from .order_decode import (
     decode_place_answer,
     decode_trades,
     decode_whatif,
+    snapshot_flag,
 )
 from .session import BrokerSession
 
@@ -263,6 +266,10 @@ class OrderClient:
         self._now = now
         # IBKR answers a warning only before any other request: one placement at a time.
         self._submitting = asyncio.Lock()
+        # The live orders' pre-read: one at a time, and the session generation it was taken in.
+        self._prereading = asyncio.Lock()
+        self._preread_generation: int | None = None
+        self._first_flags: tuple[str, ...] = ()
         session.add_known_ids([guard.account_id])
 
     def coid_for(self, intent_id: UUID) -> str:
@@ -298,9 +305,51 @@ class OrderClient:
         )
         return decode_whatif(answer)
 
-    async def live_orders(self) -> LiveOrders:
+    @property
+    def first_live_orders_flags(self) -> tuple[str, ...]:
+        """The ``snapshot`` flag of this brokerage session's pre-read and of the read after it,
+        as :func:`~obliskiq.ibkr.order_decode.snapshot_flag` words them; fewer while they have
+        not been taken."""
+        return self._first_flags
+
+    async def _preread_live_orders(self) -> None:
+        """Read the live orders once per brokerage session and discard the answer.
+
+        IBKR does not mark a session's first live-orders answer a complete snapshot
+        (docs/knowledge/ibkr-orders.md, "Live orders, status and trades"), so the read that
+        counts is never the first. The pre-read is the same request, paced by the same
+        rate-limit group. One that fails raises and is not counted, and neither is one a session
+        repair overlapped: the next read takes it again. VERIFY-LIVE(the read after the pre-read
+        carries ``snapshot: true``; whether a re-armed session's first read lacks it too).
+        """
+        async with self._prereading:
+            generation = self._session.generation
+            if self._preread_generation == generation:
+                return
+            self._first_flags = ()
+            body = await self._session.request("GET", LIVE_ORDERS_PATH)
+            if self._session.generation != generation:
+                return
+            self._preread_generation = generation
+            self._first_flags = (snapshot_flag(body),)
+            log.info("live orders pre-read", extra={"snapshot": self._first_flags[0]})
+
+    async def _read_live_orders(self) -> Any:
+        """The live orders' answer. Whether it is a complete snapshot is the decoder's to say."""
         body = await self._session.request("GET", LIVE_ORDERS_PATH)
-        return decode_live_orders(body, observed_at=self._now())
+        if len(self._first_flags) == 1:
+            self._first_flags = (*self._first_flags, snapshot_flag(body))
+            log.info(
+                "live orders, the read after the pre-read",
+                extra={"snapshot": self._first_flags[1]},
+            )
+        return body
+
+    async def live_orders(self) -> LiveOrders:
+        """The live orders, after this brokerage session's pre-read. A pre-read that fails
+        raises: the gate, the cOID lookup and the reconciliation then read nothing."""
+        await self._preread_live_orders()
+        return decode_live_orders(await self._read_live_orders(), observed_at=self._now())
 
     async def trades(self) -> tuple[Fill, ...]:
         body = await self._session.request(
@@ -309,9 +358,19 @@ class OrderClient:
         return decode_trades(body)
 
     async def live_order_rows(self) -> LiveOrderRows:
-        """The live orders row by row, for the kill switch's sweep."""
-        body = await self._session.request("GET", LIVE_ORDERS_PATH)
-        return decode_live_order_rows(body, observed_at=self._now())
+        """The live orders row by row, for the kill switch's sweep.
+
+        A pre-read that fails does not stop the sweep's own read: the switch cancels what it
+        can read, and its next pass takes the pre-read again.
+        """
+        try:
+            await self._preread_live_orders()
+        except IbkrError as exc:
+            log.warning(
+                "the live orders' pre-read failed; the kill switch's read goes on",
+                extra={"error": self._session.redact(str(exc))},
+            )
+        return decode_live_order_rows(await self._read_live_orders(), observed_at=self._now())
 
     async def status(self, order_id: str) -> BrokerOrder:
         body = await self._session.request(
