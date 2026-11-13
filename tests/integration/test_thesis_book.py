@@ -30,6 +30,7 @@ from obliskiq.domain.orders import (
     ExecutionMode,
     IntentRole,
     IntentState,
+    OrderSide,
     ReconcileFinding,
     ReconcileRun,
     ReconcileStatus,
@@ -721,3 +722,45 @@ async def test_the_digest_says_when_the_book_cannot_be_surveyed(
     assert "Thesis book:\n  not surveyed" in body
     assert "record: no thesis has closed" in body
     assert "cannot read: the thesis book cannot be surveyed: the store is locked" in body
+
+
+async def test_a_position_is_held_while_an_order_works_or_no_quote_judges_it(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    await cycle(s)
+    await work(s)
+    thesis_book = book(s)
+    # No quote: its levels are not judged, and it is held.
+    del s.broker.quotes[SPPW]
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert plan.blocked == f"a held position has no price: conid {SPPW}"
+    quote(s, SPPW, "39")
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert only(plan).action == "exit"
+    await thesis_book.apply(plan)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)  # its exit works
+    assert (only(plan).action, only(plan).reason) == ("hold", "an order still works on it")
+    await work(s)
+    # Sold out, but another order still works on the instrument: closed once it has ended.
+    parts = build_capital(s.path.settings, s.path, now=s.clock.now)
+    extra = await parts.maker.make(
+        conid=SPPW, side=OrderSide.BUY, quantity=D(1), sleeve=Sleeve.SATELLITE,
+        reason="thesis", mode=ExecutionMode.SHADOW, thesis_id="T1",
+    )  # fmt: skip
+    assert not isinstance(extra, str)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, only(plan).reason) == ("hold", "an order still works on it")
+    assert only(plan).held == D(0)
+
+
+async def test_cash_that_cannot_be_valued_blocks_the_book(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    s.broker.cash["GBP"] = (D(5), None)
+    plan = await surveyed(s)
+    assert plan.blocked == "the GBP cash cannot be valued in EUR"
+    assert plan.decisions == []

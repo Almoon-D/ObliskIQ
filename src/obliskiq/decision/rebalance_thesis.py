@@ -358,8 +358,7 @@ class ThesisRebalancer:
         due = exit_due(thesis, reference, read.today)
         if due is not None:
             return decided(EXIT, due, held)
-        if reference is None:
-            return decided(HOLD, "no fresh quote: its levels are not judged")
+        # A held position is always priced here: the capital view refuses the survey otherwise.
         return decided(HOLD, f"at {reference} inside its levels")
 
     def _enter(
