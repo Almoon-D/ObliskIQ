@@ -193,10 +193,7 @@ class Service:
         self._analysis = (
             None
             if compute is None and analyst is None
-            else AnalysisPlan(
-                settings.runtime.compute if compute is not None else None,
-                settings.runtime.analyst if analyst is not None else None,
-            )
+            else AnalysisPlan(compute=compute is not None, analyst=analyst is not None)
         )
         self._rebalancer = rebalancer
         self._reporter = reporter

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from ..calendars.service import Calendars
-from ..config.schema_runtime import Anchor, RuntimeConfig, SessionAnchor
+from ..config.schema_runtime import Anchor, RuntimeConfig
 from ..errors import CalendarError
 
 CYCLE = "cycle"
@@ -98,18 +98,11 @@ class SourcePlan:
 
 @dataclass(frozen=True, slots=True)
 class AnalysisPlan:
-    """The daily compute step over the measurement store and the analyst after it
-    (``runtime.compute``, ``runtime.analyst``); ``None`` where the service runs no such job."""
+    """Whether the service runs the daily compute step over the measurement store
+    (``runtime.compute``) and the analyst after it (``runtime.analyst``)."""
 
-    compute: SessionAnchor | None
-    analyst: SessionAnchor | None
-
-    def anchors(self) -> tuple[tuple[str, SessionAnchor], ...]:
-        return tuple(
-            (kind, anchor)
-            for kind, anchor in ((COMPUTE, self.compute), (ANALYST, self.analyst))
-            if anchor is not None
-        )
+    compute: bool
+    analyst: bool
 
 
 def covered(calendars: Calendars, venue: str, day: date) -> bool:
@@ -160,10 +153,16 @@ def jobs_on(
         at = moment(calendars, planned.venue, planned.anchor, planned.offset_minutes, day)
         if at is not None:
             jobs.append(Job(at, SOURCE, planned.name, planned.venue, day))
-    for kind, anchor in analysis.anchors() if analysis is not None else ():
-        at = moment(calendars, anchor.venue, anchor.anchor, anchor.offset_minutes, day)
+    if analysis is not None and analysis.compute:
+        compute = runtime.compute
+        at = moment(calendars, compute.venue, compute.anchor, compute.offset_minutes, day)
         if at is not None:
-            jobs.append(Job(at, kind, kind, anchor.venue, day))
+            jobs.append(Job(at, COMPUTE, COMPUTE, compute.venue, day))
+    if analysis is not None and analysis.analyst:
+        analyst = runtime.analyst
+        at = moment(calendars, analyst.venue, analyst.anchor, analyst.offset_minutes, day)
+        if at is not None:
+            jobs.append(Job(at, ANALYST, ANALYST, analyst.venue, day))
     return sorted(jobs)
 
 

@@ -10,11 +10,15 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest
+from measure_rig import AS_OF as RIG_AS_OF
+from measure_rig import STAMP as RIG_STAMP
+from measure_rig import seed
 
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.enums import InstrumentRole
 from obliskiq.domain.instrument import Instrument
 from obliskiq.domain.market import Bar
+from obliskiq.domain.measurement import MeasurementStatus
 from obliskiq.domain.sources import (
     CotReport,
     EventExtraction,
@@ -27,7 +31,9 @@ from obliskiq.domain.sources import (
     InsiderTransaction,
     NewsItem,
 )
+from obliskiq.grid.equity_grid import EquityGridBuilder
 from obliskiq.grid.facts import FactLine, FactSheet, build_fact_sheet, nameable, number
+from obliskiq.grid.macro_board import MacroBoardBuilder
 from obliskiq.store import Store, repos
 from obliskiq.store import nav as nav_repo
 from obliskiq.store import sources as source_repo
@@ -420,20 +426,21 @@ def test_the_sheet_carries_no_account_identifier_or_balance(
     store: Store, shipped_settings: ObliskConfig
 ) -> None:
     seed_sources(store, shipped_settings)
+    account = f"{shipped_settings.ibkr.paper_account_prefixes[0]}7654321"  # nobody's
     nav_repo.record_nav(
         store,
         nav_repo.NavReading(
             as_of=AS_OF,
             nav_base=Decimal("987654.32"),
             currency="EUR",
-            source="DU7654321",
+            source=account,
             recorded_at=STAMP,
         ),
     )
     text = build_fact_sheet(store, shipped_settings, as_of=AS_OF).text()
     assert "987654" not in text
     assert "987,654" not in text
-    assert "DU7654321" not in text
+    assert account not in text
     for prefix in shipped_settings.ibkr.paper_account_prefixes:
         assert re.search(rf"\b{prefix}[0-9]+", text) is None
 
@@ -441,3 +448,52 @@ def test_the_sheet_carries_no_account_identifier_or_balance(
 @pytest.mark.parametrize("value", [0.5, -0.000123456, 12345.678])
 def test_values_carry_four_significant_digits(value: float) -> None:
     assert number(value) == f"{value:.4g}"
+
+
+def test_a_built_grid_board_and_rankings_become_lines(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    """Over the measurement rig's store (``tests/support/measure_rig.py``), built once."""
+    seed(store, shipped_settings)
+    grid = EquityGridBuilder(store, shipped_settings)
+    board = MacroBoardBuilder(store, shipped_settings)
+    grid.write(grid.build(as_of=RIG_AS_OF, computed_at=RIG_STAMP))
+    board.write(board.build(as_of=RIG_AS_OF, computed_at=RIG_STAMP))
+    sheet = build_fact_sheet(store, shipped_settings, as_of=RIG_AS_OF + timedelta(days=1))
+    macro = section(sheet, "macro")
+    assert all(line.day == RIG_AS_OF for line in macro)  # the session the board was built for
+    us_10y = next(line for line in macro if line.text.startswith("us/rate_10y: "))
+    assert us_10y.status == "ok"
+    assert "level 0.03797" in us_10y.text
+    assert macro[-1].status == "n/a"
+    assert macro[-1].text.endswith("board cells have no measured leaf")
+    cells = section(sheet, "grid")
+    us = next(line for line in cells if line.text.startswith("us/broad: "))
+    assert "return_21d_base 0.1151" in us.text
+    assert "iv_percentile" not in us.text  # unmeasured there: left out, not filled
+    assert cells[-1].text.startswith("187 of 192 grid cells have none of return_21d_base")
+    ranks = section(sheet, "ranking")
+    assert ranks[0].text.startswith("most_extended #1: canada/broad distance_from_52w_high")
+    assert "(ranked over 5 of 61 reachable cells)" in ranks[0].text
+    iwda = next(line for line in section(sheet, "instrument") if line.text.startswith("IWDA:"))
+    assert (iwda.status, sheet.closes["IWDA"]) == ("ok", pytest.approx(169.2, abs=0.05))
+
+
+def test_a_stale_measurement_is_marked(store: Store, shipped_settings: ObliskConfig) -> None:
+    seed(store, shipped_settings)
+    board = MacroBoardBuilder(store, shipped_settings)
+    rows = board.build(as_of=RIG_AS_OF, computed_at=RIG_STAMP)
+    stale = [
+        row.model_copy(
+            update={"status": MeasurementStatus.STALE, "reason": "old", "reason_code": "stale"}
+        )
+        if row.status is MeasurementStatus.OK
+        else row
+        for row in rows
+    ]
+    board.write(stale)
+    lines = section(build_fact_sheet(store, shipped_settings, as_of=RIG_AS_OF), "macro")
+    measured = [line for line in lines if line.status != "n/a"]
+    assert measured
+    assert all(line.status == "stale" for line in measured)
+    assert "(stale)" in measured[0].text
