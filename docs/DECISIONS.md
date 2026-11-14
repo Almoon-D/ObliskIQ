@@ -3722,17 +3722,17 @@ probability); counting the generous case alone.
 ### D163 · The breakers measure the book's fall beyond the equity reference's (§5.11; D88, D147)
 
 Global equity fell more than lite's 15 % inside a month in October 2008 and March 2020, falls the
-owner accepts (D147); a freeze on the book's own fall would then have left deposits uninvested for
-a month. So both breakers measure the managed book's fall, flows neutralised, **less the equity
-reference's fall over the same days** (`equity_reference_conid`, one unit read beside every
-managed NAV), from every daily close in scope. A market's fall trips neither; a fall of the book's
-own does. The reference only excuses: with no reading at either end nothing is excused, so a trip
-needs the book's own readings alone. **Rolling month** (lite's keys and values: 15 %, 30 days, 2
-observations): freeze new buys. **Hard** (`hard_drawdown_pct` 0.25, a judgement: ten points past
-the freeze, and D88's 30 % is not reused): force shadow. With the reserve in global equity both sit
-far from a market's fall; a satellite that grows toward D149's ceiling can fall beyond the
-reference without a fault, and the owner then widens the keys. Rejected: lite's measure on the
-book alone; a relative index (it "falls" while the brake sits in cash through a rally).
+owner accepts (D147); a freeze on the book's own fall would then have left deposits uninvested.
+So both breakers measure the managed book's fall, flows neutralised, **less the equity
+reference's fall over the same days** (`equity_reference_conid`, read beside every managed NAV),
+from every daily close in scope. A market's fall trips neither; a fall of the book's own does. The
+reference only excuses: with no reading at either end nothing is excused, so a trip needs the
+book's readings alone. **Rolling month** (lite's keys and values: 15 %, 30 days, 2 observations):
+freeze new buys. **Hard** (`hard_drawdown_pct` 0.25, a judgement: ten points past the freeze;
+D88's 30 % is not reused): force shadow. With the reserve in global equity both sit far from a
+market's fall; a satellite grown toward D149's ceiling can pass them without a fault, and the
+owner then widens the keys. Rejected: lite's measure on the book alone; a relative index (it
+"falls" while the brake sits in cash through a rally).
 
 ### D164 · Smaller choices of the breakers (§5.11, §5.12; D51, D88, D163)
 
