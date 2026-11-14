@@ -396,7 +396,7 @@ def _modes(loaded: Loaded) -> tuple[Modes, StoreWorker]:
     settings = loaded.config.settings
     data_dir = loaded.env.require_data_dir()
     worker = StoreWorker(lambda: open_store(settings, data_dir))
-    return Modes(worker, settings, profile=loaded.env.ibkr_profile), worker
+    return Modes(worker, settings, profile=loaded.env.ibkr_profile, data_dir=data_dir), worker
 
 
 def _mode_show(loaded: Loaded, out: TextIO) -> int:

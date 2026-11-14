@@ -3716,3 +3716,33 @@ The recommendation is not to buy; the owner decides, and Session 24 waits. The f
 `research.decision.min_sufficient_probability` (0.5), which `research power` reads. Rejected:
 lowering θ (the same fault as raising it); a shorter, cheaper history (fewer months, lower
 probability); counting the generous case alone.
+
+## Session 25 — Book breakers (2026-11-14)
+
+### D163 · The breakers measure the book's fall beyond the equity reference's (§5.11; D88, D147)
+
+Global equity fell more than lite's 15 % inside a month in October 2008 and March 2020, falls the
+owner accepts (D147); a freeze on the book's own fall would then have left deposits uninvested.
+So both breakers measure the managed book's fall, flows neutralised, **less the equity
+reference's fall over the same days** (`equity_reference_conid`, read beside every managed NAV),
+from every daily close in scope. A market's fall trips neither; a fall of the book's own does. The
+reference only excuses: with no reading at either end nothing is excused, so a trip needs the
+book's readings alone. **Rolling month** (lite's keys and values: 15 %, 30 days, 2 observations):
+freeze new buys. **Hard** (`hard_drawdown_pct` 0.25, a judgement: ten points past the freeze;
+D88's 30 % is not reused): force shadow. With the reserve in global equity both sit far from a
+market's fall; a satellite grown toward D149's ceiling can pass them without a fault, and the
+owner then widens the keys. Rejected: lite's measure on the book alone; a relative index (it
+"falls" while the brake sits in cash through a rally).
+
+### D164 · Smaller choices of the breakers (§5.11, §5.12; D51, D88, D163)
+
+- **Close.** The reading of `close_cycle` is the day's; a day holds one reading and nothing read
+  inside it replaces a close. Shadow's and the broker's books are two series.
+- **States.** Below `min_observations` closes: `n/a`, refusing nothing. No value now, flows that
+  cannot be valued or a last close older than `max_close_age_days`: unreadable, buys refused; a
+  book back from a long stand-down therefore buys again after its next close.
+- **Latch.** A hard trip is stored and holds across restarts until `obliskiq breakers reset`; an
+  upgrade is refused meanwhile, and the hard breaker then measures from the closes that follow.
+- **Stand-down.** Where the store cannot record the downgrade, the file `FORCED_SHADOW` holds the
+  mode at shadow, as the kill switch's file does; the next upgrade writes the missed audit row.
+- **Not done.** Working orders are left to the mode change and the kill switch; no breaker sells.

@@ -21,3 +21,35 @@ equity_risk:
   # An entry above this share of its long-run range going into earnings requires a decision:
   # reduce, hedge, or a stated reason for carrying the gap. lite.
   pre_earnings_range_decile_trigger: 0.90
+
+# The book's breakers (decision/breakers.py; MASTER_PLAN §5.11): lite's `portfolio_circuit_breaker`
+# block (legacy/lite/config.yaml:145-155, @b1ebd49) with lite's values, and the keys the hard
+# breaker and the measurement need. Both breakers measure the managed book's fall, flows
+# neutralised, beyond the equity reference's fall over the same days, so a market's fall the
+# owner accepts trips neither (DECISIONS D147, D163). Neither sells anything.
+portfolio_circuit_breaker:
+  # New buys are frozen while the book has fallen more than this beyond the equity reference
+  # within the rolling window. QUOTED: compared exactly. lite.
+  monthly_drawdown_pct: "0.15"
+  # What the rolling-month breaker does: existing positions keep their own exit rules. lite.
+  action: freeze_new_buys_and_audit
+  # What "a rolling month" counts as, in calendar days: a drawdown is a fact about the book over
+  # elapsed time, not over sessions. lite.
+  window_days: 30
+  # Below this many daily closes there is no drawdown to measure, and a breaker reports n/a
+  # rather than "fine". lite.
+  min_observations: 2
+  # The hard breaker: the mode is forced to shadow, until the owner resets it, when the book has
+  # fallen more than this beyond the equity reference from any daily close since the last reset.
+  # QUOTED. A judgement (DECISIONS D163): ten points past the freeze.
+  hard_drawdown_pct: "0.25"
+  # The decision cycle whose managed NAV is the day's close: the day's last (DECISIONS D88). A
+  # peak is taken from closes alone; a value read inside the day never raises it.
+  close_cycle: us_late
+  # A last close older than this many calendar days is stale: the breakers are unreadable and
+  # new buys are refused until a close is recorded. A judgement: a long weekend passes, a week
+  # without a close does not.
+  max_close_age_days: 5
+  # The equity reference: the universe instrument (config/universe.yaml) whose unit value is read
+  # beside every managed NAV; XDWD, the MSCI World fund quoted in euros on Xetra. A judgement.
+  equity_reference_conid: 163606916

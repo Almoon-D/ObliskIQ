@@ -42,10 +42,12 @@ from obliskiq.execution.instruments import UniverseDirectory, describe_pinned
 from obliskiq.orchestration import jobs
 from obliskiq.orchestration.assemble import build_thesis_book
 from obliskiq.orchestration.parts import build_capital
+from obliskiq.store import breakers as breaker_repo
 from obliskiq.store import open_database, repos
 from obliskiq.store import orders as repo
 from obliskiq.store import theses as thesis_repo
 from obliskiq.store import universe as universe_repo
+from obliskiq.store.breakers import ManagedReading
 from obliskiq.tax.book import identity_of
 
 D = Decimal
@@ -423,6 +425,23 @@ async def test_entries_wait_for_the_kill_switch_a_freeze_the_venue_and_cash(
     )
     plan = await surveyed(s)
     assert plan.entries_blocked == "reconciliation is drift: new risk is frozen"
+    # A frozen book enters nothing either (the breakers, decision/breakers.py).
+    for days in (2, 1):
+        day = MONDAY - timedelta(days=days)
+        await s.rig.store(
+            breaker_repo.record_reading,
+            ManagedReading(
+                book="shadow",
+                as_of=day,
+                managed=D(130000),
+                reference_conid=None,
+                reference_unit=None,
+                is_close=True,
+                recorded_at=EUROPE - timedelta(days=days),
+            ),
+        )
+    plan = await surveyed(s)
+    assert "the rolling-month breaker is tripped" in str(plan.entries_blocked)
     s.broker.cash = {"EUR": (D(1000), None)}
     assert "no_cash" in [f.code.value for f in (await surveyed(s)).decisions[0].findings]
 

@@ -25,7 +25,8 @@ once, so a failed re-login reaches the owner within one heartbeat (DECISIONS D68
 
 **Downgrade.** ``runtime.downgrade_after_failed_cycles`` cycles in a row that end ``error`` or
 ``partial`` move a writing mode down to shadow, audited and alerted (MASTER_PLAN §5.12: downgrades
-are automatic, upgrades an owner command).
+are automatic, upgrades an owner command); where the store cannot record it, the
+``FORCED_SHADOW`` file holds the mode there (``execution/modes.py``).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -437,17 +438,19 @@ class Service:
         reason = (
             f"{self._runtime.downgrade_after_failed_cycles} decision cycles in a row ended in error"
         )
-        change = await self._path.modes.downgrade(
-            ExecutionMode.SHADOW, actor="service", reason=reason
-        )
-        if change is None:
+        stood = await self._path.modes.stand_down(actor="service", reason=reason)
+        if stood.change is None and not stood.by_file:
             return
+        was = (
+            "mode -> shadow (held by the FORCED_SHADOW file: the store could not record it)"
+            if stood.change is None
+            else f"mode {stood.change.from_mode.value} -> shadow"
+        )
         self._reporter.push(
             Alert(
                 "service.downgraded",
                 "service.downgraded",
-                f"mode {change.from_mode.value} -> shadow: {reason}. Upgrading again is an owner "
-                "command (obliskiq mode set).",
+                f"{was}: {reason}. Upgrading again is an owner command (obliskiq mode set).",
                 Severity.CRITICAL,
                 self._clock.now(),
                 condition=False,

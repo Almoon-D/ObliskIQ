@@ -5,6 +5,30 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.23.0] - 2026-11-14
+
+Session 25: a falling managed book freezes its own new buys and then stands itself down to
+shadow, selling nothing.
+
+### Added
+
+- The book's breakers (`decision/breakers.py`, DECISIONS D163–D164): each cycle stores the
+  managed book's value and the equity reference's; the day's last cycle's is the close, and a
+  value read inside the day never raises a peak. Both measure the book's fall, the owner's flows
+  neutralised, beyond the reference's over the same days.
+- Rolling month (lite's `portfolio_circuit_breaker` keys: 15 %, 30 days, 2 observations): the
+  core's rebalancer and the thesis book make no buy while it is tripped or unreadable; sales
+  are unchanged.
+- Hard (`hard_drawdown_pct`, 25 %): the mode is forced to shadow and the trip latched until
+  `obliskiq breakers reset`; an upgrade is refused meanwhile.
+- The digest, `obliskiq status` and the run log's `breakers` step show each breaker's state,
+  `n/a` below the minimum observations.
+
+### Changed
+
+- A stand-down to shadow holds when the store cannot record it: the `FORCED_SHADOW` file keeps
+  the mode at shadow until the owner's next upgrade.
+
 ## [0.22.0] - 2026-11-13
 
 Session 23: before any purchase, the owner learns which price history the Hunter's test would

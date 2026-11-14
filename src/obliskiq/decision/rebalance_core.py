@@ -21,8 +21,10 @@ cycle:
    by the book's cash (the reservation planner chooses those sales, ``capital/planner.py``), a buy
    that would take a loss the two-month rule still holds open (the live tax lots, DECISIONS D110:
    the rebalancer never buys back inside an open window; a tax-aware variant's engine has already
-   sent it to the swap partner when one would not), and a trade below the minimum trade
-   (``trading.min_trade``) or its own commission. Buys are made within
+   sent it to the swap partner when one would not), a buy while a breaker freezes new buys or
+   cannot be read (``decision/breakers.py``: sales stay allowed, and no breaker makes one), and
+   a trade below the minimum trade (``trading.min_trade``) or its own commission. Buys are made
+   within
    what the book may spend now: the smaller of the account's cash and the book's own cash, less
    the open withdrawal reservations, the part of a deposit not yet released for deployment
    (``capital/deploy.py``), every open buy's commitment and ``execution.pretrade.cash_floor``,
@@ -91,6 +93,7 @@ from ..store.worker import StoreWorker
 from ..tax.book import TaxBook, TaxHooks
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
+from .breakers import BreakerReport, Breakers
 from .core_vehicles import (
     CoreVehicleChooser,
     CoreVehicles,
@@ -145,6 +148,7 @@ class RebalancePlan:
     core_capital: Decimal | None = None
     spendable: Decimal | None = None
     portfolio: TargetPortfolio | None = None
+    breakers: BreakerReport | None = None
     decisions: list[RoleDecision] = field(default_factory=list)
     blocked: str | None = None
 
@@ -180,6 +184,8 @@ class RebalancePlan:
                     f"{role.held_weight:.4f}: {role.reason}"
                 )
             lines += [f"  note: {note}" for note in portfolio.notes]
+        if self.breakers is not None:
+            lines += [f"  {line}" for line in self.breakers.lines()]
         if self.blocked is not None:
             lines.append(f"  nothing trades: {self.blocked}")
         for d in self.decisions:
@@ -272,6 +278,7 @@ class CoreRebalancer:
         kill: KillSwitch,
         tax: TaxBook,
         chooser: CoreVehicleChooser,
+        breakers: Breakers,
         value: CoreStrategyValue | None = None,
         correlations: CorrelationSource | None = None,
         now: Callable[[], datetime] = utc_now,
@@ -286,6 +293,7 @@ class CoreRebalancer:
         self._kill = kill
         self._tax = tax
         self._chooser = chooser
+        self._breakers = breakers
         self._value = value
         self._correlations = correlations
         self._now = now
@@ -480,6 +488,7 @@ class CoreRebalancer:
             plan.blocked = f"the account cannot be read: {exc}"
             return plan
         view = await self._capital.read(mode, cash=cash)
+        plan.breakers = await self._breakers.read(mode, view, cash)
         if isinstance(view, str):
             plan.blocked = view
             return plan
@@ -558,6 +567,7 @@ class CoreRebalancer:
             sizing,
             sells_paused=view.unfunded > ZERO,
             hooks=hooks,
+            frozen=plan.breakers.buys_refused,
         )
         return plan
 
@@ -574,6 +584,7 @@ class CoreRebalancer:
         *,
         sells_paused: bool,
         hooks: TaxHooks | None,
+        frozen: str | None,
     ) -> list[RoleDecision]:
         trades = {trade.conid: trade for trade in portfolio.trades}
         rows: dict[int, RoleDecision] = {}
@@ -589,7 +600,14 @@ class CoreRebalancer:
                 )
                 continue
             refusal = self._refusal(
-                trade, found, venues, busy, at, sells_paused=sells_paused, hooks=hooks
+                trade,
+                found,
+                venues,
+                busy,
+                at,
+                sells_paused=sells_paused,
+                hooks=hooks,
+                frozen=frozen,
             )
             if refusal is not None:
                 rows[vehicle.conid] = _row(portfolio, vehicle, found, SKIP, refusal)
@@ -670,9 +688,12 @@ class CoreRebalancer:
         *,
         sells_paused: bool,
         hooks: TaxHooks | None,
+        frozen: str | None,
     ) -> str | None:
         """Why a planned trade is not made now, or ``None`` when it may be."""
         side = "sell" if trade.side is OrderSide.SELL else "buy"
+        if trade.side is OrderSide.BUY and frozen is not None:
+            return f"buy: {frozen}"
         if found is None:
             return f"{side}: no instrument describes the conid or it has no price"
         if trade.conid in self._refused:

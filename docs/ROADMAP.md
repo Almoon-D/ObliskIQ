@@ -32,7 +32,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | done (no test reaches a probability of a sufficient outcome of 0.5: do not buy, D162) | v0.22.0 |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after the owner buys a history, which Session 23 advises against (D162) | |
-| 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | after 22 (beside 24) | |
+| 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | done (on fixtures; no IBKR call) | v0.23.0 |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | after 22, 24, 25, the reserve's paper cycle and a sufficient or inconclusive-positive outcome | |
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25, 27 and 24's verdict | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
@@ -58,6 +58,23 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 25 — Book breakers (2026-11-14, v0.23.0)
+
+- **Landed:** at every cycle the managed book's value is stored with the equity reference's
+  beside it, the day's last cycle's as the close. A book more than 15 % beyond the reference's
+  fall within 30 days buys nothing (the core and the thesis book; sales unchanged); more than
+  25 % from any close forces shadow, latched until `obliskiq breakers reset`. Flows are
+  neutralised; `n/a` below two closes; unreadable (buys refused) on a missing value or a close
+  older than five days. The digest and `status` show each state (D163, D164).
+- **Stand-down without the store:** `Modes.stand_down` falls back to the `FORCED_SHADOW` file.
+- **Observable:** `tests/integration/test_book_breakers.py` drives 100,000 → 84,000 → 70,000
+  through the cycle: the run log's `breakers` step reads "new buys frozen", then "forced shadow".
+- **Not built:** expected shortfall, stress, sizing, the expression selector, anything for options.
+- **Live findings.** None: no IBKR call. **VERIFY-LIVE:** the reference's quote outside Xetra's
+  hours (queued below).
+- **Prompts edited:** Session 17 loses the breakers' config port, its deliverable 5 names what
+  exists and its test list drops the breaker drills.
 
 ### Session 23 — Hunter: data and power (2026-11-13, v0.22.0)
 
@@ -340,8 +357,13 @@ settles it.
 | `yfinance`'s earnings dates from the deployment machine (worked from the cloud, 2026-10-23) | 10 | the first week of `serve` |
 | The option surface, the sleeve's candidates and the census on live chains: each tenor's nearest expiry, the smile's wings at deltas 0.10 and 0.25, the liquidity share, and how many contracts clear every gate; the FX decomposition on the board's live `fx_vs_base` and CPI; the commodity leaves on live curves (`VERIFY-LIVE(the option surface on live chains)`, `VERIFY-LIVE(futures curve prices)`) | 12 | the first command list after the collectors' live round |
 | `obliskiq compute all` on a store the collectors filled live: each family's reach and its dominant blocker against the fixture store's, the session solve on a route that prices chains without vols, the coverage floor, and the run's time on the machine | 11 | the first command list after the collectors' live round |
+| The equity reference's quote beside each managed NAV: that XDWD (IBIS2) returns a usable delayed or closing quote at every cycle, the Asian morning and New York's last hour included (`VERIFY-LIVE(the equity reference's quote outside its venue's hours)`); without one a fall is not excused | 25 | the first week of `serve` |
 
 ## Follow-ups
+
+- **Breakers (Session 25):** a forced shadow leaves the paper orders already working to expire
+  or to the kill switch; the hard limit (0.25) assumes the reserve dominates the book and wants a
+  look when the satellite's ceiling rises (D163; Session 18). The freeze's audit is Session 17's.
 
 - **Owner question (Session 23):** buy Sharadar's Core US Equities Bundle, full history, at
   US$499 a year, for the Hunter's test: yes or no? The recommendation is no: no test in the

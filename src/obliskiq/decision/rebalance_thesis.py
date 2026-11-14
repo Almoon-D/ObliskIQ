@@ -78,6 +78,7 @@ from ..store.orders import IntentFill
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
+from .breakers import Breakers
 from .thesis_intake import find_candidate
 from .vehicle_inputs import market_inputs
 from .vehicle_selector import VehicleMarket
@@ -191,6 +192,7 @@ class ThesisRebalancer:
         kill: KillSwitch,
         eligibility: EligibilityPolicy,
         secdef: Secdef,
+        breakers: Breakers,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._settings = settings
@@ -202,6 +204,7 @@ class ThesisRebalancer:
         self._kill = kill
         self._eligibility = eligibility
         self._secdef = secdef
+        self._breakers = breakers
         self._now = now
         self._gate = ThesisGate(settings.thesis)
         self._liquidity_sessions = settings.thesis.liquidity.sessions
@@ -243,6 +246,9 @@ class ThesisRebalancer:
         latest = await self._worker.run(repo.latest_reconciliation)
         if latest is not None and latest.status is not ReconcileStatus.GREEN:
             plan.entries_blocked = f"reconciliation is {latest.status.value}: new risk is frozen"
+        frozen = (await self._breakers.read(mode, view, cash)).buys_refused
+        if frozen is not None:
+            plan.entries_blocked = frozen
         allocation = book_allocation(self._settings, view.investable, mode)
         plan.capital = allocation.satellite
         busy, _ = await self._cash.pending(mode)

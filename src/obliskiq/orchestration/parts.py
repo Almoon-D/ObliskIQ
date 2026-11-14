@@ -14,6 +14,7 @@ from ..capital.questions import OwnerQuestions
 from ..capital.strategy import DefaultStrategyValue
 from ..capital.valuation import Valuer
 from ..config.schema import ObliskConfig
+from ..decision.breakers import Breakers
 from ..execution.intent_maker import IntentMaker
 from ..execution.runtime import OrderPath
 from ..jurisdiction import TAX_POLICIES
@@ -25,7 +26,7 @@ from ..tax.book import TaxBook
 class CapitalParts:
     """Capital, cash flows and tax over an order path: the one capital reader, the live tax
     book, the owner questions, the reservation planner, the intent maker they share and the
-    strategy value the core notes its target portfolio on."""
+    strategy value the core notes its target portfolio on, and the book's breakers."""
 
     capital: CapitalReader
     tax: TaxBook
@@ -33,6 +34,7 @@ class CapitalParts:
     planner: ReservationPlanner
     maker: IntentMaker
     value: CoreStrategyValue
+    breakers: Breakers
 
 
 def build_capital(
@@ -80,4 +82,5 @@ def build_capital(
         kill=path.kill,
         now=now,
     )
-    return CapitalParts(capital, tax, questions, planner, maker, value)
+    breakers = Breakers(settings, capital=capital, worker=path.worker, now=now)
+    return CapitalParts(capital, tax, questions, planner, maker, value, breakers)

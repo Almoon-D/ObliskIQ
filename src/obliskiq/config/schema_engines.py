@@ -1,6 +1,7 @@
 """The shape of the engines' configuration: the options sleeve and its zombie test, the risk
 engine's stops and rules, the FX engine and the commodity engine (lite's ``option_sleeve``,
-``zombie_test``, ``equity_risk``, ``fx_inflation`` and ``commodities`` keys they read).
+``zombie_test``, ``equity_risk``, ``portfolio_circuit_breaker``, ``fx_inflation`` and
+``commodities`` keys they read).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -11,12 +12,15 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from ..domain.base import NonEmptyText
-from .base import FrozenModel
+from .base import FrozenModel, Identifier
 
 #: A probability or a share, inside (0, 1).
 type Share = Annotated[float, Field(gt=0, lt=1)]
 #: A money multiple or share, quoted, finite and positive.
 type PositiveDecimal = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
+
+#: A fraction of a value, quoted, inside (0, 1).
+type QuotedFraction = Annotated[Decimal, Field(gt=0, lt=1, allow_inf_nan=False)]
 
 type ExitReason = Literal["target", "time_window", "trailing_stop"]
 type Wrapper = Literal["eu_listed_physical_etc", "producer_equity", "futures_tracking_wrapper"]
@@ -74,6 +78,26 @@ class EquityRiskConfig(FrozenModel):
     allow_averaging_down: bool
     pre_earnings_rule: Literal["hold", "flag_and_size", "force_reduce"]
     pre_earnings_range_decile_trigger: Share
+
+
+class PortfolioCircuitBreakerConfig(FrozenModel):
+    """lite's ``portfolio_circuit_breaker`` keys, the hard breaker's threshold and what both
+    are measured with (MASTER_PLAN §5.11)."""
+
+    monthly_drawdown_pct: QuotedFraction
+    action: Literal["freeze_new_buys_and_audit"]
+    window_days: PositiveInt
+    min_observations: Annotated[int, Field(ge=2)]
+    hard_drawdown_pct: QuotedFraction
+    close_cycle: Identifier
+    max_close_age_days: PositiveInt
+    equity_reference_conid: PositiveInt
+
+    @model_validator(mode="after")
+    def _hard_beyond_the_freeze(self) -> Self:
+        if self.hard_drawdown_pct <= self.monthly_drawdown_pct:
+            raise ValueError("hard_drawdown_pct sits beyond monthly_drawdown_pct")
+        return self
 
 
 class FxInflationConfig(FrozenModel):

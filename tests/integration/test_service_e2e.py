@@ -84,6 +84,7 @@ async def test_cycle_one_fills_in_shadow_and_cycle_two_does_nothing(make: Any) -
     assert europe.status == "ok"
     assert [step["step"] for step in europe.detail["steps"]] == [
         "nav",
+        "breakers",
         "reserve",
         "rebalance",
         "thesis",

@@ -1,4 +1,4 @@
-"""The shape of the migrations (``001_core.sql`` through ``012_engines.sql``) and the
+"""The shape of the migrations (``001_core.sql`` through ``014_breakers.sql``) and the
 constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
@@ -307,6 +307,14 @@ SHAPE = {
         "exit_reason:TEXT!, quantity:TEXT!, entry_price:TEXT!, exit_price:TEXT!, "
         "reached:INTEGER!, payoff:TEXT!, stated_payoff:TEXT!, days_held:INTEGER!, "
         "horizon_days:INTEGER!"
+    ),
+    # 014_breakers
+    "managed_nav": (
+        "book:TEXT!*, as_of:TEXT!*, managed:TEXT!, reference_conid:INTEGER, "
+        "reference_unit:TEXT, is_close:INTEGER!, recorded_at:TEXT!"
+    ),
+    "breaker_events": (
+        "event_id:INTEGER*, at:TEXT!, book:TEXT!, event:TEXT!, actor:TEXT!, detail:TEXT!"
     ),
 }
 

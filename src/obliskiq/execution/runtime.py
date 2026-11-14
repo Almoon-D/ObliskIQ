@@ -135,7 +135,7 @@ def assemble(
         client.session, settings, guard, StoreClearanceLedger(worker, now=now), now=now
     )
     book = IntentBook(worker, coid_max_length=settings.execution.orders.coid_max_length, now=now)
-    modes = Modes(worker, settings, profile=guard.profile, now=now)
+    modes = Modes(worker, settings, profile=guard.profile, data_dir=data_dir, now=now)
     kill = KillSwitch(data_dir, worker, settings, now=now)
     boundary = WriteBoundary(
         client=orders,

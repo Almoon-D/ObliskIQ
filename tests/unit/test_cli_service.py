@@ -11,6 +11,7 @@ import logging
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -32,11 +33,14 @@ from obliskiq.domain.orders import (
     TimeInForce,
 )
 from obliskiq.execution.intents import new_intent
+from obliskiq.execution.modes import FORCED_SHADOW_FILE
 from obliskiq.orchestration.health import write_heartbeat
 from obliskiq.orchestration.lock import ServiceLock
+from obliskiq.store import breakers as breaker_repo
 from obliskiq.store import open_store
 from obliskiq.store import orders as repo
 from obliskiq.store import runs as run_repo
+from obliskiq.store.breakers import BreakerEvent, ManagedReading
 
 
 @pytest.fixture(autouse=True)
@@ -127,6 +131,7 @@ def test_a_cycle_runs_and_records_itself(
     assert record.command == "cycle:manual"
     assert [s["step"] for s in record.detail["steps"]] == [
         "nav",
+        "breakers",
         "reserve",
         "rebalance",
         "thesis",
@@ -232,6 +237,57 @@ def test_status_on_an_empty_store_says_nothing_has_run(data_dir: Path) -> None:
     assert "reconciliation: none yet" in out
     assert "NAV: none recorded" in out
     assert "none. Nothing has run" in out
+    # Each breaker's state, n/a below the minimum observations.
+    assert "Breakers (shadow book):" in out
+    assert "rolling-month breaker: n/a (no managed NAV reading is recorded)" in out
+    assert "hard breaker: n/a" in out
+
+
+def test_status_shows_a_tripped_breaker_and_reset_releases_it(
+    data_dir: Path, config_dir: Path
+) -> None:
+    settings = _settings(config_dir)
+    now = datetime.now(UTC)
+    with open_store(settings, data_dir) as store:
+        for days, value in ((2, "1000"), (1, "1000"), (0, "800")):
+            breaker_repo.record_reading(
+                store,
+                ManagedReading(
+                    book="shadow",
+                    as_of=now.date() - timedelta(days=days),
+                    managed=Decimal(value),
+                    reference_conid=None,
+                    reference_unit=None,
+                    is_close=days > 0,
+                    recorded_at=now - timedelta(days=days),
+                ),
+            )
+        breaker_repo.record_event(
+            store, BreakerEvent(now, "broker", "tripped", "breaker", "fell 30 %")
+        )
+    (data_dir / FORCED_SHADOW_FILE).write_text("{}", encoding="utf-8")
+    _, out, _ = _run("status")
+    assert "mode shadow (held by the FORCED_SHADOW file)" in out
+    assert "rolling-month breaker: TRIPPED (the book fell 20.0%" in out
+    assert "hard breaker: ok" in out
+    assert "hard breaker of the broker book: TRIPPED" in out
+    assert "measured on the reading of" in out
+    status, out, _ = _run("breakers", "reset", "--reason", "looked at the book")
+    assert status == EXIT_OK
+    assert "nothing was recorded" in out
+    with open_store(settings, data_dir) as store:
+        assert breaker_repo.tripped(store, "broker") is not None
+    status, out, _ = _run("breakers", "reset", "--reason", "looked at the book", "--confirm")
+    assert status == EXIT_OK
+    assert "hard breaker reset for the broker book; the mode is unchanged" in out
+    with open_store(settings, data_dir) as store:
+        assert breaker_repo.tripped(store, "broker") is None
+        reset = breaker_repo.latest_reset(store, "broker")
+    assert reset is not None
+    assert reset.detail == "looked at the book"
+    _, out, _ = _run("breakers", "reset", "--reason", "again", "--confirm")
+    assert "no hard breaker is tripped" in out
+    assert "broker book: TRIPPED" not in _run("status")[1]
 
 
 def test_status_shows_the_heartbeat_runs_and_alerts(data_dir: Path, config_dir: Path) -> None:

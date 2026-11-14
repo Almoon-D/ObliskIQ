@@ -149,6 +149,7 @@ def build_rebalancer(
         kill=path.kill,
         tax=parts.tax,
         chooser=CoreVehicleChooser(settings, selector, SwapPartners(settings, policy)),
+        breakers=parts.breakers,
         value=parts.value,
         correlations=correlations,
         now=now,
@@ -169,6 +170,7 @@ def build_thesis_book(
         kill=path.kill,
         eligibility=ELIGIBILITY_POLICIES.resolve(path.profile, settings),
         secdef=path.client.secdef,
+        breakers=parts.breakers,
         now=now,
     )
 

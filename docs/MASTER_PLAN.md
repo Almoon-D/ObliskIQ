@@ -629,9 +629,11 @@ decision only when its activation condition holds (§2).
   base-currency real terms — always including unmanaged and external holdings (positions
   the owner holds elsewhere, entered by hand and flagged stale after a configured age).
 - **Breakers.** Rolling-month drawdown → freeze new buys and audit; hard peak-to-trough →
-  force `shadow` and alert; the peak is D88's (the managed NAV at the day's last cycle). Their
-  thresholds are keys of their own, and the owner sets no drawdown limit beside them (§11,
-  DECISIONS D147).
+  force `shadow`, latch until the owner's reset and alert; the peak is D88's (the managed NAV at
+  the day's last cycle). Both measure the managed book's fall, flows neutralised, beyond the
+  equity reference's over the same days, so a market's fall trips neither (DECISIONS D163).
+  Their thresholds are keys of their own, and the owner sets no drawdown limit beside them (§11,
+  DECISIONS D147). Neither sells.
 - **Inertia.** Intents only for a band breach, an approved thesis, a scale-up confirmation,
   a fired trigger, stop, zombie or mandatory close, a cash-flow reservation or a risk breach;
   monthly turnover and realised-gain budgets.

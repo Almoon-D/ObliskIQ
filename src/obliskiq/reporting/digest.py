@@ -1,7 +1,7 @@
-"""The daily digest: mode, NAV and its time-weighted return, capital, positions, targets, the
-thesis book (open theses, withheld ideas with their reasons, the graded record), the reservation
-plan and its reasons, open owner questions, unexplained cash, intents, fills, errors, venue status
-and health.
+"""The daily digest: mode, the book's breakers, NAV and its time-weighted return, capital,
+positions, targets, the thesis book (open theses, withheld ideas with their reasons, the graded
+record), the reservation plan and its reasons, open owner questions, unexplained cash, intents,
+fills, errors, venue status and health.
 
 The service gathers it after the day's last cycle (``runtime.digest``) and sends it through the
 notifier; ``obliskiq status`` prints the same gathering on demand. Everything it shows is read
@@ -25,6 +25,7 @@ from ..calendars.status import BlockReason
 from ..capital.planner import ReservationPlan, ReservationPlanner
 from ..capital.twr import TwrResult, account_twr
 from ..config.schema import ObliskConfig
+from ..decision.breakers import BreakerReport, book_of, stored_report
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
 from ..domain.calendar import PhaseKind
@@ -113,6 +114,8 @@ class Digest:
     reconcile: ReconcileRun | None = None
     nav: NavReading | None = None
     twr: TwrResult | None = None
+    #: The breakers of the mode's book on its last stored reading.
+    breakers: BreakerReport | None = None
     plan: RebalancePlan | None = None
     reservations: ReservationPlan | None = None
     theses: ThesisPlan | None = None
@@ -161,6 +164,10 @@ async def gather_digest(
     digest.nav = series[-1] if series else None
     digest.twr = await account_twr(worker, settings, since=day - window, as_of=day)
     if digest.mode is not None:
+        try:
+            digest.breakers = await worker.run(stored_report, settings, book_of(digest.mode), at=at)
+        except Exception as exc:  # shown as unreadable, never left out
+            digest.problems.append(f"the breakers cannot be read: {type(exc).__name__}")
         try:
             digest.plan = await rebalancer.survey(digest.mode)
         except ObliskError as exc:
@@ -245,6 +252,7 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
             if twr.value is not None
             else f"Time-weighted return: not measured ({twr.reason})"
         )
+    lines += breaker_lines(digest.breakers)
     plan = digest.plan
     lines.append("")
     lines.append("Book (targets, positions):")
@@ -315,6 +323,14 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
         lines.append(f"Open alerts ({len(digest.alerts)}):")
         _more(lines, [f"  {kind}: {key}" for key, kind in digest.alerts.items()], rows)
     return subject, "\n".join(lines)
+
+
+def breaker_lines(report: BreakerReport | None) -> list[str]:
+    """Each breaker's state (``n/a`` below the minimum observations), as the digest and
+    ``obliskiq status`` show it; an unread report says so."""
+    if report is None:
+        return ["Breakers: not read"]
+    return [f"Breakers ({report.book} book):", *(f"  {line}" for line in report.lines())]
 
 
 def _run_line(run: RunRow) -> str:
