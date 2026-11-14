@@ -20,6 +20,11 @@ runtime:
     - {name: us_late, venue: XNYS, anchor: close, offset_minutes: -60}
   # The daily digest, after the day's last cycle. A judgement.
   digest: {venue: XNYS, anchor: close, offset_minutes: 30}
+  # The measurement store's compute step (`obliskiq compute all`) once a day, after New York's
+  # collection; then the LLM analyst on the views it refreshed. A job that comes due while
+  # another runs waits for it. Judgements.
+  compute: {venue: XNYS, anchor: close, offset_minutes: 60}
+  analyst: {venue: XNYS, anchor: close, offset_minutes: 90}
   # A cycle or digest whose moment passed while the service was down, with no finished run in the
   # run log, runs when the service starts if it is at most this late; an older one is recorded as
   # missed. A judgement: inside the same session's order window for the cycles above.

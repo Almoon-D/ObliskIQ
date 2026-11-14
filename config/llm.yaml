@@ -43,3 +43,45 @@ llm:
     # A call that fails (the provider down, a timeout) leaves its item queued; after this many
     # failed calls the item waits no more.
     max_call_failures: 3
+  analyst:
+    # The Analyst role (MASTER_PLAN §5.5, §5.10; DECISIONS D156): theses it proposes on its own
+    # from the point-in-time fact sheet, and a second opinion on each of the owner's ideas. A
+    # change of model or prompt (this block and the fact sheet's shape are part of the prompt's
+    # hash) starts a new segment of the forward record (D128).
+    model: gemini_flash_lite
+    prompt_version: 1
+    temperature: 0
+    # A judgement: room for a few theses with their reasons, and for the model's own reasoning
+    # where the provider counts it as output.
+    max_output_tokens: 8192
+    request_timeout_seconds: 120
+    # One retry with the validation error, then the call fails closed and nothing is used.
+    retries_on_invalid: 1
+    # A second opinion whose call fails (the provider down, a timeout) is asked again on later
+    # runs, up to this many failed calls.
+    max_call_failures: 3
+    # The most drafts handed to the thesis book's intake in an ISO week (Monday to Sunday). A
+    # judgement: the book holds eight positions and a thesis runs for months.
+    max_drafts_per_week: 3
+    # A draft's horizon is at most this many days after the fact sheet's date. A judgement: the
+    # forward record is read every six months (H13), and a thesis longer than a year holds a slot
+    # through two looks without an answer.
+    max_horizon_days: 365
+    fact_sheet:
+      # The equity grid's leaves a cell's line carries (the rest of a cell is in the store; a
+      # cell with none of them measured is counted, not listed).
+      grid_leaves: [return_21d_base, return_63d_base, return_12m_base, distance_from_52w_high,
+                    realised_vol_30d_percentile, iv_percentile, positioning_percentile]
+      # An instrument's line: its last close and its return over each of these sessions.
+      return_sessions: [21, 63]
+      # A close older than this many days before the sheet's date is shown as stale.
+      price_stale_after_days: 5
+      # News items collected in this many days up to the sheet's date are read, newest first, at
+      # most `max_news_lines`. Judgements.
+      news_lookback_days: 7
+      max_news_lines: 40
+      # Prediction markets: the curated ones first, then the largest moves, at most this many.
+      max_market_lines: 20
+      # Issuers with open-market purchases by officers or directors in the cluster window, the
+      # most buyers first, at most this many.
+      max_insider_lines: 15

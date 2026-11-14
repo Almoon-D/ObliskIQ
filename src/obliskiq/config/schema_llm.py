@@ -1,8 +1,8 @@
 """The LLM layer's configuration (``config/llm.yaml``, section ``llm``; MASTER_PLAN §5.10).
 
-Session 10 holds one provider, one model and the minimal EventExtractor (DECISIONS D70); the
-registry grows in Session 16. A provider names the environment variable that holds its key, so a
-provider is added by an entry here and one variable.
+One provider and one model serve two roles: the minimal EventExtractor (DECISIONS D70) and the
+Analyst with its fact sheet (D156); the registry grows in Session 16. A provider names the
+environment variable that holds its key, so a provider is added by an entry here and one variable.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -57,11 +57,45 @@ class ExtractorConfig(FrozenModel):
     max_call_failures: PositiveInt
 
 
+class FactSheetConfig(FrozenModel):
+    """What the analyst's fact sheet carries (``grid/facts.py``)."""
+
+    grid_leaves: list[NonEmptyText] = Field(min_length=1)
+    return_sessions: list[PositiveInt] = Field(min_length=1)
+    price_stale_after_days: PositiveInt
+    news_lookback_days: PositiveInt
+    max_news_lines: NonNegativeInt
+    max_market_lines: NonNegativeInt
+    max_insider_lines: NonNegativeInt
+
+
+class AnalystConfig(FrozenModel):
+    """The Analyst role: theses of its own and second opinions (``llm/analyst.py``)."""
+
+    model: Identifier
+    prompt_version: PositiveInt
+    temperature: NonNegativeFloat
+    max_output_tokens: PositiveInt
+    request_timeout_seconds: PositiveInt
+    retries_on_invalid: NonNegativeInt
+    max_call_failures: PositiveInt
+    max_drafts_per_week: NonNegativeInt
+    max_horizon_days: PositiveInt
+    fact_sheet: FactSheetConfig
+
+
 class LlmConfig(FrozenModel):
     providers: dict[Identifier, LlmProviderConfig] = Field(min_length=1)
     models: dict[Identifier, LlmModelConfig] = Field(min_length=1)
     budget: LlmBudgetConfig
     extractor: ExtractorConfig
+    analyst: AnalystConfig
+
+    def analyst_model(self) -> LlmModelConfig:
+        return self.models[self.analyst.model]
+
+    def analyst_provider(self) -> LlmProviderConfig:
+        return self.providers[self.analyst_model().provider]
 
     def extractor_model(self) -> LlmModelConfig:
         return self.models[self.extractor.model]
@@ -76,8 +110,9 @@ class LlmConfig(FrozenModel):
             for name, model in self.models.items()
             if model.provider not in self.providers
         ]
-        if self.extractor.model not in self.models:
-            problems.append(f"extractor.model {self.extractor.model} is not a declared model")
+        for role, name in (("extractor", self.extractor.model), ("analyst", self.analyst.model)):
+            if name not in self.models:
+                problems.append(f"{role}.model {name} is not a declared model")
         if problems:
             raise ValueError("; ".join(problems))
         return self

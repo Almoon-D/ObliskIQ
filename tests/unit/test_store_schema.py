@@ -1,4 +1,4 @@
-"""The shape of the migrations (``001_core.sql`` through ``014_breakers.sql``) and the
+"""The shape of the migrations (``001_core.sql`` through ``015_analyst.sql``) and the
 constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
@@ -316,9 +316,24 @@ SHAPE = {
     "breaker_events": (
         "event_id:INTEGER*, at:TEXT!, book:TEXT!, event:TEXT!, actor:TEXT!, detail:TEXT!"
     ),
+    # 015_analyst
+    "analyst_calls": (
+        "call_id:INTEGER*, kind:TEXT!, thesis_id:INTEGER, as_of:TEXT!, sheet_hash:TEXT!, "
+        "produced_at:TEXT!, provider:TEXT!, model_id:TEXT!, prompt_version:INTEGER!, "
+        "prompt_hash:TEXT!, status:TEXT!, attempts:INTEGER!, output:TEXT, error:TEXT, "
+        "input_tokens:INTEGER!, output_tokens:INTEGER!, cost_usd:REAL!"
+    ),
+    "analyst_drafts": (
+        "call_id:INTEGER!*, seq:INTEGER!*, draft:TEXT!, facts:TEXT!, outcome:TEXT!, "
+        "reason:TEXT, thesis_id:INTEGER"
+    ),
+    "thesis_opinions": (
+        "thesis_id:INTEGER*, call_id:INTEGER!, probability:REAL!, critique:TEXT!, facts:TEXT!"
+    ),
 }
 
 INDEXES = {
+    "ix_analyst_calls_produced",
     "ix_chain_expiry",
     "ix_chain_underlying_date",
     "ix_curves_root_date",

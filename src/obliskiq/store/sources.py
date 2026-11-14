@@ -367,6 +367,16 @@ def insider_filings(
         return tuple(_filing_from_row(store, row) for row in rows)
 
 
+def insider_issuers(store: Store, *, since: date, as_of: date) -> tuple[int, ...]:
+    """The issuers with a filing public between ``since`` and ``as_of``, both included."""
+    rows = store.execute(
+        "SELECT DISTINCT issuer_cik FROM insider_filings WHERE filed_on >= ? AND filed_on <= ? "
+        "ORDER BY issuer_cik",
+        (date_text(since), date_text(as_of)),
+    ).fetchall()
+    return tuple(int(row["issuer_cik"]) for row in rows)
+
+
 def _filing_from_row(store: Store, row: sqlite3.Row) -> InsiderFiling:
     accession = row["accession"]
     owners = store.execute(
@@ -723,13 +733,17 @@ def extraction_spend(store: Store, since: datetime) -> float:
     return float(row["spent"])
 
 
-def extractions(store: Store, *, as_of: date) -> tuple[EventExtraction, ...]:
-    """Every extraction produced by the end of ``as_of``, in the order produced."""
-    rows = store.execute(
-        f"SELECT {_EXTRACTION_COLUMNS} FROM event_extractions WHERE produced_at < ? "
-        "ORDER BY extraction_id",
-        (cutoff_text(as_of),),
-    ).fetchall()
+def extractions(
+    store: Store, *, as_of: date, since: date | None = None
+) -> tuple[EventExtraction, ...]:
+    """Every extraction produced by the end of ``as_of`` (from ``since`` on), in the order
+    produced."""
+    sql = f"SELECT {_EXTRACTION_COLUMNS} FROM event_extractions WHERE produced_at < ?"
+    params: list[object] = [cutoff_text(as_of)]
+    if since is not None:
+        sql += " AND produced_at >= ?"
+        params.append(stamp_text(datetime.combine(since, time.min, tzinfo=UTC)))
+    rows = store.execute(sql + " ORDER BY extraction_id", params).fetchall()
     return tuple(_extraction_from_row(row) for row in rows)
 
 

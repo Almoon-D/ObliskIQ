@@ -11,7 +11,8 @@ with its item, the time it was produced, the provider, the model id, the prompt 
 hash, its tokens and its cost, so H7's evidence is the series as produced.
 
 Without the provider's key (the variable config names) the run is skipped and the items wait. A
-call whose worst-case cost would take the month's spend past ``budget.monthly_usd`` is not made:
+call whose worst-case cost would take the month's spend (the extractor's and the analyst's) past
+``budget.monthly_usd`` is not made:
 the run stops there and the rest wait for the next month. Nothing here sizes, orders or gates
 anything, and nothing consumes the output yet.
 
@@ -31,6 +32,7 @@ from ..config.schema import ObliskConfig
 from ..domain.sources import EventExtraction, ExtractionStatus, NewsItem
 from ..errors import ConfigError
 from ..logging_setup import get_logger
+from ..store import analyst as analyst_repo
 from ..store import sources as source_repo
 from ..store.worker import StoreWorker
 from ..util.http import RetryPolicy
@@ -130,7 +132,7 @@ class EventExtractor:
                 "skipped",
                 f"{self._provider.key_env} is unset: no call made, {len(items)} items wait",
             )
-        spent = await self._worker.run(source_repo.extraction_spend, month_start(self._now()))
+        spent = await self._worker.run(analyst_repo.llm_spend, month_start(self._now()))
         counts = dict.fromkeys(ExtractionStatus, 0)
         cost = 0.0
         for item in items:
