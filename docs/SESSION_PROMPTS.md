@@ -2364,8 +2364,8 @@ READ: legacy/lite/src/obliskiq/server/guards.py; decision/gates.py and the engin
 (Session 12 — reuse, don't duplicate); legacy/old/ObliskIQ/modules/execution/
 phase4_decision_engine.py (apply_quarter_kelly_clamp only), modules/data/
 crisis_database.py, research/validation/{stress_tester,monte_carlo}.py and
-test_crisis_database.py. Port lite's `positions` and `portfolio_circuit_breaker` keys you
-consume (legacy/lite/config.yaml:118-133, 145-155).
+test_crisis_database.py. Port lite's `positions` keys you consume
+(legacy/lite/config.yaml:118-133).
 
 DELIVERABLES
 1. decision/expression.py: a long option when the options sleeve is active (Session 12's
@@ -2411,9 +2411,9 @@ DELIVERABLES
    and external holdings (Session 7; stale external data makes the report UNRELIABLE,
    never a number); the optional exposure caps by asset class (D88), absent by default and
    read on look-through exposure.
-5. The breakers are Session 25's (rolling-month drawdown → freeze new buys; hard
-   peak-to-trough → force shadow): wire the new sleeves' buys to their freeze and add the
-   audit the freeze opens. Do not rebuild them.
+5. The breakers are Session 25's (decision/breakers.py, DECISIONS D163–D164; the core's and
+   the thesis book's buys already read their freeze): wire the new sleeves' buys to
+   `BreakerReport.buys_refused` and add the audit the freeze opens. Do not rebuild them.
 6. decision/inertia.py: intents only for a band breach, an approved thesis, a share
    scale-up confirmation, a fired trigger, stop, zombie or mandatory close, a cash
    reservation, or a risk breach; monthly turnover and realised-gain budgets; tax hooks
@@ -2437,8 +2437,8 @@ below the stop-only size on an instrument with fat overnight gaps (test); a 20 %
 holds more than four positions once its budget over the absolute floor allows it (test); end to end from a fixture
 thesis to a share probe, a scale-up after a trend confirmation and an exit on a fired
 trigger; an option thesis entered in one block and partially exited at the premium
-multiple; hand-computed Kelly with each p_base; a refused case per gate; ES tests; breaker
-drills; a cash reservation overriding a buy.
+multiple; hand-computed Kelly with each p_base; a refused case per gate; ES tests; a new
+sleeve's buy refused while a breaker freezes; a cash reservation overriding a buy.
 Finish with the end-of-session protocol in AGENTS.md.
 ```
 
