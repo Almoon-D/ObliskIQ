@@ -12,12 +12,11 @@ recorded as missed otherwise.
 
 **Then** it sleeps until the next heartbeat or job (``orchestration/schedule.py``: the cycles,
 the digest, the market collections, each source's runs, and the daily compute step and analyst
-run) and runs it, refreshing IBKR's
-schedule once a day, re-reading the owner's manual incident file each heartbeat and the
-single-stock halt feed every ``halts.nasdaq_trader.refresh_minutes`` (``data/halts.py``; its last
-state is restored at the start), until ``stop`` is set (SIGTERM or SIGINT from the command
-line): the job in hand finishes, the keepalive and the sweep stop, the health file says so, and
-the queued alerts go out.
+run) and runs it, refreshing IBKR's schedule once a day, re-reading the owner's manual incident
+file each heartbeat and the single-stock halt feed every ``halts.nasdaq_trader.refresh_minutes``
+(``data/halts.py``; its last state is restored at the start), until ``stop`` is set (SIGTERM or
+SIGINT from the command line): the job in hand finishes, the keepalive and the sweep stop, the
+health file says so, and the queued alerts go out.
 
 **Alerts.** The order path, the broker session and the calendars report through synchronous
 hooks; :class:`AlertHooks` tags each with the job in hand (or ``session``, ``calendar``, ``sweep``

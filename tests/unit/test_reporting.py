@@ -16,6 +16,7 @@ import pytest
 import respx
 from pydantic import SecretStr
 from service_rig import RecordingNotifier
+from thesis_rig import thesis
 
 from obliskiq.calendars.status import Disagreement, DisagreementKind
 from obliskiq.capital.managed import CapitalView
@@ -23,6 +24,7 @@ from obliskiq.capital.planner import ReservationLine, ReservationPlan
 from obliskiq.capital.twr import Period, TwrResult
 from obliskiq.config import ObliskConfig
 from obliskiq.decision.rebalance_core import RebalancePlan, RoleDecision
+from obliskiq.domain.analyst import AnalystCall, CallKind, OpinionScore, SecondOpinion
 from obliskiq.domain.capital import (
     CashEvent,
     OptionEffect,
@@ -40,6 +42,7 @@ from obliskiq.domain.orders import (
     ReconcileRun,
     ReconcileStatus,
 )
+from obliskiq.domain.sources import ExtractionStatus
 from obliskiq.execution.boundary import OrderAlert, OrderAlertKind
 from obliskiq.execution.currency import ConversionOutcome
 from obliskiq.execution.executor import CycleReport
@@ -526,3 +529,40 @@ def test_the_digest_shows_the_return_the_withdrawals_the_questions_and_unexplain
     assert "nothing planned: the kill switch is on" in body
     quiet = Digest(day=day, at=AT, reservations=ReservationPlan(mode=ExecutionMode.PAPER, at=AT))
     assert "Withdrawals" not in render_digest(quiet, rows=1, base_currency="EUR")[1]
+
+
+def test_the_digest_shows_second_opinions_and_their_brier_score() -> None:
+    idea = thesis(thesis_id=2)
+    call = AnalystCall(
+        call_id=5,
+        kind=CallKind.OPINION,
+        thesis_id=2,
+        as_of=AT.date(),
+        sheet_hash="a" * 64,
+        produced_at=AT,
+        provider="gemini",
+        model_id="m",
+        prompt_version=1,
+        prompt_hash="b" * 64,
+        status=ExtractionStatus.OK,
+        attempts=1,
+        output="{}",
+        error=None,
+        input_tokens=1,
+        output_tokens=1,
+        cost_usd=0.0,
+    )
+    given = SecondOpinion(thesis_id=2, call_id=5, probability=0.3, critique="thin.", facts="[]")
+    digest = Digest(
+        day=AT.date(),
+        at=AT,
+        mode=ExecutionMode.SHADOW,
+        opinions=[(idea, given, call)],
+        opinion_scores=[OpinionScore(segment=call.segment, graded=4, brier=0.1875)],
+    )
+    body = render_digest(digest, rows=10, base_currency="EUR")[1]
+    assert (
+        f"  second opinion on T2 EMIM ({call.segment}): 30% that it reaches its target. thin."
+        in (body)
+    )
+    assert f"  second opinions graded, {call.segment}: 4, mean Brier score 0.188" in body
