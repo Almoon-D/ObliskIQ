@@ -1,5 +1,5 @@
-"""``obliskiq llm``: the extractor's status and one run by hand, with and without its key, in
-process and without a network; and the service's verdict of an extractor run.
+"""``obliskiq llm``: each role's status, the fact sheet, and one extractor or analyst run by hand,
+with and without the key, in process and without a network; and the service's verdict of each.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -10,6 +10,7 @@ import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 import respx
@@ -19,7 +20,9 @@ from obliskiq.cli import llm as llm_cli
 from obliskiq.cli.app import EXIT_OK, run
 from obliskiq.config.loader import load_config
 from obliskiq.domain.sources import NewsItem
+from obliskiq.llm.analyst import AnalystRun
 from obliskiq.llm.extractor import ExtractorRun
+from obliskiq.orchestration.analyst import AnalystOutcome, judge_analyst
 from obliskiq.orchestration.service import _judge_extraction
 from obliskiq.store import open_store
 from obliskiq.store import sources as source_repo
@@ -127,3 +130,81 @@ def test_the_service_judges_an_extractor_run(result: ExtractorRun, verdict: str)
     assert outcome.status == verdict
     assert outcome.reason == result.reason
     assert outcome.detail["cost_usd"] == round(result.cost_usd, 6)
+
+
+# ── the analyst ──
+
+
+def test_facts_prints_the_sheet_and_calls_nothing(data_dir: Path) -> None:
+    with respx.mock as router:
+        status, out = _run("llm", "facts", "--as-of", "2026-10-23")
+        assert not router.calls
+    assert status == EXIT_OK
+    assert out.startswith("fact sheet as of 2026-10-23 (")
+    assert "| news | fed_press (central_bank): Fed raises rates (published unknown)" in out
+    assert "| n/a | grid | no equity grid is built" in out
+
+
+def test_status_names_the_analyst_s_segment_and_the_week(data_dir: Path) -> None:
+    status, out = _run("llm", "status")
+    assert status == EXIT_OK
+    assert "analyst: model gemini-3.1-flash-lite (gemini); prompt hash " in out
+    assert "analyst calls of this prompt: none" in out
+    assert "drafts handed to the intake this week: 0 of 3" in out
+
+
+def test_analyst_without_its_key_is_skipped_and_with_it_proposes(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    status, out = _run("llm", "analyst", "--as-of", "2026-10-23")
+    assert status == 2
+    assert "analyst: skipped: GEMINI_API_KEY is unset: no call made" in out
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-a-secret")
+    answer = {
+        "drafts": [
+            {
+                "symbol": "ACME",
+                "view": "bullish",
+                "expectation": "x",
+                "target": 2.0,
+                "invalidation": 1.0,
+                "horizon": "2027-01-04",
+                "facts": ["F1"],
+            }
+        ]
+    }
+    reply = {
+        "choices": [{"message": {"content": json.dumps(answer)}}],
+        "usage": {"prompt_tokens": 900, "completion_tokens": 80},
+    }
+    with respx.mock as router:
+        router.post(COMPLETIONS).mock(return_value=Response(200, json=reply))
+        status, out = _run("llm", "analyst", "--as-of", "2026-10-23")
+    assert status == EXIT_OK
+    assert "analyst: ok: 0 second opinions written; 1 drafts returned, 0 valid" in out
+    assert "to the intake: 0 accepted, 0 refused, 1 dropped" in out
+    assert "theses none" in out
+    assert "draft 1 dropped: names ACME, which is not an instrument the fact sheet lists" in out
+    _, after = _run("llm", "status")
+    assert "analyst calls of this prompt: 1 drafts ok" in after
+
+
+def _outcome(**run: Any) -> AnalystOutcome:
+    return AnalystOutcome(AnalystRun(**{"state": "ok", "reason": "r", **run}), lines=3)
+
+
+@pytest.mark.parametrize(
+    ("outcome", "verdict"),
+    [
+        (_outcome(state="skipped"), "skipped"),
+        (_outcome(), "ok"),
+        (_outcome(failed=1), "degraded"),
+        (_outcome(invalid=1), "degraded"),
+        (_outcome(state="budget_spent", cost_usd=0.1234567), "degraded"),
+    ],
+)
+def test_the_service_judges_an_analyst_run(outcome: AnalystOutcome, verdict: str) -> None:
+    judged = judge_analyst(outcome)
+    assert (judged.name, judged.status, judged.reason) == ("analyst", verdict, "r")
+    assert judged.detail["cost_usd"] == round(outcome.run.cost_usd, 6)
+    assert judged.detail["fact_lines"] == 3

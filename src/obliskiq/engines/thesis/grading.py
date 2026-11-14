@@ -1,5 +1,5 @@
-"""Grading a closed thesis against what it wrote, and the record per source and conviction
-(MASTER_PLAN §5.5).
+"""Grading a closed thesis against what it wrote, and the record per source, analyst segment and
+conviction (MASTER_PLAN §5.5); the analyst's second opinions graded by their Brier score.
 
 A grade says whether the target was reached, the payoff realised against the one stated, and the
 days held against the horizon. It describes the calls and moves no capital: the book's capital
@@ -9,13 +9,14 @@ Session 18's scoreboard computes from the same fills.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from ...domain.analyst import AnalystCall, OpinionScore, SecondOpinion, brier
 from ...domain.orders import Fill, OrderSide
-from ...domain.thesis import Thesis, ThesisGrade
+from ...domain.thesis import Thesis, ThesisGrade, ThesisSource
 from .exits import TARGET
 
 ZERO = Decimal(0)
@@ -75,15 +76,41 @@ def _group(name: str, grades: Sequence[ThesisGrade]) -> GroupRecord:
     )
 
 
-def record(grades: Iterable[ThesisGrade]) -> list[GroupRecord]:
-    """The record of the book, then of each source and each conviction level that has a closed
-    thesis. Nothing is reported for a group without one."""
+def record(
+    grades: Iterable[ThesisGrade], segments: Mapping[int, str] | None = None
+) -> list[GroupRecord]:
+    """The record of the book, then of each source, each segment of the analyst's (one model and
+    one prompt hash, from ``segments``: thesis id to segment) and each conviction level that has a
+    closed thesis. Nothing is reported for a group without one."""
     every = list(grades)
     if not every:
         return []
+    named = segments or {}
     groups: dict[str, list[ThesisGrade]] = {}
     for item in every:
         groups.setdefault(f"source {item.source.value}", []).append(item)
     for item in every:
+        if item.source is ThesisSource.ANALYST and item.thesis_id in named:
+            groups.setdefault(f"analyst {named[item.thesis_id]}", []).append(item)
+    for item in every:
         groups.setdefault(f"conviction {item.conviction.value}", []).append(item)
     return [_group("book", every), *(_group(name, found) for name, found in groups.items())]
+
+
+def opinion_record(
+    opinions: Iterable[tuple[SecondOpinion, AnalystCall]], grades: Iterable[ThesisGrade]
+) -> list[OpinionScore]:
+    """The analyst's second opinions graded against the theses they were on, per segment: the
+    mean Brier score of those whose thesis has closed. Nothing is reported for a segment without
+    one; an opinion on a thesis that never filled is never graded."""
+    reached = {grade.thesis_id: grade.reached for grade in grades}
+    scores: dict[str, list[float]] = {}
+    for opinion, call in opinions:
+        if opinion.thesis_id in reached:
+            scores.setdefault(call.segment, []).append(
+                brier(opinion.probability, reached[opinion.thesis_id])
+            )
+    return [
+        OpinionScore(segment=segment, graded=len(found), brier=sum(found) / len(found))
+        for segment, found in scores.items()
+    ]

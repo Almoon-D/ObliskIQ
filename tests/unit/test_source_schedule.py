@@ -9,7 +9,14 @@ from datetime import UTC, date, datetime
 from obliskiq.calendars.service import Calendars
 from obliskiq.config import ObliskConfig
 from obliskiq.orchestration.assemble import calendar_extras, source_plan
-from obliskiq.orchestration.schedule import SOURCE, jobs_on, next_job
+from obliskiq.orchestration.schedule import (
+    ANALYST,
+    COMPUTE,
+    SOURCE,
+    AnalysisPlan,
+    jobs_on,
+    next_job,
+)
 
 WEDNESDAY = date(2026, 10, 21)
 
@@ -56,3 +63,26 @@ def test_the_service_s_calendars_cover_the_sources_and_the_halt_feed(
 ) -> None:
     extras = set(calendar_extras(shipped_settings))
     assert {"XTKS", "XETR", "XNYS", "XNAS"} <= extras
+
+
+def test_the_compute_step_and_the_analyst_run_after_new_york_s_close(
+    shipped_settings: ObliskConfig, calendars: Calendars
+) -> None:
+    runtime = shipped_settings.runtime
+    plan = AnalysisPlan(runtime.compute, runtime.analyst)
+    jobs = {
+        j.kind: j
+        for j in jobs_on(calendars, runtime, WEDNESDAY, analysis=plan)
+        if j.kind in (COMPUTE, ANALYST)
+    }
+    assert jobs[COMPUTE].at == datetime(2026, 10, 21, 21, 0, tzinfo=UTC)  # 16:00 EDT + 60 min
+    assert jobs[ANALYST].at == datetime(2026, 10, 21, 21, 30, tzinfo=UTC)
+    assert (jobs[COMPUTE].command, jobs[ANALYST].command) == ("compute", "analyst")
+    assert AnalysisPlan(None, runtime.analyst).anchors() == (("analyst", runtime.analyst),)
+    without = jobs_on(calendars, runtime, WEDNESDAY)
+    assert not [j for j in without if j.kind in (COMPUTE, ANALYST)]
+    upcoming = next_job(
+        calendars, runtime, datetime(2026, 10, 21, 21, 10, tzinfo=UTC), analysis=plan
+    )
+    assert upcoming is not None
+    assert upcoming.kind == ANALYST

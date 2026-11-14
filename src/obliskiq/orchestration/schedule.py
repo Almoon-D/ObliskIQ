@@ -1,6 +1,6 @@
 """When the service's jobs run: four decision cycles and a digest a day, a collection job per
-venue after its close, and each source's runs (``sources.providers.<id>.schedule``), from the
-calendars.
+venue after its close, each source's runs (``sources.providers.<id>.schedule``), and the daily
+compute step and analyst run (``runtime.compute``, ``runtime.analyst``), from the calendars.
 
 Each job is a moment of one venue's regular session (``runtime.cycles``, ``runtime.digest``,
 ``collectors.schedule``): its open or close moved by an offset, read through the calendars, so
@@ -16,13 +16,15 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from ..calendars.service import Calendars
-from ..config.schema_runtime import Anchor, RuntimeConfig
+from ..config.schema_runtime import Anchor, RuntimeConfig, SessionAnchor
 from ..errors import CalendarError
 
 CYCLE = "cycle"
 DIGEST = "digest"
 COLLECT = "collect"
 SOURCE = "source"
+COMPUTE = "compute"
+ANALYST = "analyst"
 #: Kinds whose run-log command carries the job's name.
 NAMED_KINDS = frozenset({CYCLE, COLLECT, SOURCE})
 
@@ -44,7 +46,7 @@ class Job:
     @property
     def command(self) -> str:
         """The run log's name for it: ``cycle:<name>``, ``collect:<MIC>``,
-        ``source:<source>.<n>`` or ``digest``."""
+        ``source:<source>.<n>``, ``digest``, ``compute`` or ``analyst``."""
         return f"{self.kind}:{self.name}" if self.kind in NAMED_KINDS else self.kind
 
 
@@ -94,6 +96,22 @@ class SourcePlan:
         return tuple(sorted({m.venue for m in self.moments}))
 
 
+@dataclass(frozen=True, slots=True)
+class AnalysisPlan:
+    """The daily compute step over the measurement store and the analyst after it
+    (``runtime.compute``, ``runtime.analyst``); ``None`` where the service runs no such job."""
+
+    compute: SessionAnchor | None
+    analyst: SessionAnchor | None
+
+    def anchors(self) -> tuple[tuple[str, SessionAnchor], ...]:
+        return tuple(
+            (kind, anchor)
+            for kind, anchor in ((COMPUTE, self.compute), (ANALYST, self.analyst))
+            if anchor is not None
+        )
+
+
 def covered(calendars: Calendars, venue: str, day: date) -> bool:
     """Whether the calendars hold ``venue`` on ``day`` (a holiday is covered: it has no session)."""
     span = calendars.coverage().get(venue)
@@ -121,6 +139,7 @@ def jobs_on(
     day: date,
     collect: CollectPlan | None = None,
     sources: SourcePlan | None = None,
+    analysis: AnalysisPlan | None = None,
 ) -> list[Job]:
     """Every job of the sessions dated ``day``, in time order."""
     jobs = []
@@ -141,6 +160,10 @@ def jobs_on(
         at = moment(calendars, planned.venue, planned.anchor, planned.offset_minutes, day)
         if at is not None:
             jobs.append(Job(at, SOURCE, planned.name, planned.venue, day))
+    for kind, anchor in analysis.anchors() if analysis is not None else ():
+        at = moment(calendars, anchor.venue, anchor.anchor, anchor.offset_minutes, day)
+        if at is not None:
+            jobs.append(Job(at, kind, kind, anchor.venue, day))
     return sorted(jobs)
 
 
@@ -151,6 +174,7 @@ def jobs_between(
     end: datetime,
     collect: CollectPlan | None = None,
     sources: SourcePlan | None = None,
+    analysis: AnalysisPlan | None = None,
 ) -> list[Job]:
     """Every job whose moment is in ``(start, end]``, in time order."""
     found: list[Job] = []
@@ -158,7 +182,7 @@ def jobs_between(
     while day <= end.date() + timedelta(days=1):
         found += [
             job
-            for job in jobs_on(calendars, runtime, day, collect, sources)
+            for job in jobs_on(calendars, runtime, day, collect, sources, analysis)
             if start < job.at <= end
         ]
         day += timedelta(days=1)
@@ -171,9 +195,10 @@ def next_job(
     after: datetime,
     collect: CollectPlan | None = None,
     sources: SourcePlan | None = None,
+    analysis: AnalysisPlan | None = None,
 ) -> Job | None:
     """The first job strictly after ``after``; ``None`` when the calendars cover none soon."""
     upcoming = jobs_between(
-        calendars, runtime, after, after + timedelta(days=SEARCH_DAYS), collect, sources
+        calendars, runtime, after, after + timedelta(days=SEARCH_DAYS), collect, sources, analysis
     )
     return upcoming[0] if upcoming else None

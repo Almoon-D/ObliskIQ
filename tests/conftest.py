@@ -47,9 +47,16 @@ settings.register_profile("ci", deadline=None, derandomize=True)
 settings.load_profile("ci" if os.environ.get("CI") else "default")
 
 
+#: The environment variables that hold the LLM providers' keys (config names them): a
+#: developer's key must not turn a test that assumes none into a call.
+LLM_KEYS = tuple(
+    provider.key_env for provider in load_config(ROOT / "config").settings.llm.providers.values()
+)
+
+
 @pytest.fixture(autouse=True)
 def _isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in variable_names():
+    for name in (*variable_names(), *LLM_KEYS):
         monkeypatch.delenv(name, raising=False)
 
 

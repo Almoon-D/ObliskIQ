@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import asyncio
 import dataclasses
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -182,10 +183,12 @@ def build_service_rig(
     notifier: RecordingNotifier | None = None,
     collect: bool = False,
     http: httpx.AsyncClient | None = None,
+    secrets: Callable[[str], str | None] | None = None,
 ) -> ServiceRig:
     """The service over ``rig``'s client and store, with ``settings`` and ``calendars``. Its
     collection jobs are off unless ``collect``: the fake broker serves no market history. With
-    ``http`` it runs the sources and reads the halt feed through it (and reads no earnings)."""
+    ``http`` it runs the sources, reads the halt feed and runs the analyst through it (and reads no
+    earnings); ``secrets`` resolves the credentials they name."""
     settings = three_fund_core(settings)
     if not collect:
         schedule = settings.collectors.schedule.model_copy(update={"enabled": False})
@@ -222,6 +225,7 @@ def build_service_rig(
         hooks=hooks,
         clock=clock,
         http=http,
+        secrets=secrets,
         earnings=lambda _symbol, _limit: [],
     )
     return ServiceRig(rig, path, service, notifier, reporter, hooks, clock)

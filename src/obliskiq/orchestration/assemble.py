@@ -6,19 +6,21 @@ the account guard) with the service's alert hooks, the venues its jobs are ancho
 trading schedule as the calendars' cross-check, opens the HTTP client the sources share, and
 builds the :class:`Service` over them. :func:`build_service` does the building over a path that
 is already open; the tests drive it over the fake broker. Without an HTTP client the service runs
-no source and reads no halt feed.
+no source, reads no halt feed and runs no analyst; without the market collections it runs no
+compute step (there is nothing new to compute).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import httpx
 from pydantic import SecretStr
 
+from ..calendars.service import Calendars
 from ..config.schema import ObliskConfig
 from ..data.events.earnings import EarningsSource, yfinance_earnings
 from ..data.halts import HaltFeed
@@ -30,20 +32,24 @@ from ..decision.rebalance_core import CoreRebalancer
 from ..decision.rebalance_thesis import ThesisRebalancer
 from ..decision.swap_partners import SwapPartners
 from ..decision.vehicle_selector import VehicleSelector
-from ..env import Environment, secret_reader
+from ..env import Environment, repository_root, secret_reader
 from ..execution.runtime import OrderPath, calendar_venues, open_order_path
 from ..ibkr.session import BrokerSession
 from ..ibkr.transport import Transport
 from ..ibkr.transport.gateway_login import LoginDriver
 from ..jurisdiction import ELIGIBILITY_POLICIES
 from ..jurisdiction.profile import JurisdictionProfile
+from ..llm.analyst import Analyst
 from ..llm.extractor import EventExtractor
 from ..quant.costs import CostBook
 from ..reporting.alerts import AlertBook
 from ..reporting.notifier import LogNotifier, Notifier, TelegramNotifier
 from ..reporting.reporter import Reporter
+from ..research.patterns import REGISTRY_PATH
 from ..util.http import RetryPolicy
+from .analyst import AnalystJob
 from .clock import Clock
+from .compute import ComputeRunner
 from .correlations import ResearchCorrelationSource
 from .jobs import Jobs
 from .nav import NavCollector
@@ -77,9 +83,11 @@ def source_plan(settings: ObliskConfig) -> SourcePlan:
 
 
 def anchor_venues(settings: ObliskConfig) -> tuple[str, ...]:
-    """The venues the service's decision cycles and digest are anchored to."""
+    """The venues the service's decision cycles, digest, compute step and analyst are anchored
+    to."""
     runtime = settings.runtime
-    return tuple(sorted({cycle.venue for cycle in runtime.cycles} | {runtime.digest.venue}))
+    jobs = {runtime.digest.venue, runtime.compute.venue, runtime.analyst.venue}
+    return tuple(sorted({cycle.venue for cycle in runtime.cycles} | jobs))
 
 
 def calendar_extras(settings: ObliskConfig) -> tuple[str, ...]:
@@ -175,6 +183,25 @@ def build_thesis_book(
     )
 
 
+def build_compute(
+    settings: ObliskConfig, path: OrderPath, *, now: Callable[[], datetime]
+) -> ComputeRunner:
+    """The measurement store's compute step over the order path's store, with calendars of
+    every configured venue (``obliskiq compute`` builds the same)."""
+    root = repository_root()
+
+    def calendars(reference: date) -> Calendars:
+        return Calendars.from_settings(settings, reference=reference, data_dir=path.data_dir)
+
+    return ComputeRunner(
+        settings,
+        path.worker,
+        calendars=calendars,
+        now=now,
+        registry=None if root is None else root / REGISTRY_PATH,
+    )
+
+
 def build_service(
     settings: ObliskConfig,
     *,
@@ -246,6 +273,22 @@ def build_service(
         if http is not None
         else None
     )
+    analyst = (
+        AnalystJob(
+            settings,
+            analyst=Analyst(
+                settings,
+                client=http,
+                worker=path.worker,
+                key=(secrets or _no_secret)(settings.llm.analyst_provider().key_env),
+                now=clock.now,
+            ),
+            worker=path.worker,
+            now=clock.now,
+        )
+        if http is not None
+        else None
+    )
     halts = (
         HaltFeed(
             settings,
@@ -272,6 +315,10 @@ def build_service(
         source_plan=source_plan(settings),
         halts=halts,
         extractor=extractor,
+        compute=build_compute(settings, path, now=clock.now)
+        if settings.collectors.schedule.enabled
+        else None,
+        analyst=analyst,
     )
 
 
