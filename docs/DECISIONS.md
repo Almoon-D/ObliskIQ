@@ -3746,3 +3746,34 @@ owner then widens the keys. Rejected: lite's measure on the book alone; a relati
 - **Stand-down.** Where the store cannot record the downgrade, the file `FORCED_SHADOW` holds the
   mode at shadow, as the kill switch's file does; the next upgrade writes the missed audit row.
 - **Not done.** Working orders are left to the mode change and the kill switch; no breaker sells.
+
+## Session 28 — LLM analyst (2026-11-14)
+
+### D165 · The analyst proposes, the intake and the gate decide (§5.5, §5.10; D70, D128, D156)
+
+- **A run** writes a second opinion on each open owner idea that has none, then asks once for at
+  most what is left of `max_drafts_per_week` (3; drafts handed to the intake, by the ISO week of
+  the sheet). A draft is dropped, with its reason, when a field is missing, its instrument is
+  not on the sheet, an open thesis holds it, it cites no line or a line after the sheet, its
+  instrument has no close or its levels do not bracket it, or its horizon passes
+  `max_horizon_days` (365). The intake and the gate decide the rest, as for the owner.
+- **Opinions:** once per idea, never a veto, Brier-graded per segment when the thesis closes.
+- **A segment** is the model and one hash over both prompts, both schemas, the fact sheet's
+  configuration and the stated gain-to-loss ratio. One monthly budget serves every role.
+
+Rejected: trusting the prompt to keep the model off held or unpriced instruments (live, it was
+not); the model's probability as a size or a veto (D156).
+
+### D166 · The fact sheet and the daily compute step (§5.7, §5.14)
+
+- **The sheet** carries the nameable instruments' closes and returns, measured macro-board and
+  grid cells (`fact_sheet.grid_leaves`), the ranked views, CFTC crowding, prediction markets,
+  GDELT pulses, recent news with what the extractor read, and insider-purchase clusters. Each
+  line is dated when its fact was known; unmeasured cells are counted on one `n/a` line. No
+  account table is read. Feed text is escaped inside `<facts>`.
+- **The service** runs `compute all` daily at New York's close + 60 min when it collects market
+  data, and the analyst at + 90 min when it holds an HTTP client; either failing stops at its
+  own run record, and the cycles run as before.
+
+Rejected: a compute run after every venue's collection (the loop runs jobs inline, D129); the
+catalyst calendar on the sheet before a graded record asks for it.

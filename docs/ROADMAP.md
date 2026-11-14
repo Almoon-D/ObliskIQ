@@ -28,7 +28,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 13 | Core engine | the variants 4c registered (4e found no total-risk specification sufficient, D95), risk budgeting, tax-aware trend tilt, rebalancing | done (parity with the simulator on a fixture history; the owner's variant is D50 since v0.19.0, D147; the live cycle a command list for the owner) | v0.18.0 |
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | done (on fixtures; the order test, the execution test and the reserve's paper cycle are the owner's list in docs/RUNBOOK.md) | v0.20.2 |
 | 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | done (on fixtures, in shadow; H13 locked, #63; no IBKR call) | v0.21.0 |
-| 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | after 27 (an LLM key, or fixtures) | |
+| 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | done (on fixtures and one live provider; drafts and opinions in shadow, graded forward; no IBKR call) | v0.24.0 |
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | done (no test reaches a probability of a sufficient outcome of 0.5: do not buy, D162) | v0.22.0 |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after the owner buys a history, which Session 23 advises against (D162) | |
@@ -53,11 +53,28 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
-| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule; no idea has been handed in | `research/preregistrations/thesis-book.md` |
+| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule, the analyst's per segment; the analyst proposes from the service once its key is on the machine | `research/preregistrations/thesis-book.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run; the literature supports less than θ net of decay, costs and tax for every candidate | `research/reports/hunter-feasibility.md` |
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 28 — LLM analyst (2026-11-14, v0.24.0)
+
+- **Landed** (D165, D166): the fact sheet (`obliskiq llm facts`), dated and statused lines from
+  the store bounded by `as_of`, no account figure; the Analyst's drafts and second opinions
+  (`llm/analyst.py`), stored per segment; drafts through the thesis intake as source `analyst`;
+  `obliskiq llm analyst`; the service's daily `compute` and `analyst` jobs after New York's
+  close; opinions and their Brier score in the digest and `idea show`; one monthly LLM budget.
+- **Live** [Gemini ✓ 2026-11-14, a fixture store, US$0.016 in all]: one draft accepted as a
+  thesis (IWDA, target 186.12, invalidation 160.74, resting on F18); a second opinion (45 %, its
+  critique misreads the 10-year yield's percentile, which grading is for). Two defects found and
+  fixed: a draft on an instrument an open thesis held, and drafts with levels on an instrument
+  without a close on the sheet (both now dropped).
+- **Not built:** the provider registry, other roles, runs on event spikes; catalysts and stock
+  candidates are not on the sheet. **Prompts edited:** Session 16 wires the Analyst into its
+  registry without breaking its segment.
+- **Live findings.** None from IBKR: no IBKR call.
 
 ### Session 25 — Book breakers (2026-11-14, v0.23.0)
 
@@ -352,7 +369,7 @@ settles it.
 | GDELT's collection end to end from the deployment machine (the cloud session's shared egress met HTTP 429 on nearly every request, 2026-10-23; the fixtures are that day's live answers) | 10 | the first week of `serve` |
 | An NYSE-listed halt in Nasdaq Trader's feed and its `Market` code (only NASDAQ and AMEX were listed on 2026-10-23); until seen, XNYS's mapping can add blocks and never lift one | 10 | the first NYSE halt while `serve` runs |
 | A halt with its resumption as the feed shows it (`ResumptionDate`, `ResumptionTradeTime` formats; none was listed on 2026-10-23) | 10 | the first resumed halt while `serve` runs |
-| The EventExtractor's first call: Gemini's OpenAI-compatible reply, its `usage`, and the `json_schema` response format accepted (no key in the session) | 10 | the owner setting `GEMINI_API_KEY` |
+| The LLM transport's first calls: settled, Gemini's OpenAI-compatible reply (`choices[0].message.content`), its `usage` (`prompt_tokens`, `completion_tokens`) and a `json_schema` response format with inlined objects, enums, `format: date` and `additionalProperties: false` accepted [Gemini ✓ 2026-11-14] | 10 | settled (28) |
 | The service's source jobs, the halt refresh and the extractor on the machine (built and tested over the fake broker and a mock web) | 10 | the first week of `serve` |
 | `yfinance`'s earnings dates from the deployment machine (worked from the cloud, 2026-10-23) | 10 | the first week of `serve` |
 | The option surface, the sleeve's candidates and the census on live chains: each tenor's nearest expiry, the smile's wings at deltas 0.10 and 0.25, the liquidity share, and how many contracts clear every gate; the FX decomposition on the board's live `fx_vs_base` and CPI; the commodity leaves on live curves (`VERIFY-LIVE(the option surface on live chains)`, `VERIFY-LIVE(futures curve prices)`) | 12 | the first command list after the collectors' live round |
@@ -372,12 +389,10 @@ settles it.
 - The cross-section harness Bonferroni-adjusts over every test of a confirmation run; a fixed
   sequence (D154) needs none. A pre-registration of the Hunter's sequence would need the
   adjustment named per test (Session 24, if it runs).
-- The service runs no compute step yet: `obliskiq compute all` by hand. A scheduled job after
-  each region's collection lands with the first engine that reads the measurement store on its
-  own (Session 17; the core reads the collected bars and the research store directly, D144,
-  D143). With it, the order path's eligibility reads the commodity engine's contango check
-  through the store worker, in place of the fail-closed `UnavailableContangoCheck` (D137). That
-  is needed before a futures-tracking ETC joins the universe.
+- The order path's eligibility still fails the contango check closed (`UnavailableContangoCheck`,
+  D137): the daily compute step (D166) writes the commodity engine's readings, and Session 17
+  reads them through the store worker. That is needed before a futures-tracking ETC joins the
+  universe.
 - Session 17 hands the options sleeve its investable capital (`CapitalReader`) so the pool's
   gates are tested, and turns an active sleeve's entries into intents. Its penalty ledger is
   written by the fills and the zombie reviews it schedules.
@@ -388,8 +403,6 @@ settles it.
   buffer.
 - Lite's 13-week positioning change (`commodities.cot`) is not carried (D134); add it to
   `data/positioning/readings.py` if a consumer asks for it.
-- `GEMINI_API_KEY` in a developer's environment makes `test_cli_llm.py` and `test_env.py` fail
-  locally (they assume the key absent); CI is unaffected. Clear the key inside those tests.
 - The core holds gold's and broad commodities' share (16 % of A) in cash. Their candidates list
   on venues whose capabilities are unverified (the London and Milan lines, D121), so neither role
   has a vehicle the selector may propose. They fill when Session 9's probe on paper verifies a venue.
@@ -463,9 +476,15 @@ settles it.
   analyst's fact sheet from Session 28 (D156). What still serves no order, verdict or fact line
   then (`engines/commodity`, `engines/fx`, parts of `engines/options_sleeve`) is kept or deleted
   by whether a layer reads it.
-- **Owner:** an LLM provider key and its monthly budget before Session 28 (the analyst runs on
-  fixtures without it and proposes nothing live); the thesis book's exploration share before the
-  live account (a tenth of investable capital unless set).
+- **Owner:** `GEMINI_API_KEY` on the deployment machine (the analyst and the extractor are
+  skipped without it, and say so) and the monthly budget (`llm.budget.monthly_usd`, US$5); the
+  thesis book's exploration share before the live account (a tenth of investable capital unless
+  set).
+- The analyst's fact sheet holds no catalyst calendar (central-bank and release dates, earnings)
+  and no stock candidate: a thesis on a share outside the universe file is the owner's alone.
+  Add either when a graded record asks for it (D166).
+- The analyst runs once a day after New York's close; MASTER_PLAN §5.10's run "on event spikes"
+  waits for a spike detector (Session 15's GDELT pulse and prediction-market velocity).
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
   ceiling, so the owner's 50 % (D149) cannot be written until the budget reader lets the reserve
   shrink. Until then the defaults stand: the Hunter is inactive and its share stays in the reserve.

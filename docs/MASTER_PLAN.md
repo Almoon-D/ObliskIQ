@@ -741,7 +741,8 @@ earns them. The vehicle selector prefers venues the plan covers.
 One asyncio service (`obliskiq serve`): a heartbeat every few minutes (health, kill switch,
 broker session, trigger evaluation, intents whose venue is open); four decision cycles per
 trading day anchored to venue sessions (Asia, Europe, US, US-late), computed from
-calendars, none of which rebuilds the book (DECISIONS D151); collectors per venue after the close and per source cadence; monthly core
+calendars, none of which rebuilds the book (DECISIONS D151); collectors per venue after the close and per source cadence; the
+measurement store's compute step and the analyst daily after New York's close (D166); monthly core
 evaluation; weekly grading, DevilsAdvocate and digest. Crash-safe through run records;
 idempotent intents.
 
