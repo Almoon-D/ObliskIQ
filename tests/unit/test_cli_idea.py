@@ -19,8 +19,18 @@ from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, run
 from obliskiq.config import ObliskConfig, load_config
 from obliskiq.data.candidates import parse_ishares
 from obliskiq.decision.thesis_intake import ThesisIntake
-from obliskiq.domain.thesis import View
+from obliskiq.domain.analyst import (
+    UNSTORED_CALL,
+    AnalystCall,
+    CallKind,
+    DraftOutcome,
+    DraftRecord,
+    SecondOpinion,
+)
+from obliskiq.domain.sources import ExtractionStatus
+from obliskiq.domain.thesis import ThesisSource, View
 from obliskiq.domain.universe import ScannerRow
+from obliskiq.store import analyst as analyst_repo
 from obliskiq.store import open_store
 from obliskiq.store import theses as thesis_repo
 from obliskiq.store import universe as universe_repo
@@ -275,3 +285,72 @@ async def test_a_candidate_listed_on_no_configured_venue_has_no_calendar(
     )
     assert isinstance(refused, list)
     assert [f.code.value for f in refused] == ["no_calendar"]
+
+
+def test_show_tells_what_the_analyst_wrote(data_dir: Path, config_dir: Path) -> None:
+    settings = load_config(config_dir).settings
+    assert add("FCX")[0] == EXIT_OK
+    with open_store(settings, data_dir) as store:
+        mine = thesis_repo.insert_thesis(
+            store,
+            thesis_repo.get_thesis(store, 1).model_copy(  # type: ignore[union-attr]
+                update={"source": ThesisSource.ANALYST}
+            ),
+            actor="analyst",
+        )
+        stamped: dict[str, Any] = {
+            "call_id": UNSTORED_CALL,
+            "as_of": NOW.date(),
+            "sheet_hash": "a" * 64,
+            "produced_at": NOW,
+            "provider": "gemini",
+            "model_id": "m",
+            "prompt_version": 1,
+            "prompt_hash": "b" * 64,
+            "status": ExtractionStatus.OK,
+            "attempts": 1,
+            "output": "{}",
+            "error": None,
+            "input_tokens": 1,
+            "output_tokens": 1,
+            "cost_usd": 0.0,
+        }
+        drafted = analyst_repo.record_call(
+            store, AnalystCall(kind=CallKind.DRAFTS, thesis_id=None, **stamped)
+        )
+        analyst_repo.record_drafts(
+            store,
+            [
+                DraftRecord(
+                    call_id=drafted.call_id,
+                    seq=1,
+                    draft="{}",
+                    facts='["F1 | 2026-10-23 | ok | instrument | FCX: close 45"]',
+                    outcome=DraftOutcome.ACCEPTED,
+                    reason=None,
+                    thesis_id=mine.thesis_id,
+                )
+            ],
+        )
+        asked = analyst_repo.record_call(
+            store, AnalystCall(kind=CallKind.OPINION, thesis_id=1, **stamped)
+        )
+        analyst_repo.record_opinion(
+            store,
+            SecondOpinion(
+                thesis_id=1,
+                call_id=asked.call_id,
+                probability=0.25,
+                critique="copper is not tight",
+                facts='["F2 | 2026-10-23 | ok | macro | x"]',
+            ),
+        )
+    shown = _run("idea", "show", "T1")[1]
+    assert (
+        f"second opinion (m {'b' * 12}, {NOW.isoformat()}): 25% that it reaches its target. "
+        in (shown)
+    )
+    assert "    F2 | 2026-10-23 | ok | macro | x" in shown
+    proposed = _run("idea", "show", f"T{mine.thesis_id}")[1]
+    assert f"proposed by the analyst (m {'b' * 12}) on the facts of {NOW.date()}:" in proposed
+    assert "    F1 | 2026-10-23 | ok | instrument | FCX: close 45" in proposed

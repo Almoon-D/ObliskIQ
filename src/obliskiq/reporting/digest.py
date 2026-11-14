@@ -1,7 +1,7 @@
 """The daily digest: mode, the book's breakers, NAV and its time-weighted return, capital,
 positions, targets, the thesis book (open theses, withheld ideas with their reasons, the graded
-record), the reservation plan and its reasons, open owner questions, unexplained cash, intents,
-fills, errors, venue status and health.
+record, the analyst's second opinions and their Brier scores), the reservation plan and its
+reasons, open owner questions, unexplained cash, intents, fills, errors, venue status and health.
 
 The service gathers it after the day's last cycle (``runtime.digest``) and sends it through the
 notifier; ``obliskiq status`` prints the same gathering on demand. Everything it shows is read
@@ -28,6 +28,7 @@ from ..config.schema import ObliskConfig
 from ..decision.breakers import BreakerReport, book_of, stored_report
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
+from ..domain.analyst import AnalystCall, OpinionScore, SecondOpinion
 from ..domain.calendar import PhaseKind
 from ..domain.capital import CashEvent, OwnerQuestion, QuestionState
 from ..domain.core import RoleStatus
@@ -37,11 +38,12 @@ from ..domain.orders import (
     IntentState,
     ReconcileRun,
 )
-from ..domain.thesis import ENDED_STATES, Thesis, ThesisLogEntry
-from ..engines.thesis.grading import GroupRecord, record
+from ..domain.thesis import ENDED_STATES, OPEN_STATES, Thesis, ThesisLogEntry
+from ..engines.thesis.grading import GroupRecord, opinion_record, record
 from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
+from ..store import analyst as analyst_repo
 from ..store import capital as capital_repo
 from ..store import nav as nav_repo
 from ..store import orders as repo
@@ -122,6 +124,9 @@ class Digest:
     #: The theses that ended today, each with the last entry of its log (why).
     ended: list[tuple[Thesis, ThesisLogEntry | None]] = field(default_factory=list)
     record: list[GroupRecord] = field(default_factory=list)
+    #: The analyst's second opinions on the owner's open theses, and their graded record.
+    opinions: list[tuple[Thesis, SecondOpinion, AnalystCall]] = field(default_factory=list)
+    opinion_scores: list[OpinionScore] = field(default_factory=list)
     questions: list[OwnerQuestion] = field(default_factory=list)
     cash_events: list[CashEvent] = field(default_factory=list)
     intents: list[StoredIntent] = field(default_factory=list)
@@ -181,7 +186,11 @@ async def gather_digest(
         except ObliskError as exc:
             digest.problems.append(f"the thesis book cannot be surveyed: {exc}")
     digest.ended = await worker.run(_ended_today, day, start)
-    digest.record = record(await worker.run(thesis_repo.grades, as_of=day))
+    grades = await worker.run(thesis_repo.grades, as_of=day)
+    digest.record = record(grades, await worker.run(analyst_repo.thesis_segments))
+    given = await worker.run(analyst_repo.opinions, as_of=day)
+    digest.opinion_scores = opinion_record(given, grades)
+    digest.opinions = await worker.run(_open_opinions, given, day)
     digest.questions = await worker.run(
         lambda store: capital_repo.questions(store, states=[QuestionState.OPEN])
     )
@@ -198,6 +207,18 @@ async def gather_digest(
     ]
     digest.venues = [venue_line(calendars, mic, at) for mic in venues]
     return digest
+
+
+def _open_opinions(
+    store: Store, given: Sequence[tuple[SecondOpinion, AnalystCall]], day: date
+) -> list[tuple[Thesis, SecondOpinion, AnalystCall]]:
+    """The second opinions whose thesis the book still works on."""
+    open_ = {t.thesis_id: t for t in thesis_repo.theses(store, as_of=day, states=OPEN_STATES)}
+    return [
+        (open_[opinion.thesis_id], opinion, call)
+        for opinion, call in given
+        if opinion.thesis_id in open_
+    ]
 
 
 def _ended_today(
@@ -368,6 +389,20 @@ def _thesis_lines(digest: Digest, rows: int) -> list[str]:
         f"  record, {group.group}: {group.closed} closed, {group.reached} reached their target, "
         f"mean payoff {group.mean_payoff:.2%} against {group.mean_stated_payoff:.2%} stated"
         for group in digest.record
+    ]
+    _more(
+        lines,
+        [
+            f"  second opinion on {thesis.ref} {thesis.instrument.symbol} ({call.segment}): "
+            f"{opinion.probability:.0%} that it reaches its target. {opinion.critique}"
+            for thesis, opinion, call in digest.opinions
+        ],
+        rows,
+    )
+    lines += [
+        f"  second opinions graded, {score.segment}: {score.graded}, mean Brier score "
+        f"{score.brier:.3f} (0 is a certain, right call; 0.25 a coin's)"
+        for score in digest.opinion_scores
     ]
     return lines
 

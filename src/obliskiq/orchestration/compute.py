@@ -162,11 +162,15 @@ class ComputeRunner:
         self._now = now
         self._registry = registry
 
-    async def run(self, step: str, *, as_of: date, dry_run: bool) -> ComputeOutcome:
+    async def run(
+        self, step: str, *, as_of: date, dry_run: bool, command: str | None = None
+    ) -> ComputeOutcome:
+        """The steps under one run record, named ``command`` (``compute <step>`` by default; the
+        service's scheduled job names it as its job)."""
         steps = COMPUTE_STEPS if step == ALL else (step,)
         record = RunRecord(
             self._worker,
-            command=f"{COMMAND} {step}",
+            command=command or f"{COMMAND} {step}",
             session_date=as_of,
             steps=steps,
             now=self._now,

@@ -5,6 +5,26 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.24.0] - 2026-11-14
+
+Session 28: the engine proposes its own theses from dated facts, and writes a second opinion on
+the owner's; both are graded forward.
+
+### Added
+
+- The fact sheet (`grid/facts.py`, `obliskiq llm facts`): one point-in-time text of numbered,
+  dated, statused lines from the measurement store and the sources, with no account figure
+  (DECISIONS D166).
+- The Analyst (`llm/analyst.py`, DECISIONS D165): drafts checked one by one and handed to the
+  thesis book's intake as source `analyst`; a second opinion on each owner idea, stored with it,
+  Brier-graded and shown in the digest and `idea show`; every call stored per segment.
+- The service runs `compute all` and then the analyst once a day after New York's close;
+  `obliskiq llm analyst` runs it by hand.
+
+### Changed
+
+- The extractor and the analyst share one monthly LLM budget; `llm status` shows both segments.
+
 ## [0.23.0] - 2026-11-14
 
 Session 25: a falling managed book freezes its own new buys and then stands itself down to

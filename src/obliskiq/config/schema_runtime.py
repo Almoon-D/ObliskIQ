@@ -49,6 +49,9 @@ class RuntimeConfig(FrozenModel):
     heartbeat_seconds: PositiveInt
     cycles: list[CycleConfig] = Field(min_length=1)
     digest: SessionAnchor
+    #: The daily compute step over the measurement store, and the LLM analyst after it.
+    compute: SessionAnchor
+    analyst: SessionAnchor
     catch_up_minutes: PositiveInt
     downgrade_after_failed_cycles: PositiveInt
     stuck_after_minutes: PositiveInt

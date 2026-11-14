@@ -11,12 +11,12 @@ passed with no finished run runs now if it is at most ``runtime.catch_up_minutes
 recorded as missed otherwise.
 
 **Then** it sleeps until the next heartbeat or job (``orchestration/schedule.py``: the cycles,
-the digest, the market collections and each source's runs) and runs it, refreshing IBKR's
-schedule once a day, re-reading the owner's manual incident file each heartbeat and the
-single-stock halt feed every ``halts.nasdaq_trader.refresh_minutes`` (``data/halts.py``; its last
-state is restored at the start), until ``stop`` is set (SIGTERM or SIGINT from the command
-line): the job in hand finishes, the keepalive and the sweep stop, the health file says so, and
-the queued alerts go out.
+the digest, the market collections, each source's runs, and the daily compute step and analyst
+run) and runs it, refreshing IBKR's schedule once a day, re-reading the owner's manual incident
+file each heartbeat and the single-stock halt feed every ``halts.nasdaq_trader.refresh_minutes``
+(``data/halts.py``; its last state is restored at the start), until ``stop`` is set (SIGTERM or
+SIGINT from the command line): the job in hand finishes, the keepalive and the sweep stop, the
+health file says so, and the queued alerts go out.
 
 **Alerts.** The order path, the broker session and the calendars report through synchronous
 hooks; :class:`AlertHooks` tags each with the job in hand (or ``session``, ``calendar``, ``sweep``
@@ -33,6 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import asyncio
 import contextlib
+import functools
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -57,14 +58,19 @@ from ..reporting.alerts import (
 )
 from ..reporting.reporter import Reporter
 from ..store import runs as run_repo
+from .analyst import AnalystJob, judge_analyst
 from .clock import Clock
+from .compute import ALL, ComputeRunner
 from .health import write_heartbeat
 from .jobs import Jobs
 from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcome
 from .schedule import (
+    ANALYST,
     COLLECT,
+    COMPUTE,
     CYCLE,
     SOURCE,
+    AnalysisPlan,
     CollectPlan,
     Job,
     SourcePlan,
@@ -170,6 +176,8 @@ class Service:
         source_plan: SourcePlan | None = None,
         halts: HaltFeed | None = None,
         extractor: EventExtractor | None = None,
+        compute: ComputeRunner | None = None,
+        analyst: AnalystJob | None = None,
     ) -> None:
         self._settings = settings
         self._path = path
@@ -180,6 +188,13 @@ class Service:
         self._source_plan = source_plan if sources is not None else None
         self._halts = halts
         self._extractor = extractor
+        self._compute = compute
+        self._analyst = analyst
+        self._analysis = (
+            None
+            if compute is None and analyst is None
+            else AnalysisPlan(compute=compute is not None, analyst=analyst is not None)
+        )
         self._rebalancer = rebalancer
         self._reporter = reporter
         self._hooks = hooks
@@ -284,6 +299,7 @@ class Service:
             now,
             self._collect,
             self._source_plan,
+            self._analysis,
         ):
             if await self._finished(job):
                 continue
@@ -324,7 +340,12 @@ class Service:
         beat = last
         while not stop.is_set():
             job = next_job(
-                self._path.calendars, self._runtime, last, self._collect, self._source_plan
+                self._path.calendars,
+                self._runtime,
+                last,
+                self._collect,
+                self._source_plan,
+                self._analysis,
             )
             wake = beat if job is None else min(beat, job.at)
             if until is not None and wake > until:
@@ -335,7 +356,13 @@ class Service:
             now = self._clock.now()
             # Every job due since the last pass, two at the same moment included.
             for due in jobs_between(
-                self._path.calendars, self._runtime, last, now, self._collect, self._source_plan
+                self._path.calendars,
+                self._runtime,
+                last,
+                now,
+                self._collect,
+                self._source_plan,
+                self._analysis,
             ):
                 if not await self._finished(due):
                     await self._run_job(due)
@@ -396,6 +423,10 @@ class Service:
                 await self._collect_job(job)
             elif job.kind == SOURCE:
                 await self._source_job(job)
+            elif job.kind == COMPUTE:
+                await self._compute_job(job)
+            elif job.kind == ANALYST:
+                await self._analyst_job(job)
             else:
                 await self._jobs.digest(job.session_date)
         except Exception:  # a job that breaks never stops the service
@@ -428,6 +459,31 @@ class Service:
         )
         await record.begin()
         await record.step(EXTRACT, self._extractor.run, _judge_extraction)
+        await record.finish()
+
+    async def _compute_job(self, job: Job) -> None:
+        """The measurement store's compute step for the day's session (``orchestration/
+        compute.py``): network-free, it refreshes the views the analyst reads."""
+        if self._compute is None:  # pragma: no cover - never planned
+            return
+        await self._compute.run(ALL, as_of=job.session_date, dry_run=False, command=job.command)
+
+    async def _analyst_job(self, job: Job) -> None:
+        """The analyst over the day's fact sheet (``orchestration/analyst.py``), as a run of its
+        own. A failure here never reaches the cycles: the job's exception stops at
+        :meth:`_run_job`, and the run record says what happened."""
+        if self._analyst is None:  # pragma: no cover - never planned
+            return
+        analyst = self._analyst
+        record = RunRecord(
+            self._path.worker,
+            command=job.command,
+            session_date=job.session_date,
+            steps=(ANALYST,),
+            now=self._clock.now,
+        )
+        await record.begin()
+        await record.step(ANALYST, functools.partial(analyst.run, job.session_date), judge_analyst)
         await record.finish()
 
     async def _after_cycle(self, status: str) -> None:

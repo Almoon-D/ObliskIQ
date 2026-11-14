@@ -425,6 +425,9 @@ them on schedule. No broker session is opened; it can run beside the service.
    earnings dates labelled research-grade.
 4. With `GEMINI_API_KEY` set: `uv run obliskiq llm extract` once, then `uv run obliskiq llm
    status` (the items waiting, the month's spend against `config/llm.yaml`'s budget, the prompt
-   hash H7 is bound to).
+   hash H7 is bound to, the analyst's segment). `uv run obliskiq compute all`, then `uv run
+   obliskiq llm facts` prints the analyst's fact sheet and `uv run obliskiq llm analyst` runs it
+   once: its drafts become candidate theses (`obliskiq idea list`), its opinions show in `obliskiq
+   idea show`. The service runs both each day after New York's close.
 5. Paste the masked output of steps 2 and 4 into a short session: *"Record Session 10's source
    runs per SESSION_PROMPTS §A.5."* GDELT and the first extraction close their VERIFY-LIVE rows.

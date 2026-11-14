@@ -2307,7 +2307,8 @@ DELIVERABLES
    closed. Temperature 0.
 5. Prompt registry: t-string templates; a renderer that escapes and delimits every
    interpolated value as untrusted data; prompt hash and version on every call.
-6. Roles and schemas: EventExtractor (wired into Session 10's events), HypothesisScout
+6. Roles and schemas: EventExtractor (wired into Session 10's events), the Analyst (Session
+   28's, wired into the registry without breaking its segment, DECISIONS D165), HypothesisScout
    (→ HypothesisDraft → Session 15 corroboration; new ideas also go to the pattern
    registry as `idea`), ExposureMapper, DossierWriter, DevilsAdvocate, CommandParser (an
    owner message in any language → OwnerCommand: deposit, withdrawal reservation, setting

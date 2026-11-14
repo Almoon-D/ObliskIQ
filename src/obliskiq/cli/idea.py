@@ -6,15 +6,16 @@ a stock candidate's key and its ``--isin``), what is expected, a target, an inva
 horizon, with a conviction (normal, high or max). An idea that lacks one of them is refused with
 the reason and nothing is stored. A stored idea is a candidate: the service's next cycle judges it
 at the gate, trades it inside the book's rails and grades it. ``idea list`` shows the open ideas
-(``--all``: every one), ``idea show`` one idea with its log and its grade, ``idea withdraw`` takes
-back an idea that has not filled. None opens a brokerage session, so all are safe beside a running
-service.
+(``--all``: every one), ``idea show`` one idea with its log, what the analyst wrote of it and its
+grade, ``idea withdraw`` takes back an idea that has not filled. None opens a brokerage session,
+so all are safe beside a running service.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import argparse
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -32,6 +33,7 @@ from ..domain.thesis import (
 )
 from ..engines.thesis.gate import describe
 from ..errors import ObliskError
+from ..store import analyst as analyst_repo
 from ..store import open_store
 from ..store import theses as thesis_repo
 from ..store.worker import StoreWorker
@@ -169,6 +171,7 @@ def _show(loaded: Loaded, out: TextIO) -> int:
                 f"  {entry.at.isoformat()} {entry.kind.value} ({entry.actor}): {entry.detail}",
                 file=out,
             )
+        await _analyst_lines(worker, thesis_id, out)
         grades = await worker.run(thesis_repo.grades, as_of=utc_now().date())
         for grade in (g for g in grades if g.thesis_id == thesis_id):
             reached = "reached" if grade.reached else "did not reach"
@@ -181,6 +184,30 @@ def _show(loaded: Loaded, out: TextIO) -> int:
         return EXIT_OK
 
     return _run(loaded, work, out)
+
+
+async def _analyst_lines(worker: StoreWorker, thesis_id: int, out: TextIO) -> None:
+    """What the analyst wrote of the idea: the fact lines an analyst thesis rests on, or its
+    second opinion on an owner's (logged and graded, never a veto)."""
+    drafted = await worker.run(analyst_repo.draft_for_thesis, thesis_id)
+    if drafted is not None:
+        record, call = drafted
+        print(
+            f"  proposed by the analyst ({call.segment}) on the facts of {call.as_of.isoformat()}:",
+            file=out,
+        )
+        for line in json.loads(record.facts):
+            print(f"    {line}", file=out)
+    opinion = await worker.run(analyst_repo.opinion_for, thesis_id)
+    if opinion is not None:
+        given, call = opinion
+        print(
+            f"  second opinion ({call.segment}, {call.produced_at.isoformat()}): "
+            f"{given.probability:.0%} that it reaches its target. {given.critique}",
+            file=out,
+        )
+        for line in json.loads(given.facts):
+            print(f"    {line}", file=out)
 
 
 def _withdraw(loaded: Loaded, out: TextIO) -> int:

@@ -226,8 +226,13 @@ delisted") [Yahoo ✓ 2026-10-23]. Research-grade: an upcoming date is Yahoo's e
 Gemini's OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai`,
 `/chat/completions`, bearer key, `response_format` of type `json_schema`) and
 `gemini-3.1-flash-lite`'s paid-tier price (US$0.25 input, US$1.50 output per million tokens) were
-read in Google's documentation [DOC 2026-10-23]. No key was available:
-VERIFY-LIVE(the first extraction: the reply's shape, `usage`, and a schema the endpoint accepts).
+read in Google's documentation [DOC 2026-10-23]. The reply carries the answer in
+`choices[0].message.content` (with a `thought_signature` under `extra_content.google` beside it)
+and `usage` with `prompt_tokens` and `completion_tokens`; a `json_schema` response format with
+inlined objects, string enums, `format: date`, `exclusiveMinimum` and `additionalProperties:
+false` is accepted and followed at temperature 0, which repeated an answer word for word. With a
+`max_tokens` of 20 a five-token answer ended `finish_reason: length`; at 400 it ended `stop`
+[Gemini ✓ 2026-11-14]. An analyst call on a 112-line sheet read about 7,400 input tokens.
 
 ## Catalyst calendars
 
