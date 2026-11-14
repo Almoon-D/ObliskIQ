@@ -222,7 +222,12 @@ def judge(
     ``current`` the value measured against them (or why there is none) and ``flows`` the owner's
     flows of the book in the base currency (or why they cannot be valued)."""
     today = at.date()
-    closes = [close for close in closes if close.is_close and close.as_of <= today]
+    closes = [
+        close
+        for close in closes
+        if close.is_close
+        and close.as_of <= (today if isinstance(current, str) else min(today, current.as_of))
+    ]
 
     def both(status: str, reason: str) -> BreakerReport:
         return _both(config, book, at, status, reason, len(closes), latched, live, current)
@@ -243,7 +248,9 @@ def judge(
     chain = time_weighted_return(
         [
             *(Reading(close.as_of, close.managed) for close in closes),
-            Reading(today, current.managed),
+            # On the day it was read: a stored reading is not moved to today, so a flow
+            # recorded after it is not counted against it.
+            Reading(current.as_of, current.managed),
         ],
         flows,
         timing=timing,

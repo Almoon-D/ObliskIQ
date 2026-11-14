@@ -433,6 +433,28 @@ def test_the_stored_report_reads_the_last_reading_and_names_a_trip_on_the_other_
     assert report.buys_refused is None  # the shadow book's own breakers are clear
 
 
+def test_a_stored_reading_is_measured_on_its_own_day_not_moved_to_today(
+    store: Store, shipped_settings: ObliskConfig
+) -> None:
+    for days in (3, 2):
+        repo.record_reading(store, reading(DAY - timedelta(days=days), "1000", book="shadow"))
+    # A deposit recorded the day after the last reading: that reading does not hold it.
+    capital_repo.record_flow(
+        store,
+        Deposit(
+            amount=Decimal(500),
+            currency="EUR",
+            on=DAY - timedelta(days=1),
+            recorded_at=NOON,
+            recorded_by="test",
+        ),
+    )
+    report = stored_report(store, shipped_settings, "shadow", at=NOON)
+    assert (report.rolling.status, report.hard.status) == (OK, OK)
+    assert report.rolling.worst is not None
+    assert report.rolling.worst.fall == 0
+
+
 def test_the_books_flows_are_the_capped_books_or_the_accounts(
     store: Store, shipped_settings: ObliskConfig
 ) -> None:
