@@ -34,6 +34,7 @@ from .schema_engines import (
     EquityRiskConfig,
     FxInflationConfig,
     OptionSleeveConfig,
+    PortfolioCircuitBreakerConfig,
     ZombieTestConfig,
 )
 from .schema_execution import DisciplineConfig, ExecutionConfig
@@ -160,6 +161,7 @@ class ObliskConfig(FrozenModel):
     option_sleeve: OptionSleeveConfig
     zombie_test: ZombieTestConfig
     equity_risk: EquityRiskConfig
+    portfolio_circuit_breaker: PortfolioCircuitBreakerConfig
     fx_inflation: FxInflationConfig
     commodities: CommoditiesConfig
     thesis: ThesisBookConfig
@@ -236,9 +238,27 @@ class ObliskConfig(FrozenModel):
         problems += self._source_problems()
         problems += self._grid_problems()
         problems += self._thesis_problems()
+        problems += self._breaker_problems()
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def _breaker_problems(self) -> list[str]:
+        """The breakers' close is a declared cycle and their equity reference a pinned
+        instrument of the universe."""
+        breaker = self.portfolio_circuit_breaker
+        problems: list[str] = []
+        if breaker.close_cycle not in {cycle.name for cycle in self.runtime.cycles}:
+            problems.append(
+                f"portfolio_circuit_breaker.close_cycle: {breaker.close_cycle} is not a cycle "
+                "of runtime.cycles"
+            )
+        if self.universe.pinned(breaker.equity_reference_conid) is None:
+            problems.append(
+                f"portfolio_circuit_breaker.equity_reference_conid: "
+                f"{breaker.equity_reference_conid} is not pinned by an instrument of the universe"
+            )
+        return problems
 
     def _thesis_problems(self) -> list[str]:
         """The thesis book's share comes out of the equity satellite's budget, and a defensive

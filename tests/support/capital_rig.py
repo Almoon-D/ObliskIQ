@@ -16,6 +16,7 @@ from obliskiq.capital.questions import OwnerQuestions
 from obliskiq.capital.strategy import DefaultStrategyValue, StrategyValue
 from obliskiq.capital.valuation import Valuer
 from obliskiq.config import ObliskConfig
+from obliskiq.decision.breakers import Breakers
 from obliskiq.decision.core_vehicles import CoreVehicleChooser
 from obliskiq.decision.rebalance_core import CoreRebalancer
 from obliskiq.decision.swap_partners import SwapPartners
@@ -84,7 +85,8 @@ def capital_parts(
         kill=rig.kill,
         now=rig.clock,
     )
-    return CapitalParts(capital, tax, questions, planner, maker, value)
+    breakers = Breakers(chosen, capital=capital, worker=rig.worker, now=rig.clock)
+    return CapitalParts(capital, tax, questions, planner, maker, value, breakers)
 
 
 def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -> CoreRebalancer:
@@ -107,6 +109,7 @@ def make_rebalancer(rig: Any, settings: ObliskConfig | None = None, **kw: Any) -
         kill=rig.kill,
         tax=kw.pop("tax", parts.tax),
         chooser=CoreVehicleChooser(chosen, selector, SwapPartners(chosen, policy)),
+        breakers=parts.breakers,
         value=kw.pop("value", parts.value),
         correlations=kw.pop("correlations", None),
         now=rig.clock,

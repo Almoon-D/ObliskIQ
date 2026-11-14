@@ -1,7 +1,11 @@
 """The service's jobs: a decision cycle, the heartbeat and the daily digest (MASTER_PLAN §5.14).
 
-**A decision cycle** is one run record of five guarded steps: ``nav`` (today's NAV row and the
-day's exchange rates, ``orchestration/nav.py``), ``reserve`` (the owner questions whose deadline
+**A decision cycle** is one run record of six guarded steps: ``nav`` (today's NAV row and the
+day's exchange rates, ``orchestration/nav.py``), ``breakers`` (the managed book's reading, the
+day's close at ``portfolio_circuit_breaker.close_cycle``, and the book's breakers,
+``decision/breakers.py``: a tripped rolling-month breaker freezes new buys and alerts; a tripped
+hard breaker stands the mode down to shadow, latches and alerts, and the rest of the cycle runs
+in shadow), ``reserve`` (the owner questions whose deadline
 passed take their default, then the reservation planner's survey, questions and today's sales,
 ``capital/planner.py``), ``rebalance`` (the core engine's target portfolio against the book, as
 intents, ``decision/rebalance_core.py``), ``thesis`` (the thesis book's entries and exits, as
@@ -36,6 +40,7 @@ from .. import __version__
 from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.schema import ObliskConfig
 from ..data.runner import source_health
+from ..decision.breakers import BREAKER_ACTOR, UNREADABLE, BreakerReport
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
 from ..domain.capital import OwnerQuestion
@@ -64,7 +69,7 @@ from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcom
 log = get_logger("orchestration.jobs")
 
 #: The run log's names for the steps of a cycle and of the digest.
-CYCLE_STEPS = ("nav", "reserve", "rebalance", "thesis", "execute")
+CYCLE_STEPS = ("nav", "breakers", "reserve", "rebalance", "thesis", "execute")
 DIGEST_STEPS = ("digest",)
 #: Alert sources: the job whose rounds raise and clear a condition.
 HEARTBEAT = "heartbeat"
@@ -80,6 +85,7 @@ class CycleResult:
     made: list[OrderIntent] = field(default_factory=list)
     report: CycleReport | None = None
     nav: NavOutcome | None = None
+    breakers: BreakerReport | None = None
     reservations: ReservationPlan | None = None
     planner: PlannerActions | None = None
     theses: ThesisPlan | None = None
@@ -152,6 +158,11 @@ class Jobs:
         try:
             mode = await path.modes.current()
             result.nav = await record.step("nav", lambda: self._read_nav(dry_run), _judge_nav)
+            watched = await record.step(
+                "breakers", lambda: self._watch(mode, name, dry_run=dry_run), _judge_breakers
+            )
+            if watched is not None:
+                result.breakers, mode = watched
 
             async def reserve() -> tuple[ReservationPlan, PlannerActions]:
                 if not dry_run:
@@ -215,6 +226,62 @@ class Jobs:
         if not dry_run and outcome.cash is not None:
             await self._capital.tax.note_rates(outcome.cash)
         return outcome
+
+    async def _watch(
+        self, mode: ExecutionMode, cycle: str, *, dry_run: bool
+    ) -> tuple[BreakerReport, ExecutionMode]:
+        """The book's reading and its breakers, and the mode the rest of the cycle runs in: a
+        hard breaker that trips stands the mode down to shadow, latches and alerts; a frozen or
+        unreadable book alerts while it holds. A dry run reads and judges only."""
+        breakers = self._capital.breakers
+        report = await breakers.observe(mode, close=breakers.closes(cycle), dry_run=dry_run)
+        if dry_run:
+            return report, mode
+        at = self._now()
+        if report.newly_tripped:
+            reason = f"the hard breaker tripped: {report.hard.reason}"
+            # The stand-down first: it must hold even if the latch cannot be written.
+            stood = await self._path.modes.stand_down(actor=BREAKER_ACTOR, reason=reason)
+            self._reporter.push(
+                Alert(
+                    "breaker.hard_tripped",
+                    f"breaker.hard_tripped:{report.book}",
+                    (
+                        "the shadow book is stood down"
+                        if mode is ExecutionMode.SHADOW
+                        else f"mode {mode.value} -> shadow"
+                    )
+                    + (
+                        " (held by the FORCED_SHADOW file: the store could not record it)"
+                        if stood.by_file
+                        else ""
+                    )
+                    + f": {reason}. Nothing is sold. Look at the book, then reset the breaker "
+                    "(obliskiq breakers reset) before upgrading again (obliskiq mode set).",
+                    Severity.CRITICAL,
+                    at,
+                    condition=False,
+                ),
+                CYCLE,
+            )
+            await self._reporter.flush()
+            await breakers.latch(report)
+            return report, await self._path.modes.current()
+        refused = report.buys_refused
+        if refused is not None:
+            unreadable = UNREADABLE in (report.rolling.status, report.hard.status)
+            kind = "breaker.unreadable" if unreadable else "breaker.frozen"
+            self._reporter.push(
+                Alert(
+                    kind,
+                    f"{kind}:{report.book}",
+                    f"new buys are refused: {refused}. Sales stay allowed and nothing is sold.",
+                    Severity.WARNING if unreadable else Severity.CRITICAL,
+                    at,
+                ),
+                CYCLE,
+            )
+        return report, mode
 
     def _question_expired(self, question: OwnerQuestion, effect: str) -> None:
         self._reporter.push(
@@ -501,6 +568,29 @@ def _judge_nav(outcome: NavOutcome) -> StepOutcome:
     if outcome.reading is None:
         return StepOutcome("nav", ERROR, outcome.reason)
     return StepOutcome("nav", OK, outcome.reason)
+
+
+def _judge_breakers(watched: tuple[BreakerReport, ExecutionMode]) -> StepOutcome:
+    """Measured and clear is ok; a trip, a freeze or a breaker that cannot be read is degraded,
+    so the owner hears of it and the cycle does not count as failed."""
+    report, mode = watched
+    detail = {
+        "book": report.book,
+        "rolling": report.rolling.status,
+        "hard": report.hard.status,
+        "mode": mode.value,
+    }
+    if report.newly_tripped:
+        return StepOutcome(
+            "breakers",
+            DEGRADED,
+            f"forced shadow: the hard breaker tripped ({report.hard.reason})",
+            detail,
+        )
+    refused = report.buys_refused
+    if refused is not None:
+        return StepOutcome("breakers", DEGRADED, f"new buys frozen: {refused}", detail)
+    return StepOutcome("breakers", OK, "; ".join(report.lines()), detail)
 
 
 def _judge_reserve(done: tuple[ReservationPlan, PlannerActions], *, dry_run: bool) -> StepOutcome:

@@ -1,12 +1,15 @@
-"""``obliskiq serve``, ``run-cycle``, ``status``, ``intents list`` and ``holdings list|assign``.
+"""``obliskiq serve``, ``run-cycle``, ``status``, ``breakers reset``, ``intents list`` and
+``holdings list|assign``.
 
 ``serve`` runs the service until SIGTERM or SIGINT (``orchestration/service.py``). ``run-cycle
 --mode shadow|paper`` runs one decision cycle now, in the mode the store holds (set it first with
 ``obliskiq mode set``); ``--dry-run`` reads the broker and prints the plan and writes nothing.
 Both take the service lock: one process talks to the broker and runs the executor at a time.
 ``status`` reads the store, the heartbeat file and the alert state, and opens no broker session,
-so it is safe beside a running service; so are ``intents list`` (``--history``: each intent's
-recorded events beneath it, a declined warning's text among them) and ``holdings``.
+so it is safe beside a running service; so are ``breakers reset`` (the owner releases a latched
+hard breaker, audited; the mode stays shadow until ``obliskiq mode set``), ``intents list``
+(``--history``: each intent's recorded events beneath it, a declined warning's text among them)
+and ``holdings``.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -21,6 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from ..data.runner import source_health
+from ..decision.breakers import book_of, release, stored_report
 from ..domain.orders import (
     TERMINAL_STATES,
     UNMANAGED,
@@ -33,11 +37,13 @@ from ..domain.orders import (
 from ..domain.sources import SourceState
 from ..errors import ObliskError
 from ..execution.killswitch import file_flag_on
+from ..execution.modes import forced_shadow_on
 from ..orchestration.assemble import build_notifier, build_reporter, open_service
 from ..orchestration.clock import SystemClock
 from ..orchestration.health import read_heartbeat
 from ..orchestration.lock import ServiceLock, ServiceLockedError
 from ..orchestration.runlog import exit_code
+from ..reporting.digest import breaker_lines
 from ..reporting.summary import CycleSummary, format_cycle
 from ..store import nav as nav_repo
 from ..store import open_store
@@ -180,9 +186,16 @@ def _status(loaded: Loaded, out: TextIO) -> int:
         open_states = [state for state in IntentState if state not in TERMINAL_STATES]
         open_intents = repo.intents_in_states(store, open_states)
         source_runs = source_repo.source_runs(store)
-    mode = settings.execution.modes.initial if change is None else change.to_mode
+        mode = settings.execution.modes.initial if change is None else change.to_mode
+        forced = forced_shadow_on(data_dir)
+        if forced:
+            mode = ExecutionMode.SHADOW
+        breakers = stored_report(store, settings, book_of(mode), at=now)
     kill_on = file_flag_on(data_dir) or (kill is not None and kill.on)
-    print(f"mode {mode.value} · kill switch {'ON' if kill_on else 'off'}", file=out)
+    held = " (held by the FORCED_SHADOW file)" if forced else ""
+    print(f"mode {mode.value}{held} · kill switch {'ON' if kill_on else 'off'}", file=out)
+    for line in breaker_lines(breakers):
+        print(line, file=out)
     beat, facts = read_heartbeat(data_dir / settings.paths.heartbeat_file)
     if beat is None:
         print("heartbeat: none recorded (the service has not run here)", file=out)
@@ -232,6 +245,27 @@ def _status(loaded: Loaded, out: TextIO) -> int:
             f"{run.steps_completed}/{run.steps_planned} steps",
             file=out,
         )
+    return EXIT_OK
+
+
+def _breakers_reset(loaded: Loaded, out: TextIO) -> int:
+    """Release every latched hard breaker; its peak is then taken from the closes that follow."""
+    if not loaded.args.confirm:
+        print("nothing was recorded: run the same command with --confirm to record it", file=out)
+        return EXIT_OK
+    settings = loaded.config.settings
+    with open_store(settings, loaded.env.require_data_dir()) as store:
+        released = release(
+            store, at=datetime.now(UTC), actor=OWNER_ACTOR, reason=loaded.args.reason
+        )
+    if not released:
+        print("no hard breaker is tripped: nothing to reset", file=out)
+        return EXIT_OK
+    print(
+        f"hard breaker reset for the {' and the '.join(released)} book; the mode is unchanged "
+        "(upgrade with `obliskiq mode set`)",
+        file=out,
+    )
     return EXIT_OK
 
 
@@ -345,6 +379,15 @@ def add_service_commands(commands: argparse._SubParsersAction[argparse.ArgumentP
         "status", help="mode, kill switch, heartbeat, runs and alerts (no broker session)"
     )
     status.set_defaults(handler=_status)
+
+    breakers = commands.add_parser("breakers", help="the book's breakers (MASTER_PLAN §5.11)")
+    breaker_actions = breakers.add_subparsers(dest="action", required=True, metavar="ACTION")
+    reset = breaker_actions.add_parser(
+        "reset", help="release a latched hard breaker (the mode stays as it is)"
+    )
+    reset.add_argument("--reason", required=True, help="why (audited)")
+    reset.add_argument("--confirm", action="store_true", help="record it")
+    reset.set_defaults(handler=_breakers_reset)
 
     intents = commands.add_parser("intents", help="the order intents")
     intent_actions = intents.add_subparsers(dest="action", required=True, metavar="ACTION")
