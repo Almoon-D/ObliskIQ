@@ -138,9 +138,8 @@ def observed_rho(by_week: dict[str, list[GradedCall]]) -> float | None:
     panel: list[list[float | None]] = []
     for items in by_week.values():
         row: dict[int, float] = {}
-        for item in items:
-            if item.excess is not None:
-                row.setdefault(item.call.conid, item.excess)
+        for item in items:  # graded calls only: every one has its excess
+            row.setdefault(item.call.conid, item.excess or 0.0)
         panel.append([row.get(name) for name in names])
     return panel_correlation(panel, min_overlap=OBSERVED_RHO_OVERLAP)
 

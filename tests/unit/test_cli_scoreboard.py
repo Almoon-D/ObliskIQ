@@ -162,6 +162,17 @@ async def test_the_verdict_handed_to_an_upgrade(
         async def broken(self: Scoreboard, *a: object, **k: object) -> None:
             raise ObliskError("no store")
 
+        async def nothing(self: Scoreboard, *a: object, **k: object) -> None:
+            return None
+
+        monkeypatch.setattr(Scoreboard, "verdict", nothing)
+        top_again = await cli.promotion_verdict(
+            loaded,  # type: ignore[arg-type]
+            worker,
+            ExecutionMode.LIVE,
+            ExecutionMode.LIVE,
+        )
+        assert "top of the ladder" in top_again.summary
         monkeypatch.setattr(Scoreboard, "verdict", broken)
         failed = await cli.promotion_verdict(
             loaded, worker, ExecutionMode.PAPER, ExecutionMode.LIVE_SMALL
@@ -170,3 +181,24 @@ async def test_the_verdict_handed_to_an_upgrade(
         assert "could not be read" in failed.summary
     finally:
         await worker.aclose()
+
+
+def test_grade_lists_each_layer_and_its_calibration(data_dir: Path) -> None:
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    from obliskiq.config import load_config
+    from obliskiq.store import open_store
+    from obliskiq.store import scoreboard as repo
+    from obliskiq.store.scoreboard import Call
+
+    settings = load_config(Path(os.environ["OBLISK_CONFIG_DIR"])).settings
+    with open_store(settings, data_dir) as store:
+        repo.record_call(
+            store,
+            Call("signal", 1, "up", datetime.now(UTC) - timedelta(days=2), "d", probability=0.6),
+        )
+    status, out = _run("scoreboard", "grade")
+    assert status == EXIT_OK
+    assert "signal: 0 graded of 1 calls" in out
+    assert "signal: uncalibrated (shrink 0.00)" in out

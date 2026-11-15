@@ -99,6 +99,8 @@ def test_the_records_are_append_only(store: Store) -> None:
     repo.record_layer_event(store, LayerEvent(AT, "l", "active", "s", "d"))
     repo.record_allocation(store, AllocationEvent(AT, "l", D("0.5"), "a", "r"))
     repo.record_drill(store, Drill(AT, "kill", ExecutionMode.PAPER, True, "owner", "d"))
+    assert [e.layer for e in repo.layer_events(store)] == ["l"]
+    assert [e.layer for e in repo.allocation_events(store, "l")] == ["l"]
     for table in ("scoreboard_calls", "layer_events", "allocation_events", "drills"):
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             store.execute(f"DELETE FROM {table}")
@@ -286,7 +288,7 @@ def test_the_month_end_drill_records_looks_freezes_and_steps(
         store,
         shipped_settings,
         spec,
-        [_layer("active")],
+        [_layer("active"), _layer("shadow", id="idle", decision="insufficient")],
         month="2026-05",
         h13_first_look=6,
         activation=lambda _: True,
@@ -379,6 +381,8 @@ def _intent(
     simulated: bool = False,
     quote: QuoteEvidence | None = None,
     price: str = "101",
+    asset_class: AssetClass = AssetClass.ETF,
+    role: IntentRole = IntentRole.ENTRY,
 ) -> UUID:
     intent_id = uuid7()
     terms = OrderTerms(
@@ -392,7 +396,7 @@ def _intent(
     intent = OrderIntent(
         intent_id=intent_id,
         sleeve=sleeve,
-        role=IntentRole.ENTRY,
+        role=role,
         terms=terms,
         reason="test",
         mode=mode,
@@ -410,7 +414,7 @@ def _intent(
             action=ClearanceAction.PLACE,
             terms=terms,
             effect=RiskEffect.ADDS,
-            asset_class=AssetClass.ETF,
+            asset_class=asset_class,
             quote=quote,
             issued_at=at,
             expires_at=at + timedelta(minutes=5),
@@ -470,9 +474,13 @@ def test_executions_measure_arrival_and_the_cost_model(
     _intent(store, mode=ExecutionMode.PAPER, at=start + timedelta(days=1), cleared=False)
     _intent(store, mode=ExecutionMode.PAPER, at=start + timedelta(days=2), simulated=True)
     _intent(store, mode=ExecutionMode.LIVE, at=start + timedelta(days=3))
+    _intent(
+        store, mode=ExecutionMode.PAPER, at=start + timedelta(days=4), asset_class=AssetClass.BOND
+    )
     found = executions(store, shipped_settings, mode=ExecutionMode.PAPER, since=None)
-    assert len(found) == 2
-    measured, unmeasured = found
+    assert len(found) == 3
+    measured, unmeasured, bond = found
+    assert bond.modelled is None
     assert measured.arrival == D(100)
     assert measured.quote_status == "realtime"
     assert measured.modelled is not None
@@ -485,7 +493,7 @@ def test_executions_measure_arrival_and_the_cost_model(
     later = executions(
         store, shipped_settings, mode=ExecutionMode.PAPER, since=start + timedelta(hours=12)
     )
-    assert len(later) == 1
+    assert len(later) == 2
 
 
 def test_the_promotion_evidence_of_a_paper_period(
@@ -517,6 +525,14 @@ def test_the_promotion_evidence_of_a_paper_period(
         mode=ExecutionMode.PAPER,
         at=entered + timedelta(days=4),
         state=IntentState.WORKING,
+        filled=False,
+    )
+    _intent(store, mode=ExecutionMode.PAPER, at=entered - timedelta(days=3))
+    _intent(
+        store,
+        mode=ExecutionMode.PAPER,
+        at=entered + timedelta(days=5),
+        role=IntentRole.PROTECTIVE,
         filled=False,
     )
     order_repo.record_reconciliation(

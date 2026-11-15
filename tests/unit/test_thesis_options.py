@@ -147,6 +147,8 @@ def test_a_thesiss_option_is_fixed_its_position_set_once_and_its_twin_closed_onc
     store: Store,
 ) -> None:
     approved_put(store)
+    assert link_repo.option_multiplier(store, 900013) == D(100)
+    assert link_repo.option_multiplier(store, SPY) is None
     held = thesis_repo.get_thesis(store, 1)
     assert held is not None
     assert (held.expression, held.held_as, held.as_option) == (

@@ -27,7 +27,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from statistics import NormalDist
@@ -425,10 +425,6 @@ def thesis_book_share(capital: ThesisBookCapital) -> ShareDecision:
 def allocation_layers(layers: Sequence[RegistryLayer]) -> dict[str, RegistryLayer]:
     """The registry layers by their allocation key (``sleeve:id``)."""
     return {layer_key(layer.sleeve, layer.id): layer for layer in layers}
-
-
-def month_of(day: date) -> str:
-    return day.strftime("%Y-%m")
 
 
 #: A layer's activation condition and its pooled re-test, by registry id (D66, D155). Empty:

@@ -485,3 +485,27 @@ def test_the_layer_months_record_the_mode(store_worker: StoreWorker) -> None:
         "l", "shadow", Sleeve.SATELLITE, "layer", None, (), None, None, None, None, None
     )
     assert layer.status == "shadow"
+
+
+async def test_the_daily_run_sends_what_the_lifecycle_raises(
+    board_parts: tuple[Scoreboard, Modes, Path], store_worker: StoreWorker, tmp_path: Path
+) -> None:
+    board, modes, _ = board_parts
+    sent = Sent()
+    reporter = Reporter(sent, AlertBook(tmp_path / "alerts.json"))
+    jobs = ScoreboardJobs(
+        board,
+        worker=store_worker,
+        modes=modes,
+        reporter=reporter,
+        data_dir=tmp_path,
+        now=lambda: NOW,
+    )
+
+    async def daily(_day: date) -> tuple[Changes, list[Any]]:
+        event = LayerEvent(NOW, "pat", "active", "scoreboard", "promoted")
+        return Changes(events=[event]), board._alerts(Changes(events=[event]), NOW)
+
+    board.daily = daily  # type: ignore[method-assign]
+    assert await jobs.daily(NOW.date()) == "ok"
+    assert sent.messages[0][0] == "ObliskIQ alert: scoreboard.active"

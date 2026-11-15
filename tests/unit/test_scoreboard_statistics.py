@@ -617,3 +617,14 @@ def test_the_panel_s_ic_increment_spread_and_minimums(
     assert found.decision is not None
     assert found.decision.outcome.value == "sufficient"
     assert found.probabilities.count == 1600
+
+
+def test_a_cohort_with_one_expected_excess_has_no_decile_spread(spec: ScoreboardSpec) -> None:
+    panel_rules = GradingRules.panel(spec, target_power=0.8)
+    items = [
+        graded(call(0, conid=c, layer="panel", expected=1.0 if c == 0 else None), 0.01 * c)
+        for c in range(25)
+    ]
+    found = panel_record("panel", items, panel_rules, min_names=spec.panel.min_names)
+    assert found.cohorts == 1
+    assert found.spread.n == 0

@@ -387,7 +387,7 @@ def executions(
         if since is not None and fill.executed_at < since:
             continue
         stored = order_repo.get_intent(store, intent_id)
-        if stored is None:
+        if stored is None:  # pragma: no cover - a fill joined to its intent has one
             continue
         intent = stored.intent
         clearance = order_repo.placement_clearance(store, intent_id)

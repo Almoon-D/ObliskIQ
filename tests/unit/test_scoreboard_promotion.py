@@ -396,6 +396,8 @@ def test_each_sleeve_s_profit_by_average_cost() -> None:
         fill(OrderSide.BUY, "10", "110", 2),
         fill(OrderSide.SELL, "5", "120", 3),
         fill(OrderSide.BUY, "1", "50", 4, conid=2),
+        fill(OrderSide.BUY, "2", "10", 5, conid=3),
+        fill(OrderSide.SELL, "2", "12", 6, conid=3),
         fill(OrderSide.BUY, "1", "50", 20),
     ]
     found = sleeve_pnl(
@@ -410,11 +412,12 @@ def test_each_sleeve_s_profit_by_average_cost() -> None:
     (satellite,) = found
     cost = (D(1000) * D("0.5") + D("0.5")) + (D(1100) * D("0.5") + D("0.5"))
     basis = cost * 5 / 20
-    assert satellite.realised == D(600) * D("0.5") - D("0.5") - basis
+    round_trip = (D(24) * D("0.5") - D("0.5")) - (D(20) * D("0.5") + D("0.5"))
+    assert satellite.realised == D(600) * D("0.5") - D("0.5") - basis + round_trip
     assert satellite.held_value == D(15) * D(60)
     assert satellite.unrealised == satellite.held_value - (cost - basis)
     assert satellite.unmarked == (2,)
-    assert satellite.commissions == D(2)
+    assert satellite.commissions == D(3)
     assert (
         sleeve_pnl(
             fills,
