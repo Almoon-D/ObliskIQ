@@ -1,0 +1,61 @@
+{
+  "as_of": "2026-11-15",
+  "sample": [
+    "2010-01-01",
+    "2026-11-13"
+  ],
+  "horizon_weeks": 4,
+  "min_overlap_periods": 26,
+  "reference": "IWDA",
+  "inputs_sha256": "5ee96b0d4ebfd5df3a46066237761609f9fe1b27abfed528c9b1e2f01f9d7029",
+  "subsets": {
+    "every tradable candidate": {
+      "names": 51,
+      "rho_by_phase": [
+        0.2223,
+        0.2204,
+        0.2175,
+        0.2174
+      ],
+      "rho_by_half": [
+        0.2059,
+        0.2157
+      ],
+      "rho_largest": 0.2223,
+      "excess_sd_per_period": 0.0554,
+      "n_eff_per_cohort": 4.21
+    },
+    "equity funds and stocks": {
+      "names": 28,
+      "rho_by_phase": [
+        0.1654,
+        0.2047,
+        0.2049,
+        0.1653
+      ],
+      "rho_by_half": [
+        0.248,
+        0.1406
+      ],
+      "rho_largest": 0.248,
+      "excess_sd_per_period": 0.0604,
+      "n_eff_per_cohort": 3.64
+    },
+    "stocks": {
+      "names": 9,
+      "rho_by_phase": [
+        0.1669,
+        0.2005,
+        0.2183,
+        0.172
+      ],
+      "rho_by_half": [
+        0.1485,
+        0.1799
+      ],
+      "rho_largest": 0.2183,
+      "excess_sd_per_period": 0.0871,
+      "n_eff_per_cohort": 3.28
+    }
+  }
+}
