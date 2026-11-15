@@ -2457,8 +2457,8 @@ You are building ObliskIQ, session 18. AGENTS.md is your operating manual; MASTE
 the design (read §1, §5.5, §5.9, §5.11, §5.19 and DECISIONS D62, D63, D65, D149, D155, D156).
 Port from legacy/, never from memory. Finish with the end-of-session protocol.
 
-PRECONDITION: Sessions 22, 25 and 27 merged and Session 24's verdict recorded. Otherwise
-STOP. Grade and calibrate only the layers that exist: where a deliverable names the event sleeve's components, theses or LLM nominations,
+PRECONDITION: Sessions 22, 25 and 27 merged and Session 24's verdict recorded ("not run",
+DECISIONS D168, satisfies it). Otherwise STOP. Grade and calibrate only the layers that exist: where a deliverable names the event sleeve's components, theses or LLM nominations,
 build the interface and leave the rest to the session that builds that layer.
 
 GOAL: the system measures itself honestly: research outcomes and live monitoring drive

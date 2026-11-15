@@ -3796,3 +3796,16 @@ catalyst calendar on the sheet before a graded record asks for it.
 
 Rejected: a pool refilled by the scaled exit (D138); a stop on an option; a twin closed with its
 option (it would hide what the sleeve's exits cost).
+
+### D168 · Session 24 is not run; no history is bought (§5.5, §5.9; D150, D154, D162)
+
+- **Ruling (owner, 2026-11-15).** The Hunter's test of D162's fixed sequence is not run and the
+  history is not bought. Session 24's verdict is recorded as not run.
+- **Why.** No test in the sequence reaches a probability of a sufficient outcome of 0.5 (at most
+  0.009 for the first, 0.04 for any); data would not change the net effect the literature
+  supports. IBKR's history is about a year of daily bars without delisted names, and free
+  prices drop the delisted: a test on survivors is biased as much as the effect (D84).
+- **Effects.** Session 18's precondition is met by this record; Session 26 waits for a Hunter
+  hypothesis that is sufficient or inconclusive-positive, which comes through Session 21.
+
+Rejected: buying the history anyway (cost without a decision); a test on IBKR or free prices.
