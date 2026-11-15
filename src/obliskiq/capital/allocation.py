@@ -98,7 +98,7 @@ def step_share(current: Decimal, rule: StepRule, evidence: StepEvidence) -> Shar
         )
     if not evidence.sufficient or not evidence.activation:
         missing = "a sufficient outcome" if not evidence.sufficient else "its activation condition"
-        return ShareDecision(ZERO, current != ZERO, f"it has no {missing}")
+        return ShareDecision(ZERO, current != ZERO, f"no share without {missing}")
     if current == ZERO:
         return ShareDecision(
             rule.first, True, "a sufficient outcome and its activation condition: its first share"

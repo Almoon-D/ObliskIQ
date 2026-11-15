@@ -3814,20 +3814,15 @@ Rejected: buying the history anyway (cost without a decision); a test on IBKR or
 
 ### D169 · The scoreboard's rules are one pre-registration, with ρ measured first (§5.9, §5.19; D62, D63, D65)
 
-`research/preregistrations/scoreboard.md` (merged in #71, locked) fixes how every forward record
-is read before any exists; the code reads its numbers and nothing else, and decides nothing
-without the lock.
-
-- **ρ = 0.25**, estimated before any minimum (D63): the mean pairwise correlation of four-week
-  excess returns in euro of the 51 tradable candidates, 2010–2026 (0.222; 0.248 at most across
-  subsets and halves), rounded up. Minimums count `Σ n_eff / horizon weeks`, never predictions.
-- **Calibration** keeps the one-sided lower bound of the reliability slope on `p − p_base` as its
-  shrink; legacy's fixed half and its count of 100 forecasts are dropped.
-- **Monitoring** spends α over 120 monthly looks by a Pocock-type function under a union bound:
-  conservative under any dependence, no numerical integration.
-
-Rejected: exact group-sequential boundaries (they assume independent normal increments the
-months do not have); a minimum in predictions (D63's withdrawn claim).
+`research/preregistrations/scoreboard.md` (#71, locked) fixes how every forward record is read
+before one exists; the code takes its numbers from it and decides nothing without the lock.
+ρ = 0.25 was estimated before any minimum (D63): four-week excess returns in euro of the 51
+tradable candidates, 2010–2026, correlate by 0.222 (0.248 at most across subsets and halves).
+Minimums count `Σ n_eff / horizon weeks`, never predictions. Calibration keeps the one-sided
+lower bound of the reliability slope (legacy kept a fixed half after 100 forecasts). Monitoring
+spends α over 120 monthly looks by a Pocock-type function under a union bound, which holds under
+any dependence. Rejected: exact group-sequential boundaries (they assume independent normal
+increments); a minimum in predictions.
 
 ### D170 · The promotion gate decides the live levels; paper records its verdict (§5.12, §5.19; AGENTS.md)
 
