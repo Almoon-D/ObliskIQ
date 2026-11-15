@@ -25,7 +25,7 @@ condition or re-test registered here meets neither, so it neither activates nor 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -62,6 +62,10 @@ _NORMAL = NormalDist()
 SCOREBOARD_ACTOR = "scoreboard"
 
 type Status = Literal["shadow", "active"]
+#: Which budget rule a layer's capital follows: the stock book's (D149) only for the entry that
+#: declares itself the Hunter's systematic book; any other layer's otherwise.
+type Budget = Literal["stock_book", "layer"]
+_BUDGETS = ("stock_book", "layer")
 _LIVE = frozenset({ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE})
 
 
@@ -78,6 +82,7 @@ class RegistryLayer:
     id: str
     status: Status
     sleeve: Sleeve
+    budget: Budget
     decision: str | None
     labels: tuple[str, ...]
     theta: float | None
@@ -106,11 +111,15 @@ def registry_layers(path: Path) -> list[RegistryLayer]:
             outcome = entry.get("outcome") or {}
             interval = outcome.get("interval")
             monitoring = entry.get("monitoring")
+            budget = entry.get("budget", "layer")
+            if budget not in _BUDGETS:
+                raise ValueError(f"{entry['id']}: budget {budget!r} is not one of {_BUDGETS}")
             found.append(
                 RegistryLayer(
                     id=str(entry["id"]),
                     status=status,
                     sleeve=Sleeve(entry.get("sleeve", Sleeve.SATELLITE.value)),
+                    budget=budget,
                     decision=outcome.get("decision"),
                     labels=tuple(outcome.get("labels") or ()),
                     theta=_float(outcome.get("theta")),
@@ -420,11 +429,6 @@ def allocation_layers(layers: Sequence[RegistryLayer]) -> dict[str, RegistryLaye
 
 def month_of(day: date) -> str:
     return day.strftime("%Y-%m")
-
-
-def stock_book_layers(layers: Mapping[str, RegistryLayer]) -> list[str]:
-    """The allocation keys of the satellite's systematic layers (the stock book's)."""
-    return [key for key, layer in layers.items() if layer.sleeve is Sleeve.SATELLITE]
 
 
 #: A layer's activation condition and its pooled re-test, by registry id (D66, D155). Empty:

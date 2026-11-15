@@ -229,6 +229,7 @@ patterns:
   - id: active-one
     status: active
     sleeve: options
+    budget: layer
     outcome: {decision: sufficient, theta: "0.01"}
     monitoring: {mean: "0.01", sd: "0.04", se: "0.002"}
 """
@@ -247,6 +248,9 @@ def test_the_registry_s_running_layers(tmp_path: Path) -> None:
     assert registry_layers(tmp_path / "missing.yaml") == []
     path.write_text("patterns:\n  - status: shadow\n", encoding="utf-8")
     with pytest.raises(LayerRegistryError):
+        registry_layers(path)
+    path.write_text("patterns:\n  - {id: x, status: shadow, budget: all}\n", encoding="utf-8")
+    with pytest.raises(LayerRegistryError, match="budget"):
         registry_layers(path)
 
 
@@ -290,6 +294,7 @@ def layer(decision: str | None = "sufficient", labels: tuple[str, ...] = ()) -> 
         id="p",
         status="shadow",
         sleeve=Sleeve.SATELLITE,
+        budget="layer",
         decision=decision,
         labels=labels,
         theta=0.005,

@@ -329,7 +329,7 @@ def run_month(
         shares = [(e.at, e.share) for e in history if e.layer == key]
         rule = (
             stock_book_rule(spec, cash_floor=cash_floor)
-            if layer.sleeve is Sleeve.SATELLITE
+            if layer.budget == "stock_book"
             else layer_rule(spec, sleeve_budget=sleeve_budget(settings, layer.sleeve))
         )
         evidence = step_evidence(

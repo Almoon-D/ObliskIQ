@@ -183,6 +183,11 @@ class Modes:
             raise ModeChangeRefusedError(
                 f"the promotion verdict is on {promotion.target.value}, not {to.value}"
             )
+        if to in _GATED and to.rank != current.rank + 1:
+            raise ModeChangeRefusedError(
+                f"promotion_gate_not_passed: {to.value} is not the level above {current.value}; "
+                "the ladder is climbed one level at a time"
+            )
         if to in _GATED and (promotion is None or not promotion.passed):
             raise ModeChangeRefusedError(
                 f"promotion_gate_not_passed: {to.value} needs the promotion gate's passed "

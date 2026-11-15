@@ -481,5 +481,7 @@ async def test_an_undelivered_summary_is_degraded_and_rules_missing_are_skipped(
 def test_the_layer_months_record_the_mode(store_worker: StoreWorker) -> None:
     month = LayerMonth("l", "2026-10", ExecutionMode.PAPER, 0, None, None, None, NOW)
     assert month.mode is ExecutionMode.PAPER
-    layer = RegistryLayer("l", "shadow", Sleeve.SATELLITE, None, (), None, None, None, None, None)
+    layer = RegistryLayer(
+        "l", "shadow", Sleeve.SATELLITE, "layer", None, (), None, None, None, None, None
+    )
     assert layer.status == "shadow"

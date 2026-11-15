@@ -88,9 +88,25 @@ async def test_a_passed_verdict_on_another_level_is_refused(
         await modes.upgrade(ExecutionMode.LIVE, actor="owner", reason="r", promotion=check)
 
 
+async def _in_paper(fresh: StoreWorker, shipped_settings: ObliskConfig) -> None:
+    await Modes(fresh, shipped_settings, profile="paper").upgrade(
+        ExecutionMode.PAPER, actor="owner", reason="r"
+    )
+
+
+async def test_a_passed_verdict_cannot_skip_a_level(
+    fresh: StoreWorker, shipped_settings: ObliskConfig
+) -> None:
+    modes = Modes(fresh, shipped_settings, profile="live")
+    check = PromotionCheck(ExecutionMode.LIVE_SMALL, True, "met")
+    with pytest.raises(ModeChangeRefusedError, match="one level at a time"):
+        await modes.upgrade(ExecutionMode.LIVE_SMALL, actor="owner", reason="r", promotion=check)
+
+
 async def test_a_passed_verdict_still_needs_the_live_profile(
     fresh: StoreWorker, shipped_settings: ObliskConfig
 ) -> None:
+    await _in_paper(fresh, shipped_settings)
     modes = Modes(fresh, shipped_settings, profile="paper")
     check = PromotionCheck(ExecutionMode.LIVE_SMALL, True, "met")
     with pytest.raises(ModeChangeRefusedError, match="profile live"):
@@ -100,6 +116,7 @@ async def test_a_passed_verdict_still_needs_the_live_profile(
 async def test_a_passed_verdict_under_the_live_profile_upgrades_and_is_audited(
     fresh: StoreWorker, shipped_settings: ObliskConfig
 ) -> None:
+    await _in_paper(fresh, shipped_settings)
     modes = Modes(fresh, shipped_settings, profile="live")
     check = PromotionCheck(ExecutionMode.LIVE_SMALL, True, "live-small: every criterion is met")
     change = await modes.upgrade(
