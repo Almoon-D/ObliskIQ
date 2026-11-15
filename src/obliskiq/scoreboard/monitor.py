@@ -17,8 +17,8 @@ last planned month, every month end is a look at two one-sided boundaries:
 Each boundary spends its alpha over the planned months by a Pocock-type function,
 ``alpha(t) = alpha ln(1 + (e - 1) t)``; a look spends the increase since the previous look, and
 the looks are combined by a union bound, so the chance of any false alarm over every look is at
-most alpha whatever the dependence between them. A look with a month that was not measured is recorded not
-evaluable and changes nothing. Monitoring reduces risk; it never declares a verdict.
+most alpha whatever the dependence between them. A look with a month that was not measured is
+recorded not evaluable and changes nothing. Monitoring reduces risk; it never declares a verdict.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
