@@ -67,7 +67,6 @@ from .rules import GradingRules
 from .tca import Execution, analyse
 
 ZERO = Decimal(0)
-MONTHS_PER_YEAR = 12
 #: Theses are graded per source (``thesis:owner``, ``thesis:analyst``) and the analyst's per
 #: segment (``analyst:<segment>``): an LLM nomination is an analyst thesis.
 THESIS_PREFIX = "thesis:"
@@ -80,7 +79,6 @@ _WORKING = frozenset(
 _FINISHED = frozenset(
     {IntentState.FILLED, IntentState.CANCELLED, IntentState.REJECTED, IntentState.EXPIRED}
 )
-_LIVE = frozenset({ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE})
 _THESIS_STATES = frozenset({ThesisState.APPROVED, ThesisState.ACTIVE, ThesisState.CLOSED})
 
 
