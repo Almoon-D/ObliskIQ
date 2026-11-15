@@ -37,7 +37,13 @@ from obliskiq.domain.orders import (
     Sleeve,
     TimeInForce,
 )
-from obliskiq.research.prereg import ScoreboardPrereg, ScoreboardSpec, load_any
+from obliskiq.research.prereg import (
+    ForwardBookPrereg,
+    ForwardBookSpec,
+    ScoreboardPrereg,
+    ScoreboardSpec,
+    load_any,
+)
 from obliskiq.scoreboard.layers import RegistryLayer
 from obliskiq.scoreboard.monitor import Backtest
 from obliskiq.scoreboard.run import (
@@ -52,7 +58,6 @@ from obliskiq.scoreboard.run import (
     promotion_evidence,
     run_lifecycle,
     run_month,
-    thesis_book_months,
 )
 from obliskiq.store import fx as fx_repo
 from obliskiq.store import nav as nav_repo
@@ -79,6 +84,13 @@ START = date(2026, 10, 5)
 def spec(repo_root: Path) -> ScoreboardSpec:
     found = load_any(repo_root / "research" / "preregistrations" / "scoreboard.md")
     assert isinstance(found, ScoreboardPrereg)
+    return found.spec
+
+
+@pytest.fixture(scope="module")
+def h13(repo_root: Path) -> ForwardBookSpec:
+    found = load_any(repo_root / "research" / "preregistrations" / "thesis-book.md")
+    assert isinstance(found, ForwardBookPrereg)
     return found.spec
 
 
@@ -276,7 +288,7 @@ def _activate(store: Store, layer: str, at: datetime) -> None:
 
 
 def test_the_month_end_drill_records_looks_freezes_and_steps(
-    store: Store, shipped_settings: ObliskConfig, spec: ScoreboardSpec
+    store: Store, shipped_settings: ObliskConfig, spec: ScoreboardSpec, h13: ForwardBookSpec
 ) -> None:
     _activate(store, "pat", datetime(2026, 1, 2, tzinfo=UTC))
     for m in range(1, 6):
@@ -292,7 +304,7 @@ def test_the_month_end_drill_records_looks_freezes_and_steps(
         spec,
         [_layer("active"), _layer("shadow", id="idle", decision="insufficient")],
         month="2026-05",
-        h13_first_look=6,
+        h13=h13,
         activation=lambda _: True,
         retest=lambda _layer, _months: True,
         at=AT,
@@ -308,7 +320,7 @@ def test_the_month_end_drill_records_looks_freezes_and_steps(
         spec,
         [_layer("active")],
         month="2026-05",
-        h13_first_look=6,
+        h13=h13,
         activation=lambda _: True,
         retest=lambda _layer, _months: True,
         at=AT,
@@ -318,7 +330,7 @@ def test_the_month_end_drill_records_looks_freezes_and_steps(
 
 
 def test_a_twin_breach_in_the_month_end_run_takes_the_share_back(
-    store: Store, shipped_settings: ObliskConfig, spec: ScoreboardSpec
+    store: Store, shipped_settings: ObliskConfig, spec: ScoreboardSpec, h13: ForwardBookSpec
 ) -> None:
     key = layer_key(Sleeve.OPTIONS, "pat")
     _activate(store, "pat", datetime(2026, 1, 2, tzinfo=UTC))
@@ -336,36 +348,13 @@ def test_a_twin_breach_in_the_month_end_run_takes_the_share_back(
         spec,
         [_layer("active", sleeve=Sleeve.OPTIONS, budget="layer")],
         month="2026-05",
-        h13_first_look=6,
+        h13=h13,
         activation=lambda _: True,
         retest=lambda _layer, _months: True,
         at=AT,
     )
     assert "shadow" in [e.event for e in changes.events]
     assert {e.layer: e.share for e in changes.shares}[key] == D(0)
-
-
-def test_the_thesis_book_s_months_from_its_first_entry_fill(
-    store: Store, shipped_settings: ObliskConfig
-) -> None:
-    assert thesis_book_months(store, as_of=date(2026, 6, 1)) == (0, 0)
-    _intent(
-        store,
-        mode=ExecutionMode.PAPER,
-        sleeve=Sleeve.SATELLITE,
-        at=datetime(2026, 2, 3, tzinfo=UTC),
-    )
-    _intent(
-        store,
-        mode=ExecutionMode.SHADOW,
-        sleeve=Sleeve.SATELLITE,
-        at=datetime(2026, 1, 3, tzinfo=UTC),
-    )
-    _intent(store, mode=ExecutionMode.LIVE, sleeve=Sleeve.CORE, at=datetime(2026, 1, 3, tzinfo=UTC))
-    _intent(
-        store, mode=ExecutionMode.LIVE, sleeve=Sleeve.SATELLITE, at=datetime(2026, 5, 3, tzinfo=UTC)
-    )
-    assert thesis_book_months(store, as_of=date(2026, 6, 1)) == (5, 2)
 
 
 # ── intents, clearances and fills ──

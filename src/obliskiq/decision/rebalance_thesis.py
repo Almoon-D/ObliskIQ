@@ -31,7 +31,9 @@ carries its protective stop: a stop-limit at the invalidation (``execution/prote
 rests at the broker from the first fill wherever orders reach one. Entries wait while the kill
 switch is on or reconciliation freezes new risk; exits do not.
 
-:meth:`ThesisRebalancer.survey` only reads, so a dry run shows the plan and writes nothing.
+:meth:`ThesisRebalancer.survey` only reads, so a dry run shows the plan and writes nothing. Applying
+a plan records the book's capital that day (the first reading kept): H13's record divides each
+month by the book's capital before it (``scoreboard/h13.py``).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -57,7 +59,15 @@ from ..domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
-from ..domain.thesis import OPEN_STATES, SLOT_STATES, Expression, LogKind, Thesis, ThesisState
+from ..domain.thesis import (
+    OPEN_STATES,
+    SLOT_STATES,
+    Conviction,
+    Expression,
+    LogKind,
+    Thesis,
+    ThesisState,
+)
 from ..engines.thesis.book import Slot
 from ..engines.thesis.exits import OVERRIDE, exit_due
 from ..engines.thesis.gate import Finding, GateFacts, Reason, ThesisGate, describe
@@ -74,11 +84,14 @@ from ..execution.protective import protective_spec
 from ..ibkr.client import Secdef
 from ..jurisdiction.eligibility import EligibilityPolicy
 from ..logging_setup import get_logger
+from ..store import analyst as analyst_repo
+from ..store import h13 as h13_repo
 from ..store import orders as repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store import universe as universe_repo
 from ..store.db import Store
+from ..store.h13 import BookCapital, record_book_capital
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
@@ -106,6 +119,9 @@ from .vehicle_inputs import market_inputs
 __all__ = ["ThesisDecision", "ThesisPlan", "ThesisRebalancer"]
 
 log = get_logger("decision.thesis")
+
+#: The modes of the live account: H13's holdbacks apply there alone.
+_LIVE = frozenset({ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE})
 
 
 class ThesisRebalancer:
@@ -170,6 +186,7 @@ class ThesisRebalancer:
         theses = await self._worker.run(thesis_repo.theses, as_of=today, states=OPEN_STATES)
         twins = await self._worker.run(link_repo.open_twins)
         if not theses and not twins:
+            plan.capital = await self._idle_capital(mode)
             return plan
         try:
             cash = await self._capital.cash()
@@ -212,6 +229,8 @@ class ThesisRebalancer:
             },
             today=today,
             at=at,
+            holdbacks=await self._worker.run(h13_repo.holdbacks) if mode in _LIVE else None,
+            segments=await self._worker.run(analyst_repo.thesis_segments),
         )
         slots = {t.thesis_id: _slot(t) for t in theses if t.state in SLOT_STATES}
         spent = ZERO
@@ -224,6 +243,19 @@ class ThesisRebalancer:
                 slots[thesis.thesis_id] = _slot(thesis, decision.size_base)
         plan.twins = await self._options.twins(read, plan)
         return plan
+
+    async def _idle_capital(self, mode: ExecutionMode) -> Decimal | None:
+        """The book's capital when it has nothing to decide: read for H13's record (its capital
+        before each month), never a reason to block the cycle."""
+        try:
+            cash = await self._capital.cash()
+            view = await self._capital.read(mode, cash=cash)
+        except ObliskError:
+            return None
+        if isinstance(view, str):
+            return None
+        allocation = await allocation_now(self._worker, self._settings, view.investable, mode)
+        return allocation.thesis_book
 
     def _position(self, thesis: Thesis, read: BookRead) -> tuple[Decimal, tuple[Fill, ...], str]:
         """The units ``thesis`` holds, the fills that made them and the last sale's reason."""
@@ -266,6 +298,10 @@ class ThesisRebalancer:
             if described is None or value.unit is None or value.rate is None
             else value.unit / (described.multiplier * value.rate)
         )
+        held_back = _held_back(thesis, read)
+        if held_back is not None and thesis.state is ThesisState.CANDIDATE:
+            finding = Finding(Reason.HELD_BACK, held_back, permanent=True)
+            return ThesisDecision(thesis, REFUSE, describe((finding,)), (finding,))
         if thesis.as_option:
             return await self._options.held(thesis, reference, read, plan)
         held, fills, last_sale = self._position(thesis, read)
@@ -383,6 +419,7 @@ class ThesisRebalancer:
             sessions=0 if found is None else found.sessions,
             slots=slots,
             minimum=read.minimum,
+            sized_as=_sized_as(thesis, read),
         )
         judged = self._gate.evaluate(thesis, facts)
         if judged.permanent:
@@ -444,6 +481,9 @@ class ThesisRebalancer:
         """Carry out ``plan``: pins, changes of state, grades, and an intent for every trade,
         priced now. A trade that cannot be priced is logged and left for the next cycle."""
         made: list[OrderIntent] = []
+        if plan.capital is not None:
+            reading = BookCapital(plan.mode, plan.at.date(), plan.capital, plan.at)
+            await self._worker.run(record_book_capital, reading)
         await self._options.close_twins(plan)
         for decision in plan.decisions:
             thesis = decision.thesis
@@ -609,6 +649,29 @@ class ThesisRebalancer:
         if decision.rate is not None:
             gain = (graded.exit_price - graded.entry_price) * graded.quantity * decision.rate
             await self._options.repay(decision, gain)
+
+
+def _held_back(thesis: Thesis, read: BookRead) -> str | None:
+    """Why H13 holds the thesis's source (or analyst segment) back on the live account."""
+    held = read.holdbacks
+    if held is None:
+        return None
+    source = held.sources.get(thesis.source.value)
+    if source is not None:
+        return f"its source {thesis.source.value} is no longer traded on the account: {source}"
+    segment = read.segments.get(thesis.thesis_id)
+    found = None if segment is None else held.segments.get(segment)
+    if found is not None:
+        return f"its analyst segment is no longer traded on the account: {found}"
+    return None
+
+
+def _sized_as(thesis: Thesis, read: BookRead) -> Conviction | None:
+    """``normal`` when H13 holds the thesis's conviction level back on the live account."""
+    held = read.holdbacks
+    if held is None or thesis.conviction.value not in held.convictions:
+        return None
+    return Conviction.NORMAL
 
 
 def _slot(thesis: Thesis, size: Decimal | None = None) -> Slot:

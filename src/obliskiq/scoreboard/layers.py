@@ -44,6 +44,7 @@ from ..capital.allocation import (
 from ..domain.orders import ExecutionMode, Sleeve
 from ..errors import ObliskError
 from ..research.prereg import PatternsSpec, ScoreboardSpec
+from ..store.h13 import BOOK, H13Look
 from ..store.scoreboard import LayerEvent, LayerMonth, Look
 from .grading import Record
 from .monitor import (
@@ -390,35 +391,41 @@ def step_evidence(
 
 @dataclass(frozen=True, slots=True)
 class ThesisBookCapital:
-    """What the thesis book's live share rests on: the owner's exploration share and how far its
-    paper and live records reach H13's first look."""
+    """What the thesis book's live share rests on: the owner's exploration share, H13's step
+    and ceiling, and the book's looks recorded on its paper and live records."""
 
     exploration: Decimal
-    paper_months: int
-    live_months: int
-    first_look_month: int
+    share_step: Decimal
+    share_ceiling: Decimal
+    looks: Sequence[H13Look]
 
 
 def thesis_book_share(capital: ThesisBookCapital) -> ShareDecision:
-    """The thesis book's live-account share under H13: its exploration share while no look of
-    its record is due; once one is due its share needs that look's result, which this build does
-    not compute (H13's after-tax record is Session 18a's), so it holds nothing on the account."""
-    due = [
-        name
-        for name, months in (("paper", capital.paper_months), ("live", capital.live_months))
-        if months >= capital.first_look_month
-    ]
-    if due:
+    """The thesis book's live-account share under H13 (DECISIONS D156, D173): nothing once a
+    live look sent it back to shadow, or while its paper record is below its boundary; else the
+    owner's exploration share and a step for each live look that stepped, to the ceiling. A look
+    not evaluable changes nothing."""
+    book = [look for look in capital.looks if look.group == BOOK]
+    for record, words in (("live", "its live record"), ("paper", "its paper record")):
+        back = next((look for look in book if look.record == record and look.back), None)
+        if back is not None:
+            return ShareDecision(
+                ZERO,
+                True,
+                f"{words} fell below H13's boundary at the look of {back.month}: back to shadow "
+                f"({back.detail})",
+            )
+    steps = [look for look in book if look.record == "live" and look.step]
+    share = min(capital.share_ceiling, capital.exploration + capital.share_step * len(steps))
+    if not steps:
         return ShareDecision(
-            ZERO,
-            True,
-            f"H13's look of its {' and '.join(due)} record is due and its record is not computed: "
-            "an untested boundary is never passed",
+            share, True, "the owner's exploration share: no live look of H13 has stepped"
         )
     return ShareDecision(
-        capital.exploration,
+        share,
         True,
-        "the owner's exploration share: no look of H13 is due yet",
+        f"the owner's exploration share and {len(steps)} steps at H13's live looks "
+        f"(the last at {steps[-1].month}), at most {capital.share_ceiling}",
     )
 
 

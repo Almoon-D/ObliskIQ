@@ -53,6 +53,7 @@ from obliskiq.scoreboard.layers import (
     thesis_book_share,
 )
 from obliskiq.scoreboard.monitor import Backtest
+from obliskiq.store.h13 import H13Look
 from obliskiq.store.scoreboard import LayerEvent, LayerMonth, Look
 from obliskiq.store.worker import StoreWorker
 
@@ -516,13 +517,57 @@ def test_step_evidence_counts_live_account_months_only() -> None:
 # ── the thesis book ──
 
 
-def test_the_thesis_book_takes_its_exploration_share_until_a_look_is_due() -> None:
-    fresh = thesis_book_share(ThesisBookCapital(D("0.10"), 3, 0, 6))
+def _h13_look(
+    record: str, month: str, *, step: bool = False, back: bool = False, group: str = "book"
+) -> H13Look:
+    return H13Look(
+        record=record,  # type: ignore[arg-type]
+        group=group,
+        month=month,
+        look=1,
+        months=6,
+        closed=8,
+        mean=0.01,
+        sd=0.01,
+        t_up=4.5 if step else 0.1,
+        t_down=-4.0 if back else 0.1,
+        c_up=4.032,
+        c_down=3.365,
+        without_best=0.005,
+        step=step,
+        back=back,
+        evaluable=True,
+        series="[]",
+        detail="d",
+        at=datetime(2027, 7, 1, tzinfo=UTC),
+    )
+
+
+def _thesis_share(*looks: H13Look) -> Decimal:
+    return thesis_book_share(ThesisBookCapital(D("0.10"), D("0.10"), D("0.50"), looks)).share
+
+
+def test_the_thesis_book_s_live_share_follows_h13_s_looks() -> None:
+    fresh = thesis_book_share(ThesisBookCapital(D("0.10"), D("0.10"), D("0.50"), ()))
     assert fresh.share == D("0.10")
-    assert "no look of H13 is due" in fresh.reason
-    due = thesis_book_share(ThesisBookCapital(D("0.10"), 6, 0, 6))
-    assert due.share == D(0)
-    assert "paper record is due" in due.reason
-    both = thesis_book_share(ThesisBookCapital(D("0.10"), 9, 7, 6))
-    assert both.share == D(0)
-    assert "paper and live" in both.reason
+    assert "exploration share" in fresh.reason
+    # A look that neither steps nor goes back, or a group's look, changes nothing.
+    assert _thesis_share(_h13_look("live", "2027-06")) == D("0.10")
+    assert _thesis_share(_h13_look("live", "2027-06", back=True, group="source:owner")) == D("0.10")
+    # A step at each live look, to the ceiling; shadow and paper never step.
+    steps = [_h13_look("live", f"20{27 + i}-06", step=True) for i in range(6)]
+    assert _thesis_share(steps[0]) == D("0.20")
+    assert _thesis_share(*steps) == D("0.50")
+    assert _thesis_share(_h13_look("paper", "2027-06", step=True)) == D("0.10")
+    # The paper record below its boundary: no share on the live account.
+    paper = thesis_book_share(
+        ThesisBookCapital(
+            D("0.10"), D("0.10"), D("0.50"), (_h13_look("paper", "2027-06", back=True),)
+        )
+    )
+    assert paper.share == D(0)
+    assert "paper record" in paper.reason
+    # Back to shadow on the live record wins over every earlier step.
+    assert _thesis_share(steps[0], _h13_look("live", "2028-12", back=True)) == D(0)
+    # A shadow look decides nothing.
+    assert _thesis_share(_h13_look("shadow", "2027-06", back=True)) == D("0.10")

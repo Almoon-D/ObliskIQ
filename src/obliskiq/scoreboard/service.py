@@ -18,14 +18,15 @@ from ..calendars.service import Calendars
 from ..config.schema import ObliskConfig
 from ..domain.orders import ExecutionMode
 from ..domain.tax import TaxYearSummary
-from ..errors import ObliskError
+from ..errors import CalendarError, ObliskError
 from ..reporting.alerts import Alert, Severity
 from ..reporting.scoreboard import ReportInputs
 from ..research.patterns import REGISTRY_PATH
-from ..research.prereg import ForwardBookPrereg, ScoreboardPrereg, load_any
+from ..research.prereg import ForwardBookPrereg, ScoreboardPrereg
 from ..store import scoreboard as repo
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook
+from .h13_run import run_h13
 from .layers import (
     Activation,
     RegistryLayer,
@@ -35,7 +36,7 @@ from .layers import (
     registry_layers,
 )
 from .promotion import Verdict, evaluate
-from .rules import H13_PATH, RULES_PATH, load_locked
+from .rules import H13_PATH, RULES_PATH, load_locked, load_locked_book
 from .run import (
     Changes,
     GradeBook,
@@ -60,10 +61,10 @@ SCOREBOARD = "scoreboard"
 
 @dataclass(frozen=True, slots=True)
 class Rules:
-    """The locked rules and what the allocation reads of H13, or why there are none."""
+    """The locked rules: the scoreboard's and H13's."""
 
     scoreboard: ScoreboardPrereg
-    h13_first_look: int
+    h13: ForwardBookPrereg
 
 
 def previous_month(day: date) -> str:
@@ -101,12 +102,10 @@ class Scoreboard:
             return "no repository holds the research files (an installed wheel)"
         try:
             locked = load_locked(self._root / RULES_PATH)
-            h13 = load_any(self._root / H13_PATH)
+            h13 = load_locked_book(self._root / H13_PATH)
         except ObliskError as exc:
             return str(exc)
-        if not isinstance(h13, ForwardBookPrereg):
-            return f"{H13_PATH} is not the thesis book's pre-registration"
-        return Rules(locked, h13.spec.looks.every_months)
+        return Rules(locked, h13)
 
     def layers(self) -> list[RegistryLayer]:
         return [] if self._root is None else registry_layers(self._root / REGISTRY_PATH)
@@ -132,23 +131,39 @@ class Scoreboard:
         )
         return changes, self._alerts(changes, at)
 
+    def _venue(self, exchange: str) -> str | None:
+        try:
+            return self._calendars.venue_for_ibkr(exchange)
+        except CalendarError:
+            return None
+
     async def month_end(self, month: str) -> tuple[Changes | str, list[Alert]]:
-        """The looks and allocation of ``month``'s end, once each."""
+        """H13's looks, the layers' looks and the allocation of ``month``'s end, once each."""
         rules = self.rules()
         if isinstance(rules, str):
             return rules, []
         at = self._now()
+        h13 = await self._worker.run(
+            run_h13,
+            self._settings,
+            rules.h13.spec,
+            policy=None if self._tax is None else self._tax.policy,
+            venue_of=self._venue,
+            month=month,
+            at=at,
+        )
         changes = await self._worker.run(
             run_month,
             self._settings,
             rules.scoreboard.spec,
             self.layers(),
             month=month,
-            h13_first_look=rules.h13_first_look,
+            h13=rules.h13.spec,
             activation=self._activation,
             retest=self._retest,
             at=at,
         )
+        changes.h13 = h13
         return changes, self._alerts(changes, at)
 
     def _alerts(self, changes: Changes, at: datetime) -> list[Alert]:
@@ -161,6 +176,19 @@ class Scoreboard:
                     f"scoreboard.{event.event}:{event.layer}",
                     f"{event.layer}: {event.detail}",
                     severity,
+                    at,
+                    condition=False,
+                )
+            )
+        for look in changes.h13:
+            if not (look.step or look.back):
+                continue
+            found.append(
+                Alert(
+                    "scoreboard.h13",
+                    f"scoreboard.h13:{look.record}:{look.group}",
+                    f"H13 {look.record} {look.group}: {look.detail}",
+                    Severity.CRITICAL if look.back else Severity.INFO,
                     at,
                     condition=False,
                 )

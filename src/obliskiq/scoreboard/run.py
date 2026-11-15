@@ -23,15 +23,16 @@ from ..capital.allocation import (
 )
 from ..capital.twr import Reading, account_flows
 from ..config.schema import ObliskConfig
-from ..domain.orders import ExecutionMode, IntentRole, IntentState, OrderSide, Sleeve
+from ..domain.orders import ExecutionMode, IntentRole, IntentState, OrderSide
 from ..domain.thesis import ThesisState, View
 from ..quant.costs import CostBook
 from ..quant.costs import OrderTerms as CostTerms
-from ..research.prereg import ScoreboardSpec
+from ..research.prereg import ForwardBookSpec, ScoreboardSpec
 from ..store import analyst as analyst_repo
 from ..store import breakers as breaker_repo
 from ..store import capital as capital_repo
 from ..store import fx as fx_repo
+from ..store import h13 as h13_repo
 from ..store import nav as nav_repo
 from ..store import orders as order_repo
 from ..store import repos
@@ -228,6 +229,7 @@ class Changes:
     events: list[LayerEvent] = field(default_factory=list)
     looks: list[repo.Look] = field(default_factory=list)
     shares: list[AllocationEvent] = field(default_factory=list)
+    h13: list[h13_repo.H13Look] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
 
@@ -263,28 +265,6 @@ def run_lifecycle(
     return changes
 
 
-def thesis_book_months(store: Store, *, as_of: date) -> tuple[int, int]:
-    """The months of the thesis book's paper and live-account records: from the month of each
-    record's first entry fill, counted whole."""
-    firsts: dict[str, date] = {}
-    for item in order_repo.intent_fills(store):
-        if item.sleeve is not Sleeve.SATELLITE or item.role is not IntentRole.ENTRY:
-            continue
-        record_name = (
-            "paper" if item.mode is ExecutionMode.PAPER else "live" if item.mode in _LIVE else None
-        )
-        day = item.fill.executed_at.date()
-        if record_name is not None and day <= as_of:
-            firsts.setdefault(record_name, day)
-
-    def months(first: date | None) -> int:
-        if first is None:
-            return 0
-        return (as_of.year - first.year) * MONTHS_PER_YEAR + as_of.month - first.month + 1
-
-    return months(firsts.get("paper")), months(firsts.get("live"))
-
-
 def run_month(
     store: Store,
     settings: ObliskConfig,
@@ -292,7 +272,7 @@ def run_month(
     layers: Sequence[RegistryLayer],
     *,
     month: str,
-    h13_first_look: int,
+    h13: ForwardBookSpec,
     activation: Activation,
     retest: Retest,
     at: datetime,
@@ -343,13 +323,12 @@ def run_month(
             retest=retest(layer, months),
         )
         _record_share(store, changes, key, step_share(current.get(key, ZERO), rule, evidence), at)
-    paper, live = thesis_book_months(store, as_of=at.date())
     decision = thesis_book_share(
         ThesisBookCapital(
             exploration=settings.thesis.capital_share,
-            paper_months=paper,
-            live_months=live,
-            first_look_month=h13_first_look,
+            share_step=h13.step.share_step,
+            share_ceiling=h13.step.share_ceiling,
+            looks=h13_repo.h13_looks(store),
         )
     )
     _record_share(store, changes, THESIS_BOOK, decision, at)

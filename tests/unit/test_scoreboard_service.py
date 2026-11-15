@@ -60,7 +60,7 @@ def research_copy(repo_root: Path, tmp_path: Path, *, registry: str | None = Non
     root = tmp_path / "repo"
     folder = root / "research" / "preregistrations"
     folder.mkdir(parents=True)
-    for name in ("scoreboard.md", "scoreboard.lock", "thesis-book.md"):
+    for name in ("scoreboard.md", "scoreboard.lock", "thesis-book.md", "thesis-book.lock"):
         shutil.copy(repo_root / "research" / "preregistrations" / name, folder / name)
     (root / "research" / "pattern_registry.yaml").write_text(
         registry or "patterns: []\n", encoding="utf-8"
@@ -344,8 +344,13 @@ async def test_the_h13_file_must_be_the_thesis_book_s(
     board_parts: tuple[Scoreboard, Modes, Path],
 ) -> None:
     board, _, root = board_parts
+    (root / H13_PATH).write_text("changed", encoding="utf-8")
+    assert "thesis-book.md is not the text its lock records" in str(board.rules())
+    (root / H13_PATH.with_suffix(".lock")).unlink()
+    assert "no readable lock (thesis-book.lock)" in str(board.rules())
     shutil.copy(root / RULES_PATH, root / H13_PATH)
-    assert "not the thesis book" in str(board.rules())
+    shutil.copy(root / RULES_PATH.with_suffix(".lock"), root / H13_PATH.with_suffix(".lock"))
+    assert "not a forward book" in str(board.rules())
     (root / RULES_PATH).write_text("changed", encoding="utf-8")
     assert "not the text" in str(board.rules())
 
