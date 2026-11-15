@@ -92,7 +92,9 @@ def step_share(current: Decimal, rule: StepRule, evidence: StepEvidence) -> Shar
     """The share of a layer whose capital follows a sufficient test: its first share, a step at a
     look, a return to zero on a twin breach, or no change."""
     if evidence.twin_breached:
-        return ShareDecision(ZERO, current != ZERO, "its twin breached its boundary: back to shadow")
+        return ShareDecision(
+            ZERO, current != ZERO, "its twin breached its boundary: back to shadow"
+        )
     if not evidence.sufficient or not evidence.activation:
         missing = "a sufficient outcome" if not evidence.sufficient else "its activation condition"
         return ShareDecision(ZERO, current != ZERO, f"it has no {missing}")
@@ -184,9 +186,7 @@ def recorded_shares(store: Store) -> dict[str, Decimal]:
     return repo.current_shares(store)
 
 
-def live_allocation(
-    settings: ObliskConfig, investable: Decimal, shares: LiveShares
-) -> Allocation:
+def live_allocation(settings: ObliskConfig, investable: Decimal, shares: LiveShares) -> Allocation:
     """What each sleeve may use of ``investable`` on the live account: the layers' recorded
     shares, within the satellite's ceiling and what the cash floor leaves; the reserve holds the
     rest."""

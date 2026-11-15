@@ -1,6 +1,6 @@
 """The scoreboard's rules: ``research/preregistrations/scoreboard.md``, read as its lock records it.
 
-Every number the scoreboard decides with (ρ, the horizon, θ, the minimums, the boundaries, the
+Every number the scoreboard decides with (rho, the horizon, θ, the minimums, the boundaries, the
 budget steps) is the pre-registration's, so none lives in configuration or code. The running
 system reads the file only when it is the text the lock records (its SHA-256): a missing lock or
 a changed file leaves the scoreboard without rules, and nothing it would decide is decided. The

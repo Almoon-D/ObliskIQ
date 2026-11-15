@@ -71,13 +71,15 @@ END;
 
 -- ───────────────────────────── layer_months ─────────────────────────────
 
--- An active layer's month: its live log return on its capital, its twin's (the same signals on
--- the same dates through the cost model) and its reference's, as its test measured it. NULL: not
--- measured that month (the look that needs it is not evaluable). Written once per month by the
--- layer's engine.
+-- An active layer's month: its realised log return on its capital in the mode it traded (mode),
+-- its twin's (the same signals on the same dates through the cost model) and its reference's, as
+-- its test measured it, and the positions it closed that month. NULL: not measured that month
+-- (the look that needs it is not evaluable). Written once per month by the layer's engine.
 CREATE TABLE layer_months (
     layer       TEXT NOT NULL CHECK (trim(layer) <> ''),
     month       TEXT NOT NULL CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
+    mode        TEXT NOT NULL CHECK (mode IN ('shadow', 'paper', 'live-small', 'live')),
+    closed      INTEGER NOT NULL CHECK (closed >= 0),
     live        REAL,
     twin        REAL,
     reference   REAL,

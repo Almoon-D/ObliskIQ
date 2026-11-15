@@ -54,11 +54,13 @@ class LayerEvent:
 
 @dataclass(frozen=True, slots=True)
 class LayerMonth:
-    """A layer's month (``YYYY-MM``): its live, twin and reference log returns; ``None`` where
-    that month was not measured."""
+    """A layer's month (``YYYY-MM``): its realised log return in the mode it traded, its twin's and
+    its reference's (``None`` where not measured), and the positions it closed."""
 
     layer: str
     month: str
+    mode: ExecutionMode
+    closed: int
     live: float | None
     twin: float | None
     reference: float | None
@@ -214,11 +216,13 @@ def record_month(store: Store, month: LayerMonth) -> bool:
     """Record a layer's month; ``False`` when that month is already recorded."""
     with store.transaction():
         cursor = store.execute(
-            "INSERT INTO layer_months (layer, month, live, twin, reference, recorded_at) "
-            "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (layer, month) DO NOTHING",
+            "INSERT INTO layer_months (layer, month, mode, closed, live, twin, reference, "
+            "recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (layer, month) DO NOTHING",
             (
                 month.layer,
                 month.month,
+                month.mode.value,
+                month.closed,
                 month.live,
                 month.twin,
                 month.reference,
@@ -236,6 +240,8 @@ def layer_months(store: Store, layer: str) -> list[LayerMonth]:
         LayerMonth(
             layer=row["layer"],
             month=row["month"],
+            mode=ExecutionMode(row["mode"]),
+            closed=row["closed"],
             live=row["live"],
             twin=row["twin"],
             reference=row["reference"],

@@ -71,9 +71,7 @@ def measure(execution: Execution) -> Measured | str:
         return "the cost model has no figure for its leg"
     sign = 1 if execution.side is OrderSide.BUY else -1
     value = execution.price * execution.quantity
-    commission = (
-        float(execution.commission / value) if execution.commission and value > 0 else 0.0
-    )
+    commission = float(execution.commission / value) if execution.commission and value > 0 else 0.0
     slippage = float(sign * (execution.price - execution.arrival) / execution.arrival)
     return Measured(execution, slippage + commission, float(execution.modelled) + commission)
 

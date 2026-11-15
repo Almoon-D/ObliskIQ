@@ -1,12 +1,12 @@
 """The operational promotion ladder L0 → L3 (MASTER_PLAN §5.19; ``config/defaults/scoreboard.yaml``
 ``promotion``).
 
-| Level | Entry criteria |
-|---|---|
-| L0 shadow | the default |
-| L1 paper | consecutive trading days of shadow with no unhandled error, clean reconciliation, no stuck intent, every daily reset re-logged unattended |
-| L2 live-small | weeks of paper with no rail violation, order success and slippage inside their bounds, the breaker, kill and cash-flow drills passed, on a capped book |
-| L3 live | months of live-small, a monthly scoreboard report, the owner's command |
+* **L0 shadow**: the default.
+* **L1 paper**: consecutive trading days of shadow with no unhandled error, clean reconciliation,
+  no stuck intent and every daily reset re-logged unattended.
+* **L2 live-small**: weeks of paper with no rail violation, order success and slippage inside
+  their bounds, the breaker, kill and cash-flow drills passed, on a capped book.
+* **L3 live**: months of live-small, a monthly scoreboard report, the owner's command.
 
 The criteria are operational, not alpha: a pass says the machine ran cleanly, never that it
 earns anything. Every criterion is passed, failed or **unmeasured**; an unmeasured one fails the
@@ -232,7 +232,8 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
             mine = [
                 d
                 for d in evidence.drills
-                if d.kind == kind and d.mode is ExecutionMode.PAPER
+                if d.kind == kind
+                and d.mode is ExecutionMode.PAPER
                 and (since is None or d.at >= since)
             ]
             latest = mine[-1] if mine else None

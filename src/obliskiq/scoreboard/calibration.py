@@ -5,15 +5,15 @@
 the minimum of cohorts and effective observations and a Brier skill above zero against its base
 rate; it is uncalibrated when either fails, and the state is re-read at every grading, so it can
 switch back. Uncalibrated, a stated probability sizes nothing (the fixed risk budget). Calibrated,
-``p_eff = p_base + shrink × (p_stated − p_base)`` where ``shrink`` is the one-sided lower bound of
-the reliability slope ``β`` in ``o − p_base = β (p_stated − p_base) + ε`` (least squares through
+``p_eff = p_base + shrink * (p_stated - p_base)`` where ``shrink`` is the one-sided lower bound of
+the reliability slope ``β`` in ``o - p_base = β (p_stated - p_base) + ε`` (least squares through
 the origin, its standard error scaled by ``√(n / N_eff)``), clipped to [0, 1]: the share of the
 stated edge the outcomes bore out, kept only as far as the record shows it with confidence
 (legacy ``calibration_state`` kept a fixed half).
 
 **Weights.** With at least the minimum number of components past their own minimum sample, the
-prior variance of their graded means is ``τ² = max(0, mean(m²) − mean(s²))`` (prior mean zero) and
-each mean shrinks to ``m × τ² / (τ² + s²)``; a component's weight is its positive shrunk mean over
+prior variance of their graded means is ``τ² = max(0, mean(m²) - mean(s²))`` (prior mean zero) and
+each mean shrinks to ``m * τ² / (τ² + s²)``; a component's weight is its positive shrunk mean over
 the sum of them. Without such evidence the registration's weights stand. A weight set is
 versioned by the SHA-256 of its canonical JSON.
 
@@ -61,8 +61,8 @@ class CalibrationState:
 def _slope_lower_bound(
     stated: Sequence[GradedCall], *, effective: float, alpha: float
 ) -> tuple[float | None, float | None]:
-    """The slope through the origin of ``o − p_base`` on ``p_stated − p_base``, and its one-sided
-    ``1 − alpha`` lower bound with the standard error scaled for dependence."""
+    """The slope through the origin of ``o - p_base`` on ``p_stated - p_base``, and its one-sided
+    ``1 - alpha`` lower bound with the standard error scaled for dependence."""
     xs: list[float] = []
     ys: list[float] = []
     climatology = sum(1 for g in stated if g.right) / len(stated)
@@ -87,7 +87,9 @@ def calibration_state(
     score = probability_score(graded, rules)
     stated = [g for g in graded if g.graded and g.call.probability is not None]
 
-    def state(calibrated: bool, shrink: float, slope: float | None, reason: str) -> CalibrationState:
+    def state(
+        calibrated: bool, shrink: float, slope: float | None, reason: str
+    ) -> CalibrationState:
         return CalibrationState(
             layer=layer,
             calibrated=calibrated,
@@ -111,7 +113,9 @@ def calibration_state(
         )
     if score.skill is None or score.skill <= float(spec.brier_skill_above):
         shown = "undefined" if score.skill is None else f"{score.skill:+.3f}"
-        return state(False, 0.0, None, f"Brier skill {shown} against {score.base} is not above zero")
+        return state(
+            False, 0.0, None, f"Brier skill {shown} against {score.base} is not above zero"
+        )
     slope, lower = _slope_lower_bound(
         stated, effective=score.effective, alpha=float(spec.shrink_alpha)
     )
@@ -177,8 +181,7 @@ def component_weights(
     variances = {name: float(item.estimate.se or 0.0) ** 2 for name, item in mature.items()}
     tau2 = max(
         0.0,
-        sum(m * m for m in means.values()) / len(means)
-        - sum(variances.values()) / len(variances),
+        sum(m * m for m in means.values()) / len(means) - sum(variances.values()) / len(variances),
     )
     shrunk = {
         name: (means[name] * tau2 / (tau2 + variances[name]) if tau2 + variances[name] > 0 else 0.0)
@@ -195,7 +198,9 @@ def component_weights(
         )
     total = sum(positive.values())
     weights = {name: positive.get(name, 0.0) / total for name in sorted(components)}
-    return WeightUpdate(layer, weights, shrunk, tau2, f"τ² = {tau2:.3g} over {len(mature)} components")
+    return WeightUpdate(
+        layer, weights, shrunk, tau2, f"τ² = {tau2:.3g} over {len(mature)} components"
+    )
 
 
 def graded_effective(graded: Sequence[GradedCall], rules: GradingRules) -> float:

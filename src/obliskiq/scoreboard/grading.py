@@ -15,7 +15,7 @@ both marks is not graded, counted beside the record and never filled in.
 **A layer's record** is the mean of its weekly cohorts' means, with a Newey-West standard error of
 as many lags as the horizon has weeks (floored at the independent variance), and its D62 verdict
 against θ — only from the minimum of cohorts and effective observations on. A cohort of ``n``
-calls carries ``n / (1 + (n - 1) ρ)`` effective observations, and consecutive cohorts share all
+calls carries ``n / (1 + (n - 1) rho)`` effective observations, and consecutive cohorts share all
 but one week of their horizon, so a record carries the sum of those over the horizon's weeks.
 
 **The weekly forecast panel** is graded per cohort by the Spearman IC of its expected excess
@@ -29,6 +29,7 @@ import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from itertools import pairwise
 
 from ..quant.inference import MeanEstimate, brier_score, spearman_ic
 from ..research.decide import AdequacyCheck, Decision, decide
@@ -42,7 +43,7 @@ MIN_SERIES_POINTS = 3
 MIN_RANK_PAIRS = 5
 #: The reliability table's bins: fifths of the probability scale.
 RELIABILITY_BINS = 5
-#: Pairs of names whose realised ρ is reported must share this many cohorts.
+#: Pairs of names whose realised rho is reported must share this many cohorts.
 OBSERVED_RHO_OVERLAP = 3
 #: The share of a cohort in each tail of the decile spread.
 DECILE = 10
@@ -105,8 +106,7 @@ def grade_call(
         return GradedCall(call, week, None, f"no mark of {missing} within the age allowed")
     p0, p1 = prices
     r0, r1 = references
-    assert p0 is not None and p1 is not None and r0 is not None and r1 is not None
-    if min(p0, p1, r0, r1) <= 0:
+    if p0 is None or p1 is None or r0 is None or r1 is None or min(p0, p1, r0, r1) <= 0:
         return GradedCall(call, week, None, "a mark that is not a price")
     sign = 1.0 if call.direction == "up" else -1.0
     return GradedCall(call, week, sign * (math.log(p1 / p0) - math.log(r1 / r0)), None)
@@ -246,11 +246,9 @@ def reliability(probabilities: Sequence[float], outcomes: Sequence[bool]) -> lis
     ``_reliability_bins``); an empty bin is left out."""
     found: list[ReliabilityBin] = []
     edges = [i / RELIABILITY_BINS for i in range(RELIABILITY_BINS + 1)]
-    for low, high in zip(edges[:-1], edges[1:], strict=True):
+    for low, high in pairwise(edges):
         inside = [
-            i
-            for i, p in enumerate(probabilities)
-            if low <= p < high or (high == 1.0 and p == 1.0)
+            i for i, p in enumerate(probabilities) if low <= p < high or (high == 1.0 and p == 1.0)
         ]
         if inside:
             found.append(
@@ -346,9 +344,7 @@ def panel_record(
     layer: str, graded: Sequence[GradedCall], rules: GradingRules, *, min_names: int
 ) -> PanelRecord:
     """The panel's record; a cohort with fewer than ``min_names`` graded forecasts is left out."""
-    kept = {
-        week: items for week, items in cohorts(graded).items() if len(items) >= min_names
-    }
+    kept = {week: items for week, items in cohorts(graded).items() if len(items) >= min_names}
     ic: list[float | None] = []
     baseline: list[float | None] = []
     increment: list[float | None] = []
@@ -397,7 +393,5 @@ def panel_record(
         incremental_ic=mean(increment),
         spread=mean(spread),
         decision=_verdict(estimate, rules, rules.theta, graded_ic, effective),
-        probabilities=probability_score(
-            [g for items in kept.values() for g in items], rules
-        ),
+        probabilities=probability_score([g for items in kept.values() for g in items], rules),
     )

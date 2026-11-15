@@ -7,16 +7,16 @@ twin's and the reference's (``store/scoreboard.layer_months``). From the first l
 last planned month, every month end is a look at two one-sided boundaries:
 
 * **the gap**, live less twin: ``t = (ḡ + tolerance) / (s / √n)`` against Student's t with
-  ``n − 1`` degrees of freedom. Below its boundary the layer's new entries freeze, an alert goes
+  ``n - 1`` degrees of freedom. Below its boundary the layer's new entries freeze, an alert goes
   out and an operational investigation opens; the owner lifts the freeze after it.
 * **the twin** against the backtest's predictive distribution for the months elapsed:
-  ``z = (S − n μ_b) / √(n σ_b² + n² se_b²)`` with ``S`` the twin's summed excess over its
+  ``z = (S - n mu_b) / sqrt(n sigma_b^2 + n^2 se_b^2)`` with ``S`` the twin's summed excess over its
   reference. Below its boundary the layer returns to shadow at zero weight, an alert goes out and
   a research review opens.
 
-Each boundary spends its α over the planned months by a Pocock-type function,
-``α(t) = α ln(1 + (e − 1) t)``; a look spends the increase since the previous look, and the looks
-are combined by a union bound, so the chance of any false alarm over every look is at most α
+Each boundary spends its alpha over the planned months by a Pocock-type function,
+``alpha(t) = alpha ln(1 + (e - 1) t)``; a look spends the increase since the previous look, and
+the looks are combined by a union bound, so the chance of any false alarm over every look is at most alpha
 whatever the dependence between them. A look with a month that was not measured is recorded not
 evaluable and changes nothing. Monitoring reduces risk; it never declares a verdict.
 
@@ -36,14 +36,14 @@ _NORMAL = NormalDist()
 
 
 def spent_by(alpha: float, t: float) -> float:
-    """The Pocock-type spending function: the α spent by information fraction ``t``."""
+    """The Pocock-type spending function: the alpha spent by information fraction ``t``."""
     if not 0.0 <= t <= 1.0:
         raise ValueError(f"an information fraction lies in [0, 1], got {t}")
     return alpha * math.log(1.0 + (math.e - 1.0) * t)
 
 
 def look_alpha(alpha: float, month: int, spec: MonitoringSpec) -> float:
-    """The α the look at ``month`` (counted from activation) spends: the spending function's
+    """The alpha the look at ``month`` (counted from activation) spends: the spending function's
     increase since the previous look (the first look spends everything up to it)."""
     first, planned = spec.first_look_month, spec.planned_months
     if not first <= month <= planned:
