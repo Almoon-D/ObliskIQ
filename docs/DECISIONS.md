@@ -3859,19 +3859,17 @@ recorded). Rejected: a window of 24 hours between re-logins (a weekend's mainten
 
 ### D173 · How H13's record is read from the store (§5.5, §5.19; D156, D159, D171)
 
-- **K** is the book's capital as a decision cycle read it, the day's first reading kept
-  (`book_capital`): an idle book reads it too, never blocking the cycle.
-- **A thesis's fills** are the satellite's fills of its instrument, or of the option it is held as,
-  from its approval to its close, as the book counts them. Costs are the fill's commission.
-- **The twin** buys the universe's equity reference (`equity_reference_conid`, the grading's), at
-  the last close no older than the mark age, costed by the cost model on its calendar venue.
-- **A look** is taken at month `6k` of each record and of each group (source, analyst segment,
-  conviction) with an entry; anything that cannot be measured (a mark, a rate, tax facts, K, the
-  twin's cost, no tax policy) makes it not evaluable and it is recorded so, once.
-- **The share** is the owner's exploration share plus a step per live look that stepped, to 0.50;
-  nothing after a live look sent the book back or a paper look found it below its boundary. A
-  group's return holds its source or segment back (refused) or its conviction to `normal`, on the
-  live account only. A book back to shadow keeps no parallel shadow book: its record stops.
+- **K** is the book's capital as a cycle read it, the day's first reading kept; an idle book reads
+  it too. **A thesis's fills** are the satellite's fills of its instrument (or option) from its
+  approval to its close, as the book counts them; costs are the fill's commission.
+- **The twin** buys the equity reference the grading uses, at its last close inside the mark age,
+  costed by the cost model on its calendar venue. A look falls at month `6k` of each record and
+  group; anything unmeasurable (a mark, a rate, tax facts, K, a cost, no policy) records it not
+  evaluable, once.
+- **The share** is the exploration share plus a step per live look that stepped, to 0.50; nothing
+  once a live look sent the book back or a paper look found it below. A group's return refuses its
+  source's (or segment's) new ideas, or sizes its conviction as `normal`, on the live account; an
+  idea approved before keeps its entry. A book sent back keeps no parallel shadow record.
 
 Rejected: recomputing a look later from backfilled marks (H13: a look is not repeated).
 
