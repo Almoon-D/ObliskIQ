@@ -369,6 +369,7 @@ async def open_service(
         ) as path,
         client_for(settings) as http,
     ):
+        hooks.attach(path.worker)
         correlations = ResearchCorrelationSource(settings, data_dir)
         try:
             yield build_service(

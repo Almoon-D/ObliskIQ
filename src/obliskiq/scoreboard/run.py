@@ -37,6 +37,7 @@ from ..store import orders as order_repo
 from ..store import repos
 from ..store import runs as run_repo
 from ..store import scoreboard as repo
+from ..store import session_events as session_repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store.db import Store
@@ -471,7 +472,7 @@ def promotion_evidence(
         runs=runs,
         reconciliations=reconciled,
         stuck_intents=stuck,
-        relogins_recorded=False,
+        session_events=tuple(session_repo.session_events(store, since=entered or now, as_of=now)),
         placed=placed,
         filled=filled,
         fills_without_clearance=violations,

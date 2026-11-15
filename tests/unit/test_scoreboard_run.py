@@ -59,10 +59,12 @@ from obliskiq.store import nav as nav_repo
 from obliskiq.store import orders as order_repo
 from obliskiq.store import runs as run_repo
 from obliskiq.store import scoreboard as repo
+from obliskiq.store import session_events as session_repo
 from obliskiq.store.db import Store
 from obliskiq.store.fx import FxRate
 from obliskiq.store.nav import NavReading
 from obliskiq.store.scoreboard import AllocationEvent, Call, Drill, LayerEvent, LayerMonth, Look
+from obliskiq.store.session_events import SessionEvent
 
 D = Decimal
 REFERENCE = 163606916
@@ -550,6 +552,12 @@ def test_the_promotion_evidence_of_a_paper_period(
     repo.record_drill(
         store, Drill(entered + timedelta(days=5), "kill", ExecutionMode.PAPER, True, "o", "d")
     )
+    session_repo.record_session_event(
+        store, SessionEvent(entered - timedelta(days=1), "reauthenticated", "before the period")
+    )
+    session_repo.record_session_event(
+        store, SessionEvent(entered + timedelta(days=2), "reauthenticated", "the session was lost")
+    )
     now = entered + timedelta(days=60)
     evidence = promotion_evidence(
         store,
@@ -568,7 +576,7 @@ def test_the_promotion_evidence_of_a_paper_period(
     assert len(evidence.runs) == 1
     assert evidence.sessions == (date(2026, 1, 5), now.date())
     assert evidence.capped_book
-    assert not evidence.relogins_recorded
+    assert len(evidence.session_events) == 1
     assert not evidence.hard_breaker_tripped
     assert len(evidence.drills) == 1
 
