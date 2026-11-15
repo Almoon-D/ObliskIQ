@@ -14,7 +14,8 @@ activation condition, and the would-be entries it logs while that condition fail
 
 The sleeve places nothing: Session 17's decision layer turns an active sleeve's entries into
 intents. A thesis of the thesis book reaches it through :mod:`.thesis_link` and trades under
-its own activation (DECISIONS D157). Every input that cannot be read leaves its gate or its leg untested, with why.
+its own activation (DECISIONS D157). Every input that cannot be read leaves its gate or its leg
+untested, with why.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
