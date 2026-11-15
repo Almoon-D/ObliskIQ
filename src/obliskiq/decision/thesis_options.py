@@ -147,10 +147,6 @@ class ThesisOptions:
         self._scaled = settings.option_sleeve.scaled_exit
         self._qualifying = frozenset(settings.option_sleeve.qualifying_exit_reasons)
 
-    @property
-    def link(self) -> ThesisLink:
-        return self._link
-
     async def describe(self) -> None:
         """Describe to the order path every option a thesis was approved as, so a restarted
         service can still value, exit and reconcile them."""

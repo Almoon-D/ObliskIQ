@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eligibility_double import AllowlistEligibility
 from options_rig import EXPIRIES, SPY, seed_options
 from service_rig import CURRENCY, ServiceRig
 from thesis_rig import draft
@@ -170,6 +171,10 @@ async def cycle(s: ServiceRig) -> ThesisPlan:
 
 async def surveyed(s: ServiceRig) -> ThesisPlan:
     return await book(s).survey(ExecutionMode.SHADOW)
+
+
+def sppw_of(plan: ThesisPlan) -> Any:
+    return next(d for d in plan.decisions if d.thesis.instrument.symbol == "SPPW")
 
 
 def only(plan: ThesisPlan) -> Any:
@@ -552,6 +557,25 @@ async def test_the_penalty_balance_blocks_a_new_block_until_gains_repay_it(
     assert codes(plan) == ["option_budget"]
     assert "locked by penalty" in only(plan).reason
     assert only(plan).action == "wait"
+    # A share idea that reaches its target repays the balance one for one with its gain.
+    sppw = 355720826
+    CURRENCY[sppw] = "EUR"
+    s.broker.quote(sppw, bid="44.98", ask="45.02", last="45", sigma="15%")
+    await s.rig.store(_bars, sppw)
+    await idea(s, symbol="SPPW", target=D(60), invalidation=D(40), view="bullish",
+               expression=Expression.SHARES)  # fmt: skip
+    assert sppw_of(await cycle(s)).action == "enter"
+    await work(s, 20)  # Xetra closes at 16:30 UTC
+    assert sppw_of(await cycle(s)).action == "hold"
+    s.broker.quote(sppw, bid="60.98", ask="61.02", last="61", sigma="15%")
+    assert sppw_of(await cycle(s)).reason == "target"
+    await work(s, 20)
+    assert sppw_of(await cycle(s)).action == "close"
+    events = await s.rig.store(options_repo.ledger_events, as_of=MONDAY)
+    repaid = events[-1]
+    assert (repaid.event_type, repaid.exit_reason) == (LedgerEventType.QUALIFYING_GAIN, "target")
+    assert (await pool(s)).penalty_balance == max(D(0), locked.penalty_balance - repaid.amount)
+    assert repaid.amount > 300  # 27 shares, some 16 a share
 
 
 async def test_a_confirmed_zombie_is_sold_and_its_penalty_booked_once(
@@ -665,3 +689,81 @@ async def test_no_path_writes_an_option(make: Any, shipped_settings: ObliskConfi
     # Every order the book itself makes on an option is a buy to open or a sell of what it holds.
     plan = await surveyed(s)
     assert only(plan).held == D(1)
+
+
+async def test_an_entry_that_did_not_fill_is_made_again_while_its_rules_hold(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    for row in s.rows:  # type: ignore[attr-defined]
+        quote_option(s, row.option_conid, f"{row.mid:.2f}", availability="DP")  # delayed
+    await idea(s)
+    chosen = only(await cycle(s)).option
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["working"])
+    # The next day the order has ended unfilled: the same contract and block again.
+    s.clock.wall.now = NEW_YORK + timedelta(days=1)
+    await work(s, 10)  # the executor ends the expired intent
+    mid = f"{put(s, chosen.strike).mid:.2f}"
+    quote_option(s, chosen.option_conid, mid)
+    plan = await surveyed(s)
+    assert (only(plan).action, only(plan).quantity) == ("enter", D(1)), plan.render()
+    assert only(plan).reason == f"its entry again: 1 x {chosen.symbol}"
+    assert only(plan).option == chosen
+    # Not while the kill switch is on, without a quote, or above what the pool allows.
+    await s.path.kill.turn_on(actor="test", reason="drill")
+    assert codes(await surveyed(s)) == ["entries_blocked"]
+    await s.path.kill.turn_off(actor="test", reason="over")
+    del s.broker.quotes[chosen.option_conid]
+    assert codes(await surveyed(s)) == ["no_quote"]
+    quote_option(s, chosen.option_conid, "60")
+    plan = await surveyed(s)
+    assert (codes(plan), "above what the pool" in only(plan).reason) == (["option_budget"], True)
+    quote_option(s, chosen.option_conid, mid)
+    # Never once its levels are passed, or its entry window has ended.
+    quote_spy(s, "531")
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("expire", ["invalidated"])
+    quote_spy(s, "500")
+    s.clock.wall.now = NEW_YORK + timedelta(days=28)
+    plan = await surveyed(s)
+    assert (only(plan).action, only(plan).reason) == (
+        "expire",
+        "its entry window ended without a fill",
+    )
+    await book(s).apply(plan)
+    assert (await state(s)).state is ThesisState.EXPIRED
+    assert await s.rig.store(options_repo.open_positions, as_of=s.clock.now().date()) == ()
+
+
+async def test_a_new_option_waits_for_the_kill_switch_and_a_full_book(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    await s.path.kill.turn_on(actor="test", reason="drill")
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["entries_blocked"])
+    await s.path.kill.turn_off(actor="test", reason="over")
+    # Its live quote above what the pool allows: the stored chain was cheaper.
+    for row in s.rows:  # type: ignore[attr-defined]
+        quote_option(s, row.option_conid, "60")
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["option_budget"])
+    assert "at its live quote the block costs" in only(plan).reason
+    # Its exchange closed: it waits for the session.
+    for row in s.rows:  # type: ignore[attr-defined]
+        quote_option(s, row.option_conid, f"{row.mid:.2f}")
+    s.clock.wall.now = datetime(2026, 10, 26, 9, 0, tzinfo=UTC)
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["venue_not_tradable"])
+    s.clock.wall.now = NEW_YORK
+    # An option the jurisdiction's policy refuses is never bought.
+    strict = book(s)
+    strict._options._eligibility = AllowlistEligibility([])  # type: ignore[attr-defined]
+    plan = await strict.survey(ExecutionMode.SHADOW)
+    assert (only(plan).action, codes(plan)) == ("refuse", ["ineligible"])
+    # Past its target before it was bought: refused for good.
+    quote_spy(s, "415")
+    plan = await surveyed(s)
+    assert (only(plan).action, codes(plan)) == ("refuse", ["target_passed"])

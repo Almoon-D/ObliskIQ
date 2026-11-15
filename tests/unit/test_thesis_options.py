@@ -187,6 +187,13 @@ def test_a_thesiss_option_is_fixed_its_position_set_once_and_its_twin_closed_onc
         chosen(close_by=FAR + timedelta(days=1))
 
 
+def test_an_option_without_a_closed_position_is_not_graded() -> None:
+    from obliskiq.decision.thesis_options import grade_option
+
+    with pytest.raises(ValueError, match="no closed option position"):
+        grade_option(thesis(expression="option", **FALL), chosen(), [], exit_reason="t", at=NOW)
+
+
 def test_the_pairs_are_read_from_the_sleeves_ledger(
     store: Store, shipped_settings: ObliskConfig
 ) -> None:
