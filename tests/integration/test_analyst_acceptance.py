@@ -214,7 +214,7 @@ async def test_one_scheduled_run_yields_drafts_that_become_shadow_theses(
         assert given[0].probability == 0.3
         s.clock.wall.now = datetime(2026, 10, 26, 21, 40, tzinfo=UTC)
         await s.service.jobs.digest(MONDAY)
-        digest = s.notifier.sent[-1][1]
+        digest = s.notifier.digest()
         assert f"second opinion on {owner.ref} FCX" in digest
         assert "30% that it reaches its target" in digest
 

@@ -40,7 +40,6 @@ from ..store import scoreboard as repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store.db import Store
-from ..store.mappers import stamp_text
 from ..store.scoreboard import AllocationEvent, Call, Direction, LayerEvent
 from .calibration import CalibrationState, calibration_state
 from .grading import GradedCall, PanelRecord, Record, dedupe, grade_call, panel_record, record
@@ -444,9 +443,7 @@ def promotion_evidence(
         RunOutcome(r.session_date, r.command, r.status)
         for r in run_repo.runs_since(store, since=first)
     )
-    reconciled = tuple(
-        order_repo.reconciliation_statuses(store, since=entered or now, as_of=now)
-    )
+    reconciled = tuple(order_repo.reconciliation_statuses(store, since=entered or now, as_of=now))
     cutoff = now - timedelta(minutes=settings.runtime.stuck_after_minutes)
     stuck = sum(
         1

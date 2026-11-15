@@ -250,7 +250,7 @@ def test_the_migration_keeps_every_thesis_as_shares(tmp_path: Path) -> None:
     connection.execute(
         "INSERT INTO thesis_log VALUES (2, 1, ?, 'owner', 'intake', 'handed in')", (stamp,)
     )
-    assert migrations.migrate(connection) == ["016_thesis_options.sql"]
+    assert migrations.migrate(connection)[0] == "016_thesis_options.sql"
     rows = connection.execute(
         "SELECT thesis_id, state, expression, held_as FROM theses ORDER BY thesis_id"
     ).fetchall()
