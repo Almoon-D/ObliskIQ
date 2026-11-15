@@ -48,6 +48,10 @@ record it produces: its after-tax log growth minus a reference's on the same cap
 pre-registered looks against one-sided boundaries (a step of capital, a return to shadow), the
 same per source and conviction level. The scoreboard computes the looks from it.
 
+The **scoreboard's rules** (``kind: scoreboard``, DECISIONS D63, D65) are not a test: they fix
+how every forward record is graded, when a stated probability may size, how component weights
+and patterns move, the monitoring boundaries of each active layer and the steps of its capital.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -1167,6 +1171,174 @@ class ForwardBookSpec(FrozenModel):
         return self
 
 
+# ── the scoreboard's rules (kind: scoreboard) ──
+
+
+class DependenceSpec(FrozenModel):
+    """The average correlation between names in a cohort, estimated from history before any
+    minimum was fixed (D63), and how overlapping cohorts are counted."""
+
+    rho: Correlation
+    rho_estimated: Correlation
+    rho_inputs_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    overlap: Literal["divide_by_horizon_weeks"]
+
+
+class GradingSpec(FrozenModel):
+    """Forward grading under D62: weekly cohorts, a Newey-West mean, a minimum in effective
+    observations."""
+
+    observation: Literal["first_per_layer_instrument_direction_week"]
+    cohort: Literal["iso_week"]
+    outcome: Literal["signed_excess_log_return"]
+    currency: Literal["base"]
+    reference_role: Key
+    horizon_days: PositiveInt
+    newey_west_lags: Literal["horizon_weeks"]
+    alpha: Rate
+    theta_per_horizon: Positive
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    max_mark_age_days: PositiveInt
+
+
+class PanelSpec(FrozenModel):
+    """The weekly forecast panel: a fixed universe forecast every week, graded by rank IC."""
+
+    universe: Literal["tradable_candidates"]
+    horizon_days: PositiveInt
+    metric: Literal["rank_ic"]
+    theta: Positive
+    min_names: PositiveInt
+    min_coverage: Share
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    probability: Literal["p_outperform"]
+    base_rate: Literal["climatology"]
+
+
+class CalibrationSpec(FrozenModel):
+    """When a layer's stated probabilities may size, and how far they are believed."""
+
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    brier_skill_above: Annotated[Decimal, Field(ge=0, lt=1)]
+    shrink: Literal["slope_lower_bound"]
+    shrink_alpha: Rate
+
+
+class WeightsSpec(FrozenModel):
+    """Component weights by empirical-Bayes shrinkage toward zero."""
+
+    method: Literal["empirical_bayes_toward_zero"]
+    min_components: Annotated[int, Field(ge=2)]
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    every_months: PositiveInt
+
+
+class PatternsSpec(FrozenModel):
+    """A shadow pattern's promotion to active, and its retirement."""
+
+    promote: list[Literal["sufficient"]] = Field(min_length=1)
+    pool: list[Literal["inconclusive_positive"]]
+    pooling: Literal["inverse_variance"]
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    shadow_upper_above: Annotated[Decimal, Field(ge=0)]
+    retire: Literal["new_preregistration"]
+
+
+class BoundarySpec(FrozenModel):
+    alpha: Rate
+    distribution: Literal["student_t", "normal"]
+    action: Literal["freeze_new_entries", "shadow_at_zero_weight"]
+
+
+class GapBoundarySpec(BoundarySpec):
+    tolerance_per_month: Annotated[Decimal, Field(ge=0)]
+
+
+class MonitoringSpec(FrozenModel):
+    """The twin, the monthly looks and the alpha-spending boundaries of D65."""
+
+    period: Literal["month"]
+    first_look_month: Annotated[int, Field(ge=3)]
+    planned_months: PositiveInt
+    spending: Literal["pocock_type"]
+    combine_looks: Literal["union_bound"]
+    gap: GapBoundarySpec
+    twin: BoundarySpec
+
+    @model_validator(mode="after")
+    def _looks(self) -> Self:
+        if self.first_look_month > self.planned_months:
+            raise ValueError("the first look is after the last planned month")
+        if self.gap.distribution != "student_t" or self.gap.action != "freeze_new_entries":
+            raise ValueError("the gap is read on Student's t and freezes new entries")
+        if self.twin.distribution != "normal" or self.twin.action != "shadow_at_zero_weight":
+            raise ValueError("the twin is read on the normal and returns the layer to shadow")
+        return self
+
+
+class BudgetStepsSpec(FrozenModel):
+    """Where a layer's live-account share starts, how it steps and what each step needs."""
+
+    every_months: PositiveInt
+    record: Literal[ExecutionMode.LIVE]
+    min_months_first: PositiveInt
+    min_months_between: PositiveInt
+    min_closed_first: PositiveInt
+    min_closed_between: PositiveInt
+    retest: Literal["pooled_with_live"]
+
+
+class StockBookBudgetSpec(BudgetStepsSpec):
+    first_share: Share
+    share_step: Share
+    ceiling: Literal["investable_less_cash_floor"]
+
+
+class LayerBudgetSpec(BudgetStepsSpec):
+    first_share_of_sleeve: Share
+    share_step_of_sleeve: Share
+    ceiling: Literal["sleeve_budget"]
+
+
+class BudgetsSpec(FrozenModel):
+    stock_book: StockBookBudgetSpec
+    other_layer: LayerBudgetSpec
+    thesis_book: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]
+
+
+class ScoreboardSpec(FrozenModel):
+    """The scoreboard's rules (``kind: scoreboard``): how every forward record is read and what
+    each reading may change, fixed before any record exists."""
+
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]
+    title: NonEmptyText
+    kind: Literal["scoreboard"]
+    rationale: NonEmptyText
+    citation: NonEmptyText
+    dependence: DependenceSpec
+    grading: GradingSpec
+    panel: PanelSpec
+    calibration: CalibrationSpec
+    weights: WeightsSpec
+    patterns: PatternsSpec
+    monitoring: MonitoringSpec
+    budgets: BudgetsSpec
+    trial_budget: Literal[0]
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        if self.dependence.rho < self.dependence.rho_estimated:
+            raise ValueError("the registered rho is below its estimate: minimums would come early")
+        if self.calibration.min_effective < self.grading.min_effective:
+            raise ValueError("calibration needs at least the grading minimum")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class Prereg:
     path: Path
@@ -1199,9 +1371,19 @@ class ForwardBookPrereg:
     body: str
 
 
-type AnyPrereg = Prereg | CrossSectionPrereg | ForwardTestPrereg | ForwardBookPrereg
+@dataclass(frozen=True, slots=True)
+class ScoreboardPrereg:
+    path: Path
+    sha256: str
+    spec: ScoreboardSpec
+    body: str
+
+
+type AnyPrereg = (
+    Prereg | CrossSectionPrereg | ForwardTestPrereg | ForwardBookPrereg | ScoreboardPrereg
+)
 #: The kinds whose evidence is produced live: the harness commands that read history refuse them.
-FORWARD_KINDS = (ForwardTestPrereg, ForwardBookPrereg)
+FORWARD_KINDS = (ForwardTestPrereg, ForwardBookPrereg, ScoreboardPrereg)
 
 
 def front_matter(text: str) -> tuple[Any, str]:
@@ -1259,6 +1441,9 @@ def load_any(path: Path) -> AnyPrereg:
     if isinstance(data, dict) and data.get("kind") == "forward_book":
         book = _validate(ForwardBookSpec, data, path)
         return ForwardBookPrereg(path=path, sha256=file_sha256(path), spec=book, body=body)
+    if isinstance(data, dict) and data.get("kind") == "scoreboard":
+        rules = _validate(ScoreboardSpec, data, path)
+        return ScoreboardPrereg(path=path, sha256=file_sha256(path), spec=rules, body=body)
     return Prereg(
         path=path, sha256=file_sha256(path), spec=_validate(PreregSpec, data, path), body=body
     )

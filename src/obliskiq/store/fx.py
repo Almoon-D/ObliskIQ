@@ -68,3 +68,22 @@ def rate_on(store: Store, currency: str, on: date) -> FxRate | None:
         source=row["source"],
         observed_at=read_stamp(row["observed_at"], "fx_rates", "observed_at"),
     )
+
+
+def rate_on_or_before(store: Store, currency: str, on: date) -> FxRate | None:
+    """The latest rate recorded for ``currency`` on or before ``on``; ``None`` when there is
+    none (the caller decides how old a rate it accepts)."""
+    row = store.execute(
+        "SELECT currency, on_date, rate_to_base, source, observed_at FROM fx_rates "
+        "WHERE currency = ? AND on_date <= ? ORDER BY on_date DESC LIMIT 1",
+        (currency, date_text(on)),
+    ).fetchone()
+    if row is None:
+        return None
+    return FxRate(
+        currency=row["currency"],
+        on=read_date(row["on_date"], "fx_rates", "on_date"),
+        rate_to_base=Decimal(row["rate_to_base"]),
+        source=row["source"],
+        observed_at=read_stamp(row["observed_at"], "fx_rates", "observed_at"),
+    )

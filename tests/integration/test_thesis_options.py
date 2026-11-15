@@ -299,7 +299,7 @@ async def test_a_bearish_owner_idea_goes_from_idea_add_to_a_shadow_put_its_exit_
     assert (await cycle(s)).decisions == []  # the slot is free and holds nothing
 
     await s.service.jobs.digest(MONDAY)
-    digest = s.notifier.sent[-1][1]
+    digest = s.notifier.digest()
     assert "options: premium at risk 0.00 in 0 position(s), penalty balance 0.00" in digest
     assert "option record, puts: 1 closed on " in digest
     assert "1 twin(s) in the underlying at the base size made +212.50" in digest

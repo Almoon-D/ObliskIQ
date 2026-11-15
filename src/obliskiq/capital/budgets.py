@@ -3,19 +3,20 @@
 ``capital.budgets`` gives each sleeve its share of investable capital: the core, the equity
 satellite, the option premium, and a cash floor that stays cash. A sleeve with no active layer —
 no sufficient research outcome and activation condition yet (D65, D66) — leaves its budget in the
-core, Session 17's rule, so an inactive satellite never strands capital as idle cash. Session 18's
-capital allocation moves the satellite's share, never above ``capital.satellite_ceiling``.
+core, Session 17's rule, so an inactive satellite never strands capital as idle cash. On the live
+account the capital allocation rule moves the satellite's share (``capital/allocation.py``),
+never above ``capital.satellite_ceiling``.
 
 **The thesis book** is the satellite's one layer that trades (MASTER_PLAN §5.5): in shadow and in
 paper it takes ``thesis.capital_share`` of investable capital out of the satellite's budget, and
 the rest of that budget stays in the core (:func:`book_allocation`, DECISIONS D159). On the live
-account its share is the capital allocation rule's; until that rule exists it has none there.
+account its share is the capital allocation rule's (``capital/allocation.py``).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from collections.abc import Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from ..config.schema import ObliskConfig
@@ -37,6 +38,8 @@ class Allocation:
     satellite: Decimal
     options: Decimal
     cash_floor: Decimal
+    #: The thesis book's part of the satellite (all of it in shadow and paper).
+    thesis_book: Decimal = Decimal(0)
 
     def of(self, sleeve: Sleeve) -> Decimal:
         return {Sleeve.CORE: self.core, Sleeve.SATELLITE: self.satellite}.get(sleeve, self.options)
@@ -51,7 +54,7 @@ class SleeveBudgets:
 
     @property
     def satellite_ceiling(self) -> Decimal:
-        """The most the satellite's share may be moved to (Session 18)."""
+        """The most the satellite's share may be moved to on the live account."""
         return self._ceiling
 
     def share(self, sleeve: Sleeve) -> Decimal:
@@ -99,18 +102,20 @@ class SleeveBudgets:
 
 def thesis_share(settings: ObliskConfig, mode: ExecutionMode) -> Decimal:
     """The thesis book's share of investable capital in ``mode``: ``thesis.capital_share`` in
-    shadow and in paper; nothing on the live account, where the capital allocation rule gives it
-    one (Session 18)."""
+    shadow and in paper; nothing here on the live account, where the capital allocation rule gives
+    it one (``capital/allocation.py``)."""
     return settings.thesis.capital_share if mode in _THESIS_MODES else ZERO
 
 
 def book_allocation(settings: ObliskConfig, investable: Decimal, mode: ExecutionMode) -> Allocation:
-    """What each sleeve may use of ``investable`` in ``mode``: the core, and the satellite's one
-    trading layer, the thesis book, when it has a share."""
+    """What each sleeve may use of ``investable`` in shadow and paper: the core, and the
+    satellite's one trading layer there, the thesis book, when it has a share. On the live
+    account the shares are the allocation rule's (``capital/allocation.py``)."""
     share = thesis_share(settings, mode)
     budgets = SleeveBudgets(settings.capital)
     if share > ZERO:
-        return budgets.allocate(
+        found = budgets.allocate(
             investable, active={Sleeve.CORE, Sleeve.SATELLITE}, satellite_share=share
         )
+        return replace(found, thesis_book=found.satellite)
     return budgets.allocate(investable, active={Sleeve.CORE})

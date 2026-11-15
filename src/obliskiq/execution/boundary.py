@@ -4,10 +4,10 @@ Before a placement or a modify, and again immediately before it is sent (the ord
 check, after the cOID lookup):
 
 1. **Mode.** The current mode, read from the store, must be the intent's and permit writes
-   under this profile (``shadow`` never does; ``paper`` needs profile ``paper``; the live levels
-   none until the promotion gate exists), and the account guard must run under the same
-   profile. A mode that cannot be read refuses. An expired intent is never sent or confirmed,
-   and a modify must name an order placed for its intent.
+   under this profile (``shadow`` never does; ``paper`` needs profile ``paper``; the live levels,
+   reached only through the promotion gate and an owner command, profile ``live``), and the
+   account guard must run under the same profile. A mode that cannot be read refuses. An
+   expired intent is never sent or confirmed, and a modify must name an order placed for it.
 2. **Paper guard.** Under profile ``paper`` the account must carry a paper prefix.
 3. **Kill switch**, for an order that adds risk (I3, I4): ON refuses it. Every order adds risk
    except a sell the gate cleared as reducing it (the clearance model refuses that effect on a

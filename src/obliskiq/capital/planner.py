@@ -77,7 +77,7 @@ from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook, TaxHooks
 from ..util.timeutil import utc_now
-from .budgets import book_allocation
+from .allocation import allocation_now
 from .managed import BookHolding, CapitalReader, CapitalView, book_fills
 from .questions import OwnerQuestions
 from .strategy import ExpectedReturn, PositionFacts, Protected, StrategyValue
@@ -408,7 +408,7 @@ class ReservationPlanner:
         # target before the reservations, not the shrinking every role shows on the reduced
         # capital, which is the reservation itself.
         before = view.investable + view.reserved
-        allocation = book_allocation(self._settings, before, mode)
+        allocation = await allocation_now(self._worker, self._settings, before, mode)
         found: list[_Candidate] = []
         for holding in view.holdings:
             unit, instrument = holding.unit.unit, holding.unit.instrument

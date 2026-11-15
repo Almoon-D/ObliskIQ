@@ -54,6 +54,76 @@ def critical_value(alpha: float) -> float:
     return NormalDist().inv_cdf(1.0 - alpha / 2.0)
 
 
+#: The continued fraction of the incomplete beta stops at this relative change, or after this
+#: many terms (Lentz's method; Press et al., Numerical Recipes, 3rd ed., §6.4).
+_BETA_TOLERANCE = 1e-14
+_BETA_MAX_TERMS = 500
+_TINY = 1e-300
+#: Bisection on Student's t stops at this width.
+_QUANTILE_TOLERANCE = 1e-12
+
+
+def _beta_fraction(a: float, b: float, x: float) -> float:
+    qab, qap, qam = a + b, a + 1.0, a - 1.0
+    c, d = 1.0, 1.0 - qab * x / qap
+    d = 1.0 / (d if abs(d) > _TINY else _TINY)
+    h = d
+    for m in range(1, _BETA_MAX_TERMS + 1):
+        m2 = 2 * m
+        for numerator in (
+            m * (b - m) * x / ((qam + m2) * (a + m2)),
+            -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2)),
+        ):
+            d = 1.0 + numerator * d
+            d = 1.0 / (d if abs(d) > _TINY else _TINY)
+            c = 1.0 + numerator / c
+            c = c if abs(c) > _TINY else _TINY
+            h *= d * c
+        if abs(d * c - 1.0) < _BETA_TOLERANCE:
+            return h
+    raise ArithmeticError(f"the incomplete beta did not converge at a={a}, b={b}, x={x}")
+
+
+def regularized_beta(a: float, b: float, x: float) -> float:
+    """``I_x(a, b)``, the regularized incomplete beta function."""
+    if not 0.0 <= x <= 1.0 or a <= 0 or b <= 0:
+        raise ValueError(f"I_x(a, b) needs 0 <= x <= 1 and a, b > 0, got {x}, {a}, {b}")
+    if x in (0.0, 1.0):
+        return x
+    log_front = (
+        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x)
+    )
+    if x < (a + 1.0) / (a + b + 2.0):
+        return math.exp(log_front) * _beta_fraction(a, b, x) / a
+    return 1.0 - math.exp(log_front) * _beta_fraction(b, a, 1.0 - x) / b
+
+
+def student_t_cdf(t: float, df: float) -> float:
+    """``P(T <= t)`` for Student's t with ``df`` degrees of freedom."""
+    if df <= 0:
+        raise ValueError(f"degrees of freedom are positive, got {df}")
+    tail = 0.5 * regularized_beta(df / 2.0, 0.5, df / (df + t * t))
+    return 1.0 - tail if t > 0 else tail
+
+
+def student_t_quantile(p: float, df: float) -> float:
+    """The ``p`` quantile of Student's t with ``df`` degrees of freedom, by bisection on the CDF."""
+    if not 0.0 < p < 1.0:
+        raise ValueError(f"a quantile's probability lies strictly between 0 and 1, got {p}")
+    if p < 0.5:
+        return -student_t_quantile(1.0 - p, df)
+    low, high = 0.0, 1.0
+    while student_t_cdf(high, df) < p:
+        low, high = high, high * 2.0
+    while high - low > _QUANTILE_TOLERANCE * max(1.0, high):
+        middle = (low + high) / 2.0
+        if student_t_cdf(middle, df) < p:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2.0
+
+
 def benjamini_hochberg(p_values: Sequence[float | None], *, q: float) -> list[bool]:
     """Benjamini-Hochberg step-up procedure: control the false discovery rate at ``q``.
 

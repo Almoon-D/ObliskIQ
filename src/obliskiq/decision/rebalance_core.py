@@ -53,7 +53,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from ..calendars.service import Calendars
-from ..capital.budgets import book_allocation
+from ..capital.allocation import allocation_now
 from ..capital.core_value import CoreStrategyValue
 from ..capital.managed import BookHolding, CapitalReader, CapitalView
 from ..config.schema import ObliskConfig
@@ -493,7 +493,7 @@ class CoreRebalancer:
             plan.blocked = view
             return plan
         plan.capital = view
-        budget = book_allocation(self._settings, view.investable, mode).core
+        budget = (await allocation_now(self._worker, self._settings, view.investable, mode)).core
         plan.core_capital = budget
         spendable = await self._cash.spendable(mode, view, cash)
         if isinstance(spendable, str):

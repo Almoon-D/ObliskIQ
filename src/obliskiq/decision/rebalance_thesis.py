@@ -42,7 +42,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from ..calendars.service import Calendars
-from ..capital.budgets import book_allocation
+from ..capital.allocation import allocation_now
 from ..capital.managed import CapitalReader, book_fills
 from ..config.schema import ObliskConfig
 from ..data.candidates import resolve_candidate
@@ -192,14 +192,14 @@ class ThesisRebalancer:
         frozen = (await self._breakers.read(mode, view, cash)).buys_refused
         if frozen is not None:
             plan.entries_blocked = frozen
-        allocation = book_allocation(self._settings, view.investable, mode)
-        plan.capital = allocation.satellite
+        allocation = await allocation_now(self._worker, self._settings, view.investable, mode)
+        plan.capital = allocation.thesis_book
         busy, _ = await self._cash.pending(mode)
         conids = [t.instrument.conid for t in theses if t.instrument.conid is not None]
         read = BookRead(
             view=view,
             cash=cash,
-            capital=allocation.satellite,
+            capital=allocation.thesis_book,
             spendable=max(ZERO, spendable - allocation.cash_floor),
             minimum=self._minimum,
             fills=book_fills(await self._worker.run(repo.intent_fills), mode),

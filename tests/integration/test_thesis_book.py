@@ -268,7 +268,7 @@ async def test_an_owner_idea_goes_from_idea_add_to_a_shadow_fill_an_exit_and_its
     assert (await cycle(s)).decisions == []  # the slot is free and holds nothing
 
     await s.service.jobs.digest(MONDAY)
-    digest = s.notifier.sent[-1][1]
+    digest = s.notifier.digest()
     assert "Thesis book:" in digest
     assert "T1 SPPW closed today: closed by invalidation: payoff -" in digest
     assert "record, book: 1 closed, 0 reached their target, mean payoff -" in digest
@@ -737,7 +737,7 @@ async def test_the_digest_says_when_the_book_cannot_be_surveyed(
 
     monkeypatch.setattr(s.service.jobs._thesis, "survey", broken)
     await s.service.jobs.digest(MONDAY)
-    body = s.notifier.sent[-1][1]
+    body = s.notifier.digest()
     assert "Thesis book:\n  not surveyed" in body
     assert "record: no thesis has closed" in body
     assert "cannot read: the thesis book cannot be surveyed: the store is locked" in body

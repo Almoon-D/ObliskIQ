@@ -5,6 +5,29 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.26.0] - 2026-11-15
+
+Session 18: the system measures itself under one locked pre-registration, and capital and the
+live levels follow that measurement.
+
+### Added
+
+- `research/preregistrations/scoreboard.md` (#71) and its lock: ρ = 0.25 estimated from history;
+  forward grading under D62 with minimums in effective observations (D169).
+- Forward grading of every layer's calls (signals, patterns, theses per source and analyst
+  segment, the weekly panel by rank IC), Brier and reliability, calibration for sizing and
+  empirical-Bayes component weights.
+- Monitoring of each active layer against its twin (gap and twin boundaries, monthly looks,
+  alpha spending) with a freeze or a return to shadow; the pattern lifecycle shadow → active.
+- The live allocation rule (`capital/allocation.py`): first shares, steps at looks, the thesis
+  book's exploration share, every change audited (D171).
+- Performance (TWR, the references, each sleeve's profit, realised tax) and TCA (arrival, fill,
+  cost model by venue, order type and quote status).
+- The promotion gate L0–L3: `obliskiq promotion status|drill`; a live level needs its passed
+  verdict, profile `live` and the owner's command (D170).
+- `obliskiq scoreboard grade|report|month|unfreeze`; weekly and monthly reports, written and
+  summarised to Telegram after the digest.
+
 ## [0.25.1] - 2026-11-15
 
 Owner ruling: Session 24 is not run and no price history is bought for the Hunter's test (D168).

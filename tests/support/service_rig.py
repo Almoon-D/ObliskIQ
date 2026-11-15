@@ -80,6 +80,12 @@ class RecordingNotifier:
     def subjects(self) -> list[str]:
         return [subject for subject, _ in self.sent]
 
+    def digest(self) -> str:
+        """The body of the last daily digest (the scoreboard's reports follow it)."""
+        return [body for subject, body in self.sent if subject.startswith("ObliskIQ daily digest")][
+            -1
+        ]
+
     def alerts(self, kind: str) -> list[str]:
         return [body for subject, body in self.sent if subject == f"ObliskIQ alert: {kind}"]
 

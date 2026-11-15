@@ -147,6 +147,8 @@ def test_a_thesiss_option_is_fixed_its_position_set_once_and_its_twin_closed_onc
     store: Store,
 ) -> None:
     approved_put(store)
+    assert link_repo.option_multiplier(store, 900013) == D(100)
+    assert link_repo.option_multiplier(store, SPY) is None
     held = thesis_repo.get_thesis(store, 1)
     assert held is not None
     assert (held.expression, held.held_as, held.as_option) == (
@@ -226,7 +228,7 @@ def test_the_migration_keeps_every_thesis_as_shares(tmp_path: Path) -> None:
     before = tmp_path / "before"
     before.mkdir()
     for path in sorted(source.glob("*.sql")):
-        if not path.name.startswith("016"):
+        if path.name < "016":
             (before / path.name).write_text(path.read_text())
     connection = sqlite3.connect(tmp_path / "db.sqlite", autocommit=True)
     migrations.migrate(connection, before)
@@ -250,7 +252,7 @@ def test_the_migration_keeps_every_thesis_as_shares(tmp_path: Path) -> None:
     connection.execute(
         "INSERT INTO thesis_log VALUES (2, 1, ?, 'owner', 'intake', 'handed in')", (stamp,)
     )
-    assert migrations.migrate(connection) == ["016_thesis_options.sql"]
+    assert migrations.migrate(connection)[0] == "016_thesis_options.sql"
     rows = connection.execute(
         "SELECT thesis_id, state, expression, held_as FROM theses ORDER BY thesis_id"
     ).fetchall()

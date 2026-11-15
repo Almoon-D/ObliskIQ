@@ -46,6 +46,7 @@ from ..reporting.alerts import AlertBook
 from ..reporting.notifier import LogNotifier, Notifier, TelegramNotifier
 from ..reporting.reporter import Reporter
 from ..research.patterns import REGISTRY_PATH
+from ..scoreboard.service import Scoreboard
 from ..util.http import RetryPolicy
 from .analyst import AnalystJob
 from .clock import Clock
@@ -55,6 +56,7 @@ from .jobs import Jobs
 from .nav import NavCollector
 from .parts import CapitalParts, build_capital
 from .schedule import CollectPlan, SourceMoment, SourcePlan
+from .scoreboard_jobs import ScoreboardJobs
 from .service import AlertHooks, Service
 
 
@@ -235,6 +237,21 @@ def build_service(
         session_state=lambda: session_state(path.session),
         now=clock.now,
         ping_url=ping_url,
+        scoreboard=ScoreboardJobs(
+            Scoreboard(
+                settings,
+                path.worker,
+                root=repository_root(),
+                calendars=path.calendars,
+                tax=parts.tax,
+                now=clock.now,
+            ),
+            worker=path.worker,
+            modes=path.modes,
+            reporter=reporter,
+            data_dir=path.data_dir,
+            now=clock.now,
+        ),
     )
     collector = (
         MarketCollector(

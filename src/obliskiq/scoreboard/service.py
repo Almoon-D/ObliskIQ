@@ -1,0 +1,255 @@
+"""The scoreboard as the service and the CLI run it: the daily grading and pattern lifecycle, the
+month-end looks and allocation, the promotion gate's verdict, and the reports' inputs.
+
+The rules are the locked pre-registration's (``rules.py``): without them nothing is graded,
+promoted, looked at or allocated, and the report says why. Reading the scoreboard never places an
+order; its only writes are its own records.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+"""
+
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
+
+from ..calendars.service import Calendars
+from ..config.schema import ObliskConfig
+from ..domain.orders import ExecutionMode
+from ..domain.tax import TaxYearSummary
+from ..errors import ObliskError
+from ..reporting.alerts import Alert, Severity
+from ..reporting.scoreboard import ReportInputs
+from ..research.patterns import REGISTRY_PATH
+from ..research.prereg import ForwardBookPrereg, ScoreboardPrereg, load_any
+from ..store import scoreboard as repo
+from ..store.worker import StoreWorker
+from ..tax.book import TaxBook
+from .layers import (
+    Activation,
+    RegistryLayer,
+    Retest,
+    no_activation,
+    no_retest,
+    registry_layers,
+)
+from .promotion import Verdict, evaluate
+from .rules import H13_PATH, RULES_PATH, load_locked
+from .run import (
+    Changes,
+    GradeBook,
+    executions,
+    grade_book,
+    performance,
+    promotion_evidence,
+    run_lifecycle,
+    run_month,
+)
+from .tca import analyse
+
+#: The next level of the ladder from each level.
+NEXT_LEVEL = {
+    ExecutionMode.SHADOW: ExecutionMode.PAPER,
+    ExecutionMode.PAPER: ExecutionMode.LIVE_SMALL,
+    ExecutionMode.LIVE_SMALL: ExecutionMode.LIVE,
+}
+#: The alert source of the scoreboard's runs.
+SCOREBOARD = "scoreboard"
+
+
+@dataclass(frozen=True, slots=True)
+class Rules:
+    """The locked rules and what the allocation reads of H13, or why there are none."""
+
+    scoreboard: ScoreboardPrereg
+    h13_first_look: int
+
+
+def previous_month(day: date) -> str:
+    """The calendar month before ``day``'s, as ``YYYY-MM``."""
+    return (day.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+
+
+class Scoreboard:
+    """The scoreboard over the store, the repository's research files and the calendars."""
+
+    def __init__(
+        self,
+        settings: ObliskConfig,
+        worker: StoreWorker,
+        *,
+        root: Path | None,
+        calendars: Calendars,
+        tax: TaxBook | None,
+        now: Callable[[], datetime],
+        activation: Activation = no_activation,
+        retest: Retest = no_retest,
+    ) -> None:
+        self._settings = settings
+        self._worker = worker
+        self._root = root
+        self._calendars = calendars
+        self._tax = tax
+        self._now = now
+        self._activation = activation
+        self._retest = retest
+
+    def rules(self) -> Rules | str:
+        """The locked rules, or why they cannot be read."""
+        if self._root is None:
+            return "no repository holds the research files (an installed wheel)"
+        try:
+            locked = load_locked(self._root / RULES_PATH)
+            h13 = load_any(self._root / H13_PATH)
+        except ObliskError as exc:
+            return str(exc)
+        if not isinstance(h13, ForwardBookPrereg):
+            return f"{H13_PATH} is not the thesis book's pre-registration"
+        return Rules(locked, h13.spec.looks.every_months)
+
+    def layers(self) -> list[RegistryLayer]:
+        return [] if self._root is None else registry_layers(self._root / REGISTRY_PATH)
+
+    async def grades(self, as_of: date) -> GradeBook | str:
+        rules = self.rules()
+        if isinstance(rules, str):
+            return rules
+        return await self._worker.run(
+            grade_book, self._settings, rules.scoreboard.spec, as_of=as_of
+        )
+
+    async def daily(self, as_of: date) -> tuple[Changes | str, list[Alert]]:
+        """Grade every layer and promote the shadow entries whose rule is met."""
+        rules = self.rules()
+        if isinstance(rules, str):
+            return rules, []
+        spec = rules.scoreboard.spec
+        at = self._now()
+        book = await self._worker.run(grade_book, self._settings, spec, as_of=as_of)
+        changes = await self._worker.run(
+            run_lifecycle, spec, self.layers(), book, activation=self._activation, at=at
+        )
+        return changes, self._alerts(changes, at)
+
+    async def month_end(self, month: str) -> tuple[Changes | str, list[Alert]]:
+        """The looks and allocation of ``month``'s end, once each."""
+        rules = self.rules()
+        if isinstance(rules, str):
+            return rules, []
+        at = self._now()
+        changes = await self._worker.run(
+            run_month,
+            self._settings,
+            rules.scoreboard.spec,
+            self.layers(),
+            month=month,
+            h13_first_look=rules.h13_first_look,
+            activation=self._activation,
+            retest=self._retest,
+            at=at,
+        )
+        return changes, self._alerts(changes, at)
+
+    def _alerts(self, changes: Changes, at: datetime) -> list[Alert]:
+        found: list[Alert] = []
+        for event in changes.events:
+            severity = Severity.CRITICAL if event.event in ("shadow", "freeze") else Severity.INFO
+            found.append(
+                Alert(
+                    f"scoreboard.{event.event}",
+                    f"scoreboard.{event.event}:{event.layer}",
+                    f"{event.layer}: {event.detail}",
+                    severity,
+                    at,
+                    condition=False,
+                )
+            )
+        for share in changes.shares:
+            found.append(
+                Alert(
+                    "scoreboard.allocation",
+                    f"scoreboard.allocation:{share.layer}",
+                    f"{share.layer} now has {share.share:.2%} of investable capital on the live "
+                    f"account: {share.reason}",
+                    Severity.INFO,
+                    at,
+                    condition=False,
+                )
+            )
+        return found
+
+    def sessions(self, first: date, last: date) -> list[date]:
+        """The digest venue's trading days from ``first`` to ``last``."""
+        venue = self._settings.runtime.digest.venue
+        days: list[date] = []
+        day = first
+        while day <= last:
+            if self._calendars.session_bounds(venue, day) is not None:
+                days.append(day)
+            day += timedelta(days=1)
+        return days
+
+    async def verdict(
+        self, mode: ExecutionMode, target: ExecutionMode | None = None
+    ) -> Verdict | None:
+        """The promotion gate's verdict on ``target`` (the next level by default); ``None`` at the
+        top of the ladder."""
+        goal = target or NEXT_LEVEL.get(mode)
+        if goal is None:
+            return None
+        evidence = await self._worker.run(
+            promotion_evidence,
+            self._settings,
+            mode=mode,
+            now=self._now(),
+            sessions=self.sessions,
+        )
+        return evaluate(goal, evidence, self._settings.promotion)
+
+    async def _tax_summary(self, year: int) -> TaxYearSummary | str:
+        if self._tax is None:
+            return "no tax book"
+        try:
+            engine = await self._tax.engine()
+        except ObliskError as exc:
+            return str(exc)
+        settled = {s.tax_year: s for s in engine.ledger.settled()}
+        return settled.get(year) or engine.ledger.provisional(year)
+
+    async def inputs(
+        self, *, mode: ExecutionMode, since: date, as_of: date, monthly: bool
+    ) -> ReportInputs:
+        """Everything a weekly or monthly report shows."""
+        grades = await self.grades(as_of)
+        view = await self._worker.run(performance, self._settings, since=since, as_of=as_of)
+        measured = await self._worker.run(executions, self._settings, mode=mode, since=None)
+        looks: Sequence[repo.Look] = []
+        allocation: Sequence[repo.AllocationEvent] = []
+        if monthly:
+            month = as_of.strftime("%Y-%m")
+            looks = [
+                look
+                for look in await self._worker.run(repo.looks)
+                if look.month in (month, previous_month(as_of))
+            ]
+            allocation = [
+                event
+                for event in await self._worker.run(repo.allocation_events)
+                if event.at.date() >= since
+            ]
+        shares: dict[str, Decimal] = await self._worker.run(repo.current_shares)
+        return ReportInputs(
+            as_of=as_of,
+            mode=mode,
+            grades=None if isinstance(grades, str) else grades,
+            grades_missing=grades if isinstance(grades, str) else None,
+            performance=view,
+            tca=analyse(measured),
+            promotion=await self.verdict(mode),
+            looks=looks,
+            allocation=allocation,
+            shares=shares,
+            tax=await self._tax_summary(as_of.year) if monthly else None,
+            notes=(),
+        )

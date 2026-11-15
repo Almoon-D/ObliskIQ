@@ -171,3 +171,12 @@ def pairs(store: Store, *, as_of: date) -> list[PairGrade]:
             )
         )
     return [pair for _, pair in sorted(found, key=lambda item: (item[0], item[1].thesis_id))]
+
+
+def option_multiplier(store: Store, option_conid: int) -> Decimal | None:
+    """The contract multiplier of an option a thesis was held as; ``None`` for any other
+    instrument."""
+    row = store.execute(
+        "SELECT multiplier FROM thesis_options WHERE option_conid = ? LIMIT 1", (option_conid,)
+    ).fetchone()
+    return None if row is None else Decimal(str(row[0]))

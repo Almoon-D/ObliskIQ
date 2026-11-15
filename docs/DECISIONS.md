@@ -3809,3 +3809,38 @@ option (it would hide what the sleeve's exits cost).
   hypothesis that is sufficient or inconclusive-positive, which comes through Session 21.
 
 Rejected: buying the history anyway (cost without a decision); a test on IBKR or free prices.
+
+## Session 18 — Scoreboard, capital and promotion (2026-11-15)
+
+### D169 · The scoreboard's rules are one pre-registration, with ρ measured first (§5.9, §5.19; D62, D63, D65)
+
+`research/preregistrations/scoreboard.md` (#71, locked) fixes how every forward record is read
+before one exists; the code takes its numbers from it and decides nothing without the lock.
+ρ = 0.25 was estimated before any minimum (D63): four-week excess returns in euro of the 51
+tradable candidates, 2010–2026, correlate by 0.222 (0.248 at most across subsets and halves).
+Minimums count `Σ n_eff / horizon weeks`, never predictions. Calibration keeps the one-sided
+lower bound of the reliability slope (legacy kept a fixed half after 100 forecasts). Monitoring
+spends α over 120 monthly looks by a Pocock-type function under a union bound, which holds under
+any dependence. Rejected: exact group-sequential boundaries (they assume independent normal
+increments); a minimum in predictions.
+
+### D170 · The promotion gate decides the live levels; paper records its verdict (§5.12, §5.19; AGENTS.md)
+
+An upgrade to live-small or live needs the gate's passed verdict on that very level, profile
+`live` and the owner's `obliskiq mode set`; the live levels then write under profile `live`.
+`shadow → paper` stays an owner command whatever the verdict (paper risks no money and the
+owner's order test needs it); the verdict is written in the audit row. An unmeasured criterion
+fails its level. The drills are recorded by the owner (`obliskiq promotion drill`); the broker
+session's re-logins are not in the store, so L1's last criterion reads unmeasured until they are
+(Session 18a). Live-small also needs `capital.mode: cap`, the book of a stated size. Rejected:
+blocking paper on L1 (it would stop the owner's list in docs/RUNBOOK.md).
+
+### D171 · What Session 18 leaves to 18a, and how capital fails closed meanwhile (§5.5, §5.19; D156, D159)
+
+H13's record (each month's after-tax book against its twin, at liquidation) and the weekly
+forecast panel's producer (the model's forecasts of the universe) are Session 18a's. Until then
+the thesis book takes the owner's exploration share on the live account only while no H13 look
+is due; once one is due its share is nothing, since an unread boundary is never passed. The
+satellite's live share is capped by `capital.satellite_ceiling` (0.20), whose validator keeps the
+core's budget: D149's 50 % and steps need that check reworked, which falls to Session 26 when a
+Hunter hypothesis exists. The panel's grading, calibration and its report are built now.
