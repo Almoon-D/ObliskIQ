@@ -671,13 +671,15 @@ class IntentFill:
     mode: ExecutionMode
     role: IntentRole
     reason: str
+    #: The intent the fill is of.
+    intent_id: UUID | None = None
 
 
 def intent_fills(store: Store) -> list[IntentFill]:
     """Every fill of an intent the bot made (foreign fills left out), oldest first."""
     rows = store.execute(
-        "SELECT f.*, i.sleeve AS i_sleeve, i.mode AS i_mode, i.role AS i_role, "
-        "i.reason AS i_reason FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
+        "SELECT f.*, i.intent_id AS i_intent_id, i.sleeve AS i_sleeve, i.mode AS i_mode, "
+        "i.role AS i_role, i.reason AS i_reason FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
         "ORDER BY f.executed_at, f.execution_id"
     ).fetchall()
     return [_intent_fill_from_row(row) for row in rows]
@@ -691,6 +693,7 @@ def _intent_fill_from_row(row: sqlite3.Row) -> IntentFill:
             mode=ExecutionMode(row["i_mode"]),
             role=IntentRole(row["i_role"]),
             reason=row["i_reason"],
+            intent_id=UUID(row["i_intent_id"]),
         )
 
     return _build("fills", make)
@@ -868,6 +871,42 @@ def latest_mode_change(store: Store) -> ModeChange | None:
             reason=row["reason"],
         ),
     )
+
+
+def _mode_change(row: sqlite3.Row) -> ModeChange:
+    return _build(
+        "mode_audit",
+        lambda: ModeChange(
+            at=read_stamp(row["at"], "mode_audit", "at"),
+            from_mode=ExecutionMode(row["from_mode"]),
+            to_mode=ExecutionMode(row["to_mode"]),
+            direction=row["direction"],
+            actor=row["actor"],
+            reason=row["reason"],
+        ),
+    )
+
+
+def mode_changes(store: Store) -> list[ModeChange]:
+    """Every recorded change, in the order recorded."""
+    rows = store.execute(
+        "SELECT at, from_mode, to_mode, direction, actor, reason FROM mode_audit "
+        "ORDER BY change_id"
+    ).fetchall()
+    return [_mode_change(row) for row in rows]
+
+
+def placement_clearance(store: Store, intent_id: UUID) -> PretradeClearance | None:
+    """The spent clearance that placed ``intent_id`` (its first placement); ``None`` when it was
+    never placed through the gate."""
+    row = store.execute(
+        "SELECT clearance FROM clearances WHERE intent_id = ? AND action = 'place' "
+        "AND used_at IS NOT NULL ORDER BY used_at LIMIT 1",
+        (str(intent_id),),
+    ).fetchone()
+    if row is None:
+        return None
+    return _build("clearances", lambda: PretradeClearance.model_validate_json(row[0]))
 
 
 def record_kill_switch(store: Store, record: KillSwitchRecord) -> None:
@@ -1094,6 +1133,15 @@ def record_reconciliation(
                 int(anchor),
             ),
         )
+
+
+def reconciliation_statuses(store: Store, *, since: datetime) -> list[tuple[datetime, str]]:
+    """When each reconciliation since ``since`` ran and its status, in the order recorded."""
+    rows = store.execute(
+        "SELECT at, status FROM reconciliations WHERE at >= ? ORDER BY run_id",
+        (stamp_text(since),),
+    ).fetchall()
+    return [(read_stamp(row["at"], "reconciliations", "at"), row["status"]) for row in rows]
 
 
 def latest_reconciliation(store: Store) -> ReconcileRun | None:
