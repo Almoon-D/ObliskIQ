@@ -25,6 +25,7 @@ from ..scoreboard.performance import Series
 from ..scoreboard.promotion import Verdict
 from ..scoreboard.run import GradeBook, PerformanceView
 from ..scoreboard.tca import TcaReport
+from ..store.h13 import H13Look
 from ..store.scoreboard import AllocationEvent, Look
 
 #: The owner's aspiration, a year (DECISIONS D153): shown as a distance, never a forecast.
@@ -49,6 +50,8 @@ class ReportInputs:
     shares: dict[str, Decimal]
     tax: TaxYearSummary | str | None
     notes: Sequence[str]
+    #: H13's looks taken this month (the thesis book's record against its twin).
+    h13: Sequence[H13Look] = ()
 
 
 def _pct(value: float | Decimal | None, places: int = 2) -> str:
@@ -208,6 +211,25 @@ def _looks(looks: Sequence[Look]) -> list[str]:
     ]
 
 
+def _h13(looks: Sequence[H13Look]) -> list[str]:
+    if not looks:
+        return ["No look of H13 fell this month."]
+    lines = [f"{len(looks)} records and groups were looked at; the groups are not adjusted for one "
+             "another."]  # fmt: skip
+    for look in looks:
+        verdict = (
+            "not evaluable"
+            if not look.evaluable
+            else "STEP"
+            if look.step
+            else "BACK TO SHADOW"
+            if look.back
+            else "no change"
+        )
+        lines.append(f"- {look.record} {look.group}, look {look.look}: {verdict} — {look.detail}")
+    return lines
+
+
 def _tax(tax: TaxYearSummary | str | None) -> list[str]:
     if tax is None:
         return ["Not computed."]
@@ -276,6 +298,10 @@ def monthly(inputs: ReportInputs) -> str:
         "## Monitoring",
         "",
         *_looks(inputs.looks),
+        "",
+        "## The thesis book (H13)",
+        "",
+        *_h13(inputs.h13),
         "",
         "## Capital",
         "",

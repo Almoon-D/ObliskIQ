@@ -22,6 +22,7 @@ from ..errors import StoreError
 from . import theses as thesis_repo
 from .db import Store
 from .mappers import cutoff_text, date_text, read_date, read_stamp, stamp_text
+from .panel import panel_spend
 from .sources import extraction_spend
 
 _CALL_COLUMNS = (
@@ -118,9 +119,9 @@ def analyst_spend(store: Store, since: datetime) -> float:
 
 
 def llm_spend(store: Store, since: datetime) -> float:
-    """What every LLM call since ``since`` cost: the extractor's and the analyst's, against the
-    one monthly budget (``llm.budget.monthly_usd``)."""
-    return extraction_spend(store, since) + analyst_spend(store, since)
+    """What every LLM call since ``since`` cost: the extractor's, the analyst's and the weekly
+    panel's, against the one monthly budget (``llm.budget.monthly_usd``)."""
+    return extraction_spend(store, since) + analyst_spend(store, since) + panel_spend(store, since)
 
 
 # ── drafts ──

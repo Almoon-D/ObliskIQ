@@ -42,7 +42,7 @@ from ..store import session_events as session_repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store.db import Store
-from ..store.scoreboard import AllocationEvent, Call, Direction, LayerEvent
+from ..store.scoreboard import PANEL_LAYER, AllocationEvent, Call, Direction, LayerEvent
 from .calibration import CalibrationState, calibration_state
 from .grading import GradedCall, PanelRecord, Record, dedupe, grade_call, panel_record, record
 from .layers import (
@@ -68,8 +68,6 @@ from .tca import Execution, analyse
 
 ZERO = Decimal(0)
 MONTHS_PER_YEAR = 12
-#: The layer of the weekly forecast panel's calls.
-PANEL_LAYER = "panel"
 #: Theses are graded per source (``thesis:owner``, ``thesis:analyst``) and the analyst's per
 #: segment (``analyst:<segment>``): an LLM nomination is an analyst thesis.
 THESIS_PREFIX = "thesis:"
@@ -174,6 +172,15 @@ def all_calls(store: Store, *, as_of: date) -> dict[str, list[Call]]:
     return by_layer
 
 
+def current_universe(calls: Sequence[Call]) -> list[Call]:
+    """The panel's calls of its latest universe: each forecast names its universe's hash first in
+    its detail, and a change of universe or prompt starts a new record."""
+    if not calls:
+        return []
+    latest = calls[-1].detail.split(";", 1)[0]
+    return [call for call in calls if call.detail.split(";", 1)[0] == latest]
+
+
 @dataclass(frozen=True, slots=True)
 class GradeBook:
     """Every layer's record and calibration on a day, and the panel's."""
@@ -203,7 +210,8 @@ def grade_book(
     calibration: dict[str, CalibrationState] = {}
     graded_by: dict[str, list[GradedCall]] = {}
     panel: PanelRecord | None = None
-    for layer, calls in sorted(all_calls(store, as_of=as_of).items()):
+    for layer, every in sorted(all_calls(store, as_of=as_of).items()):
+        calls = current_universe(every) if layer == PANEL_LAYER else every
         layer_rules = panel_rules if layer == PANEL_LAYER else rules
         graded = [
             grade_call(c, mark=marks.mark, reference=reference, rules=layer_rules, as_of=as_of)

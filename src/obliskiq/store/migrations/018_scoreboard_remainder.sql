@@ -1,6 +1,7 @@
--- 018_h13_sessions — what H13's record and the promotion gate's last L1 criterion read
--- (research/preregistrations/thesis-book.md; MASTER_PLAN §5.19; DECISIONS D171): the broker
--- session's repairs, the thesis book's capital each day it was read, and H13's looks.
+-- 018_scoreboard_remainder — what H13's record, the weekly forecast panel and the promotion
+-- gate's last L1 criterion read (research/preregistrations/thesis-book.md and scoreboard.md;
+-- MASTER_PLAN §5.19; DECISIONS D171): the broker session's repairs, the thesis book's capital
+-- each day it was read, H13's looks, and the panel's calls to the model.
 --
 -- Forward-only. Conventions as in 001_core and 017_scoreboard (money as TEXT holding a Decimal's
 -- exact digits, dates 'YYYY-MM-DD', stamps 'YYYY-MM-DDTHH:MM:SSZ'). Every table here is a record:
@@ -97,4 +98,41 @@ END;
 CREATE TRIGGER h13_looks_no_delete BEFORE DELETE ON h13_looks
 BEGIN
     SELECT RAISE(ABORT, 'an H13 look is written once');
+END;
+
+-- ───────────────────────────── panel_calls ─────────────────────────────
+
+-- One call of the weekly forecast panel to the model: a batch of names of one ISO week's
+-- universe, what it cost and how many valid forecasts it gave. The forecasts themselves are the
+-- scoreboard's calls of layer 'panel'. Append-only.
+CREATE TABLE panel_calls (
+    call_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    week          TEXT    NOT NULL CHECK (week GLOB '[0-9][0-9][0-9][0-9]-W[0-9][0-9]'),
+    universe      TEXT    NOT NULL CHECK (length(universe) = 64),
+    produced_at   TEXT    NOT NULL CHECK (produced_at GLOB
+                      '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    provider      TEXT    NOT NULL CHECK (trim(provider) <> ''),
+    model_id      TEXT    NOT NULL CHECK (trim(model_id) <> ''),
+    prompt_hash   TEXT    NOT NULL CHECK (length(prompt_hash) = 64),
+    status        TEXT    NOT NULL CHECK (status IN ('ok', 'invalid', 'failed')),
+    attempts      INTEGER NOT NULL CHECK (attempts >= 0),
+    asked         INTEGER NOT NULL CHECK (asked >= 1),
+    valid         INTEGER NOT NULL CHECK (valid >= 0 AND valid <= asked),
+    error         TEXT,
+    input_tokens  INTEGER NOT NULL CHECK (input_tokens >= 0),
+    output_tokens INTEGER NOT NULL CHECK (output_tokens >= 0),
+    cost_usd      REAL    NOT NULL CHECK (cost_usd >= 0),
+    CHECK (status = 'ok' OR (error IS NOT NULL AND trim(error) <> ''))
+);
+
+CREATE INDEX ix_panel_calls_produced ON panel_calls (produced_at);
+
+CREATE TRIGGER panel_calls_no_update BEFORE UPDATE ON panel_calls
+BEGIN
+    SELECT RAISE(ABORT, 'panel_calls is append-only');
+END;
+
+CREATE TRIGGER panel_calls_no_delete BEFORE DELETE ON panel_calls
+BEGIN
+    SELECT RAISE(ABORT, 'panel_calls is append-only');
 END;

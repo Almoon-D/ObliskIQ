@@ -272,6 +272,30 @@ def test_the_monthly_report_adds_looks_capital_and_tax() -> None:
     assert "Not computed: no tax book." in bare
     assert "top of the ladder" in bare
     assert "Not computed." in report.monthly(inputs(tax=None))
+    assert "No look of H13 fell this month." in bare
+
+    def h13(record: str, group: str, *, step: bool, back: bool, evaluable: bool) -> H13Look:
+        return H13Look(
+            record, group, "2026-10", 2, 12, 9, 0.0, 0.0, None, None, None, None, None,  # type: ignore[arg-type]
+            step, back, evaluable, "[]", "detail", NOW,
+        )  # fmt: skip
+
+    looked = report.monthly(
+        inputs(
+            h13=[
+                h13("live", "book", step=True, back=False, evaluable=True),
+                h13("paper", "source:analyst", step=False, back=True, evaluable=True),
+                h13("shadow", "book", step=False, back=False, evaluable=False),
+                h13("paper", "book", step=False, back=False, evaluable=True),
+            ]
+        )
+    )
+    assert "## The thesis book (H13)" in looked
+    assert "4 records and groups were looked at" in looked
+    assert "- live book, look 2: STEP" in looked
+    assert "- paper source:analyst, look 2: BACK TO SHADOW" in looked
+    assert "- shadow book, look 2: not evaluable" in looked
+    assert "- paper book, look 2: no change" in looked
 
 
 def test_a_report_says_what_it_could_not_compute() -> None:

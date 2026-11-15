@@ -5,6 +5,23 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.27.0] - 2026-11-15
+
+Session 18a: the thesis book's capital follows H13 on its own record, the weekly forecast panel
+produces its forecasts, and the promotion gate reads the broker session's re-logins.
+
+### Added
+
+- H13's record: the thesis book and its matched twin after tax at liquidation, x_m on the book's
+  recorded capital, the looks at month 6k per record, source, analyst segment and conviction,
+  each recorded once (D173).
+- The thesis book's live share from H13's looks (exploration share, steps, back to shadow), and
+  a held-back source or conviction applied on the live account; an H13 section in the monthly
+  report.
+- The weekly forecast panel's producer on the analyst's model and budget, once per ISO week,
+  with its calls costed against the LLM budget (D174).
+- The broker session's alerts in the store; L1's "every daily reset re-logged" is measured (D172).
+
 ## [0.26.0] - 2026-11-15
 
 Session 18: the system measures itself under one locked pre-registration, and capital and the

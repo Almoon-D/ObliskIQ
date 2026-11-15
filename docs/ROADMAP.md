@@ -35,7 +35,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | done (on fixtures; no IBKR call) | v0.23.0 |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | not run while no Hunter hypothesis is sufficient or inconclusive-positive (D168); a new hypothesis comes through Session 21 | |
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | done (on fixtures; the rules pre-registered and locked, #71; no layer active yet; H13's record and the panel's producer to 18a, D171) | v0.26.0 |
-| 18a | Scoreboard, the remainder | H13's after-tax monthly record and its looks, the weekly forecast panel's producer, the broker session's re-logins in the store | after 18 | |
+| 18a | Scoreboard, the remainder | H13's after-tax monthly record and its looks, the weekly forecast panel's producer, the broker session's re-logins in the store | done (on fixtures; no thesis has a record yet; the panel waits on the analyst's key; no IBKR call) | v0.27.0 |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
@@ -59,6 +59,18 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 18a — Scoreboard, the remainder (2026-11-15, v0.27.0)
+
+- **Landed:** H13's record per record (the book and its matched twin after tax at liquidation,
+  x_m on K, the looks at month 6k with the step, the return to shadow and each group's), recorded
+  once; the thesis book's live share and the holdbacks read from them (D173); the weekly forecast
+  panel on the analyst's model and budget, once per ISO week (D174); the session's re-logins in
+  the store and L1's criterion measured (D172); H13's lock checked; an H13 section in the monthly
+  report.
+- **Deferred:** a book sent back to shadow keeps no parallel shadow record (D173); an option
+  thesis needs marks of its contract to be evaluable.
+- **Live findings.** None: no IBKR or LLM call.
 
 ### Session 18 — Scoreboard, capital and promotion (2026-11-15, v0.26.0)
 
@@ -420,6 +432,8 @@ settles it.
 | The option surface, the sleeve's candidates and the census on live chains: each tenor's nearest expiry, the smile's wings at deltas 0.10 and 0.25, the liquidity share, and how many contracts clear every gate; the FX decomposition on the board's live `fx_vs_base` and CPI; the commodity leaves on live curves (`VERIFY-LIVE(the option surface on live chains)`, `VERIFY-LIVE(futures curve prices)`) | 12 | the first command list after the collectors' live round |
 | `obliskiq compute all` on a store the collectors filled live: each family's reach and its dominant blocker against the fixture store's, the session solve on a route that prices chains without vols, the coverage floor, and the run's time on the machine | 11 | the first command list after the collectors' live round |
 | The equity reference's quote beside each managed NAV: that XDWD (IBIS2) returns a usable delayed or closing quote at every cycle, the Asian morning and New York's last hour included (`VERIFY-LIVE(the equity reference's quote outside its venue's hours)`); without one a fall is not excused | 25 | the first week of `serve` |
+| IBKR's daily reset as the session reports it on the machine: a `session_lost` then a `reauthenticated` in `session_events` on or the day before each trading day, so L1's re-login criterion passes (`VERIFY-LIVE(the daily reset in session_events)`, D172) | 18a | the first week of `serve` |
+| The weekly forecast panel's first live cohort: the model answers 40 ids a call inside the schema, the coverage reaches 60 %, and the cost per week against the budget (`VERIFY-LIVE(the panel's first cohort)`, D174) | 18a | the first week of `serve` with the analyst's key |
 
 ## Follow-ups
 
@@ -428,6 +442,10 @@ settles it.
   D171). A layer's activation condition and pooled re-test are registered per layer when one
   exists; none is, so no layer activates or steps. The thesis book's grading as calls uses the
   approval date and the 28-day horizon; H13 reads its own record (18a).
+- **Scoreboard (Session 18a):** a book H13 sends back to shadow stops its record instead of going
+  on as a shadow book beside the live one (D173); option theses need their contracts' closes
+  collected, or their months are not evaluable; the 0.50 ceiling of H13's steps sits under the
+  satellite's 0.20 ceiling until Session 26 reworks it.
 
 - **Breakers (Session 25):** a forced shadow leaves the paper orders already working to expire
   or to the kill switch; the hard limit (0.25) assumes the reserve dominates the book and wants a

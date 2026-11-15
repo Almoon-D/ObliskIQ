@@ -60,7 +60,7 @@ from ..reporting.reporter import Reporter
 from ..store import runs as run_repo
 from ..store.session_events import SessionEvent, SessionEventKind, record_session_event
 from ..store.worker import StoreWorker
-from .analyst import AnalystJob, judge_analyst
+from .analyst import PANEL, AnalystJob, judge_analyst, judge_panel
 from .clock import Clock
 from .compute import ALL, ComputeRunner
 from .health import write_heartbeat
@@ -502,21 +502,25 @@ class Service:
         await self._compute.run(ALL, as_of=job.session_date, dry_run=False, command=job.command)
 
     async def _analyst_job(self, job: Job) -> None:
-        """The analyst over the day's fact sheet (``orchestration/analyst.py``), as a run of its
-        own. A failure here never reaches the cycles: the job's exception stops at
+        """The analyst over the day's fact sheet, then the weekly forecast panel
+        (``orchestration/analyst.py``), as a run of its own. A failure here never reaches the
+        cycles: the job's exception stops at
         :meth:`_run_job`, and the run record says what happened."""
         if self._analyst is None:  # pragma: no cover - never planned
             return
         analyst = self._analyst
+        panel = analyst.panel
         record = RunRecord(
             self._path.worker,
             command=job.command,
             session_date=job.session_date,
-            steps=(ANALYST,),
+            steps=(ANALYST,) if panel is None else (ANALYST, PANEL),
             now=self._clock.now,
         )
         await record.begin()
         await record.step(ANALYST, functools.partial(analyst.run, job.session_date), judge_analyst)
+        if panel is not None:
+            await record.step(PANEL, panel.run, judge_panel)
         await record.finish()
 
     async def _after_cycle(self, status: str) -> None:

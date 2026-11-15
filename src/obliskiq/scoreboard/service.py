@@ -24,6 +24,7 @@ from ..reporting.scoreboard import ReportInputs
 from ..research.patterns import REGISTRY_PATH
 from ..research.prereg import ForwardBookPrereg, ScoreboardPrereg
 from ..store import scoreboard as repo
+from ..store.h13 import H13Look, h13_looks
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook
 from .h13_run import run_h13
@@ -253,12 +254,18 @@ class Scoreboard:
         view = await self._worker.run(performance, self._settings, since=since, as_of=as_of)
         measured = await self._worker.run(executions, self._settings, mode=mode, since=None)
         looks: Sequence[repo.Look] = []
+        h13: Sequence[H13Look] = []
         allocation: Sequence[repo.AllocationEvent] = []
         if monthly:
             month = as_of.strftime("%Y-%m")
             looks = [
                 look
                 for look in await self._worker.run(repo.looks)
+                if look.month in (month, previous_month(as_of))
+            ]
+            h13 = [
+                look
+                for look in await self._worker.run(h13_looks)
                 if look.month in (month, previous_month(as_of))
             ]
             allocation = [
@@ -280,4 +287,5 @@ class Scoreboard:
             shares=shares,
             tax=await self._tax_summary(as_of.year) if monthly else None,
             notes=(),
+            h13=h13,
         )
