@@ -16,6 +16,7 @@ from eligibility_double import AllowlistEligibility
 from service_rig import CURRENCY, EMIM, ServiceRig
 from thesis_rig import draft
 
+from obliskiq.capital.allocation import THESIS_BOOK
 from obliskiq.cli import idea as idea_cli
 from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, run
 from obliskiq.config import ObliskConfig
@@ -48,6 +49,8 @@ from obliskiq.store import orders as repo
 from obliskiq.store import theses as thesis_repo
 from obliskiq.store import universe as universe_repo
 from obliskiq.store.breakers import ManagedReading
+from obliskiq.store.h13 import H13Look, book_capital, record_h13_look
+from obliskiq.store.scoreboard import AllocationEvent, record_allocation
 from obliskiq.tax.book import identity_of
 
 D = Decimal
@@ -783,3 +786,74 @@ async def test_cash_that_cannot_be_valued_blocks_the_book(
     plan = await surveyed(s)
     assert plan.blocked == "the GBP cash cannot be valued in EUR"
     assert plan.decisions == []
+
+
+# ── H13's holdbacks on the live account ──
+
+
+async def _hold_back(s: ServiceRig, group: str) -> None:
+    look = H13Look(
+        record="live",
+        group=group,
+        month="2027-06",
+        look=1,
+        months=6,
+        closed=4,
+        mean=-0.05,
+        sd=0.01,
+        t_up=None,
+        t_down=-12.0,
+        c_up=None,
+        c_down=3.365,
+        without_best=None,
+        step=False,
+        back=True,
+        evaluable=True,
+        series="[]",
+        detail="below its boundary",
+        at=EUROPE,
+    )
+    await s.rig.store(record_h13_look, look)
+
+
+async def test_a_held_back_source_is_refused_and_a_held_back_conviction_sized_as_normal(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    share = AllocationEvent(EUROPE, THESIS_BOOK, D("0.10"), "allocation rule", "exploration")
+    await s.rig.store(record_allocation, share)
+    await idea(s, conviction="max")
+    thesis_book = book(s)
+    before = only(await thesis_book.survey(ExecutionMode.LIVE))
+    await _hold_back(s, "conviction:max")
+    normal = only(await thesis_book.survey(ExecutionMode.LIVE))
+    assert before.size_base is not None
+    assert normal.size_base is not None
+    assert normal.size_base == before.size_base / shipped_settings.thesis.conviction.max
+    # In shadow nothing is held back: the holdbacks are the live account's.
+    shadow = only(await thesis_book.survey(ExecutionMode.SHADOW))
+    assert shadow.action == "enter"
+    await _hold_back(s, "source:owner")
+    refused = await thesis_book.survey(ExecutionMode.LIVE)
+    assert only(refused).action == "refuse"
+    assert codes(refused) == ["held_back"]
+    assert "no longer traded on the account" in only(refused).reason
+
+
+async def test_each_cycle_records_the_book_s_capital_for_h13_even_with_no_idea(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    thesis_book = book(s)
+    plan = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert plan.decisions == []
+    assert plan.capital is not None
+    assert plan.capital > D(0)
+    await thesis_book.apply(plan)
+    await thesis_book.apply(await thesis_book.survey(ExecutionMode.SHADOW))
+    (kept,) = await s.rig.store(book_capital)
+    assert (kept.mode, kept.on, kept.capital) == (ExecutionMode.SHADOW, MONDAY, plan.capital)
+    # An account that cannot be read records nothing and blocks nothing while the book is idle.
+    s.broker.unavailable.add("ledger")
+    idle = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert (idle.capital, idle.blocked) == (None, None)

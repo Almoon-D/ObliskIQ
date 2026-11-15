@@ -39,6 +39,7 @@ from obliskiq.scoreboard.service import NEXT_LEVEL, Scoreboard, previous_month
 from obliskiq.scoreboard.tca import analyse
 from obliskiq.store import runs as run_repo
 from obliskiq.store import scoreboard as repo
+from obliskiq.store.h13 import H13Look
 from obliskiq.store.scoreboard import AllocationEvent, Call, LayerEvent, LayerMonth, Look
 from obliskiq.store.worker import StoreWorker
 
@@ -370,6 +371,22 @@ async def test_the_daily_and_monthly_runs_and_their_alerts(
     flagged = board._alerts(Changes(events=[LayerEvent(NOW, "p", "freeze", "s", "gap")]), NOW)
     assert flagged[0].severity.value == "critical"
     assert not flagged[0].condition
+
+    def h13(step: bool, back: bool, group: str = "book") -> H13Look:
+        return H13Look(
+            "live", group, "2026-10", 1, 6, 8, 0.0, 0.0, None, None, None, None, None,
+            step, back, True, "[]", "d", NOW,
+        )  # fmt: skip
+
+    looked = board._alerts(
+        Changes(h13=[h13(True, False), h13(False, True, "source:analyst"), h13(False, False)]),
+        NOW,
+    )
+    assert [(a.kind, a.severity.value) for a in looked] == [
+        ("scoreboard.h13", "info"),
+        ("scoreboard.h13", "critical"),
+    ]
+    assert "source:analyst" in looked[1].text
     grades = await board.grades(NOW.date())
     assert isinstance(grades, GradeBook)
     assert "signal" in grades.records
