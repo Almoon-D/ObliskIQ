@@ -679,8 +679,8 @@ def intent_fills(store: Store) -> list[IntentFill]:
     """Every fill of an intent the bot made (foreign fills left out), oldest first."""
     rows = store.execute(
         "SELECT f.*, i.intent_id AS i_intent_id, i.sleeve AS i_sleeve, i.mode AS i_mode, "
-        "i.role AS i_role, i.reason AS i_reason FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
-        "ORDER BY f.executed_at, f.execution_id"
+        "i.role AS i_role, i.reason AS i_reason FROM fills f "
+        "JOIN intents i ON i.intent_id = f.intent_id ORDER BY f.executed_at, f.execution_id"
     ).fetchall()
     return [_intent_fill_from_row(row) for row in rows]
 
@@ -890,8 +890,7 @@ def _mode_change(row: sqlite3.Row) -> ModeChange:
 def mode_changes(store: Store) -> list[ModeChange]:
     """Every recorded change, in the order recorded."""
     rows = store.execute(
-        "SELECT at, from_mode, to_mode, direction, actor, reason FROM mode_audit "
-        "ORDER BY change_id"
+        "SELECT at, from_mode, to_mode, direction, actor, reason FROM mode_audit ORDER BY change_id"
     ).fetchall()
     return [_mode_change(row) for row in rows]
 
