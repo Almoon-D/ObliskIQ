@@ -1,0 +1,46 @@
+# The scoreboard (MASTER_PLAN §5.19; scoreboard/, reporting/): the references every report
+# measures the account against, and the operational promotion ladder L0 to L3. The rules that
+# grade, calibrate, promote patterns, monitor layers and step capital are not here: they are
+# research/preregistrations/scoreboard.md's, locked before any record existed.
+scoreboard:
+  # The references (D60): bought-and-held mixes of the universe's eligible vehicles, from the
+  # daily closes the collectors store, in the base currency, rebalanced to these weights at each
+  # month end. XDWD (MSCI World, the breakers' equity reference) and XMME (MSCI Emerging Markets)
+  # in ACWI's mix of developed and emerging markets, about nine to one; DBXQ (euro government
+  # bonds, the core's euro_govt_intermediate) for the bond side of a global 60/40. QUOTED.
+  references:
+    - name: global equity
+      members:
+        - {conid: 163606916, weight: "0.90"}
+        - {conid: 280737629, weight: "0.10"}
+    - name: global 60/40
+      members:
+        - {conid: 163606916, weight: "0.54"}
+        - {conid: 280737629, weight: "0.06"}
+        - {conid: 53507356, weight: "0.40"}
+  # In the reports (the references, attribution), a close older than this many calendar days is
+  # no mark. A judgement: a week with holidays passes. Forward grading reads its own age from the
+  # pre-registration.
+  max_mark_age_days: 7
+
+promotion:
+  # L1 paper: this many consecutive trading days of shadow (on the order path's venue calendar)
+  # with no unhandled error, clean reconciliation and no stuck intent (MASTER_PLAN §5.19).
+  shadow_days: 10
+  # L2 live-small: this many weeks of paper with no rail violation, the order success rate and
+  # slippage below, and a passed breaker, kill and cash-flow drill.
+  paper_weeks: 8
+  # L3 live: this many months of live-small, a monthly scoreboard report among them, and the
+  # owner's command.
+  live_small_months: 3
+  # The share of the paper intents placed that filled, at least, over at least min_orders of
+  # them. A judgement: one order in ten may expire unfilled at a patient limit.
+  order_success_min: "0.90"
+  min_orders: 20
+  # Realised execution cost against the cost model's spread and slippage for the same legs: the
+  # mean of realised less modelled, as a fraction of value, at most this, over at least min_fills
+  # fills. A judgement: 0.1 % a leg above the model, the liquid tier's slippage (costs.yaml).
+  slippage_excess_max: "0.001"
+  min_fills: 20
+  # An intent still working this long after it expired is stuck. A judgement: a cycle's length.
+  stuck_after_hours: 6

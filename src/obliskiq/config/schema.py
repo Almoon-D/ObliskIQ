@@ -55,6 +55,7 @@ from .schema_runtime import (
     RuntimeConfig,
     TradingConfig,
 )
+from .schema_scoreboard import PromotionConfig, ScoreboardConfig
 from .schema_sources import SourcesConfig
 from .schema_thesis import ThesisBookConfig
 from .schema_universe import UniverseConfig
@@ -165,6 +166,8 @@ class ObliskConfig(FrozenModel):
     fx_inflation: FxInflationConfig
     commodities: CommoditiesConfig
     thesis: ThesisBookConfig
+    scoreboard: ScoreboardConfig
+    promotion: PromotionConfig
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -239,6 +242,13 @@ class ObliskConfig(FrozenModel):
         problems += self._grid_problems()
         problems += self._thesis_problems()
         problems += self._breaker_problems()
+        problems += [
+            f"scoreboard.references: {reference.name} names {member.conid}, which no instrument "
+            "of the universe pins"
+            for reference in self.scoreboard.references
+            for member in reference.members
+            if self.universe.pinned(member.conid) is None
+        ]
         if problems:
             raise ValueError("; ".join(problems))
         return self
