@@ -31,6 +31,7 @@ from ..config.schema import ObliskConfig
 from ..domain.orders import ExecutionMode, Sleeve
 from ..store import scoreboard as repo
 from ..store.db import Store
+from ..store.worker import StoreWorker
 from .budgets import Allocation, SleeveBudgets, book_allocation
 
 ZERO = Decimal(0)
@@ -201,20 +202,19 @@ def live_allocation(settings: ObliskConfig, investable: Decimal, shares: LiveSha
         satellite=investable * satellite,
         options=investable * options,
         cash_floor=investable * budgets.cash_floor,
+        thesis_book=investable * min(shares.thesis, satellite),
     )
 
 
-def allocation_for(
-    settings: ObliskConfig,
-    investable: Decimal,
-    mode: ExecutionMode,
-    shares: LiveShares | None,
+async def allocation_now(
+    worker: StoreWorker, settings: ObliskConfig, investable: Decimal, mode: ExecutionMode
 ) -> Allocation:
     """The allocation in ``mode``: shadow and paper keep the configured book share (D159); the
-    live account takes the rule's recorded shares, nothing when none could be read."""
+    live account takes the rule's recorded shares (none recorded: the reserve holds it all)."""
     if mode not in _LIVE_MODES:
         return book_allocation(settings, investable, mode)
-    return live_allocation(settings, investable, shares or LiveShares.none())
+    shares = await worker.run(recorded_shares)
+    return live_allocation(settings, investable, live_shares(shares))
 
 
 def sleeve_budget(settings: ObliskConfig, sleeve: Sleeve) -> Decimal:
