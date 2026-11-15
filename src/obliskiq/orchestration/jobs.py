@@ -65,6 +65,7 @@ from .health import ping, write_heartbeat
 from .nav import NavCollector, NavOutcome
 from .parts import CapitalParts
 from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcome
+from .scoreboard_jobs import ScoreboardJobs
 
 log = get_logger("orchestration.jobs")
 
@@ -92,7 +93,8 @@ class CycleResult:
 
 
 class Jobs:
-    """Runs a cycle, a heartbeat or a digest over an assembled order path."""
+    """Runs a cycle, a heartbeat or a digest over an assembled order path; after the digest, the
+    scoreboard's runs."""
 
     def __init__(
         self,
@@ -109,8 +111,10 @@ class Jobs:
         session_state: Callable[[], str],
         now: Callable[[], datetime],
         ping_url: SecretStr | None = None,
+        scoreboard: ScoreboardJobs | None = None,
     ) -> None:
         self._settings = settings
+        self._scoreboard = scoreboard
         self._path = path
         self._rebalancer = rebalancer
         self._thesis = thesis
@@ -561,7 +565,10 @@ class Jobs:
             return await self._reporter.report(subject, body)
 
         await record.step("digest", send, _judge_sent)
-        return await record.finish()
+        status = await record.finish()
+        if self._scoreboard is not None:
+            await self._scoreboard.after_digest(session_date)
+        return status
 
 
 def _judge_nav(outcome: NavOutcome) -> StepOutcome:

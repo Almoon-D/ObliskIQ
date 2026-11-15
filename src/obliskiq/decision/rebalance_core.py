@@ -493,9 +493,7 @@ class CoreRebalancer:
             plan.blocked = view
             return plan
         plan.capital = view
-        budget = (
-            await allocation_now(self._worker, self._settings, view.investable, mode)
-        ).core
+        budget = (await allocation_now(self._worker, self._settings, view.investable, mode)).core
         plan.core_capital = budget
         spendable = await self._cash.spendable(mode, view, cash)
         if isinstance(spendable, str):

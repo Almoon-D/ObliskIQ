@@ -66,6 +66,7 @@ from .compute import add_compute_commands
 from .idea import add_idea_commands
 from .llm import add_llm_commands
 from .research import add_research_commands
+from .scoreboard import add_scoreboard_commands, promotion_verdict
 from .service import add_service_commands
 from .sources import add_sources_commands
 
@@ -422,7 +423,8 @@ def _mode_set(loaded: Loaded, out: TextIO) -> int:
             if target is current:
                 return f"execution mode is already {current.value}"
             if target.rank > current.rank:
-                await modes.upgrade(target, actor=OWNER_ACTOR, reason=reason)
+                verdict = await promotion_verdict(loaded, worker, current, target)
+                await modes.upgrade(target, actor=OWNER_ACTOR, reason=reason, promotion=verdict)
             else:
                 await modes.downgrade(target, actor=OWNER_ACTOR, reason=reason)
             return f"execution mode {current.value} -> {target.value}"
@@ -564,6 +566,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_compute_commands(commands)
     add_sources_commands(commands)
     add_llm_commands(commands)
+    add_scoreboard_commands(commands)
     return parser
 
 
