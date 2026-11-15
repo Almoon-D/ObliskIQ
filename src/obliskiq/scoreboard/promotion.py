@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 
 from ..config.schema_scoreboard import PromotionConfig
@@ -285,8 +285,3 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
     if since is not None:
         criteria += _clean_period(evidence, since)
     return Verdict(target, tuple(criteria))
-
-
-def stuck_cutoff(now: datetime, config: PromotionConfig) -> datetime:
-    """An intent still working that expired before this is stuck."""
-    return now - timedelta(hours=config.stuck_after_hours)

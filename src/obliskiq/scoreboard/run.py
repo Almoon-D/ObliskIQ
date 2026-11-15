@@ -21,6 +21,7 @@ from ..capital.allocation import (
     sleeve_budget,
     step_share,
 )
+from ..capital.twr import Reading, account_flows
 from ..config.schema import ObliskConfig
 from ..domain.orders import ExecutionMode, IntentRole, IntentState, OrderSide, Sleeve
 from ..domain.thesis import ThesisState, View
@@ -29,7 +30,9 @@ from ..quant.costs import OrderTerms as CostTerms
 from ..research.prereg import ScoreboardSpec
 from ..store import analyst as analyst_repo
 from ..store import breakers as breaker_repo
+from ..store import capital as capital_repo
 from ..store import fx as fx_repo
+from ..store import nav as nav_repo
 from ..store import orders as order_repo
 from ..store import repos
 from ..store import runs as run_repo
@@ -56,7 +59,8 @@ from .layers import (
     stock_book_rule,
     thesis_book_share,
 )
-from .promotion import Evidence, RunOutcome, stuck_cutoff
+from .performance import Series, SleevePnl, nav_index, reference_index, sleeve_pnl
+from .promotion import Evidence, RunOutcome
 from .rules import GradingRules
 from .tca import Execution, analyse
 
@@ -442,7 +446,7 @@ def promotion_evidence(
         (at, status)
         for at, status in order_repo.reconciliation_statuses(store, since=entered or now)
     )
-    cutoff = stuck_cutoff(now, settings.promotion)
+    cutoff = now - timedelta(minutes=settings.runtime.stuck_after_minutes)
     stuck = sum(
         1
         for stored in order_repo.intents_in_states(store, _WORKING)
@@ -483,3 +487,72 @@ def promotion_evidence(
         capped_book=settings.capital.mode == "cap",
         hard_breaker_tripped=breaker_repo.tripped(store, "broker") is not None,
     )
+
+
+# ── performance ──
+
+
+@dataclass(frozen=True, slots=True)
+class PerformanceView:
+    """The account's growth and the references' over a period, and each sleeve's profit at its
+    end (``sleeves`` is why not, when it cannot be computed)."""
+
+    since: date
+    as_of: date
+    account: Series
+    references: tuple[Series, ...]
+    sleeves: list[SleevePnl] | str
+
+
+def performance(
+    store: Store, settings: ObliskConfig, *, since: date, as_of: date
+) -> PerformanceView:
+    """The account's time-weighted growth from ``since`` to ``as_of``, the configured references
+    over the same NAV days, and each sleeve's profit on ``as_of``."""
+    readings = [
+        Reading(r.as_of, r.nav_base) for r in nav_repo.nav_series(store, since=since, as_of=as_of)
+    ]
+    marks = StoreMarks(
+        store,
+        base=settings.account.base_currency,
+        max_age_days=settings.scoreboard.max_mark_age_days,
+        as_of=as_of,
+    )
+    flows = account_flows(
+        capital_repo.cash_flows(store, as_of=as_of),
+        base=settings.account.base_currency,
+        rate=marks.rate,
+    )
+    account = (
+        Series("account", (), flows)
+        if isinstance(flows, str)
+        else nav_index(readings, flows, timing=settings.capital.twr.flow_timing)
+    )
+    days = [r.on for r in readings]
+    references = tuple(
+        reference_index(
+            reference.name,
+            {member.conid: member.weight for member in reference.members},
+            days,
+            marks.price,
+        )
+        for reference in settings.scoreboard.references
+    )
+    sleeves = sleeve_pnl(
+        order_repo.intent_fills(store),
+        currency=marks.currency,
+        multiplier=lambda conid: _multiplier(store, conid),
+        rate=marks.rate,
+        price=marks.price,
+        on=as_of,
+    )
+    return PerformanceView(since, as_of, account, references, sleeves)
+
+
+def _multiplier(store: Store, conid: int) -> Decimal:
+    """An option's contract multiplier from the thesis options it was chosen for; one for
+    anything else."""
+    row = store.execute(
+        "SELECT multiplier FROM thesis_options WHERE option_conid = ? LIMIT 1", (conid,)
+    ).fetchone()
+    return Decimal(1) if row is None else Decimal(str(row[0]))

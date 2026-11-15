@@ -51,4 +51,3 @@ class PromotionConfig(FrozenModel):
     min_orders: PositiveInt
     slippage_excess_max: Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
     min_fills: PositiveInt
-    stuck_after_hours: PositiveInt

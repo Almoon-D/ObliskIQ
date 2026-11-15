@@ -15,7 +15,7 @@ import pytest
 from obliskiq.config import ObliskConfig
 from obliskiq.domain.orders import ExecutionMode
 from obliskiq.errors import ModeChangeRefusedError
-from obliskiq.execution.modes import PROMOTION_UNTESTED, Modes, write_refusal
+from obliskiq.execution.modes import PROMOTION_UNTESTED, Modes, PromotionCheck, write_refusal
 from obliskiq.store import open_database
 from obliskiq.store import orders as repo
 from obliskiq.store.worker import StoreWorker
@@ -64,13 +64,59 @@ async def test_paper_needs_the_paper_profile(
 
 @pytest.mark.parametrize("target", [ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE])
 @pytest.mark.parametrize("profile", ["paper", "live"])
-async def test_the_live_levels_wait_for_the_promotion_gate(
-    fresh: StoreWorker, shipped_settings: ObliskConfig, target: ExecutionMode, profile: Any
+@pytest.mark.parametrize("passed", [None, False])
+async def test_the_live_levels_need_the_promotion_gate_s_passed_verdict(
+    fresh: StoreWorker,
+    shipped_settings: ObliskConfig,
+    target: ExecutionMode,
+    profile: Any,
+    passed: bool | None,
 ) -> None:
     modes = Modes(fresh, shipped_settings, profile=profile)
-    with pytest.raises(ModeChangeRefusedError, match="promotion_gate_unavailable"):
-        await modes.upgrade(target, actor="owner", reason="r")
+    check = None if passed is None else PromotionCheck(target, passed, "not met")
+    with pytest.raises(ModeChangeRefusedError, match="promotion_gate_not_passed"):
+        await modes.upgrade(target, actor="owner", reason="r", promotion=check)
     assert await fresh.run(repo.latest_mode_change) is None
+
+
+async def test_a_passed_verdict_on_another_level_is_refused(
+    fresh: StoreWorker, shipped_settings: ObliskConfig
+) -> None:
+    modes = Modes(fresh, shipped_settings, profile="live")
+    check = PromotionCheck(ExecutionMode.LIVE_SMALL, True, "met")
+    with pytest.raises(ModeChangeRefusedError, match="not live"):
+        await modes.upgrade(ExecutionMode.LIVE, actor="owner", reason="r", promotion=check)
+
+
+async def test_a_passed_verdict_still_needs_the_live_profile(
+    fresh: StoreWorker, shipped_settings: ObliskConfig
+) -> None:
+    modes = Modes(fresh, shipped_settings, profile="paper")
+    check = PromotionCheck(ExecutionMode.LIVE_SMALL, True, "met")
+    with pytest.raises(ModeChangeRefusedError, match="profile live"):
+        await modes.upgrade(ExecutionMode.LIVE_SMALL, actor="owner", reason="r", promotion=check)
+
+
+async def test_a_passed_verdict_under_the_live_profile_upgrades_and_is_audited(
+    fresh: StoreWorker, shipped_settings: ObliskConfig
+) -> None:
+    modes = Modes(fresh, shipped_settings, profile="live")
+    check = PromotionCheck(ExecutionMode.LIVE_SMALL, True, "live-small: every criterion is met")
+    change = await modes.upgrade(
+        ExecutionMode.LIVE_SMALL, actor="owner", reason="r", promotion=check
+    )
+    assert change.to_mode is ExecutionMode.LIVE_SMALL
+    assert "promotion gate: live-small: every criterion is met" in change.reason
+    assert await modes.current() is ExecutionMode.LIVE_SMALL
+
+
+async def test_paper_records_the_gate_s_verdict_when_given(
+    fresh: StoreWorker, shipped_settings: ObliskConfig
+) -> None:
+    modes = Modes(fresh, shipped_settings, profile="paper")
+    check = PromotionCheck(ExecutionMode.PAPER, False, "paper: not met (10 trading days)")
+    change = await modes.upgrade(ExecutionMode.PAPER, actor="owner", reason="r", promotion=check)
+    assert "promotion gate: paper: not met" in change.reason
 
 
 async def test_an_upgrade_must_go_up(fresh: StoreWorker, shipped_settings: ObliskConfig) -> None:
@@ -98,9 +144,10 @@ def test_what_each_mode_may_write() -> None:
     assert write_refusal(ExecutionMode.PAPER, "paper") is None
     assert write_refusal(ExecutionMode.PAPER, "live") is not None
     assert write_refusal(ExecutionMode.PAPER, None) is not None
-    # The live levels write nothing until the promotion gate exists, whatever the audit says.
+    # The live levels write only under the live profile (reached through the promotion gate).
     for mode in (ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE):
-        for profile in ("live", "paper", None):
+        assert write_refusal(mode, "live") is None
+        for profile in ("paper", None):
             refusal = write_refusal(mode, profile)  # type: ignore[arg-type]
             assert refusal is not None
-            assert "promotion_gate_unavailable" in refusal
+            assert "profile live" in refusal

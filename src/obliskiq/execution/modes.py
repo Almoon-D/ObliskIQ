@@ -3,10 +3,12 @@
 * ``shadow`` sends nothing to the broker: fills are simulated with the cost model
   (``execution/shadow.py``). ``paper`` writes to the IBKR paper account, under profile ``paper``
   only. ``live-small`` and ``live`` write to the live account, under profile ``live`` only.
-* **Upgrades** are explicit owner commands and are audited. ``shadow → paper`` is allowed; its
-  operational entry criteria are the promotion gate's (Session 18) and are recorded as untested,
-  never as passed. The live levels need the promotion gate, which does not exist yet, so every
-  upgrade to them is refused (``promotion_gate_unavailable``).
+* **Upgrades** are explicit owner commands and are audited, with the promotion gate's verdict on
+  the level (``scoreboard/promotion.py``, MASTER_PLAN §5.19) in the audit row. ``shadow → paper``
+  is allowed whatever the verdict says (paper risks no money, and the owner's order test needs
+  it); a verdict not handed in is recorded as untested, never as passed. A live level needs the
+  gate's passed verdict for that very level, handed in by the owner's command, and profile
+  ``live``; otherwise it is refused (``promotion_gate_not_passed``).
 * **Downgrades** are automatic and always allowed; they are audited too.
 * The current mode is the latest audited change, else ``execution.modes.initial``. It is read
   from the store before every write, so a downgrade by another process takes effect at the next
@@ -43,14 +45,28 @@ log = get_logger("execution.modes")
 
 type Profile = Literal["paper", "live"]
 
-#: The profile each writing mode requires. The live levels write nothing until the promotion
-#: gate exists (Session 18), so none is listed.
-_PROFILE_FOR: dict[ExecutionMode, Profile] = {ExecutionMode.PAPER: "paper"}
+#: The profile each writing mode requires.
+_PROFILE_FOR: dict[ExecutionMode, Profile] = {
+    ExecutionMode.PAPER: "paper",
+    ExecutionMode.LIVE_SMALL: "live",
+    ExecutionMode.LIVE: "live",
+}
 
-#: Upgrades this build can make; the live levels wait for the promotion gate (Session 18).
-_UPGRADABLE = frozenset({ExecutionMode.PAPER})
+#: The levels an upgrade to needs the promotion gate's passed verdict.
+_GATED = frozenset({ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE})
 
-PROMOTION_UNTESTED = "promotion criteria untested (the promotion gate is Session 18's)"
+PROMOTION_UNTESTED = "promotion criteria untested (no verdict of the promotion gate was given)"
+
+
+@dataclass(frozen=True, slots=True)
+class PromotionCheck:
+    """The promotion gate's verdict on an upgrade to ``target``, as the owner's command hands it
+    in (the gate reads the scoreboard, which the order path never imports)."""
+
+    target: ExecutionMode
+    passed: bool
+    summary: str
+
 
 #: The file that holds the mode at shadow when the store could not record a stand-down. Fixed,
 #: so it is read without configuration.
@@ -106,9 +122,6 @@ def write_refusal(mode: ExecutionMode, profile: Profile | None) -> str | None:
     """Why ``mode`` under ``profile`` may not place or modify an order; ``None`` if it may."""
     if mode is ExecutionMode.SHADOW:
         return "shadow mode sends no order to the broker"
-    if mode not in _UPGRADABLE:
-        # Whatever the audit says: no live write until the promotion gate exists (Session 18).
-        return f"promotion_gate_unavailable: mode {mode.value} needs the promotion gate"
     required = _PROFILE_FOR[mode]
     if profile != required:
         return f"mode {mode.value} writes only under profile {required} (profile is {profile})"
@@ -153,15 +166,28 @@ class Modes:
             return ExecutionMode.SHADOW
         return await self._recorded()
 
-    async def upgrade(self, to: ExecutionMode, *, actor: str, reason: str) -> ModeChange:
-        """An owner's explicit upgrade; refused unless this build may make it."""
+    async def upgrade(
+        self,
+        to: ExecutionMode,
+        *,
+        actor: str,
+        reason: str,
+        promotion: PromotionCheck | None = None,
+    ) -> ModeChange:
+        """An owner's explicit upgrade, with the promotion gate's verdict on ``to``; refused when
+        the rules do not allow it."""
         current = await self.current()
         if to.rank <= current.rank:
             raise ModeChangeRefusedError(f"{to.value} is not above the current {current.value}")
-        if to not in _UPGRADABLE:
+        if promotion is not None and promotion.target is not to:
             raise ModeChangeRefusedError(
-                f"promotion_gate_unavailable: {to.value} needs the promotion gate and an owner "
-                "command; the gate is not built yet"
+                f"the promotion verdict is on {promotion.target.value}, not {to.value}"
+            )
+        if to in _GATED and (promotion is None or not promotion.passed):
+            raise ModeChangeRefusedError(
+                f"promotion_gate_not_passed: {to.value} needs the promotion gate's passed "
+                "verdict and an owner command"
+                + ("" if promotion is None else f" ({promotion.summary})")
             )
         refusal = write_refusal(to, self._profile)
         if refusal is not None:
@@ -179,7 +205,8 @@ class Modes:
             to_mode=to,
             direction="upgrade",
             actor=actor,
-            reason=f"{reason}; {PROMOTION_UNTESTED}",
+            reason=f"{reason}; "
+            + (PROMOTION_UNTESTED if promotion is None else f"promotion gate: {promotion.summary}"),
         )
         await self._worker.run(repo.record_mode_change, change)
         return change

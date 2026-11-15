@@ -24,8 +24,8 @@ scoreboard:
   max_mark_age_days: 7
 
 promotion:
-  # L1 paper: this many consecutive trading days of shadow (on the order path's venue calendar)
-  # with no unhandled error, clean reconciliation and no stuck intent (MASTER_PLAN §5.19).
+  # L1 paper: this many consecutive trading days of shadow (on the digest's venue calendar) with
+  # no unhandled error, clean reconciliation and no stuck intent (runtime.stuck_after_minutes).
   shadow_days: 10
   # L2 live-small: this many weeks of paper with no rail violation, the order success rate and
   # slippage below, and a passed breaker, kill and cash-flow drill.
@@ -42,5 +42,3 @@ promotion:
   # fills. A judgement: 0.1 % a leg above the model, the liquid tier's slippage (costs.yaml).
   slippage_excess_max: "0.001"
   min_fills: 20
-  # An intent still working this long after it expired is stuck. A judgement: a cycle's length.
-  stuck_after_hours: 6
