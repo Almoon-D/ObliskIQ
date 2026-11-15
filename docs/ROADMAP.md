@@ -34,7 +34,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | not run (owner, 2026-11-15, D168): no history bought; no test reaches a probability of a sufficient outcome of 0.5 (D162) | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | done (on fixtures; no IBKR call) | v0.23.0 |
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | not run while no Hunter hypothesis is sufficient or inconclusive-positive (D168); a new hypothesis comes through Session 21 | |
-| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25 and 27, with 24's verdict recorded as not run (D168) | |
+| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | done (on fixtures; the rules pre-registered and locked, #71; no layer active yet; H13's record and the panel's producer to 18a, D171) | v0.26.0 |
+| 18a | Scoreboard, the remainder | H13's after-tax monthly record and its looks, the weekly forecast panel's producer, the broker session's re-logins in the store | after 18 | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
@@ -58,6 +59,21 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 18 — Scoreboard, capital and promotion (2026-11-15, v0.26.0)
+
+- **Pre-registered first** (#71, D169): the scoreboard's rules, with ρ = 0.25 estimated from
+  2010–2026 history of the 51 tradable candidates before any minimum was fixed; locked.
+- **Landed:** forward grading of every layer's calls in weekly cohorts with Newey–West and D62's
+  verdict from 26 cohorts and 30 effective observations; Brier, reliability, calibration and
+  empirical-Bayes weights; monitoring against a twin with Pocock-type spending; the pattern
+  lifecycle; the live allocation rule; performance, TCA, the promotion gate with live upgrades
+  behind it (D170); weekly and monthly reports after the digest; `obliskiq scoreboard` and
+  `obliskiq promotion`.
+- **Deferred** (D171, Session 18a): H13's record and its looks (the thesis book holds no live
+  share once a look is due), the panel's producer, re-logins in the store.
+- **Live findings.** None: no IBKR call (Yahoo and the ECB for ρ, through the research store).
+  **Prompts edited:** Session 18a inserted.
 
 ### Owner ruling: Session 24 is not run (2026-11-15, v0.25.1)
 
@@ -323,11 +339,13 @@ settles it.
 | B3 regular close follows New York daylight saving time (the BVMF seasonal close) | 2 | T1 or the first command list after it |
 | XEUR session hours versus single-stock option hours (options use `common_windows`) | 2 | T1 or the first command list after it |
 | IBKR's trading-schedule format as a `ScheduleSource` (regular hours only are compared) | 2 | T1 or the first command list after it |
-| Order window 30 min after the open and 15 before the close | 2 | 18 (TCA) |
+| Order window 30 min after the open and 15 before the close | 2 | the first paper fills through TCA (built in 18) |
 | Holiday lists for XSHE, XNSE, CHIA, XSPX (blocked until sourced; XNSE holds data only) | 2 | 19a |
 | Precomputed calendars end 2026-12-31 for XSHG, XBOM, XSES (`Calendars.coverage()`); the universe holds data only there (510300 on XSHG), collected in New York's job past that date (D96, D116) | 2 | 19a (a tradable candidate there) |
 | IBKR market-data flag spellings: `FROZEN_DELAYED` → `frozen`, an unlisted or negated flag → NULL with the raw flag kept (CP's 6509 letter codes are decoded by `ibkr/decode.py`; MCP spellings unchanged) | 2 | T1 or the first command list after it |
 | US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
+| TCA on the first paper fills: the clearance's quote as arrival, the cost model's leg beside each fill (`scoreboard/tca.py`, `obliskiq scoreboard report weekly`) | 18 | the owner's order test and execution test |
+| The weekly and monthly reports and their Telegram summary on the deployed machine (`orchestration/scoreboard_jobs.py`) | 18 | the first week of `serve` after 18 |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
 | Transaction taxes: FR's rate against CGI art. 235 ter ZD (Légifrance refused the container, 2026-10-22); IT's regulated-market rate and paying side in Legge 228/2012 art. 1 c. 491 and 494 (Legge 199/2025's 0.4 % standard rate read on Normattiva, 2026-10-22); GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21). The core's ETFs and ETCs pay none of them | 2 | 15 (the first French or Italian share a thesis orders) |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
@@ -404,6 +422,12 @@ settles it.
 | The equity reference's quote beside each managed NAV: that XDWD (IBIS2) returns a usable delayed or closing quote at every cycle, the Asian morning and New York's last hour included (`VERIFY-LIVE(the equity reference's quote outside its venue's hours)`); without one a fall is not excused | 25 | the first week of `serve` |
 
 ## Follow-ups
+
+- **Scoreboard (Session 18):** `capital.satellite_ceiling` (0.20) and its validator keep the
+  core's budget, so D149's 50 % needs them reworked when a Hunter hypothesis exists (Session 26,
+  D171). A layer's activation condition and pooled re-test are registered per layer when one
+  exists; none is, so no layer activates or steps. The thesis book's grading as calls uses the
+  approval date and the 28-day horizon; H13 reads its own record (18a).
 
 - **Breakers (Session 25):** a forced shadow leaves the paper orders already working to expire
   or to the kill switch; the hard limit (0.25) assumes the reserve dominates the book and wants a

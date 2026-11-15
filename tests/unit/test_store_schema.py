@@ -1,4 +1,4 @@
-"""The shape of the migrations (``001_core.sql`` through ``016_thesis_options.sql``) and the
+"""The shape of the migrations (``001_core.sql`` through ``017_scoreboard.sql``) and the
 constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
@@ -339,9 +339,37 @@ SHAPE = {
     "thesis_opinions": (
         "thesis_id:INTEGER*, call_id:INTEGER!, probability:REAL!, critique:TEXT!, facts:TEXT!"
     ),
+    # 017_scoreboard
+    "scoreboard_calls": (
+        "call_id:INTEGER*, layer:TEXT!, conid:INTEGER!, direction:TEXT!, called_at:TEXT!, "
+        "probability:REAL, base_rate:REAL, expected_excess:REAL, baseline:REAL, detail:TEXT!"
+    ),
+    "layer_events": (
+        "event_id:INTEGER*, at:TEXT!, layer:TEXT!, event:TEXT!, actor:TEXT!, detail:TEXT!"
+    ),
+    "layer_months": (
+        "layer:TEXT!*, month:TEXT!*, mode:TEXT!, closed:INTEGER!, live:REAL, twin:REAL, "
+        "reference:REAL, recorded_at:TEXT!"
+    ),
+    "monitor_looks": (
+        "layer:TEXT!*, month:TEXT!*, boundary:TEXT!*, statistic:REAL, critical:REAL, "
+        "spent:REAL!, breached:INTEGER!, evaluable:INTEGER!, detail:TEXT!, at:TEXT!"
+    ),
+    "allocation_events": (
+        "event_id:INTEGER*, at:TEXT!, layer:TEXT!, share:TEXT!, actor:TEXT!, reason:TEXT!"
+    ),
+    "weight_sets": "layer:TEXT!*, sha256:TEXT!*, weights:TEXT!, at:TEXT!",
+    "drills": (
+        "drill_id:INTEGER*, at:TEXT!, kind:TEXT!, mode:TEXT!, passed:INTEGER!, actor:TEXT!, "
+        "detail:TEXT!"
+    ),
 }
 
 INDEXES = {
+    # 017_scoreboard
+    "ix_scoreboard_calls_layer",
+    "ix_layer_events_layer",
+    "ix_allocation_events_layer",
     "ix_analyst_calls_produced",
     "ix_chain_expiry",
     "ix_chain_underlying_date",
@@ -1035,3 +1063,60 @@ def test_a_bad_zombie_observation_is_refused(store: Store, overrides: dict[str, 
 )
 def test_a_bad_shadow_entry_is_refused(store: Store, overrides: dict[str, Any]) -> None:
     refuses(store, "option_shadow_entries", **overrides)
+
+
+# ── 017_scoreboard ──
+
+
+@pytest.mark.parametrize(
+    ("sql", "values"),
+    [
+        (
+            "INSERT INTO scoreboard_calls (layer, conid, direction, called_at, detail) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("l", 1, "sideways", STAMP, "d"),
+        ),
+        (
+            "INSERT INTO scoreboard_calls (layer, conid, direction, called_at, probability, "
+            "detail) VALUES (?, ?, ?, ?, ?, ?)",
+            ("l", 1, "up", STAMP, 1.5, "d"),
+        ),
+        (
+            "INSERT INTO layer_events (at, layer, event, actor, detail) VALUES (?, ?, ?, ?, ?)",
+            (STAMP, "l", "retire", "a", "d"),
+        ),
+        (
+            "INSERT INTO layer_months (layer, month, mode, closed, recorded_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("l", "2026-1", "live", 0, STAMP),
+        ),
+        (
+            "INSERT INTO monitor_looks (layer, month, boundary, statistic, critical, spent, "
+            "breached, evaluable, detail, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("l", "2026-10", "gap", None, None, 0.001, 1, 0, "d", STAMP),
+        ),
+        (
+            "INSERT INTO monitor_looks (layer, month, boundary, statistic, critical, spent, "
+            "breached, evaluable, detail, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("l", "2026-10", "twin", 1.0, None, 0.001, 0, 1, "d", STAMP),
+        ),
+        (
+            "INSERT INTO allocation_events (at, layer, share, actor, reason) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (STAMP, "l", "1.5", "a", "r"),
+        ),
+        (
+            "INSERT INTO weight_sets (layer, sha256, weights, at) VALUES (?, ?, ?, ?)",
+            ("l", "abc", "{}", STAMP),
+        ),
+        (
+            "INSERT INTO drills (at, kind, mode, passed, actor, detail) VALUES (?, ?, ?, ?, ?, ?)",
+            (STAMP, "fire", "paper", 1, "a", "d"),
+        ),
+    ],
+)
+def test_the_scoreboard_s_records_refuse_what_is_not_a_record(
+    store: Store, sql: str, values: tuple[Any, ...]
+) -> None:
+    with pytest.raises(sqlite3.IntegrityError):
+        store.execute(sql, values)

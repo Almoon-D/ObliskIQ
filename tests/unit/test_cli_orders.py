@@ -143,7 +143,7 @@ def test_mode_show_and_set(data_dir: Path) -> None:
     )
     status, out, _ = _run("mode", "set", "live", "--reason", "too soon")
     assert status == EXIT_INVALID
-    assert "promotion_gate_unavailable" in out
+    assert "promotion_gate_not_passed" in out
     status, out, _ = _run("mode", "set", "shadow", "--reason", "pause")
     assert (status, out.strip()) == (EXIT_OK, "execution mode paper -> shadow")
 

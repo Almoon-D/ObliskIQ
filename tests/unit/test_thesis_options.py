@@ -226,7 +226,7 @@ def test_the_migration_keeps_every_thesis_as_shares(tmp_path: Path) -> None:
     before = tmp_path / "before"
     before.mkdir()
     for path in sorted(source.glob("*.sql")):
-        if not path.name.startswith("016"):
+        if path.name < "016":
             (before / path.name).write_text(path.read_text())
     connection = sqlite3.connect(tmp_path / "db.sqlite", autocommit=True)
     migrations.migrate(connection, before)

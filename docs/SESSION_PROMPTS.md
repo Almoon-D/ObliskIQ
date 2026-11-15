@@ -2517,6 +2517,46 @@ calibration, budget steps and pattern promotion are impossible before the minimu
 
 ---
 
+## Session 18a — Scoreboard, the remainder
+
+**Launcher:** `Execute Session 18a exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 18a. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §5.5, §5.19 and DECISIONS D156, D169, D170, D171). Port from legacy/, never
+from memory. Finish with the end-of-session protocol.
+
+PRECONDITION: Session 18 merged (v0.26.0). The scoreboard's rules are locked
+(research/preregistrations/scoreboard.md); H13 is research/preregistrations/thesis-book.md.
+
+GOAL: the thesis book's capital follows H13 on its own record, the weekly forecast panel
+produces its forecasts, and the promotion gate can read the broker session's re-logins.
+
+DELIVERABLES
+1. H13's record (scoreboard/): for each record (shadow, paper, live) the book's and the twin's
+   accounts from the thesis fills, after tax at liquidation under the active TaxPolicy, valued
+   at month-end marks; x_m per month; the looks at H13's months with its step, its return to
+   shadow and its per-source and per-conviction boundaries, "without the best thesis" and the
+   minimums of closed theses; a look not evaluable on a stale mark. Results recorded once.
+2. The allocation rule reads those looks (capital/allocation.py, scoreboard/layers.py
+   thesis_book_share): the exploration share while the paper record is not below its
+   boundary, the steps on the live record, a source or a conviction level held back as H13
+   says; every change audited and reported.
+3. The weekly forecast panel's producer (port legacy/old/ObliskIQ/modules/analytics/
+   forecast_panel.py): the tradable candidates with a fresh close, hashed; trailing price
+   statistics only; the analyst's provider and budget; at least 60 % and 20 names or nothing;
+   each forecast a scoreboard call of layer `panel` with 12-1 momentum beside it; once per ISO
+   week from the service.
+4. The broker session's re-logins in the store, so L1's "every daily reset re-logged
+   unattended" is measured (scoreboard/promotion.py).
+
+ACCEPTANCE: a hand-computed x_m with tax and a twin; H13's locked boundary table reproduced;
+a look not evaluable on a stale mark changes nothing; a step and a return to shadow drill; the
+panel refuses a stale feed and a thin cohort; L1 reads the re-logins.
+```
+
+---
+
 ## Session 19 — Cockpit, settings and deployment
 
 **Launcher:** `Execute Session 19 exactly as specified in docs/SESSION_PROMPTS.md on main.`

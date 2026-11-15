@@ -38,6 +38,7 @@ from ..store import repos
 from ..store import runs as run_repo
 from ..store import scoreboard as repo
 from ..store import theses as thesis_repo
+from ..store import thesis_options as link_repo
 from ..store.db import Store
 from ..store.mappers import stamp_text
 from ..store.scoreboard import AllocationEvent, Call, Direction, LayerEvent
@@ -65,6 +66,7 @@ from .rules import GradingRules
 from .tca import Execution, analyse
 
 ZERO = Decimal(0)
+MONTHS_PER_YEAR = 12
 #: The layer of the weekly forecast panel's calls.
 PANEL_LAYER = "panel"
 #: Theses are graded per source (``thesis:owner``, ``thesis:analyst``) and the analyst's per
@@ -278,7 +280,7 @@ def thesis_book_months(store: Store, *, as_of: date) -> tuple[int, int]:
     def months(first: date | None) -> int:
         if first is None:
             return 0
-        return (as_of.year - first.year) * 12 + as_of.month - first.month + 1
+        return (as_of.year - first.year) * MONTHS_PER_YEAR + as_of.month - first.month + 1
 
     return months(firsts.get("paper")), months(firsts.get("live"))
 
@@ -443,8 +445,7 @@ def promotion_evidence(
         for r in run_repo.runs_since(store, since=first)
     )
     reconciled = tuple(
-        (at, status)
-        for at, status in order_repo.reconciliation_statuses(store, since=entered or now)
+        order_repo.reconciliation_statuses(store, since=entered or now, as_of=now)
     )
     cutoff = now - timedelta(minutes=settings.runtime.stuck_after_minutes)
     stuck = sum(
@@ -463,12 +464,7 @@ def promotion_evidence(
             continue
         placed += 1
         filled += intent.state is IntentState.FILLED
-    violations = store.execute(
-        "SELECT COUNT(*) FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
-        "WHERE f.simulated = 0 AND i.mode = ? AND f.executed_at >= ? AND NOT EXISTS ("
-        "SELECT 1 FROM clearances c WHERE c.intent_id = i.intent_id AND c.used_at IS NOT NULL)",
-        (mode.value, stamp_text(entered or now)),
-    ).fetchone()[0]
+    violations = order_repo.fills_without_clearance(store, mode, since=entered or now, as_of=now)
     measured = executions(store, settings, mode=mode, since=entered)
     return Evidence(
         now=now,
@@ -481,7 +477,7 @@ def promotion_evidence(
         relogins_recorded=False,
         placed=placed,
         filled=filled,
-        fills_without_clearance=int(violations),
+        fills_without_clearance=violations,
         tca=analyse(measured),
         drills=tuple(repo.drills(store)),
         capped_book=settings.capital.mode == "cap",
@@ -552,7 +548,5 @@ def performance(
 def _multiplier(store: Store, conid: int) -> Decimal:
     """An option's contract multiplier from the thesis options it was chosen for; one for
     anything else."""
-    row = store.execute(
-        "SELECT multiplier FROM thesis_options WHERE option_conid = ? LIMIT 1", (conid,)
-    ).fetchone()
-    return Decimal(1) if row is None else Decimal(str(row[0]))
+    found = link_repo.option_multiplier(store, conid)
+    return Decimal(1) if found is None else found

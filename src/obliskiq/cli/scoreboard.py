@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from .app import Loaded
 
 EXIT_OK = 0
-EXIT_INVALID = 2
+EXIT_INVALID = 1
 OWNER_ACTOR = "owner"
 #: Days a weekly and a monthly report look back.
 WEEK_DAYS = 7

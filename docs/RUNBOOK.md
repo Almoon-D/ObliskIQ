@@ -94,10 +94,14 @@ WantedBy=default.target
 
 ## Move to paper
 
-L1 of the promotion ladder (MASTER_PLAN §5.19) asks for ten trading days of clean shadow first;
-the promotion gate that checks it is Session 18's, so today it is the owner's judgement.
+L1 of the promotion ladder (MASTER_PLAN §5.19) asks for ten trading days of clean shadow first.
+`obliskiq promotion status` reads it: each criterion met, not met or unmeasured. The broker
+session's re-logins are not recorded yet (Session 18a), so L1 reads "not met" until then; the
+upgrade to paper is your command whatever the verdict, and the verdict is written in its audit row
+(DECISIONS D170).
 
 ```
+uv run obliskiq promotion status                    # the gate's verdict on paper
 uv run obliskiq run-cycle --mode shadow --dry-run   # still sensible?
 systemctl --user stop obliskiq                      # the lock: stop the service first
 uv run obliskiq mode set paper --reason "start paper trading"
@@ -108,6 +112,25 @@ systemctl --user start obliskiq
 ```
 
 `run-cycle --mode` must name the mode the store holds; it refuses otherwise.
+
+## The scoreboard, drills and the live levels
+
+After the digest the service grades every layer's calls; the first digest of a week writes the
+weekly report (`<data dir>/reports/`) and sends its summary, the first digest of a month runs the
+month's monitoring looks and capital allocation and sends the monthly report. By hand:
+
+```
+uv run obliskiq scoreboard grade                      # every layer's forward record
+uv run obliskiq scoreboard report weekly --send       # or monthly
+uv run obliskiq promotion status                      # the next level's criteria
+uv run obliskiq promotion drill kill passed --detail "set, entries refused, cleared"
+uv run obliskiq scoreboard unfreeze <layer> --reason "what the investigation found"
+```
+
+Record each drill in paper as you run it (`breaker`, `kill`, `cash_flow`): L2 needs the latest of
+each passed in paper. An upgrade to live-small or live is refused unless `promotion status`
+passes for that level and the profile is `live` (OAuth, never from a cloud session); it is still
+your command (`obliskiq mode set live-small --reason ...`).
 
 ## Stop
 

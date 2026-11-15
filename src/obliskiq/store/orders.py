@@ -895,6 +895,21 @@ def mode_changes(store: Store) -> list[ModeChange]:
     return [_mode_change(row) for row in rows]
 
 
+def fills_without_clearance(
+    store: Store, mode: ExecutionMode, *, since: datetime, as_of: datetime
+) -> int:
+    """The broker fills of ``mode``'s intents from ``since`` to ``as_of`` whose intent has no
+    spent clearance: an order that reached the broker around the pre-trade gate."""
+    row = store.execute(
+        "SELECT COUNT(*) FROM fills f JOIN intents i ON i.intent_id = f.intent_id "
+        "WHERE f.simulated = 0 AND i.mode = ? AND f.executed_at >= ? AND f.executed_at <= ? "
+        "AND NOT EXISTS (SELECT 1 FROM clearances c WHERE c.intent_id = i.intent_id "
+        "AND c.used_at IS NOT NULL)",
+        (mode.value, stamp_text(since), stamp_text(as_of)),
+    ).fetchone()
+    return int(row[0])
+
+
 def placement_clearance(store: Store, intent_id: UUID) -> PretradeClearance | None:
     """The spent clearance that placed ``intent_id`` (its first placement); ``None`` when it was
     never placed through the gate."""
@@ -1134,11 +1149,14 @@ def record_reconciliation(
         )
 
 
-def reconciliation_statuses(store: Store, *, since: datetime) -> list[tuple[datetime, str]]:
-    """When each reconciliation since ``since`` ran and its status, in the order recorded."""
+def reconciliation_statuses(
+    store: Store, *, since: datetime, as_of: datetime
+) -> list[tuple[datetime, str]]:
+    """When each reconciliation from ``since`` to ``as_of`` ran and its status, in the order
+    recorded."""
     rows = store.execute(
-        "SELECT at, status FROM reconciliations WHERE at >= ? ORDER BY run_id",
-        (stamp_text(since),),
+        "SELECT at, status FROM reconciliations WHERE at >= ? AND at <= ? ORDER BY run_id",
+        (stamp_text(since), stamp_text(as_of)),
     ).fetchall()
     return [(read_stamp(row["at"], "reconciliations", "at"), row["status"]) for row in rows]
 

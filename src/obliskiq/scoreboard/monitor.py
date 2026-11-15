@@ -33,6 +33,7 @@ from ..research.prereg import MonitoringSpec
 from ..store.scoreboard import Boundary, LayerMonth
 
 _NORMAL = NormalDist()
+MONTHS_PER_YEAR = 12
 
 
 def spent_by(alpha: float, t: float) -> float:
@@ -150,5 +151,9 @@ def twin_look(months: Sequence[LayerMonth], backtest: Backtest, spec: Monitoring
 
 def months_since(first: str, last: str) -> int:
     """Months from ``first`` to ``last`` (``YYYY-MM``) counted whole: the same month is 1."""
-    a, b = int(first[:4]) * 12 + int(first[5:7]), int(last[:4]) * 12 + int(last[5:7])
-    return b - a + 1
+
+    def index(month: str) -> int:
+        year, number = (int(part) for part in month.split("-"))
+        return year * MONTHS_PER_YEAR + number
+
+    return index(last) - index(first) + 1

@@ -154,6 +154,10 @@ STATE_READS = {
     # Session 7: the bot's own fills with their intents, read whole by the managed book (its
     # cash in mode cap) and the reservation planner (when a position was opened).
     "intent_fills",
+    # Session 18: the mode audit whole (when the account entered its mode, for the promotion
+    # gate) and the clearance that placed one intent (its arrival quote, for TCA).
+    "mode_changes",
+    "placement_clearance",
 }
 
 #: Names that write in ``store/orders.py``.

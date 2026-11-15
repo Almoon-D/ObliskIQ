@@ -26,6 +26,7 @@ from ..domain.orders import ExecutionMode, ModeChange
 from ..store.scoreboard import DRILL_KINDS, Drill
 from .tca import TcaReport
 
+MONTHS_PER_YEAR = 12
 #: Days in a week.
 DAYS_PER_WEEK = 7
 #: The run statuses that are an unhandled error.
@@ -98,7 +99,7 @@ def mode_since(changes: Sequence[ModeChange], mode: ExecutionMode) -> datetime |
 
 
 def _months_between(first: datetime, last: datetime) -> int:
-    months = (last.year - first.year) * 12 + last.month - first.month
+    months = (last.year - first.year) * MONTHS_PER_YEAR + last.month - first.month
     return months - (1 if last.day < first.day else 0)
 
 
@@ -137,7 +138,7 @@ def _clean_period(evidence: Evidence, since: datetime) -> list[Criterion]:
     ]
 
 
-def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig) -> Verdict:
+def evaluate(target: ExecutionMode, evidence: Evidence, promotion: PromotionConfig) -> Verdict:
     """The verdict on an upgrade to ``target`` from the evidence of the current mode."""
     criteria: list[Criterion] = []
     previous = {
@@ -165,8 +166,8 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
         days = [] if since is None else [d for d in evidence.sessions if d >= since.date()]
         criteria.append(
             Criterion(
-                f"{config.shadow_days} trading days of shadow",
-                None if since is None else len(days) >= config.shadow_days,
+                f"{promotion.shadow_days} trading days of shadow",
+                None if since is None else len(days) >= promotion.shadow_days,
                 "the audit does not date the entry into shadow"
                 if since is None
                 else f"{len(days)} trading days since {since.date().isoformat()}",
@@ -188,8 +189,8 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
         weeks = None if since is None else (evidence.now - since).days // DAYS_PER_WEEK
         criteria.append(
             Criterion(
-                f"{config.paper_weeks} weeks of paper",
-                None if weeks is None else weeks >= config.paper_weeks,
+                f"{promotion.paper_weeks} weeks of paper",
+                None if weeks is None else weeks >= promotion.paper_weeks,
                 "the audit does not date the entry into paper"
                 if weeks is None
                 else f"{weeks} weeks since {since.date().isoformat() if since else ''}",
@@ -205,14 +206,14 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
                 "clearance",
             )
         )
-        enough = evidence.placed >= config.min_orders
+        enough = evidence.placed >= promotion.min_orders
         rate = Decimal(evidence.filled) / evidence.placed if enough else None
         criteria.append(
             Criterion(
-                f"order success at least {config.order_success_min}",
-                None if rate is None else rate >= config.order_success_min,
+                f"order success at least {promotion.order_success_min}",
+                None if rate is None else rate >= promotion.order_success_min,
                 f"{evidence.filled} of {evidence.placed} orders placed filled"
-                + ("" if enough else f" (at least {config.min_orders} needed)"),
+                + ("" if enough else f" (at least {promotion.min_orders} needed)"),
             )
         )
         tca = evidence.tca
@@ -220,12 +221,12 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
             Criterion(
                 "slippage within the cost model's band",
                 None
-                if tca is None or tca.excess is None or tca.fills < config.min_fills
-                else Decimal(str(tca.excess)) <= config.slippage_excess_max,
+                if tca is None or tca.excess is None or tca.fills < promotion.min_fills
+                else Decimal(str(tca.excess)) <= promotion.slippage_excess_max,
                 "no fill measured"
                 if tca is None or tca.excess is None
                 else f"realised less modelled {tca.excess:+.4%} a leg over {tca.fills} fills "
-                f"(at most {config.slippage_excess_max}, at least {config.min_fills} fills)",
+                f"(at most {promotion.slippage_excess_max}, at least {promotion.min_fills} fills)",
             )
         )
         for kind in DRILL_KINDS:
@@ -260,8 +261,8 @@ def evaluate(target: ExecutionMode, evidence: Evidence, config: PromotionConfig)
     months = None if since is None else _months_between(since, evidence.now)
     criteria.append(
         Criterion(
-            f"{config.live_small_months} months of live-small",
-            None if months is None else months >= config.live_small_months,
+            f"{promotion.live_small_months} months of live-small",
+            None if months is None else months >= promotion.live_small_months,
             "the audit does not date the entry into live-small"
             if months is None
             else f"{months} months since {since.date().isoformat() if since else ''}",
