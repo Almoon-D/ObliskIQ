@@ -31,10 +31,10 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | done (on fixtures and one live provider; drafts and opinions in shadow, graded forward; no IBKR call) | v0.24.0 |
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | done (on fixtures, in shadow; H8 registered with its forward grading rule; no IBKR call) | v0.25.0 |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | done (no test reaches a probability of a sufficient outcome of 0.5: do not buy, D162) | v0.22.0 |
-| 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after the owner buys a history, which Session 23 advises against (D162) | |
+| 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | not run (owner, 2026-11-15, D168): no history bought; no test reaches a probability of a sufficient outcome of 0.5 (D162) | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | done (on fixtures; no IBKR call) | v0.23.0 |
-| 26 | Hunter engine | the mechanism 24 tested, on the live book | after 22, 24, 25, the reserve's paper cycle and a sufficient or inconclusive-positive outcome | |
-| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25, 27 and 24's verdict | |
+| 26 | Hunter engine | the mechanism 24 tested, on the live book | not run while no Hunter hypothesis is sufficient or inconclusive-positive (D168); a new hypothesis comes through Session 21 | |
+| 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | after 25 and 27, with 24's verdict recorded as not run (D168) | |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
@@ -58,6 +58,15 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Owner ruling: Session 24 is not run (2026-11-15, v0.25.1)
+
+- **Ruled** (D168): no history is bought for the Hunter's test; Session 24 is recorded as not
+  run, which is the verdict Session 18 needs. Session 26 does not run while the registry holds
+  no sufficient or inconclusive-positive Hunter hypothesis.
+- **Next:** the owner's order test, execution test and reserve paper cycle (docs/RUNBOOK.md),
+  then Sessions 18, 19 and 20.
+- **Live findings.** None: no IBKR call. **Prompts edited:** Session 18's precondition.
 
 ### Session 29 — Options for theses (2026-11-15, v0.25.0)
 
@@ -400,13 +409,12 @@ settles it.
   or to the kill switch; the hard limit (0.25) assumes the reserve dominates the book and wants a
   look when the satellite's ceiling rises (D163; Session 18). The freeze's audit is Session 17's.
 
-- **Owner question (Session 23):** buy Sharadar's Core US Equities Bundle, full history, at
-  US$499 a year, for the Hunter's test: yes or no? The recommendation is no: no test in the
-  fixed sequence reaches a probability of a sufficient outcome of 0.5
-  (`research/reports/hunter-feasibility.md`, D162). Session 24 waits for the answer.
+- **Owner ruling (2026-11-15, D168):** no history is bought and Session 24 is not run. A Hunter
+  test returns only through a new hypothesis whose probability of a sufficient outcome reaches
+  0.5 (Session 21).
 - The cross-section harness Bonferroni-adjusts over every test of a confirmation run; a fixed
   sequence (D154) needs none. A pre-registration of the Hunter's sequence would need the
-  adjustment named per test (Session 24, if it runs).
+  adjustment named per test (a Hunter pre-registration, if one is ever written).
 - The order path's eligibility still fails the contango check closed (`UnavailableContangoCheck`,
   D137): the daily compute step (D166) writes the commodity engine's readings, and Session 17
   reads them through the store worker. That is needed before a futures-tracking ETC joins the
@@ -479,8 +487,8 @@ settles it.
   with free prices (DECISIONS D84). A survivorship-free US price history with delisting returns
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
   (2026-10-17). Session 23 found that no test in the Hunter's sequence would reach a
-  probability of a sufficient outcome of 0.5 and advises against buying (D162); Session 24
-  waits for the owner's answer. The Hunter has no tested signal (D87).
+  probability of a sufficient outcome of 0.5 (D162); the owner bought nothing and Session 24
+  is not run (D168). The Hunter has no tested signal (D87).
 - **Owner:** the reserve runs D50 (D147). Open: an LLM provider key, or the minimal extractor
   waits (D70); whether a hedge inside a UCITS share class fits the mandate (D69); a deep
   emergency limit for protective exits (off by default, D67); buying option-surface history for
@@ -493,7 +501,7 @@ settles it.
 - The session that records the owner's paste from docs/RUNBOOK.md ("From the order test to the
   reserve on paper") decides `o10164` on a conversion from IBKR's text (D101), in a pull request
   of its own: until a conversion fills on paper no order in a foreign currency can be funded,
-  and Session 26 waits for it.
+  and Session 26, if it ever runs, waits for it.
 - The reconciliation freeze passes while no run exists, and a green run never ages
   (`execution/pretrade.py: _guards`, `execution/executor.py: _stage`,
   `decision/rebalance_core.py: survey`). Decide a maximum age, with failure-branch tests, before

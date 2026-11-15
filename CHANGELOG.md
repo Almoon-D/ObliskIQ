@@ -5,6 +5,15 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.25.1] - 2026-11-15
+
+Owner ruling: Session 24 is not run and no price history is bought for the Hunter's test (D168).
+
+### Changed
+
+- ROADMAP: Session 24 recorded as not run; Sessions 18 and 26 read it.
+- Session 18's precondition names the record.
+
 ## [0.25.0] - 2026-11-15
 
 Session 29: a thesis, bullish or bearish, can be held as a long call or a long put, and each
