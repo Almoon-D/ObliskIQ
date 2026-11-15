@@ -20,6 +20,11 @@ decision cycle, for the theses still open, in order of arrival:
    (``engines/thesis/exits.py``); one whose position is gone (the protective stop filled, its
    exit filled, the reservation planner sold it) is **closed** and graded.
 
+A thesis may be held as a long option instead of its instrument (``thesis_options.py``): one
+that says ``option``, or whose levels describe a fall, is a long call or put when the options
+sleeve's gates pass and nothing otherwise; one that says ``auto`` is the option when they pass
+and its instrument when they do not.
+
 Entries and exits are intents priced by ``IntentMaker`` and carried by the executor through the
 pre-trade gate, a funding conversion first for a foreign currency, as the core's are. An entry
 carries its protective stop: a stop-limit at the invalidation (``execution/protective.py``), which
@@ -31,14 +36,14 @@ switch is on or reconciliation freezes new risk; exits do not.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import date, datetime
+from collections.abc import Callable, Sequence
+from dataclasses import replace
+from datetime import datetime
 from decimal import Decimal
 
 from ..calendars.service import Calendars
 from ..capital.budgets import book_allocation
-from ..capital.managed import CapitalReader, CapitalView, book_fills
+from ..capital.managed import CapitalReader, book_fills
 from ..config.schema import ObliskConfig
 from ..data.candidates import resolve_candidate
 from ..domain.instrument import TradedInstrument
@@ -52,13 +57,12 @@ from ..domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
-from ..domain.thesis import OPEN_STATES, SLOT_STATES, LogKind, Thesis, ThesisState
+from ..domain.thesis import OPEN_STATES, SLOT_STATES, Expression, LogKind, Thesis, ThesisState
 from ..engines.thesis.book import Slot
 from ..engines.thesis.exits import OVERRIDE, exit_due
 from ..engines.thesis.gate import Finding, GateFacts, Reason, ThesisGate, describe
 from ..engines.thesis.grading import grade
 from ..errors import CalendarError, ObliskError
-from ..execution.account import CashRead
 from ..execution.instruments import (
     UniverseDirectory,
     describe_pinned,
@@ -72,109 +76,36 @@ from ..jurisdiction.eligibility import EligibilityPolicy
 from ..logging_setup import get_logger
 from ..store import orders as repo
 from ..store import theses as thesis_repo
+from ..store import thesis_options as link_repo
 from ..store import universe as universe_repo
 from ..store.db import Store
-from ..store.orders import IntentFill
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
 from .breakers import Breakers
 from .thesis_intake import find_candidate
+from .thesis_options import ThesisOptions
+from .thesis_plan import (
+    ACTOR,
+    CLOSE,
+    ENTER,
+    ENTRY_REASON,
+    EXIT,
+    EXPIRE,
+    HOLD,
+    REFUSE,
+    RESOLVE,
+    WAIT,
+    ZERO,
+    BookRead,
+    ThesisDecision,
+    ThesisPlan,
+)
 from .vehicle_inputs import market_inputs
-from .vehicle_selector import VehicleMarket
+
+__all__ = ["ThesisDecision", "ThesisPlan", "ThesisRebalancer"]
 
 log = get_logger("decision.thesis")
-
-ZERO = Decimal(0)
-
-#: Who the book's own log entries are written by.
-ACTOR = "thesis book"
-#: The reason an entry intent gives.
-ENTRY_REASON = "thesis"
-#: What the plan does with one thesis.
-RESOLVE, REFUSE, EXPIRE, WAIT, ENTER, HOLD, EXIT, CLOSE = (
-    "resolve",
-    "refuse",
-    "expire",
-    "wait",
-    "enter",
-    "hold",
-    "exit",
-    "close",
-)
-
-
-@dataclass(frozen=True, slots=True)
-class ThesisDecision:
-    """What the plan does with one thesis this cycle, and why."""
-
-    thesis: Thesis
-    action: str
-    reason: str
-    findings: tuple[Finding, ...] = ()
-    quantity: Decimal = ZERO
-    size_base: Decimal | None = None
-    held: Decimal = ZERO
-    fills: tuple[Fill, ...] = ()
-    #: An approved thesis whose entry has filled becomes active when the plan is applied.
-    opened: bool = False
-
-    @property
-    def trades(self) -> bool:
-        return self.action in (ENTER, EXIT)
-
-
-@dataclass
-class ThesisPlan:
-    """A survey of the thesis book: its capital, every open thesis's decision, and why nothing
-    is entered."""
-
-    mode: ExecutionMode
-    at: datetime
-    capital: Decimal | None = None
-    decisions: list[ThesisDecision] = field(default_factory=list)
-    blocked: str | None = None
-    entries_blocked: str | None = None
-
-    @property
-    def trades(self) -> list[ThesisDecision]:
-        return [decision for decision in self.decisions if decision.trades]
-
-    def render(self) -> str:
-        lines = [f"thesis book ({self.mode.value}) at {self.at.isoformat()}"]
-        if self.capital is not None:
-            lines.append(f"  the book's capital {self.capital:.2f}")
-        if self.blocked is not None:
-            lines.append(f"  nothing is decided: {self.blocked}")
-        if self.entries_blocked is not None:
-            lines.append(f"  no entry now: {self.entries_blocked}")
-        if not self.decisions and self.blocked is None:
-            lines.append("  no open thesis: the book holds nothing")
-        for d in self.decisions:
-            t = d.thesis
-            trade = f" {d.quantity}" if d.trades else ""
-            lines.append(
-                f"  {t.ref} {t.instrument.symbol} ({t.source.value}, {t.conviction.value}, "
-                f"{t.state.value}) held {d.held}: {d.action}{trade} ({d.reason})"
-            )
-        return "\n".join(lines)
-
-
-@dataclass(frozen=True, slots=True)
-class _Read:
-    """What one survey read for every thesis."""
-
-    view: CapitalView
-    cash: CashRead
-    capital: Decimal
-    spendable: Decimal
-    minimum: Decimal
-    fills: Sequence[IntentFill]
-    busy: Sequence[OrderIntent]
-    market: Mapping[int, VehicleMarket]
-    owners: Mapping[int, str]
-    today: date
-    at: datetime
 
 
 class ThesisRebalancer:
@@ -216,6 +147,16 @@ class ThesisRebalancer:
         # The absolute minimum trade alone: the share of managed capital beside it is the core's
         # inertia, and a normal idea is a smaller share of the book than that by construction.
         self._minimum = settings.trading.min_trade.absolute_base or ZERO
+        self._options = ThesisOptions(
+            settings,
+            capital=capital,
+            directory=directory,
+            calendars=calendars,
+            worker=worker,
+            eligibility=eligibility,
+            gate=self._gate,
+            now=now,
+        )
 
     # ── the survey ──
 
@@ -225,8 +166,10 @@ class ThesisRebalancer:
         today = at.date()
         plan = ThesisPlan(mode=mode, at=at)
         await describe_pinned(self._directory, self._worker)
+        await self._options.describe()
         theses = await self._worker.run(thesis_repo.theses, as_of=today, states=OPEN_STATES)
-        if not theses:
+        twins = await self._worker.run(link_repo.open_twins)
+        if not theses and not twins:
             return plan
         try:
             cash = await self._capital.cash()
@@ -253,7 +196,7 @@ class ThesisRebalancer:
         plan.capital = allocation.satellite
         busy, _ = await self._cash.pending(mode)
         conids = [t.instrument.conid for t in theses if t.instrument.conid is not None]
-        read = _Read(
+        read = BookRead(
             view=view,
             cash=cash,
             capital=allocation.satellite,
@@ -279,9 +222,10 @@ class ThesisRebalancer:
             if decision.action == ENTER and decision.size_base is not None:
                 spent += decision.size_base
                 slots[thesis.thesis_id] = _slot(thesis, decision.size_base)
+        plan.twins = await self._options.twins(read, plan)
         return plan
 
-    def _position(self, thesis: Thesis, read: _Read) -> tuple[Decimal, tuple[Fill, ...], str]:
+    def _position(self, thesis: Thesis, read: BookRead) -> tuple[Decimal, tuple[Fill, ...], str]:
         """The units ``thesis`` holds, the fills that made them and the last sale's reason."""
         since = thesis.approved_at
         conid = thesis.instrument.conid
@@ -298,7 +242,12 @@ class ThesisRebalancer:
         return held, tuple(entry.fill for entry in mine), sales[-1] if sales else OVERRIDE
 
     async def _decide(
-        self, thesis: Thesis, read: _Read, slots: tuple[Slot, ...], spent: Decimal, plan: ThesisPlan
+        self,
+        thesis: Thesis,
+        read: BookRead,
+        slots: tuple[Slot, ...],
+        spent: Decimal,
+        plan: ThesisPlan,
     ) -> ThesisDecision:
         instrument = thesis.instrument
         conid = instrument.conid
@@ -310,13 +259,6 @@ class ThesisRebalancer:
             if read.today > thesis.enter_by:
                 return ThesisDecision(thesis, EXPIRE, "its entry window ended before it resolved")
             return ThesisDecision(thesis, RESOLVE, "its stock candidate is not pinned yet")
-        held, fills, last_sale = self._position(thesis, read)
-        working = [i for i in read.busy if i.conid == conid]
-        bought = any(fill.side is OrderSide.BUY for fill in fills)
-        if bought and held <= ZERO:
-            if working:
-                return ThesisDecision(thesis, HOLD, "an order still works on it", fills=fills)
-            return ThesisDecision(thesis, CLOSE, last_sale, fills=fills, opened=True)
         described = self._directory.describe(conid)
         value = await self._capital.valuer.unit(conid, read.cash)
         reference = (
@@ -324,6 +266,17 @@ class ThesisRebalancer:
             if described is None or value.unit is None or value.rate is None
             else value.unit / (described.multiplier * value.rate)
         )
+        if thesis.as_option:
+            return await self._options.held(thesis, reference, read, plan)
+        held, fills, last_sale = self._position(thesis, read)
+        working = [i for i in read.busy if i.conid == conid]
+        bought = any(fill.side is OrderSide.BUY for fill in fills)
+        if bought and held <= ZERO:
+            if working:
+                return ThesisDecision(thesis, HOLD, "an order still works on it", fills=fills)
+            return ThesisDecision(
+                thesis, CLOSE, last_sale, fills=fills, opened=True, rate=value.rate
+            )
         if bought:
             return self._manage(thesis, held, fills, working, reference, read)
         if read.today > thesis.enter_by and not working:
@@ -340,7 +293,43 @@ class ThesisRebalancer:
                 ),
             )
             return ThesisDecision(thesis, WAIT, describe(waits), waits)
-        return self._enter(thesis, described, reference, value.rate, read, slots, spent, plan)
+        note = None
+        if thesis.held_as is None and thesis.expression is not Expression.SHARES:
+            option = await self._options.enter(
+                thesis, described, reference, value.rate, read, slots, spent, plan
+            )
+            if isinstance(option, ThesisDecision):
+                return option
+            declared = self._settings.universe.pinned(conid)
+            rises = thesis.expression is Expression.AUTO and not thesis.falls
+            if not rises:
+                return self._not_an_option(thesis, option)
+            if declared is not None and not declared.tradable:
+                why = declared.data_only_reason or "it is not a tradable candidate"
+                option.append(
+                    Finding(
+                        Reason.NOT_TRADABLE, f"{declared.symbol} itself cannot be ordered: {why}"
+                    )
+                )
+                return self._not_an_option(thesis, option)
+            note = f"not held as an option: {describe(option)}"
+        decision = self._enter(thesis, described, reference, value.rate, read, slots, spent, plan)
+        if note is None:
+            return decision
+        if decision.action == WAIT:
+            # One log entry while it waits, not two that take turns.
+            return replace(decision, reason=f"{decision.reason}; {note}")
+        return replace(decision, note=note)
+
+    @staticmethod
+    def _not_an_option(thesis: Thesis, found: list[Finding]) -> ThesisDecision:
+        """A thesis that is an option or nothing, and is not one now: refused when it never can
+        be, otherwise withheld with why."""
+        permanent = tuple(finding for finding in found if finding.permanent)
+        if permanent:
+            action = REFUSE if thesis.state is ThesisState.CANDIDATE else EXPIRE
+            return ThesisDecision(thesis, action, describe(permanent), permanent)
+        return ThesisDecision(thesis, WAIT, describe(found), tuple(found))
 
     def _manage(
         self,
@@ -349,7 +338,7 @@ class ThesisRebalancer:
         fills: tuple[Fill, ...],
         working: Sequence[OrderIntent],
         reference: Decimal | None,
-        read: _Read,
+        read: BookRead,
     ) -> ThesisDecision:
         """A thesis with a position: hold it, or leave by one of its own exits."""
         opened = thesis.state is ThesisState.APPROVED
@@ -373,7 +362,7 @@ class ThesisRebalancer:
         described: TradedInstrument,
         reference: Decimal | None,
         rate: Decimal | None,
-        read: _Read,
+        read: BookRead,
         slots: tuple[Slot, ...],
         spent: Decimal,
         plan: ThesisPlan,
@@ -433,7 +422,9 @@ class ThesisRebalancer:
             size_base=size,
         )
 
-    def _held_elsewhere(self, thesis: Thesis, read: _Read, slots: tuple[Slot, ...]) -> str | None:
+    def _held_elsewhere(
+        self, thesis: Thesis, read: BookRead, slots: tuple[Slot, ...]
+    ) -> str | None:
         """Who else holds or claims the thesis's conid: another book, the owner, another thesis."""
         conid = thesis.instrument.conid
         symbol = thesis.instrument.symbol
@@ -453,8 +444,12 @@ class ThesisRebalancer:
         """Carry out ``plan``: pins, changes of state, grades, and an intent for every trade,
         priced now. A trade that cannot be priced is logged and left for the next cycle."""
         made: list[OrderIntent] = []
+        await self._options.close_twins(plan)
         for decision in plan.decisions:
             thesis = decision.thesis
+            await self._options.apply(decision)
+            if decision.note is not None:
+                await self._note(thesis, LogKind.WITHHELD, decision.note)
             if decision.opened and thesis.state is ThesisState.APPROVED:
                 thesis = await self._move(thesis, ThesisState.ACTIVE, "its entry filled")
             if decision.action == RESOLVE:
@@ -465,6 +460,8 @@ class ThesisRebalancer:
                 await self._move(thesis, ThesisState.EXPIRED, decision.reason)
             elif decision.action == WAIT:
                 await self._note(thesis, LogKind.WITHHELD, decision.reason)
+            elif decision.action == CLOSE and decision.option is not None:
+                await self._options.close(thesis, decision)
             elif decision.action == CLOSE:
                 await self._close(thesis, decision)
             elif decision.action in (ENTER, EXIT):
@@ -546,10 +543,13 @@ class ThesisRebalancer:
     async def _trade(
         self, thesis: Thesis, decision: ThesisDecision, plan: ThesisPlan
     ) -> OrderIntent | None:
-        conid = thesis.instrument.conid
+        conid = decision.conid
         assert conid is not None  # only a pinned thesis trades
         entering = decision.action == ENTER
-        if entering and thesis.state is ThesisState.CANDIDATE:
+        as_option = decision.option is not None
+        if entering and thesis.state is ThesisState.CANDIDATE and as_option:
+            thesis = await self._options.approve(decision, plan)
+        elif entering and thesis.state is ThesisState.CANDIDATE:
             assert decision.size_base is not None  # an entry carries the gate's size
             thesis = await self._worker.run(
                 thesis_repo.approve,
@@ -568,7 +568,8 @@ class ThesisRebalancer:
             reason=ENTRY_REASON if entering else decision.reason,
             mode=plan.mode,
             thesis_id=thesis.ref,
-            protective=self._stop(thesis) if entering else None,
+            # An option carries no stop: its loss is its premium.
+            protective=self._stop(thesis) if entering and not as_option else None,
         )
         what = "entry" if entering else f"exit ({decision.reason})"
         if isinstance(intent, str):
@@ -605,6 +606,9 @@ class ThesisRebalancer:
                 thesis_repo.record_grade(store, graded)
 
         await self._worker.run(write)
+        if decision.rate is not None:
+            gain = (graded.exit_price - graded.entry_price) * graded.quantity * decision.rate
+            await self._options.repay(decision, gain)
 
 
 def _slot(thesis: Thesis, size: Decimal | None = None) -> Slot:

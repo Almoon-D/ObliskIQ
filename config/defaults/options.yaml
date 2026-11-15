@@ -26,6 +26,17 @@ option_sleeve:
   # commission alone (EUR 3.00 at Eurex's EUR 1.50 a contract) costs more than the widest spread
   # liquidity.max_spread_pct would accept (EUR 3.00 / 0.15 = EUR 20). QUOTED. lite.
   min_premium_base_currency: "20"
+  # One block takes at most this share of the sleeve's budget, at least one contract when the
+  # pool affords it (MASTER_PLAN §5.11, the uncalibrated regime). A fifth: with
+  # max_concurrent_positions blocks open the budget is spent. QUOTED. A judgement (D167).
+  block_share: "0.20"
+  # The scaled exit (MASTER_PLAN §5.6): once the option is worth premium_multiple times the
+  # premium paid, fraction of the contracts is sold, in whole contracts, once. At 2 and a half
+  # the sale recovers the premium and the rest runs for nothing. A position of one contract has
+  # no part to sell and runs whole. QUOTED. A judgement (D167).
+  scaled_exit:
+    premium_multiple: "2"
+    fraction: "0.5"
   # When the sleeve trades instead of running in shadow (DECISIONS D66): its hypothesis is
   # sufficient in research/pattern_registry.yaml, and the budget buys the number of median
   # premiums that hypothesis's pre-registration states, each within the friction gate.

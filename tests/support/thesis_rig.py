@@ -83,6 +83,7 @@ def approved(**changes: Any) -> Thesis:
         "state": ThesisState.APPROVED,
         "mode": ExecutionMode.SHADOW,
         "size_base": D(125),
+        "held_as": "shares",
         "approved_at": NOW,
     }
     return thesis(**{**fields, **changes})

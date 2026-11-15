@@ -19,6 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 
 from ..calendars.service import Calendars
 from ..calendars.status import BlockReason
@@ -39,16 +40,19 @@ from ..domain.orders import (
     ReconcileRun,
 )
 from ..domain.thesis import ENDED_STATES, OPEN_STATES, Thesis, ThesisLogEntry
-from ..engines.thesis.grading import GroupRecord, opinion_record, record
+from ..engines.options_sleeve.penalty import PenaltyLedger
+from ..engines.thesis.grading import GroupRecord, PairRecord, opinion_record, pair_record, record
 from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
 from ..store import analyst as analyst_repo
 from ..store import capital as capital_repo
 from ..store import nav as nav_repo
+from ..store import options as options_repo
 from ..store import orders as repo
 from ..store import runs as run_repo
 from ..store import theses as thesis_repo
+from ..store import thesis_options as link_repo
 from ..store.db import Store
 from ..store.nav import NavReading
 from ..store.orders import StoredIntent
@@ -124,6 +128,9 @@ class Digest:
     #: The theses that ended today, each with the last entry of its log (why).
     ended: list[tuple[Thesis, ThesisLogEntry | None]] = field(default_factory=list)
     record: list[GroupRecord] = field(default_factory=list)
+    #: The options theses are held as: the premium open positions put at risk, the sleeve's
+    #: penalty balance, and each closed option beside its twin in the underlying, per direction.
+    options: OptionBook | None = None
     #: The analyst's second opinions on the owner's open theses, and their graded record.
     opinions: list[tuple[Thesis, SecondOpinion, AnalystCall]] = field(default_factory=list)
     opinion_scores: list[OpinionScore] = field(default_factory=list)
@@ -136,6 +143,26 @@ class Digest:
     health: list[str] = field(default_factory=list)
     alerts: dict[str, str] = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class OptionBook:
+    """The option side of the thesis book on a day, in the base currency."""
+
+    positions: int
+    premium_at_risk: Decimal
+    penalty_balance: Decimal
+    pairs: tuple[PairRecord, ...]
+
+
+def _option_book(store: Store, settings: ObliskConfig, day: date) -> OptionBook:
+    ledger = PenaltyLedger(store, settings)
+    return OptionBook(
+        positions=len(options_repo.open_positions(store, as_of=day)),
+        premium_at_risk=ledger.committed_premium(as_of=day),
+        penalty_balance=ledger.balance(as_of=day),
+        pairs=tuple(pair_record(link_repo.pairs(store, as_of=day))),
+    )
 
 
 async def gather_digest(
@@ -188,6 +215,7 @@ async def gather_digest(
     digest.ended = await worker.run(_ended_today, day, start)
     grades = await worker.run(thesis_repo.grades, as_of=day)
     digest.record = record(grades, await worker.run(analyst_repo.thesis_segments))
+    digest.options = await worker.run(_option_book, settings, day)
     given = await worker.run(analyst_repo.opinions, as_of=day)
     digest.opinion_scores = opinion_record(given, grades)
     digest.opinions = await worker.run(_open_opinions, given, day)
@@ -365,6 +393,26 @@ def _run_line(run: RunRow) -> str:
     return f"  {run.started_at.strftime('%H:%M')} {run.command} {run.status}: {tail}"
 
 
+def _option_lines(book: OptionBook | None) -> list[str]:
+    """Premium at risk, the penalty balance and the record of each option beside its twin."""
+    if book is None:
+        return ["  options: not read"]
+    lines = [
+        f"  options: premium at risk {book.premium_at_risk:.2f} in {book.positions} "
+        f"position(s), penalty balance {book.penalty_balance:.2f}"
+    ]
+    if not book.pairs:
+        lines.append("  option record: no option has closed")
+    for pair in book.pairs:
+        waiting = f", {pair.twins_open} twin(s) still running" if pair.twins_open else ""
+        lines.append(
+            f"  option record, {pair.direction}: {pair.closed} closed on {pair.premium:.2f} of "
+            f"premium made {pair.option_pnl:+.2f}; {pair.twins_closed} twin(s) in the underlying "
+            f"at the base size made {pair.twin_pnl:+.2f}{waiting}"
+        )
+    return lines
+
+
 def _thesis_lines(digest: Digest, rows: int) -> list[str]:
     """The thesis book: its open theses (a withheld idea with its reason), the ideas that ended
     today and why, and the graded record per source and conviction."""
@@ -390,6 +438,7 @@ def _thesis_lines(digest: Digest, rows: int) -> list[str]:
         f"mean payoff {group.mean_payoff:.2%} against {group.mean_stated_payoff:.2%} stated"
         for group in digest.record
     ]
+    lines += _option_lines(digest.options)
     _more(
         lines,
         [

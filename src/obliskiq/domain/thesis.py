@@ -4,8 +4,10 @@ lifecycle, its log and its grade.
 A **draft** is what a source hands in; it may lack a field, and then it is refused with the reason
 and never stored. A **thesis** is a complete idea in the store: the instrument, what is expected,
 a target, a horizon, an invalidation and an entry rule, all fixed before the first order. The
-position is always long: the target lies above the invalidation, and a bearish view is a thesis on
-an instrument that holds or gains in a fall, never a short.
+position is always long. A target above the invalidation is held as the instrument or as a long
+call on it; a bearish view is a thesis on an instrument that holds or gains in a fall, or levels
+that describe the instrument's own fall (the target below the invalidation), held as a long put
+or as nothing, never a short (DECISIONS D157).
 
 **Lifecycle.** ``candidate`` (complete, waiting for the gate) → ``approved`` (the gate passed and
 a slot is taken; from here its text and triggers never change, a store trigger) → ``active`` (its
@@ -58,6 +60,16 @@ class View(StrEnum):
 
     BULLISH = "bullish"
     BEARISH = "bearish"
+
+
+class Expression(StrEnum):
+    """What a thesis may be held as: its instrument, a long option on it, or ``auto`` (the option
+    when the options sleeve's gates pass, otherwise the instrument). What an approved thesis is
+    held as is one of the first two."""
+
+    SHARES = "shares"
+    OPTION = "option"
+    AUTO = "auto"
 
 
 class ThesisState(StrEnum):
@@ -135,6 +147,7 @@ class ThesisDraft(DomainModel):
     source: ThesisSource
     conviction: Conviction = Conviction.NORMAL
     view: View = View.BULLISH
+    expression: Expression = Expression.SHARES
     symbol: NonEmptyText | None = None
     candidate: NonEmptyText | None = None
     isin: Isin | None = None
@@ -154,6 +167,7 @@ class Thesis(DomainModel):
     source: ThesisSource
     conviction: Conviction
     view: View
+    expression: Expression = Expression.SHARES
     instrument: ThesisInstrument
     expectation: NonEmptyText
     target: Price
@@ -165,10 +179,11 @@ class Thesis(DomainModel):
     enter_by: date
     state: ThesisState
     created_at: UtcDatetime
-    #: Fixed at approval: the mode whose record the thesis belongs to and its size in the base
-    #: currency.
+    #: Fixed at approval: the mode whose record the thesis belongs to, its size in the base
+    #: currency (an option's: the premium its block was sized at) and what it is held as.
     mode: ExecutionMode | None = None
     size_base: Price | None = None
+    held_as: Expression | None = None
     approved_at: UtcDatetime | None = None
     opened_at: UtcDatetime | None = None
     closed_at: UtcDatetime | None = None
@@ -176,18 +191,50 @@ class Thesis(DomainModel):
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
-        if self.target <= self.invalidation:
-            raise ValueError("the target lies above the invalidation: the book never shorts")
+        if self.target == self.invalidation:
+            raise ValueError("the target and the invalidation are two levels")
+        if self.falls and (
+            self.view is not View.BEARISH
+            or self.expression is Expression.SHARES
+            or self.entry_max is not None
+        ):
+            raise ValueError(
+                "a target below the invalidation is a bearish idea held as a long put, with no "
+                "entry limit: the book never shorts"
+            )
         if self.entry_max is not None and not self.invalidation < self.entry_max < self.target:
             raise ValueError("entry_max lies between the invalidation and the target")
         if not self.created_at.date() <= self.enter_by <= self.horizon:
             raise ValueError("the entry window ends on or before the horizon, not in the past")
         if self.conviction is not Conviction.NORMAL and self.source is not ThesisSource.OWNER:
             raise ValueError("only the owner marks a conviction above normal")
-        approved = (self.mode is not None, self.size_base is not None, self.approved_at is not None)
+        approved = (
+            self.mode is not None,
+            self.size_base is not None,
+            self.approved_at is not None,
+            self.held_as is not None,
+        )
         if any(approved) != all(approved):
-            raise ValueError("the mode, the size and the approval stamp are fixed together")
+            raise ValueError("the mode, the size, the holding and the approval are fixed together")
+        if self.held_as is Expression.AUTO or (
+            self.held_as is not None
+            and self.expression is not Expression.AUTO
+            and self.held_as is not self.expression
+        ):
+            raise ValueError("a thesis is held as its instrument or an option, as it allowed")
+        if self.falls and self.held_as is Expression.SHARES:
+            raise ValueError("a fall is held as a long put or as nothing")
         return self
+
+    @property
+    def falls(self) -> bool:
+        """Whether its levels describe a fall of the instrument: the target below the
+        invalidation, held as a long put or as nothing."""
+        return self.target < self.invalidation
+
+    @property
+    def as_option(self) -> bool:
+        return self.held_as is Expression.OPTION
 
     @property
     def ref(self) -> str:
@@ -231,6 +278,9 @@ class ThesisGrade(DomainModel):
     mode: ExecutionMode
     source: ThesisSource
     conviction: Conviction
+    #: What the graded position was; an option's prices are premiums, its payoff the return on
+    #: the premium paid.
+    held_as: Expression = Expression.SHARES
     exit_reason: NonEmptyText
     quantity: Price
     entry_price: Price

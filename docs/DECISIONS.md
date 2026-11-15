@@ -3777,3 +3777,22 @@ not); the model's probability as a size or a veto (D156).
 
 Rejected: a compute run after every venue's collection (the loop runs jobs inline, D129); the
 catalyst calendar on the sheet before a graded record asks for it.
+
+## Session 29 — Options for theses (2026-11-15)
+
+### D167 · How a thesis reaches the options sleeve (§5.5, §5.6, §5.11; D135, D139, D157)
+
+- **What is said.** `shares`, `option` or `auto`. A target below the invalidation is the
+  instrument's own fall: a long put or nothing. `auto` takes the option when every sleeve gate
+  passes that cycle, else the instrument (on SPY, which the account may not buy: nothing).
+- **The contract.** The sleeve's gates, each tested, plus one: sold by a session not before the
+  horizon. Among those that pass, the largest payoff at the target per unit of premium.
+- **Judgements:** `option_sleeve.block_share` 0.20; `scaled_exit` at 2 times the premium, half
+  the contracts, once; `discipline.entry_range_sessions` 252 (the entry's place between the
+  year's low and high close, mirrored for a put; lite took it from its caller).
+- **The budget** is the smaller of the option share of investable capital and the book's capital.
+- **The twin** is a figure at the base size, entered at the underlying's price when the option
+  was chosen; it leaves by the thesis's exits alone, so it outlives a zombie's sale.
+
+Rejected: a pool refilled by the scaled exit (D138); a stop on an option; a twin closed with its
+option (it would hide what the sleeve's exits cost).

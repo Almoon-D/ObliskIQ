@@ -139,7 +139,7 @@ PROTOCOL_CONSTANTS: dict[str, dict[str, str]] = {
     "decision/rebalance_core.py": {"ZERO": "the zero amount"},
     "decision/book_cash.py": {"ZERO": "the zero amount"},
     "decision/breakers.py": {"ZERO": "the zero amount", "ONE": "the whole (a unit)"},
-    "decision/rebalance_thesis.py": {"ZERO": "the zero amount"},
+    "decision/thesis_plan.py": {"ZERO": "the zero amount"},
     "decision/gates.py": {"ZERO": "the zero amount"},
     "decision/vehicle_selector.py": {
         "ZERO": "the zero amount",

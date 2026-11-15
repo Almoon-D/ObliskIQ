@@ -43,7 +43,7 @@ from pydantic import ValidationError
 from ..config.schema import ObliskConfig
 from ..domain.analyst import UNSTORED_CALL, AnalystCall, CallKind, SecondOpinion
 from ..domain.sources import ExtractionStatus
-from ..domain.thesis import OPEN_STATES, Thesis, ThesisDraft, ThesisSource
+from ..domain.thesis import OPEN_STATES, Expression, Thesis, ThesisDraft, ThesisSource
 from ..grid.facts import FactLine, FactSheet, number
 from ..logging_setup import get_logger
 from ..store import analyst as analyst_repo
@@ -119,6 +119,8 @@ class Proposal:
         return ThesisDraft(
             source=ThesisSource.ANALYST,
             view=answer.view,
+            # The sleeve's rules decide whether the idea is held as an option, never the model.
+            expression=Expression.AUTO,
             symbol=answer.symbol,
             expectation=answer.expectation,
             target=answer.level("target"),

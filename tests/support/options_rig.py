@@ -8,6 +8,7 @@ mid, a delta and an implied vol that agree with each other; nothing here is a ma
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -40,6 +41,16 @@ class Seeded:
     rows: tuple[ChainRow, ...]
 
 
+#: A week of bars: the rig's short history, flat at the spot.
+WEEK = 5
+
+
+def _swing(back: int) -> float:
+    """The close ``back`` sessions ago as a multiple of the spot: the spot today, and a slow
+    swing between 0.9 and 1.1 before it."""
+    return 1.0 + 0.1 * math.sin(back / 20)
+
+
 def _iv(strike: float) -> float:
     """An equity skew: implied vol falls as the strike rises."""
     return 0.20 - 0.10 * (strike - SPOT) / SPOT
@@ -54,7 +65,18 @@ def seed_options(
     multiplier: float | None = 100.0,
     rate: bool = True,
     open_interest: int = 2000,
+    first_conid: int | None = None,
+    history: int = 5,
+    risk_free: float | None = None,
+    spot: float = SPOT,
+    bids: dict[tuple[date, float], float] | None = None,
+    expiries: tuple[date, ...] = EXPIRIES,
 ) -> Seeded:
+    """``first_conid`` numbers the contracts from it (an order needs one); ``history`` is how
+    many daily bars of the underlying are stored, swinging between 90 % and 110 % of the spot
+    when more than a week of them is asked for; ``risk_free`` stores the dollar bill rate;
+    ``spot`` is the underlying's price on ``as_of`` (the strikes and their vols stay where they
+    are); ``bids`` gives a contract (expiry, strike) a bid of its own."""
     bsm = BsmInputs.from_config(settings)
     repos.upsert_instrument(
         store,
@@ -83,25 +105,26 @@ def seed_options(
             Bar(
                 conid=SPY,
                 session_date=as_of - timedelta(days=back),
-                open=SPOT,
-                high=SPOT * 1.01,
-                low=SPOT * 0.99,
-                close=SPOT,
+                open=spot,
+                high=spot * 1.11,
+                low=spot * 0.89,
+                close=spot * _swing(back) if history > WEEK else spot,
                 volume=1e6,
                 source="fixture",
             )
-            for back in range(5)
+            for back in range(history)
         ],
     )
     rows: list[ChainRow] = []
-    for expiry in EXPIRIES:
+    for expiry in expiries:
         dte = (expiry - as_of).days
         for strike in STRIKES:
             right = OptionRight.PUT if strike < SPOT else OptionRight.CALL
             sigma = _iv(strike)
             is_call = right is OptionRight.CALL
-            price = float(bsm_price(SPOT, strike, dte, sigma, 0.04, 0.0, is_call, bsm))
-            delta = float(bsm_greeks(SPOT, strike, dte, sigma, 0.04, 0.0, is_call, bsm).delta)
+            price = float(bsm_price(spot, strike, dte, sigma, 0.04, 0.0, is_call, bsm))
+            delta = float(bsm_greeks(spot, strike, dte, sigma, 0.04, 0.0, is_call, bsm).delta)
+            price = (bids or {}).get((expiry, strike), price)
             half = max(price * 0.01, 0.01)
             rows.append(
                 ChainRow(
@@ -110,10 +133,10 @@ def seed_options(
                     expiry=expiry,
                     strike=strike,
                     right=right,
-                    option_conid=None,
+                    option_conid=None if first_conid is None else first_conid + len(rows),
                     option_symbol=None,
                     option_exchange="CBOE",
-                    bid=round(price - half, 2),
+                    bid=max(0.0, round(price - half, 2)),
                     ask=round(price + half, 2),
                     last=round(price, 2),
                     iv=sigma,
@@ -143,6 +166,22 @@ def seed_options(
                     value=EURUSD,
                     frequency="daily",
                     units="USD per EUR",
+                    collected_at=STAMP,
+                )
+            ],
+        )
+    if risk_free is not None:
+        repos.upsert_macro(
+            store,
+            [
+                MacroObservation(
+                    series_id="DTB3",
+                    source="fred",
+                    reference_date=as_of,
+                    release_date=as_of,
+                    value=risk_free,
+                    frequency="daily",
+                    units="%",
                     collected_at=STAMP,
                 )
             ],

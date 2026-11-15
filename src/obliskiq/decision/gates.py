@@ -62,6 +62,7 @@ class Gate(StrEnum):
     PAYOFF_RATIO = "payoff_ratio"
     ENTRY_RANGE = "entry_range_catalyst"
     THETA_BUDGET = "theta_budget"
+    HORIZON = "horizon_cover"
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,13 +207,16 @@ class OptionCandidate:
 class OptionEntry:
     """The terms an entry states on top of its candidate: how many contracts, the named target,
     where the underlying sits in its long-run range, and the share of premium the theta budget
-    leaves (``None`` with ``theta_gap`` when it could not be computed)."""
+    leaves (``None`` with ``theta_gap`` when it could not be computed). ``horizon`` is the day a
+    thesis ends, when the entry is a thesis's: the option must still be held then."""
 
     contracts: int
     target: float | None
     entry_range_pctile: float | None
     theta_remaining_share: float | None
     theta_gap: str | None = None
+    entry_range_gap: str | None = None
+    horizon: date | None = None
 
 
 def _money(value: float) -> Decimal:
@@ -309,10 +313,18 @@ class CandidateGates:
                 is_call=row.right is OptionRight.CALL,
             ),
             self.entry_range(
-                entry_range_pctile=terms.entry_range_pctile, catalyst_date=candidate.catalyst_date
+                entry_range_pctile=terms.entry_range_pctile,
+                catalyst_date=candidate.catalyst_date,
+                gap=terms.entry_range_gap,
             ),
             self.theta_budget(terms.theta_remaining_share, gap=terms.theta_gap),
         ]
+        if terms.horizon is not None:
+            results.append(
+                self.horizon_cover(
+                    close_by=candidate.close_by, horizon=terms.horizon, gap=candidate.close_by_gap
+                )
+            )
         return merged(results)
 
     # ── the instrument ──
@@ -404,6 +416,24 @@ class CandidateGates:
                 f"the option must be sold by {close_by}: it is not opened inside its "
                 "mandatory-close window",
                 float((close_by - as_of).days),
+                0.0,
+            )
+        return GateResult()
+
+    def horizon_cover(
+        self, *, close_by: date | None, horizon: date, gap: str | None = None
+    ) -> GateResult:
+        """A thesis's option is still held on the day the thesis ends: the session it is sold by
+        is not before the horizon. A shorter tenor would close the option before the idea had
+        its time."""
+        if close_by is None:
+            return _untested(Gate.HORIZON, gap or "the mandatory-close date could not be computed")
+        if close_by < horizon:
+            return _fail(
+                Gate.HORIZON,
+                f"the option must be sold by {close_by}, before the thesis's horizon {horizon}: "
+                "the tenor does not cover the idea",
+                float((close_by - horizon).days),
                 0.0,
             )
         return GateResult()
@@ -737,7 +767,11 @@ class CandidateGates:
         )
 
     def entry_range(
-        self, *, entry_range_pctile: float | None, catalyst_date: date | None
+        self,
+        *,
+        entry_range_pctile: float | None,
+        catalyst_date: date | None,
+        gap: str | None = None,
     ) -> GateResult:
         """A top-decile entry needs a dated catalyst while
         ``discipline.entry_top_decile_requires_catalyst`` holds: buying strength is not a
@@ -746,7 +780,8 @@ class CandidateGates:
             return GateResult()
         if entry_range_pctile is None:
             return _untested(
-                Gate.ENTRY_RANGE, "where the entry sits in its long-run range was not measured"
+                Gate.ENTRY_RANGE,
+                gap or "where the entry sits in its long-run range was not measured",
             )
         if entry_range_pctile < self._top_decile_pctile or catalyst_date is not None:
             return GateResult()

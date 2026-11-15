@@ -69,14 +69,22 @@ class CandidateBook:
         self._close_cache: dict[tuple[str, date, int | None], tuple[date | None, str | None]] = {}
 
     def candidates(
-        self, *, as_of: date, pool: Pool, catalyst_date: date | None = None
+        self,
+        *,
+        as_of: date,
+        pool: Pool,
+        catalyst_date: date | None = None,
+        underlying_conid: int | None = None,
     ) -> Iterator[OptionCandidate]:
-        """Every contract of every underlying's newest chain on or before ``as_of``."""
+        """Every contract of every underlying's newest chain on or before ``as_of``, or of
+        ``underlying_conid``'s alone."""
         self.skipped = []
         store = self._store
         rates = BaseRates(store, self._settings, as_of=as_of)
         surface, surface_gap = self._surface(as_of)
         for conid, session in repos.latest_chain_sessions(store, as_of=as_of):
+            if underlying_conid is not None and conid != underlying_conid:
+                continue
             declared = self._settings.universe.pinned(conid)
             if declared is None:
                 self.skipped.append(

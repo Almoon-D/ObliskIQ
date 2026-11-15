@@ -2369,7 +2369,9 @@ test_crisis_database.py. Port lite's `positions` keys you consume
 (legacy/lite/config.yaml:118-133).
 
 DELIVERABLES
-1. decision/expression.py: a long option when the options sleeve is active (Session 12's
+1. decision/expression.py (a thesis of the thesis book already reaches the sleeve: Session
+   29's decision/thesis_options.py and engines/options_sleeve/thesis_link.py; extend them,
+   do not rebuild them): a long option when the options sleeve is active (Session 12's
    activation condition), the IV percentile is at or below threshold,
    the chain is liquid, the tenor window is satisfiable (catalyst + buffer), the payoff at
    the named target meets the minimum, real-time quotes exist for the option and its
@@ -2401,7 +2403,8 @@ DELIVERABLES
    - Options in both regimes: integer contracts, the friction gate (round-trip commission
      plus FX cost ≤ a configured share of premium), a maximum number of adjustments per
      position.
-3. Option exits: target, zombie, mandatory close, time window, and the premium-recovery
+3. Option exits (built for a thesis's option in Session 29): target, zombie, mandatory
+   close, time window, and the premium-recovery
    partial exit (sell a configured fraction at a configured premium multiple). An option
    still held at the last tradable session minus the buffer is sold, never left to expire
    unattended (test: a Monday expiry after a Friday holiday is sold by Thursday).

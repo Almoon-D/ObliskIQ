@@ -12,15 +12,20 @@ discipline:
   # lite.
   entry_order_type: limit_only
   # The only reasons an exit or a protective stop may give. lite's, with rebalance (the core,
-  # D104) and withdrawal (the reservation planner's sales, D108).
+  # D104), withdrawal (the reservation planner's sales, D108) and scaled_exit (the part of an
+  # option block sold at option_sleeve.scaled_exit, D167).
   exit_reasons_allowed:
     [invalidation, target, time_window, zombie, mandatory_close, stop, trailing_stop, override,
-     rebalance, withdrawal]
+     rebalance, withdrawal, scaled_exit]
   # A top-decile entry needs a dated catalyst: "it is going up" is not a reason. The top decile is
   # this share of the long-run range; a different rule from equity_risk's pre-earnings trigger,
   # which carries the same value today. lite.
   entry_top_decile_requires_catalyst: true
   entry_top_decile_pctile: 0.90
+  # The sessions of stored daily closes an entry's place in its long-run range is measured on
+  # (a year of sessions); with fewer the place is unmeasured and its gate untested. lite took
+  # the figure from its caller. A judgement (D167).
+  entry_range_sessions: 252
 
 execution:
   modes:

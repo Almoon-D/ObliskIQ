@@ -156,7 +156,14 @@ def test_the_sheet_and_the_idea_cannot_close_their_delimiters(
 
 
 def test_open_theses_are_shown_without_size_or_mode() -> None:
-    held = thesis(thesis_id=4, state="approved", mode="shadow", size_base="1875", approved_at=NOW)
+    held = thesis(
+        thesis_id=4,
+        state="approved",
+        mode="shadow",
+        size_base="1875",
+        approved_at=NOW,
+        held_as="shares",
+    )
     shown = prompts.describe_open([held])
     assert shown == (
         "T4 EMIM bullish target 60 invalidation 40 horizon 2027-04-30 (owner, approved)"
