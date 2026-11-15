@@ -1,5 +1,6 @@
 """The options sleeve's records: its positions, the events of its penalty ledger, its zombie
-readings and the would-be entries it logs in shadow (MASTER_PLAN §5.6).
+readings, the would-be entries it logs in shadow, and the option a thesis is held as with its
+twin in the underlying (MASTER_PLAN §5.5, §5.6).
 
 Every amount is in the base currency, which is what the sleeve's pool and its penalty balance are
 measured in; a figure converted from the contract's currency carries the conversion it took
@@ -17,7 +18,8 @@ from uuid import UUID
 from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from .base import Conid, CurrencyCode, DomainModel, NonEmptyText, UtcDatetime
-from .enums import MarketDataStatus, OptionRight
+from .enums import AssetClass, MarketDataStatus, OptionRight
+from .instrument import TradedInstrument
 
 #: A positive money amount, finite.
 type Money = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
@@ -175,3 +177,88 @@ class ShadowEntry(DomainModel):
         if self.snapshot_date > self.as_of:
             raise ValueError("a shadow entry is priced off a chain collected by its session")
         return self
+
+
+class ThesisOption(DomainModel):
+    """The option a thesis is held as, chosen at its approval, and its twin.
+
+    The **twin** is the same thesis in its underlying at the book's base size (``twin_size_base``),
+    entered at ``underlying_entry``, the underlying's price when the option was chosen. It is a
+    figure, never a position (a fall's twin would be a short, which the book never holds): it
+    leaves by the thesis's own exits, and the pair is H8's forward record (DECISIONS D157).
+    ``position_id`` is the sleeve's position once the block's fills open it.
+    """
+
+    thesis_id: PositiveInt
+    option_conid: Conid
+    underlying_conid: Conid
+    symbol: NonEmptyText
+    exchange: NonEmptyText
+    description: NonEmptyText
+    currency: CurrencyCode
+    expiry: date
+    strike: PositiveFloat
+    right: OptionRight
+    multiplier: PositiveFloat
+    contracts: PositiveInt
+    close_by: date
+    prob_target_at_entry: Probability | None
+    underlying_entry: Money
+    twin_size_base: Money
+    position_id: PositiveInt | None = None
+    twin_exit: Money | None = None
+    twin_exit_reason: NonEmptyText | None = None
+    twin_closed_at: UtcDatetime | None = None
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        closed = (self.twin_exit, self.twin_exit_reason, self.twin_closed_at)
+        if any(part is None for part in closed) and any(part is not None for part in closed):
+            raise ValueError("a twin closes with its price, its reason and its stamp together")
+        if self.close_by > self.expiry:
+            raise ValueError("an option is sold by a session on or before its expiry")
+        return self
+
+    @property
+    def is_call(self) -> bool:
+        return self.right is OptionRight.CALL
+
+    @property
+    def twin_open(self) -> bool:
+        return self.twin_exit is None
+
+    @property
+    def twin_payoff(self) -> Decimal | None:
+        """The twin's return, before costs and tax: the underlying's move from the entry to the
+        twin's exit, a fall counted as the gain of a put's twin. ``None`` while it is open."""
+        if self.twin_exit is None:
+            return None
+        move = self.twin_exit / self.underlying_entry - 1
+        return move if self.is_call else -move
+
+    def traded(self) -> TradedInstrument:
+        """The contract as an order trades it."""
+        return TradedInstrument(
+            conid=self.option_conid,
+            symbol=self.symbol,
+            listing_exchange=self.exchange,
+            currency=self.currency,
+            asset_class=AssetClass.OPTION,
+            description=self.description,
+            multiplier=Decimal(repr(self.multiplier)),
+            underlying_conid=self.underlying_conid,
+            expiry=self.expiry,
+        )
+
+
+class PairGrade(DomainModel):
+    """One closed option beside its twin, in the base currency: what the block paid and made,
+    and what the twin made at the book's base size (``None`` while the twin is open)."""
+
+    thesis_id: PositiveInt
+    right: OptionRight
+    exit_reason: NonEmptyText
+    premium_base: Money
+    option_pnl: Annotated[Decimal, Field(allow_inf_nan=False)]
+    twin_size_base: Money
+    twin_pnl: Annotated[Decimal, Field(allow_inf_nan=False)] | None

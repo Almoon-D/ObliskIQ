@@ -5,6 +5,29 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.25.0] - 2026-11-15
+
+Session 29: a thesis, bullish or bearish, can be held as a long call or a long put, and each
+option is graded beside the same thesis in its underlying.
+
+### Added
+
+- `obliskiq idea add --as shares|option|auto`: a target below the invalidation is a long put or
+  nothing; `auto` takes the option when the options sleeve's gates pass, otherwise the
+  instrument (DECISIONS D167). The analyst's drafts are `auto`.
+- The link from a thesis to the options sleeve: one block in whole contracts inside the pool and
+  the friction gate, entered through the pre-trade gate; exits by the thesis's levels and
+  horizon, the mandatory close, a confirmed zombie and the scaled exit; the penalty ledger
+  written by the fills, the reviews and the book's qualifying gains.
+- Each option's twin in the underlying at the base size; the digest and `idea show` give
+  premium at risk, the penalty balance and the record per direction. H8 is in the registry
+  with its forward grading rule.
+
+### Changed
+
+- Migration 016 rebuilds `theses` (what an idea may be, and is, held as) and adds
+  `thesis_options`; existing theses are held as shares.
+
 ## [0.24.0] - 2026-11-14
 
 Session 28: the engine proposes its own theses from dated facts, and writes a second opinion on

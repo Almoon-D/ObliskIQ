@@ -1,4 +1,4 @@
-"""The shape of the migrations (``001_core.sql`` through ``015_analyst.sql``) and the
+"""The shape of the migrations (``001_core.sql`` through ``016_thesis_options.sql``) and the
 constraints that keep a bad row out.
 
 The shape is pinned column by column so that a migration cannot change a table without a test
@@ -290,13 +290,14 @@ SHAPE = {
         "delta:REAL, multiplier:REAL, currency:TEXT!, premium_base:TEXT, iv_percentile:REAL, "
         "market_data_status:TEXT, untested:TEXT!, activation:TEXT!, computed_at:TEXT!"
     ),
-    # 013_theses
+    # 013_theses, rebuilt by 016_thesis_options
     "theses": (
-        "thesis_id:INTEGER*, source:TEXT!, conviction:TEXT!, view:TEXT!, symbol:TEXT!, "
+        "thesis_id:INTEGER*, source:TEXT!, conviction:TEXT!, view:TEXT!, expression:TEXT!, "
+        "symbol:TEXT!, "
         "candidate_key:TEXT, conid:INTEGER, listing_exchange:TEXT, currency:TEXT, "
         "asset_class:TEXT!, description:TEXT!, sector:TEXT, country:TEXT, defensive:INTEGER!, "
         "isin:TEXT, expectation:TEXT!, target:TEXT!, invalidation:TEXT!, horizon:TEXT!, "
-        "entry_max:TEXT, enter_by:TEXT!, state:TEXT!, mode:TEXT, size_base:TEXT, "
+        "entry_max:TEXT, enter_by:TEXT!, state:TEXT!, mode:TEXT, size_base:TEXT, held_as:TEXT, "
         "exit_reason:TEXT, created_at:TEXT!, approved_at:TEXT, opened_at:TEXT, closed_at:TEXT"
     ),
     "thesis_log": (
@@ -306,7 +307,15 @@ SHAPE = {
         "thesis_id:INTEGER*, graded_at:TEXT!, mode:TEXT!, source:TEXT!, conviction:TEXT!, "
         "exit_reason:TEXT!, quantity:TEXT!, entry_price:TEXT!, exit_price:TEXT!, "
         "reached:INTEGER!, payoff:TEXT!, stated_payoff:TEXT!, days_held:INTEGER!, "
-        "horizon_days:INTEGER!"
+        "horizon_days:INTEGER!, held_as:TEXT!='shares'"
+    ),
+    # 016_thesis_options
+    "thesis_options": (
+        "thesis_id:INTEGER*, option_conid:INTEGER!, underlying_conid:INTEGER!, symbol:TEXT!, "
+        "exchange:TEXT!, description:TEXT!, currency:TEXT!, expiry:TEXT!, strike:REAL!, "
+        "right:TEXT!, multiplier:REAL!, contracts:INTEGER!, close_by:TEXT!, "
+        "prob_target_at_entry:REAL, underlying_entry:TEXT!, twin_size_base:TEXT!, "
+        "position_id:INTEGER, twin_exit:TEXT, twin_exit_reason:TEXT, twin_closed_at:TEXT"
     ),
     # 014_breakers
     "managed_nav": (
@@ -387,7 +396,7 @@ INDEXES = {
     # 012_engines
     "ix_option_positions_open",
     "ix_option_ledger_position",
-    # 013_theses
+    # 013_theses, rebuilt by 016_thesis_options
     "ix_theses_state",
 }
 

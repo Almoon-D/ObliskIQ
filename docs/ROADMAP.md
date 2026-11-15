@@ -29,7 +29,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 22 | Order path on paper | the live-orders pre-read; the owner's command list from the order test to `serve` | done (on fixtures; the order test, the execution test and the reserve's paper cycle are the owner's list in docs/RUNBOOK.md) | v0.20.2 |
 | 27 | Thesis book | the owner's idea intake, the thesis lifecycle and gate, conviction sizes, exits, forward grading; its pre-registration first | done (on fixtures, in shadow; H13 locked, #63; no IBKR call) | v0.21.0 |
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | done (on fixtures and one live provider; drafts and opinions in shadow, graded forward; no IBKR call) | v0.24.0 |
-| 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | after 27 | |
+| 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | done (on fixtures, in shadow; H8 registered with its forward grading rule; no IBKR call) | v0.25.0 |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | done (no test reaches a probability of a sufficient outcome of 0.5: do not buy, D162) | v0.22.0 |
 | 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | after the owner buys a history, which Session 23 advises against (D162) | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | done (on fixtures; no IBKR call) | v0.23.0 |
@@ -58,6 +58,23 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 29 — Options for theses (2026-11-15, v0.25.0)
+
+- **Verified first:** the sleeve takes a thesis's target, horizon and direction as it stood.
+- **Landed** (D167): `idea add --as shares|option|auto`; a target below the invalidation is a
+  long put or nothing; analyst drafts are `auto`. One block in whole contracts inside the pool
+  (the option budget, at most the book's capital) and the friction gate; an entry intent
+  through the pre-trade gate, no stop. Exits: the thesis's levels and horizon on the
+  underlying, the mandatory close, a confirmed zombie, the scaled exit. Fills, reviews and the
+  book's qualifying gains write the penalty ledger. The digest and `idea show` give premium at
+  risk, the penalty balance and each option beside its twin, per direction.
+- **Registry:** H8 is an `idea` with its forward grading rule; any other signal stays in shadow.
+- **Observable:** `tests/integration/test_thesis_options.py`: a bearish owner idea from
+  `idea add` to a shadow long put, its exit at the target and its grade beside the twin.
+- **Not built:** spreads, written or futures options, calibrated sizing, the rest of Session 17.
+- **Live findings.** None: no IBKR call. **VERIFY-LIVE:** an option order on paper (queued).
+  **Prompts edited:** Session 17's deliverables 1 and 3 name what exists.
 
 ### Session 28 — LLM analyst (2026-11-14, v0.24.0)
 
@@ -290,6 +307,7 @@ settles it.
 
 | Item | Added | Settled by |
 |---|---|---|
+| A thesis's option on paper: the chain's contract id orders, its quote is real-time for the option and its underlying, its rules give a tick, and the entry and the exit fill (`decision/thesis_options.py`) | 29 | the first paper cycle with an option idea |
 | IBKR exchange codes → venues (38 codes in `ibkr_exchanges`; Sessions 8 and 9 pinned 57 universe conids with their listing exchanges through the owner's IBKR connector [MCP ✓ 2026-10-22]; the ten codes Session 8 added and Session 9's `IBIS2` are unverified on CP) | 2 | the collectors' live round |
 | Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | T1 or the first command list after it |
 | SGX mid-day break hours (the XSES lunch override; the library skips the break) | 2 | T1 or the first command list after it |
@@ -393,9 +411,17 @@ settles it.
   D137): the daily compute step (D166) writes the commodity engine's readings, and Session 17
   reads them through the store worker. That is needed before a futures-tracking ETC joins the
   universe.
-- Session 17 hands the options sleeve its investable capital (`CapitalReader`) so the pool's
-  gates are tested, and turns an active sleeve's entries into intents. Its penalty ledger is
-  written by the fills and the zombie reviews it schedules.
+- Session 17, for a signal that is not a thesis: hands the options sleeve its investable capital
+  (`CapitalReader`) and turns an active sleeve's entries into intents. A thesis's option has
+  both since Session 29 (`decision/thesis_options.py`, D167).
+- Options for theses (Session 29), open: the sleeve's pool and penalty balance are one record
+  across modes, so a shadow position commits premium a paper book then lacks (with the thesis
+  left in another mode's record, Session 18); the collar of an option order is built on its
+  underlying's volatility, so the exit of a cheap, wide option can rest inside the spread until
+  its intent ends and the next cycle retries it; an option whose quote is missing blocks the
+  capital view, and with it every decision of the cycle; an option still held after its last
+  tradable session is not written off by any rule; the scaled exit's proceeds refill the pool
+  only when the position closes.
 - Not ported from lite (D135): the commodity-proxy beta and R² regression with its `min_r2`
   flag, and the agricultural linkage (fertiliser names on natural gas), both for Session 15's
   commodity components; the screen's cheap and coiled buckets, for Session 15; futures options

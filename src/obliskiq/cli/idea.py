@@ -3,9 +3,12 @@
 
 ``idea add`` hands the engine one idea: the instrument (a universe symbol, or ``--candidate`` with
 a stock candidate's key and its ``--isin``), what is expected, a target, an invalidation and a
-horizon, with a conviction (normal, high or max). An idea that lacks one of them is refused with
-the reason and nothing is stored. A stored idea is a candidate: the service's next cycle judges it
-at the gate, trades it inside the book's rails and grades it. ``idea list`` shows the open ideas
+horizon, with a conviction (normal, high or max) and what it may be held as (``--as shares``, the
+instrument; ``option``, a long call, or a long put when the target lies below the invalidation;
+``auto``, the option when the options sleeve's gates pass, otherwise the instrument). An idea that
+lacks one of them is refused with the reason and nothing is stored. A stored idea is a candidate:
+the service's next cycle judges it at the gate, trades it inside the book's rails and grades it.
+``idea list`` shows the open ideas
 (``--all``: every one), ``idea show`` one idea with its log, what the analyst wrote of it and its
 grade, ``idea withdraw`` takes back an idea that has not filled. None opens a brokerage session,
 so all are safe beside a running service.
@@ -25,6 +28,7 @@ from ..decision.thesis_intake import ThesisIntake
 from ..domain.thesis import (
     OPEN_STATES,
     Conviction,
+    Expression,
     Thesis,
     ThesisDraft,
     ThesisSource,
@@ -36,6 +40,7 @@ from ..errors import ObliskError
 from ..store import analyst as analyst_repo
 from ..store import open_store
 from ..store import theses as thesis_repo
+from ..store import thesis_options as link_repo
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 
@@ -89,10 +94,12 @@ def _run(loaded: Loaded, work: Callable[[StoreWorker], Awaitable[int]], out: Tex
 
 def _line(thesis: Thesis) -> str:
     size = "" if thesis.size_base is None else f", size {thesis.size_base:.2f}"
+    holding = thesis.held_as or thesis.expression
+    held = "" if holding is Expression.SHARES else f", as {holding.value}"
     return (
         f"{thesis.ref} {thesis.instrument.symbol} {thesis.state.value} ({thesis.source.value}, "
-        f"{thesis.conviction.value}, {thesis.view.value}): target {thesis.target}, invalidation "
-        f"{thesis.invalidation}, horizon {thesis.horizon.isoformat()}, enter by "
+        f"{thesis.conviction.value}, {thesis.view.value}{held}): target {thesis.target}, "
+        f"invalidation {thesis.invalidation}, horizon {thesis.horizon.isoformat()}, enter by "
         f"{thesis.enter_by.isoformat()}{size}"
     )
 
@@ -105,6 +112,7 @@ def _add(loaded: Loaded, out: TextIO) -> int:
             source=ThesisSource.OWNER,
             conviction=Conviction(args.conviction),
             view=View.BEARISH if args.bearish else View.BULLISH,
+            expression=Expression(args.held_as),
             symbol=args.symbol,
             candidate=args.candidate,
             isin=args.isin,
@@ -166,6 +174,7 @@ def _show(loaded: Loaded, out: TextIO) -> int:
         print(f"  expects: {thesis.expectation}", file=out)
         if thesis.entry_max is not None:
             print(f"  entered only at or below {thesis.entry_max}", file=out)
+        await _option_lines(worker, thesis_id, out)
         for entry in await worker.run(thesis_repo.log_entries, thesis_id):
             print(
                 f"  {entry.at.isoformat()} {entry.kind.value} ({entry.actor}): {entry.detail}",
@@ -175,8 +184,9 @@ def _show(loaded: Loaded, out: TextIO) -> int:
         grades = await worker.run(thesis_repo.grades, as_of=utc_now().date())
         for grade in (g for g in grades if g.thesis_id == thesis_id):
             reached = "reached" if grade.reached else "did not reach"
+            what = "payoff on the premium" if grade.held_as is Expression.OPTION else "payoff"
             print(
-                f"  grade: {reached} its target; payoff {grade.payoff:.2%} against "
+                f"  grade: {reached} its target; {what} {grade.payoff:.2%} against "
                 f"{grade.stated_payoff:.2%} stated; {grade.days_held} of {grade.horizon_days} "
                 f"days; closed by {grade.exit_reason}",
                 file=out,
@@ -184,6 +194,38 @@ def _show(loaded: Loaded, out: TextIO) -> int:
         return EXIT_OK
 
     return _run(loaded, work, out)
+
+
+async def _option_lines(worker: StoreWorker, thesis_id: int, out: TextIO) -> None:
+    """The option the idea is held as, and its twin in the underlying beside it."""
+    chosen = await worker.run(link_repo.get, thesis_id)
+    if chosen is None:
+        return
+    kind = "call" if chosen.is_call else "put"
+    print(
+        f"  held as {chosen.contracts} long {kind}(s): {chosen.description}, sold by "
+        f"{chosen.close_by.isoformat()}",
+        file=out,
+    )
+    payoff = chosen.twin_payoff
+    twin = (
+        "still running"
+        if payoff is None
+        else f"left at {chosen.twin_exit} ({chosen.twin_exit_reason}): {payoff:.2%}, "
+        f"{chosen.twin_size_base * payoff:+.2f}"
+    )
+    print(
+        f"  its twin in the underlying, {chosen.twin_size_base:.2f} entered at "
+        f"{chosen.underlying_entry}: {twin}",
+        file=out,
+    )
+    pairs = await worker.run(link_repo.pairs, as_of=utc_now().date())
+    for pair in (p for p in pairs if p.thesis_id == thesis_id):
+        print(
+            f"  the option made {pair.option_pnl:+.2f} on {pair.premium_base:.2f} of premium "
+            f"(closed by {pair.exit_reason})",
+            file=out,
+        )
 
 
 async def _analyst_lines(worker: StoreWorker, thesis_id: int, out: TextIO) -> None:
@@ -244,7 +286,16 @@ def add_idea_commands(commands: argparse._SubParsersAction[argparse.ArgumentPars
     add.add_argument(
         "--bearish",
         action="store_true",
-        help="a bearish view, held as a defensive instrument (never a short)",
+        help="a bearish view: held as a defensive instrument, or, with a target below the "
+        "invalidation, as a long put on the instrument (never a short)",
+    )
+    add.add_argument(
+        "--as",
+        dest="held_as",
+        choices=[expression.value for expression in Expression],
+        default=Expression.SHARES.value,
+        help="what it may be held as: the instrument, a long option, or auto (the option when "
+        "the options sleeve's gates pass, otherwise the instrument)",
     )
     add.add_argument("--entry-max", help="enter only at or below this price")
     add.add_argument("--enter-by", help="the last day to enter, YYYY-MM-DD")

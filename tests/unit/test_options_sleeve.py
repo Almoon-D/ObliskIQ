@@ -266,8 +266,20 @@ def test_a_registry_that_cannot_be_read_raises(tmp_path: Path, text: str) -> Non
         registered_hypothesis(path, "H8")
 
 
-def test_the_shipped_registry_holds_no_h8(repo_root: Path) -> None:
-    assert registered_hypothesis(repo_root / "research" / "pattern_registry.yaml", "H8") is None
+def test_the_shipped_registry_holds_h8_without_an_outcome(
+    repo_root: Path, shipped_settings: ObliskConfig
+) -> None:
+    """H8 is registered with its forward grading rule and no outcome: for any signal that is
+    not a thesis the sleeve stays in shadow (DECISIONS D157)."""
+    found = registered_hypothesis(repo_root / "research" / "pattern_registry.yaml", "H8")
+    assert found is not None
+    assert (found.status, found.decision, found.min_median_premiums) == ("idea", None, None)
+    activation = SleeveActivation(shipped_settings).evaluate(
+        evidence=found, budget=None, budget_gap=None, median_premium=None, median_gap=None,
+        friction=None, friction_holds=None,
+    )  # fmt: skip
+    assert not activation.active
+    assert activation.reason().startswith("shadow: evidence fails: H8 is idea (no outcome yet)")
 
 
 # ── the sleeve ──

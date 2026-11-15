@@ -10,7 +10,10 @@ opens no brokerage session, so it is safe beside a running service:
    (``data/candidates.py``): a company an issuer's holdings file lists as an equity line, with a
    listing on a configured venue, and the ISIN the tax lots are kept by. A fund, ETF or ETC enters
    through a reviewed universe entry, because its eligibility is judged on declared attributes;
-3. a bearish view is accepted only on an instrument of a defensive core role;
+3. a bearish view held long is accepted only on an instrument of a defensive core role; an idea
+   that is an option or nothing (it says ``option``, or its levels describe a fall) needs an
+   instrument whose option chain is collected, which need not be one the account may buy: the
+   option is judged at the order, not its underlying;
 4. the thesis is stored as a candidate. The service's next cycle resolves a stock candidate
    through IBKR's contract search and pins it, then judges the thesis at the gate
    (``decision/rebalance_thesis.py``).
@@ -29,6 +32,7 @@ from ..domain.enums import AssetClass
 from ..domain.orders import TERMINAL_STATES
 from ..domain.thesis import (
     UNSTORED,
+    Expression,
     Thesis,
     ThesisDraft,
     ThesisInstrument,
@@ -37,6 +41,7 @@ from ..domain.thesis import (
 from ..engines.thesis.gate import Finding, Reason, screen, view_findings
 from ..store import orders as repo
 from ..store import theses as thesis_repo
+from ..store import thesis_options as link_repo
 from ..store import universe as universe_repo
 from ..store.db import Store
 from ..store.worker import StoreWorker
@@ -87,7 +92,9 @@ class ThesisIntake:
         self._worker = worker
         self._now = now
 
-    def _from_universe(self, symbol: str) -> ThesisInstrument | list[Finding]:
+    def _from_universe(
+        self, symbol: str, expression: Expression, falls: bool
+    ) -> ThesisInstrument | list[Finding]:
         settings = self._settings
         declared = settings.universe.instrument(symbol)
         if declared is None:
@@ -96,8 +103,23 @@ class ThesisIntake:
                 f"{symbol} is not in config/universe.yaml; a share outside it is named by its "
                 "stock candidate (--candidate), a fund through a reviewed universe entry",
             )
-        if not declared.tradable or declared.conid is None or declared.description is None:
-            why = declared.data_only_reason or "it is not pinned and described yet"
+        option_only = falls or expression is Expression.OPTION
+        if option_only and not declared.collects_chain:
+            why = declared.options_unavailable_reason or "no option chain is collected on it"
+            return _refused(
+                Reason.NO_OPTIONS,
+                f"{declared.symbol} cannot be held as an option, so nothing is held: {why}",
+            )
+        # An option's underlying need not be one the account may buy; an idea that may fall
+        # back on its instrument (auto) needs one it may, unless its chain is collected.
+        optionable = declared.collects_chain and expression is not Expression.SHARES
+        if declared.conid is None or declared.description is None:
+            return _refused(
+                Reason.NOT_TRADABLE,
+                f"{declared.symbol} cannot be ordered: it is not pinned and described yet",
+            )
+        if not declared.tradable and not optionable:
+            why = declared.data_only_reason or "it is not a tradable candidate"
             return _refused(Reason.NOT_TRADABLE, f"{declared.symbol} cannot be ordered: {why}")
         if declared.listing_exchange not in settings.ibkr_exchanges:
             return _refused(
@@ -166,14 +188,21 @@ class ThesisIntake:
         findings = screen(draft, today=today)
         if findings:
             return findings
-        instrument = (
-            self._from_universe(draft.symbol)
-            if draft.symbol is not None
-            else self._from_candidate(store, draft.candidate or "", draft.isin or "", today)
-        )
+        # The screen refused a draft without a target or an invalidation.
+        falls = (draft.target or 0) < (draft.invalidation or 0)
+        if draft.symbol is not None:
+            instrument = self._from_universe(draft.symbol, draft.expression, falls)
+        elif falls or draft.expression is Expression.OPTION:
+            return _refused(
+                Reason.NO_OPTIONS,
+                "a share outside the universe file has no collected option chain, so it cannot "
+                "be held as an option and nothing is held",
+            )
+        else:
+            instrument = self._from_candidate(store, draft.candidate or "", draft.isin or "", today)
         if isinstance(instrument, list):
             return instrument
-        findings = view_findings(draft.view, instrument)
+        findings = view_findings(draft.view, instrument, falls=falls)
         if findings:
             return findings
         horizon, expectation = draft.horizon, draft.expectation
@@ -189,6 +218,7 @@ class ThesisIntake:
             source=draft.source,
             conviction=draft.conviction,
             view=draft.view,
+            expression=draft.expression,
             instrument=instrument,
             expectation=expectation,
             target=target,
@@ -217,6 +247,10 @@ class ThesisIntake:
                 "fill; a position leaves by the thesis's own exits"
             )
         conid = thesis.instrument.conid
+        chosen = link_repo.get(store, thesis_id)
+        if chosen is not None:
+            # A thesis approved as an option trades the option, not its instrument.
+            conid = chosen.option_conid
         working = [
             stored.intent.intent_id
             for stored in (repo.intents_for_conid(store, conid) if conid is not None else [])

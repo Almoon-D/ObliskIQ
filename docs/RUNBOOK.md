@@ -200,6 +200,10 @@ uv run obliskiq idea add SGLD --bearish --expect "equities fall" \
     --target 400 --invalidation 300 --horizon 2027-03-31     # a bearish view: a defensive instrument
 uv run obliskiq idea add --candidate jp:toyota_motor --isin JP3633400001 --expect "..." \
     --target 4000 --invalidation 2500 --horizon 2027-06-30   # a share outside the universe file
+uv run obliskiq idea add SPY --bearish --as option --expect "US equities fall" \
+    --target 420 --invalidation 530 --horizon 2027-03-15     # its own fall: a long put or nothing
+uv run obliskiq idea add SPY --as auto --expect "..." \
+    --target 600 --invalidation 470 --horizon 2027-01-15     # a call if the sleeve's gates pass
 uv run obliskiq idea list                                    # open ideas (--all: every idea)
 uv run obliskiq idea show T1                                 # one idea, its log and its grade
 uv run obliskiq idea withdraw T1                             # before its first fill only

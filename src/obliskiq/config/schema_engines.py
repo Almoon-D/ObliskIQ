@@ -36,6 +36,14 @@ class SleeveActivationConfig(FrozenModel):
     friction_max_share_of_premium: Annotated[Decimal, Field(gt=0, lt=1, allow_inf_nan=False)]
 
 
+class ScaledExitConfig(FrozenModel):
+    """The scaled exit of an option block: at ``premium_multiple`` times the premium paid,
+    ``fraction`` of the contracts is sold, once."""
+
+    premium_multiple: Annotated[Decimal, Field(gt=1, allow_inf_nan=False)]
+    fraction: Annotated[Decimal, Field(gt=0, lt=1, allow_inf_nan=False)]
+
+
 class OptionSleeveConfig(FrozenModel):
     """lite's ``option_sleeve`` keys, less ``budget_pct`` (``capital.budgets.option_premium``)."""
 
@@ -45,6 +53,8 @@ class OptionSleeveConfig(FrozenModel):
     min_payoff_ratio: PositiveFloat
     max_concurrent_positions: PositiveInt
     min_premium_base_currency: PositiveDecimal
+    block_share: Annotated[Decimal, Field(gt=0, le=1, allow_inf_nan=False)]
+    scaled_exit: ScaledExitConfig
     activation: SleeveActivationConfig
 
     @model_validator(mode="after")

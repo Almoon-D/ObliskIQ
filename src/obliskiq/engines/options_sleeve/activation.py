@@ -16,6 +16,11 @@ research record, never from a NAV threshold:
 Until all three hold the sleeve runs in shadow and logs what it would have entered, which is
 H8's forward record. A leg that cannot be evaluated is untested, never assumed to hold.
 
+**A thesis of the thesis book is the exception** (DECISIONS D157, :func:`thesis_activation`): its
+long call or put trades whenever that book trades and the premium is affordable, the premium paid
+from the book's own capital; the option beside the same thesis in its underlying is H8's record.
+For any other signal the three legs above stand.
+
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
@@ -34,6 +39,8 @@ SUFFICIENT = "sufficient"
 EVIDENCE = "evidence"
 BUDGET = "budget"
 FRICTION = "friction"
+BOOK = "book"
+PREMIUM = "premium"
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +185,31 @@ class FrictionGate:
 
     def holds(self, reading: FrictionReading) -> bool | None:
         return None if reading.share is None else reading.share <= self._max_share
+
+
+def thesis_activation(*, book_capital: Decimal, available: Decimal | None) -> Activation:
+    """A thesis's activation (DECISIONS D157): the thesis book trades (it has capital in this
+    mode) and the pool can pay a premium (``available`` is what is left of the option budget
+    after the penalty balance and the open commitments; ``None`` while the book has none)."""
+    trades = book_capital > ZERO
+    return Activation(
+        (
+            ActivationLeg(
+                BOOK,
+                trades,
+                f"the thesis book trades on {book_capital:.2f}"
+                if trades
+                else "the thesis book has no capital in this mode",
+            ),
+            ActivationLeg(
+                PREMIUM,
+                None if available is None else available > ZERO,
+                "no pool without a book that trades"
+                if available is None
+                else f"{available:.2f} of the option budget is available",
+            ),
+        )
+    )
 
 
 class SleeveActivation:

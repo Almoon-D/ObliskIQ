@@ -3,9 +3,10 @@
 Every idea, whoever wrote it, passes the same two stages:
 
 1. :func:`screen` judges a **draft** on its own words: a missing instrument, expectation, target,
-   horizon or invalidation; levels that describe a fall of the instrument (the book never
-   shorts); an entry rule outside its levels; dates that do not hold; a conviction only the owner
-   may give. :func:`view_findings` adds the view against the instrument: a bearish idea is held
+   horizon or invalidation; levels that describe a fall of the instrument unless the idea is
+   bearish and may be held as an option (a long put or nothing: the book never shorts); an entry
+   rule outside its levels; dates that do not hold; a conviction only the owner may give.
+   :func:`view_findings` adds the view against the instrument: a bearish idea held long is held
    only as an instrument of a defensive core role. A draft with a finding is not stored.
 2. :func:`evaluate` judges a stored **thesis** against the market and the book, as the decision
    layer read them (:class:`GateFacts`): the mandate and the jurisdiction's eligibility (their
@@ -27,7 +28,15 @@ from decimal import ROUND_FLOOR, Decimal
 from enum import StrEnum
 
 from ...config.schema_thesis import ThesisBookConfig
-from ...domain.thesis import Conviction, Thesis, ThesisDraft, ThesisInstrument, ThesisSource, View
+from ...domain.thesis import (
+    Conviction,
+    Expression,
+    Thesis,
+    ThesisDraft,
+    ThesisInstrument,
+    ThesisSource,
+    View,
+)
 from .book import Slot, position_size
 
 ZERO = Decimal(0)
@@ -69,6 +78,10 @@ class Reason(StrEnum):
     WORKING = "working"
     ENTRIES_BLOCKED = "entries_blocked"
     NOT_PRICED = "not_priced"
+    NO_OPTIONS = "no_options"
+    OPTION_GATES = "option_gates"
+    OPTION_BUDGET = "option_budget"
+    OPTION_FRICTION = "option_friction"
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,12 +131,24 @@ def screen(draft: ThesisDraft, *, today: date) -> list[Finding]:
     assert target is not None
     assert invalidation is not None
     assert horizon is not None
-    if target <= invalidation:
-        fail(
-            Reason.SHORT,
-            f"its target {target} is not above its invalidation {invalidation}: that describes "
-            "a fall, and the book never shorts (a bearish view is held as a defensive instrument)",
-        )
+    if target == invalidation:
+        fail(Reason.LEVELS, f"its target and its invalidation are both {target}")
+    elif target < invalidation:
+        if draft.expression is Expression.SHARES:
+            fail(
+                Reason.SHORT,
+                f"its target {target} is below its invalidation {invalidation}: that describes "
+                "a fall, and the book never shorts. A fall is held as a long put (--as option) "
+                "or the view as a defensive instrument",
+            )
+        elif draft.view is not View.BEARISH:
+            fail(
+                Reason.LEVELS,
+                f"its target {target} is below its invalidation {invalidation}: a fall is a "
+                "bearish idea, and this one is not marked bearish",
+            )
+        elif draft.entry_max is not None:
+            fail(Reason.LEVELS, "a fall held as a long put names no entry limit")
     elif draft.entry_max is not None and not invalidation < draft.entry_max < target:
         fail(
             Reason.LEVELS,
@@ -140,15 +165,19 @@ def screen(draft: ThesisDraft, *, today: date) -> list[Finding]:
     return found
 
 
-def view_findings(view: View, instrument: ThesisInstrument) -> list[Finding]:
-    """A bearish idea is held as what holds or gains in a fall, never as anything else."""
-    if view is View.BEARISH and not instrument.defensive:
+def view_findings(
+    view: View, instrument: ThesisInstrument, *, falls: bool = False
+) -> list[Finding]:
+    """A bearish idea held long is held as what holds or gains in a fall, never as anything
+    else. One whose levels describe the instrument's own fall (``falls``) is a long put on it."""
+    if view is View.BEARISH and not falls and not instrument.defensive:
         return [
             Finding(
                 Reason.BEARISH_NOT_DEFENSIVE,
                 f"a bearish idea is held only as an instrument of a defensive core role; "
                 f"{instrument.symbol} fills none (the book never shorts and holds no inverse "
-                "product)",
+                "product; its own fall is written as a target below the invalidation and held "
+                "as a long put)",
                 permanent=True,
             )
         ]
@@ -203,10 +232,12 @@ class Verdict:
 
 
 def gain_to_loss(thesis: Thesis, price: Decimal) -> Decimal | None:
-    """The target's gain over the invalidation's loss at ``price``; ``None`` outside the levels."""
-    if not thesis.invalidation < price < thesis.target:
+    """The target's gain over the invalidation's loss at ``price`` of the thesis's instrument
+    (a fall's levels read the other way round); ``None`` outside the levels."""
+    low, high = sorted((thesis.invalidation, thesis.target))
+    if not low < price < high:
         return None
-    return (thesis.target - price) / (price - thesis.invalidation)
+    return abs(thesis.target - price) / abs(price - thesis.invalidation)
 
 
 def _cap(
@@ -233,12 +264,14 @@ class ThesisGate:
     def __init__(self, thesis: ThesisBookConfig) -> None:
         self._thesis = thesis
 
-    def evaluate(self, thesis: Thesis, facts: GateFacts) -> Verdict:
-        """Judge ``thesis`` on ``facts``. An approved thesis keeps its slot and its size: only what
-        moves with the market is asked again."""
+    def market(self, thesis: Thesis, facts: GateFacts) -> list[Finding]:
+        """What does not depend on how the thesis is held: the mandate's and the jurisdiction's
+        words, who else holds the instrument, and its levels against the price of its
+        instrument (an option's underlying)."""
         found: list[Finding] = []
-        instrument = thesis.instrument
-        symbol = instrument.symbol
+        symbol = thesis.instrument.symbol
+        sign = -1 if thesis.falls else 1
+        beyond, short_of = ("below", "above") if thesis.falls else ("above", "below")
         found += [
             Finding(Reason.PROHIBITED_PRODUCT, why, permanent=True) for why in facts.prohibited
         ]
@@ -249,19 +282,20 @@ class ThesisGate:
         price = facts.reference
         if price is None:
             found.append(Finding(Reason.NO_QUOTE, f"{symbol} has no fresh quote"))
-        elif price >= thesis.target:
+        elif sign * (price - thesis.target) >= 0:
             found.append(
                 Finding(
                     Reason.TARGET_PASSED,
-                    f"{symbol} at {price} is at or above the target {thesis.target}",
+                    f"{symbol} at {price} is at or {beyond} the target {thesis.target}",
                     permanent=True,
                 )
             )
-        elif price <= thesis.invalidation:
+        elif sign * (price - thesis.invalidation) <= 0:
             found.append(
                 Finding(
                     Reason.INVALIDATED,
-                    f"{symbol} at {price} is at or below the invalidation {thesis.invalidation}",
+                    f"{symbol} at {price} is at or {short_of} the invalidation "
+                    f"{thesis.invalidation}",
                     permanent=True,
                 )
             )
@@ -283,6 +317,21 @@ class ThesisGate:
                         f"{symbol} at {price} is above its entry limit {thesis.entry_max}",
                     )
                 )
+        return found
+
+    def slot(self, thesis: Thesis, size: Decimal, facts: GateFacts) -> list[Finding]:
+        """A free slot and the caps for a position of ``size``, whatever it is held as."""
+        found: list[Finding] = []
+        self._book(found, thesis.instrument, size, facts)
+        return found
+
+    def evaluate(self, thesis: Thesis, facts: GateFacts) -> Verdict:
+        """Judge ``thesis``, held as its instrument, on ``facts``. An approved thesis keeps its
+        slot and its size: only what moves with the market is asked again."""
+        found = self.market(thesis, facts)
+        instrument = thesis.instrument
+        symbol = instrument.symbol
+        price = facts.reference
         size = thesis.size_base
         if size is None:
             if facts.capital <= ZERO:

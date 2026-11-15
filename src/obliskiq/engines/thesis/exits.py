@@ -21,15 +21,25 @@ TIME_WINDOW: Final = "time_window"
 STOP: Final = "stop"
 #: The exit of a position whose thesis has no claim on it any more.
 OVERRIDE: Final = "override"
+#: The sleeve's own exits of an option a thesis is held as (MASTER_PLAN §5.6).
+ZOMBIE: Final = "zombie"
+MANDATORY_CLOSE: Final = "mandatory_close"
+SCALED_EXIT: Final = "scaled_exit"
+#: The exits that are the thesis's own: its twin in the underlying leaves by these alone.
+THESIS_EXITS: Final = frozenset({TARGET, INVALIDATION, TIME_WINDOW})
 
 
 def exit_due(thesis: Thesis, reference: Decimal | None, today: date) -> str | None:
-    """The exit ``thesis`` has reached, or ``None``. Without a price only the horizon can end
-    it: a level is never judged on a quote that was not read."""
-    if reference is not None and reference <= thesis.invalidation:
-        return INVALIDATION
-    if reference is not None and reference >= thesis.target:
-        return TARGET
+    """The exit ``thesis`` has reached, or ``None``. ``reference`` is the price of the thesis's
+    instrument (an option's underlying); levels that describe a fall are read the other way
+    round. Without a price only the horizon can end it: a level is never judged on a quote that
+    was not read."""
+    if reference is not None:
+        sign = -1 if thesis.falls else 1
+        if sign * (reference - thesis.invalidation) <= 0:
+            return INVALIDATION
+        if sign * (reference - thesis.target) >= 0:
+            return TARGET
     if today > thesis.horizon:
         return TIME_WINDOW
     return None

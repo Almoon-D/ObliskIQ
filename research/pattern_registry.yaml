@@ -222,3 +222,24 @@ patterns:
     status: pre-registered
     preregistration: research/preregistrations/thesis-book.md
     lock: research/preregistrations/thesis-book.lock
+  - id: options-for-theses
+    hypothesis: H8
+    title: A long option against the same thesis held in its underlying
+    status: idea
+    data_needed: >-
+      Forward only: no option-surface history exists to replay it on (the chain collector stores
+      surfaces from Session 8; buying history is the owner's decision, DECISIONS D71). A
+      pre-registration that states the number of pairs its decision rule needs, the effect it
+      must reach and the number of median premiums the sleeve's budget must buy; at one or two
+      contracts at a time that record takes decades, so the sleeve trades for a thesis of the
+      thesis book alone (DECISIONS D157) and stays in shadow for every other signal.
+    grading: >-
+      Each thesis of the thesis book held as a long call or put is one pair: the option block,
+      and its twin, the same thesis in its underlying at the book's base size, entered at the
+      underlying's price when the option was chosen. The option's result is its realised
+      proceeds less the premium paid, in the base currency. The twin leaves by the thesis's own
+      exits alone (target, invalidation, horizon), a fall counted as the gain of a put's twin,
+      before costs and tax; it is a figure, never a position. Pairs are reported per direction,
+      calls and puts apart, a twin still running counted and not valued (`obliskiq idea show`,
+      the digest). The record describes; it moves no capital until a pre-registration says how
+      (DECISIONS D167).

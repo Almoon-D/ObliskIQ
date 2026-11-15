@@ -58,7 +58,28 @@ def move(store: Store, thesis_id: int, to: ThesisState, **kw: Any) -> Any:
 @pytest.mark.parametrize(
     ("changes", "words"),
     [
-        ({"target": D(40), "invalidation": D(40)}, "never shorts"),
+        ({"target": D(40), "invalidation": D(40)}, "two levels"),
+        ({"target": D(30), "invalidation": D(40)}, "never shorts"),
+        (
+            {
+                "target": D(30),
+                "invalidation": D(40),
+                "view": "bearish",
+                "expression": "option",
+                "entry_max": D(35),
+            },
+            "never shorts",
+        ),
+        (
+            {
+                "expression": "option",
+                "held_as": "shares",
+                "mode": "shadow",
+                "size_base": D(1),
+                "approved_at": NOW,
+            },
+            "as it allowed",
+        ),
         ({"entry_max": D(60)}, "entry_max lies between"),
         ({"enter_by": HORIZON + timedelta(days=1)}, "entry window"),
         ({"enter_by": TODAY - timedelta(days=1)}, "entry window"),

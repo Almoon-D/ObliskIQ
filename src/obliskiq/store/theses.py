@@ -1,4 +1,5 @@
-"""The thesis book in the store (013_theses): theses, their append-only log and their grades.
+"""The thesis book in the store (013_theses, 016_thesis_options): theses, their append-only log
+and their grades.
 
 A thesis moves only along its lifecycle (``domain/thesis.py``); every change writes its log entry
 in the same transaction. The store's triggers keep an approved thesis's text and triggers, and
@@ -16,6 +17,7 @@ from decimal import Decimal, InvalidOperation
 from ..domain.orders import ExecutionMode
 from ..domain.thesis import (
     ENDED_STATES,
+    Expression,
     LogKind,
     Thesis,
     ThesisGrade,
@@ -46,10 +48,11 @@ TRANSITIONS: dict[ThesisState, frozenset[ThesisState]] = {
 }
 
 _COLUMNS = (
-    "thesis_id, source, conviction, view, symbol, candidate_key, conid, listing_exchange, "
-    "currency, asset_class, description, sector, country, defensive, isin, expectation, target, "
-    "invalidation, horizon, entry_max, enter_by, state, mode, size_base, exit_reason, created_at, "
-    "approved_at, opened_at, closed_at"
+    "thesis_id, source, conviction, view, expression, symbol, candidate_key, conid, "
+    "listing_exchange, currency, asset_class, description, sector, country, defensive, isin, "
+    "expectation, target, "
+    "invalidation, horizon, entry_max, enter_by, state, mode, size_base, held_as, exit_reason, "
+    "created_at, approved_at, opened_at, closed_at"
 )
 
 
@@ -80,6 +83,7 @@ def _thesis(row: sqlite3.Row) -> Thesis:
             source=row["source"],
             conviction=row["conviction"],
             view=row["view"],
+            expression=row["expression"],
             instrument=ThesisInstrument(
                 symbol=row["symbol"],
                 candidate_key=row["candidate_key"],
@@ -102,6 +106,7 @@ def _thesis(row: sqlite3.Row) -> Thesis:
             state=row["state"],
             mode=row["mode"],
             size_base=_optional(row["size_base"], "size_base"),
+            held_as=row["held_as"],
             exit_reason=row["exit_reason"],
             created_at=read_stamp(row["created_at"], table, "created_at"),
             approved_at=read_optional_stamp(row["approved_at"], table, "approved_at"),
@@ -141,14 +146,16 @@ def insert_thesis(store: Store, thesis: Thesis, *, actor: str) -> Thesis:
     instrument = thesis.instrument
     with store.transaction():
         cursor = store.execute(
-            "INSERT INTO theses (source, conviction, view, symbol, candidate_key, conid, "
-            "listing_exchange, currency, asset_class, description, sector, country, defensive, "
-            "isin, expectation, target, invalidation, horizon, entry_max, enter_by, state, "
-            "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO theses (source, conviction, view, expression, symbol, candidate_key, "
+            "conid, listing_exchange, currency, asset_class, description, sector, country, "
+            "defensive, isin, expectation, target, invalidation, horizon, entry_max, enter_by, "
+            "state, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 thesis.source.value,
                 thesis.conviction.value,
                 thesis.view.value,
+                thesis.expression.value,
                 instrument.symbol,
                 instrument.candidate_key,
                 instrument.conid,
@@ -177,7 +184,10 @@ def insert_thesis(store: Store, thesis: Thesis, *, actor: str) -> Thesis:
             at=thesis.created_at,
             actor=actor,
             kind=LogKind.INTAKE,
-            detail=f"handed in by {thesis.source.value}, conviction {thesis.conviction.value}",
+            detail=(
+                f"handed in by {thesis.source.value}, conviction {thesis.conviction.value}, to "
+                f"be held as {thesis.expression.value}"
+            ),
         )
     return stored
 
@@ -247,14 +257,23 @@ def approve(
     at: datetime,
     actor: str,
     detail: str,
+    held_as: Expression = Expression.SHARES,
 ) -> Thesis:
-    """A candidate the gate passed: its mode and size are fixed, and its text from here on."""
+    """A candidate the gate passed: its mode, its size and what it is held as are fixed, and its
+    text from here on."""
     with store.transaction():
         _check_move(_required(store, thesis_id), ThesisState.APPROVED)
         store.execute(
-            "UPDATE theses SET state = ?, mode = ?, size_base = ?, approved_at = ? "
+            "UPDATE theses SET state = ?, mode = ?, size_base = ?, held_as = ?, approved_at = ? "
             "WHERE thesis_id = ?",
-            (ThesisState.APPROVED.value, mode.value, _text(size_base), stamp_text(at), thesis_id),
+            (
+                ThesisState.APPROVED.value,
+                mode.value,
+                _text(size_base),
+                held_as.value,
+                stamp_text(at),
+                thesis_id,
+            ),
         )
         append_log(store, thesis_id, at=at, actor=actor, kind=LogKind.STATE, detail=detail)
         return _required(store, thesis_id)
@@ -322,7 +341,8 @@ def record_grade(store: Store, grade: ThesisGrade) -> None:
         store.execute(
             "INSERT INTO thesis_grades (thesis_id, graded_at, mode, source, conviction, "
             "exit_reason, quantity, entry_price, exit_price, reached, payoff, stated_payoff, "
-            "days_held, horizon_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "days_held, horizon_days, held_as) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 grade.thesis_id,
                 stamp_text(grade.graded_at),
@@ -338,6 +358,7 @@ def record_grade(store: Store, grade: ThesisGrade) -> None:
                 _text(grade.stated_payoff),
                 grade.days_held,
                 grade.horizon_days,
+                grade.held_as.value,
             ),
         )
 
@@ -352,6 +373,7 @@ def _grade(row: sqlite3.Row) -> ThesisGrade:
             mode=row["mode"],
             source=row["source"],
             conviction=row["conviction"],
+            held_as=row["held_as"],
             exit_reason=row["exit_reason"],
             quantity=_decimal(row["quantity"], "quantity"),
             entry_price=_decimal(row["entry_price"], "entry_price"),

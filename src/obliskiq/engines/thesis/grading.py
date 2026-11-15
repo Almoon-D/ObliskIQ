@@ -1,5 +1,7 @@
 """Grading a closed thesis against what it wrote, and the record per source, analyst segment and
-conviction (MASTER_PLAN §5.5); the analyst's second opinions graded by their Brier score.
+conviction (MASTER_PLAN §5.5); the analyst's second opinions graded by their Brier score; and
+each option a thesis was held as beside its twin in the underlying, per direction (H8's forward
+record, DECISIONS D157).
 
 A grade says whether the target was reached, the payoff realised against the one stated, and the
 days held against the horizon. It describes the calls and moves no capital: the book's capital
@@ -15,8 +17,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from ...domain.analyst import AnalystCall, OpinionScore, SecondOpinion, brier
+from ...domain.enums import OptionRight
+from ...domain.options import PairGrade
 from ...domain.orders import Fill, OrderSide
-from ...domain.thesis import Thesis, ThesisGrade, ThesisSource
+from ...domain.thesis import Expression, Thesis, ThesisGrade, ThesisSource
 from .exits import TARGET
 
 ZERO = Decimal(0)
@@ -94,6 +98,10 @@ def record(
             groups.setdefault(f"analyst {named[item.thesis_id]}", []).append(item)
     for item in every:
         groups.setdefault(f"conviction {item.conviction.value}", []).append(item)
+    if any(item.held_as is Expression.OPTION for item in every):
+        # An option's payoff is the return on its premium: the two holdings are also read apart.
+        for item in every:
+            groups.setdefault(f"held as {item.held_as.value}", []).append(item)
     return [_group("book", every), *(_group(name, found) for name, found in groups.items())]
 
 
@@ -114,3 +122,44 @@ def opinion_record(
         OpinionScore(segment=segment, graded=len(found), brier=sum(found) / len(found))
         for segment, found in scores.items()
     ]
+
+
+@dataclass(frozen=True, slots=True)
+class PairRecord:
+    """The closed options of one direction beside their twins, in the base currency: the premium
+    paid and what the options made, and what the twins that have closed made at the book's base
+    size. A twin still running is counted, never valued."""
+
+    direction: str
+    closed: int
+    premium: Decimal
+    option_pnl: Decimal
+    twins_closed: int
+    twin_pnl: Decimal
+
+    @property
+    def twins_open(self) -> int:
+        return self.closed - self.twins_closed
+
+
+def pair_record(pairs: Iterable[PairGrade]) -> list[PairRecord]:
+    """The record of the options beside their twins, calls and puts apart. Nothing is reported
+    for a direction without a closed option."""
+    found: list[PairRecord] = []
+    every = list(pairs)
+    for right, name in ((OptionRight.CALL, "calls"), (OptionRight.PUT, "puts")):
+        mine = [pair for pair in every if pair.right is right]
+        if not mine:
+            continue
+        twins = [pair.twin_pnl for pair in mine if pair.twin_pnl is not None]
+        found.append(
+            PairRecord(
+                direction=name,
+                closed=len(mine),
+                premium=sum((pair.premium_base for pair in mine), ZERO),
+                option_pnl=sum((pair.option_pnl for pair in mine), ZERO),
+                twins_closed=len(twins),
+                twin_pnl=sum(twins, ZERO),
+            )
+        )
+    return found

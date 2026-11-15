@@ -34,6 +34,7 @@ class DisciplineConfig(FrozenModel):
     exit_reasons_allowed: list[NonEmptyText] = Field(min_length=1)
     entry_top_decile_requires_catalyst: bool
     entry_top_decile_pctile: Annotated[float, Field(gt=0, lt=1)]
+    entry_range_sessions: PositiveInt
 
 
 class ModesConfig(FrozenModel):
