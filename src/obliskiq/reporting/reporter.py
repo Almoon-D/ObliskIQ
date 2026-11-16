@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..logging_setup import get_logger
 from .alerts import Alert, AlertBook
@@ -70,3 +71,7 @@ class Reporter:
     async def report(self, subject: str, body: str) -> bool:
         """A run summary or a digest."""
         return await self._notifier.send(subject, body)
+
+    async def report_file(self, caption: str, path: Path) -> bool:
+        """A file for the owner: the daily dashboard."""
+        return await self._notifier.send_document(caption, path)

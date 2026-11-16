@@ -14,6 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import html
+from pathlib import Path
 from typing import Protocol
 
 import httpx
@@ -26,12 +27,16 @@ log = get_logger("reporting.notifier")
 
 TELEGRAM_API = "https://api.telegram.org"
 HTTP_OK = 200
+#: Telegram's limit on a document's caption, in characters.
+CAPTION = 1024
 
 
 class Notifier(Protocol):
-    """Sends one message; ``True`` when it was delivered (or, for the log, written)."""
+    """Sends one message or one file; ``True`` when it was delivered (or, for the log, written)."""
 
     async def send(self, subject: str, body: str) -> bool: ...
+
+    async def send_document(self, caption: str, path: Path) -> bool: ...
 
 
 def to_telegram_html(subject: str, body: str, *, chunk: int) -> list[str]:
@@ -61,6 +66,10 @@ class LogNotifier:
 
     async def send(self, subject: str, body: str) -> bool:
         log.warning("owner message", extra={"subject": subject, "body": body})
+        return True
+
+    async def send_document(self, caption: str, path: Path) -> bool:
+        log.warning("owner file", extra={"caption": caption, "path": str(path)})
         return True
 
 
@@ -113,3 +122,31 @@ class TelegramNotifier:
             if self._client is None:
                 await client.aclose()
         return delivered
+
+    async def send_document(self, caption: str, path: Path) -> bool:
+        """Send the file at ``path`` (the dashboard) with ``caption``; never raises."""
+        await self._log.send_document(caption, path)
+        url = f"{TELEGRAM_API}/bot{self._token.get_secret_value()}/sendDocument"
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            log.warning("the file to send cannot be read", extra={"error": type(exc).__name__})
+            return False
+        client = self._client if self._client is not None else httpx.AsyncClient()
+        try:
+            response = await client.post(
+                url,
+                data={"chat_id": self._chat_id.get_secret_value(), "caption": caption[:CAPTION]},
+                files={"document": (path.name, content, "text/html")},
+                timeout=self._timeout,
+            )
+        except httpx.HTTPError as exc:
+            log.warning("telegram send failed", extra={"error": type(exc).__name__})
+            return False
+        finally:
+            if self._client is None:
+                await client.aclose()
+        if response.status_code != HTTP_OK:
+            log.warning("telegram refused the file", extra={"status": response.status_code})
+            return False
+        return True

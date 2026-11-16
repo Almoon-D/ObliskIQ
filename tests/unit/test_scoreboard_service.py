@@ -56,6 +56,9 @@ class Sent:
         self.messages.append((subject, body))
         return self.ok
 
+    async def send_document(self, caption: str, path: Path) -> bool:
+        return self.ok
+
 
 def research_copy(repo_root: Path, tmp_path: Path, *, registry: str | None = None) -> Path:
     root = tmp_path / "repo"

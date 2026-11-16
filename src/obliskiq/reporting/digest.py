@@ -335,8 +335,8 @@ def render_digest(digest: Digest, *, rows: int, base_currency: str) -> tuple[str
                 f"  {decision.role} {decision.symbol}: held {decision.held} = {value}{weight}; "
                 f"target {decision.weight:.0%} = {decision.target:,.2f}; {decision.action}"
             )
-    lines += _thesis_lines(digest, rows)
-    lines += _capital_lines(digest, rows)
+    lines += thesis_lines(digest, rows)
+    lines += capital_lines(digest, rows)
     lines.append("")
     lines.append(f"Intents today ({len(digest.intents)}):")
     _more(
@@ -413,7 +413,7 @@ def _option_lines(book: OptionBook | None) -> list[str]:
     return lines
 
 
-def _thesis_lines(digest: Digest, rows: int) -> list[str]:
+def thesis_lines(digest: Digest, rows: int) -> list[str]:
     """The thesis book: its open theses (a withheld idea with its reason), the ideas that ended
     today and why, and the graded record per source and conviction."""
     lines = ["", "Thesis book:"]
@@ -456,7 +456,7 @@ def _thesis_lines(digest: Digest, rows: int) -> list[str]:
     return lines
 
 
-def _capital_lines(digest: Digest, rows: int) -> list[str]:
+def capital_lines(digest: Digest, rows: int) -> list[str]:
     """The reservation plan and its reasons, the open questions and the unexplained cash."""
     lines: list[str] = []
     plan = digest.reservations

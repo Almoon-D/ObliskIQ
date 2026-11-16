@@ -130,7 +130,7 @@ def _series(item: Series) -> str:
     return f"{item.name}: {_pct(growth)}{note}"
 
 
-def _performance(view: PerformanceView) -> list[str]:
+def performance_lines(view: PerformanceView) -> list[str]:
     lines = [f"From {view.since.isoformat()} to {view.as_of.isoformat()}, time-weighted:"]
     lines.append(f"- {_series(view.account)}")
     lines += [f"- {_series(reference)}" for reference in view.references]
@@ -270,7 +270,7 @@ def weekly(inputs: ReportInputs) -> str:
         "",
         "## Performance",
         "",
-        *_performance(inputs.performance),
+        *performance_lines(inputs.performance),
         "",
         *_grades(inputs),
         "",
