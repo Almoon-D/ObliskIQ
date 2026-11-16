@@ -5,6 +5,25 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [0.28.0] - 2026-11-16
+
+Session 19: the owner watches, steers and stops the bot from Claude, Telegram or a daily
+dashboard, and the bot deploys, updates and rolls back unattended on a small Linux machine.
+
+### Added
+
+- The MCP cockpit (`obliskiq cockpit serve`): 21 tools behind a bearer token, `/healthz`,
+  `/dashboard`; it opens no brokerage session and reads the service's board (D178).
+- The Telegram bot: status, positions, intents, theses, questions, settings, `/set`, `/deposit`,
+  `/withdraw`, `/answer`, `/confirm`, `/pause`, `/kill`; free text through CommandParser's grammar.
+- Settings: `obliskiq settings set|diff|history`, remote changes that only tighten risk or stay in
+  bounds, every change audited and applied at the next cycle boundary (D176, D177); `obliskiq pause`.
+- The daily dashboard and the board after each digest; `obliskiq dashboard` and `obliskiq health`.
+- `obliskiq preflight --full`: the read path, the venue, a whatif never placed, a Telegram test.
+- The deployment image (Ubuntu 26.04, Python 3.14, Java 11, the Gateway inside, D175), built in PR
+  CI and published for amd64 and arm64 on each release; units, backup, restore, `update.sh` with
+  rollback, and `docs/DEPLOY.md`.
+
 ## [0.27.0] - 2026-11-15
 
 Session 18a: the thesis book's capital follows H13 on its own record, the weekly forecast panel
