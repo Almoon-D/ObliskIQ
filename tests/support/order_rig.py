@@ -35,6 +35,8 @@ from obliskiq.domain.orders import (
     PretradeClearance,
     ProtectiveSpec,
     QuoteEvidence,
+    ReconcileRun,
+    ReconcileStatus,
     RiskEffect,
     Sleeve,
     StopLimitPrice,
@@ -469,6 +471,21 @@ class Rig:
             ),
         )
 
+    async def reconciled(self, at: datetime | None = None) -> None:
+        """Put a green reconciliation in force at ``at`` (now by default), as the heartbeat of a
+        running service does: new risk is frozen without a recent one."""
+        run = ReconcileRun(
+            at=at if at is not None else self.clock(), status=ReconcileStatus.GREEN, findings=()
+        )
+        await self.worker.run(repo.record_reconciliation, run)
+
+    async def heartbeat_reconciled(self) -> None:
+        """Keep the reconciliation in force fresh as a heartbeat does, for a test that surveys at
+        a moment of its own choosing: a run that is not green stays in force."""
+        latest = await self.worker.run(repo.latest_reconciliation)
+        if latest is None or latest.status is ReconcileStatus.GREEN:
+            await self.reconciled()
+
     async def aclose(self) -> None:
         await self.worker.aclose()
 
@@ -556,7 +573,11 @@ async def build_rig(
     calendars: Calendars,
     profile: str = "paper",
     account: str = ACCOUNT,
+    reconciled: bool = True,
 ) -> Rig:
+    """The order path over a fake broker. ``reconciled``: the store starts with a green
+    reconciliation in force when the tests' market opens (``OPEN``), as a running service has
+    one from its last heartbeat; without it new risk is frozen (``execution/freeze.py``)."""
     clock = WallClock()
     broker.trade_clock = clock
     db_path = tmp_path / "orders.db"
@@ -620,4 +641,6 @@ async def build_rig(
         alerts=alerts,
     )
     rig.make_gate()
+    if reconciled:
+        await rig.reconciled(OPEN)
     return rig

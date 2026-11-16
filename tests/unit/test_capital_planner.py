@@ -86,6 +86,7 @@ async def rig(
         broker.contracts[EXV1] = ("EXV1", "IBIS", "EUR")
         broker.marks[EXV1] = D(20)
         built.clock.now = NOW
+        await built.reconciled()
         await built.to_paper()
         yield built
         await built.aclose()
@@ -790,7 +791,7 @@ async def test_unexplained_cash_alone_never_stops_a_withdrawal(rig: Any) -> None
     (intent,) = (await parts.planner.apply(plan)).intents
     assert intent.side is OrderSide.SELL
     # New buys wait for the classification.
-    assert "reconciliation is drift" in str((await make_rebalancer(rig).survey(PAPER)).blocked)
+    assert ") is drift: new risk waits" in str((await make_rebalancer(rig).survey(PAPER)).blocked)
     positions = ReconcileFinding(kind="position_mismatch", detail="d", freezes=True)
     await rig.store(
         repo.record_reconciliation,

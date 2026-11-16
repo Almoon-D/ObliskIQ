@@ -190,7 +190,9 @@ async def test_an_unreadable_mode_or_cash_stops_the_test(
 
     rig.broker.unavailable.add("ledger")
     report = await make_tester(rig).run()
-    assert not steps(report)["stopped"].ok
+    # The account cannot be reconciled, so nothing that adds risk is tried.
+    assert steps(report)["reconciliation"].detail.startswith("incomplete (broker_unreadable")
+    assert rig.broker.placements == []
 
     async def unreadable() -> Any:
         raise ObliskError("the store is gone")

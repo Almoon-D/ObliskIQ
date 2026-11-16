@@ -60,7 +60,6 @@ from ..domain.orders import (
     OrderIntent,
     OrderSide,
     ReconcileRun,
-    ReconcileStatus,
 )
 from ..errors import CalendarError, ObliskError
 from ..ibkr.models import Algo, ContractRules
@@ -74,6 +73,7 @@ from .account import AccountReader
 from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, WriteBoundary, raise_alert
 from .currency import ConversionOutcome, CurrencyManager
 from .exits import ExitCoordinator
+from .freeze import new_risk_frozen
 from .instruments import InstrumentDirectory
 from .intents import new_intent
 from .modes import Modes
@@ -205,6 +205,7 @@ class Executor:
         self._now = now
         self._held = frozenset(settings.execution.approval.sleeves)
         self._grace = timedelta(seconds=settings.execution.reconcile.grace_seconds)
+        self._reconcile_age = timedelta(seconds=settings.execution.reconcile.max_age_seconds)
         self._interval = timedelta(minutes=settings.execution.pricing.reprice_interval_minutes)
         self._since = now()
 
@@ -609,7 +610,7 @@ class Executor:
 
     async def _stage(self, report: CycleReport) -> None:
         latest = await self._worker.run(repo.latest_reconciliation)
-        frozen = latest is not None and latest.status is not ReconcileStatus.GREEN
+        frozen = new_risk_frozen(latest, now=self._now(), max_age=self._reconcile_age) is not None
         proposed = await self._worker.run(repo.intents_in_states, [IntentState.PROPOSED])
         for stored in proposed:
             intent = stored.intent

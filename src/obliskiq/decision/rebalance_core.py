@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from ..calendars.service import Calendars
@@ -71,7 +71,6 @@ from ..domain.orders import (
     ExecutionMode,
     OrderIntent,
     OrderSide,
-    ReconcileStatus,
     Sleeve,
 )
 from ..engines.core.engine import UNPRICEABLE, BookState, RoleChoice, Sizing, plan_portfolio
@@ -80,6 +79,7 @@ from ..engines.core.trades import affordable
 from ..engines.core.variants import Variant, build_variant
 from ..errors import CalendarError, CoreError, ObliskError, TaxError
 from ..execution.account import CashRead
+from ..execution.freeze import new_risk_frozen
 from ..execution.instruments import InstrumentDirectory
 from ..execution.intent_maker import IntentMaker
 from ..execution.killswitch import KillSwitch
@@ -297,6 +297,7 @@ class CoreRebalancer:
         self._value = value
         self._correlations = correlations
         self._now = now
+        self._reconcile_age = timedelta(seconds=settings.execution.reconcile.max_age_seconds)
         self._sleeve = Sleeve.CORE
         self._trading = settings.trading
         self._cash = BookCash(
@@ -470,8 +471,9 @@ class CoreRebalancer:
 
     # ── the survey ──
 
-    async def survey(self, mode: ExecutionMode) -> RebalancePlan:
-        """The plan for the book now: reads only, writes nothing."""
+    async def survey(self, mode: ExecutionMode, *, rehearsal: bool = False) -> RebalancePlan:
+        """The plan for the book now: reads only, writes nothing. ``rehearsal``: a dry run,
+        planned as the cycle that reconciles first would plan (``execution/freeze.py``)."""
         at = self._now()
         today = at.date()
         plan = RebalancePlan(mode=mode, at=at)
@@ -479,8 +481,9 @@ class CoreRebalancer:
             plan.blocked = "the kill switch is on: no new decision"
             return plan
         latest = await self._worker.run(repo.latest_reconciliation)
-        if latest is not None and latest.status is not ReconcileStatus.GREEN:
-            plan.blocked = f"reconciliation is {latest.status.value}: new risk is frozen"
+        frozen = new_risk_frozen(latest, now=at, max_age=self._reconcile_age, rehearsal=rehearsal)
+        if frozen is not None:
+            plan.blocked = frozen
             return plan
         try:
             cash = await self._capital.cash()

@@ -40,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from ..calendars.service import Calendars
@@ -56,7 +56,6 @@ from ..domain.orders import (
     OrderIntent,
     OrderSide,
     ProtectiveSpec,
-    ReconcileStatus,
     Sleeve,
 )
 from ..domain.thesis import (
@@ -73,6 +72,7 @@ from ..engines.thesis.exits import OVERRIDE, exit_due
 from ..engines.thesis.gate import Finding, GateFacts, Reason, ThesisGate, describe
 from ..engines.thesis.grading import grade
 from ..errors import CalendarError, ObliskError
+from ..execution.freeze import new_risk_frozen
 from ..execution.instruments import (
     UniverseDirectory,
     describe_pinned,
@@ -153,6 +153,7 @@ class ThesisRebalancer:
         self._secdef = secdef
         self._breakers = breakers
         self._now = now
+        self._reconcile_age = timedelta(seconds=settings.execution.reconcile.max_age_seconds)
         self._gate = ThesisGate(settings.thesis)
         self._liquidity_sessions = settings.thesis.liquidity.sessions
         self._sleeve = Sleeve.SATELLITE
@@ -176,8 +177,9 @@ class ThesisRebalancer:
 
     # ── the survey ──
 
-    async def survey(self, mode: ExecutionMode) -> ThesisPlan:
-        """The plan for the book now: reads only, writes nothing to the store."""
+    async def survey(self, mode: ExecutionMode, *, rehearsal: bool = False) -> ThesisPlan:
+        """The plan for the book now: reads only, writes nothing to the store. ``rehearsal``: a
+        dry run, planned as the cycle that reconciles first would plan."""
         at = self._now()
         today = at.date()
         plan = ThesisPlan(mode=mode, at=at)
@@ -204,8 +206,11 @@ class ThesisRebalancer:
         if await self._kill.is_on():
             plan.entries_blocked = "the kill switch is on"
         latest = await self._worker.run(repo.latest_reconciliation)
-        if latest is not None and latest.status is not ReconcileStatus.GREEN:
-            plan.entries_blocked = f"reconciliation is {latest.status.value}: new risk is frozen"
+        frozen_risk = new_risk_frozen(
+            latest, now=at, max_age=self._reconcile_age, rehearsal=rehearsal
+        )
+        if frozen_risk is not None:
+            plan.entries_blocked = frozen_risk
         frozen = (await self._breakers.read(mode, view, cash)).buys_refused
         if frozen is not None:
             plan.entries_blocked = frozen

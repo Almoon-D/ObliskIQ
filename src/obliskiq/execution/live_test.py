@@ -50,7 +50,7 @@ from ..util.timeutil import utc_now
 from .account import QuoteRead
 from .fx import conversion_leg, preview_terms
 from .intents import new_intent
-from .paper_test import TEST_SLEEVE, PaperOrderReport, _probe_id
+from .paper_test import TEST_SLEEVE, PaperOrderReport, _probe_id, reconciled
 from .pretrade import PretradeRefusal
 from .pricing import tick_for, to_tick
 from .protective import limit_offset
@@ -107,11 +107,18 @@ class ExecutionTest:
             report.add("instrument", False, f"{self._conid} is not described")
         return instrument
 
+    async def _ready_to_buy(self, report: PaperOrderReport) -> TradedInstrument | None:
+        """Phase one adds risk: it also needs a green reconciliation in force."""
+        instrument = await self._ready(report)
+        if instrument is None or not await reconciled(self._path, report):
+            return None
+        return instrument
+
     # ── phase one ──
 
     async def run(self) -> PaperOrderReport:
         report = PaperOrderReport()
-        instrument = await self._ready(report)
+        instrument = await self._ready_to_buy(report)
         if instrument is None:
             return report
         try:

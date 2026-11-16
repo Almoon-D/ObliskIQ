@@ -5,7 +5,7 @@
 # says why each value is what it is. Values marked "lite" are ObliskIQ-lite-MCP's (config.yaml
 # `discipline`, @b1ebd49).
 
-# lite's `discipline` block (legacy/lite/config.yaml:333-350): the keys the order path and the
+# lite's `discipline` block (lite's config.yaml:333-350): the keys the order path and the
 # candidate gates read.
 discipline:
   # Entries are limit orders: a patient limit or an IBKR algo with a limit cap, never a stop.
@@ -215,3 +215,8 @@ execution:
     # Cash movement in one currency that neither the bot's fills nor the owner's recorded flows
     # explain and that is tolerated, in the base currency (fees, rounding). A judgement.
     cash_tolerance_base: "5"
+    # How old the latest green run may be while orders that add risk are still staged, cleared and
+    # planned; past it, as before the first run, new risk waits (DECISIONS D179). Reconciliation
+    # runs with every heartbeat, so this is three of them: one may fail. Above
+    # runtime.heartbeat_seconds (the schema checks it). A judgement.
+    max_age_seconds: 900
