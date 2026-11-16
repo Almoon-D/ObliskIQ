@@ -187,7 +187,7 @@ def broker_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, config_dir: Path
     monkeypatch.setenv("OBLISK_CONFIG_DIR", str(config_dir))
     monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
     monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "gateway")
-    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", "DU1234567")
+    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", "DUTEST1")
     monkeypatch.setenv("OBLISK_IBKR_GATEWAY_USERNAME", "u")
     monkeypatch.setenv("OBLISK_IBKR_GATEWAY_PASSWORD", "p")
 
@@ -201,14 +201,14 @@ def test_the_command_reports_the_walk(monkeypatch: pytest.MonkeyPatch) -> None:
     def walked(loaded: Any, work: Any) -> PreflightReport:
         seen["telegram"] = work.__closure__ is not None
         report = PreflightReport(planned=FULL_STEPS)
-        report.add("auth", True, "authenticated as DU1234567")
+        report.add("auth", True, "authenticated as DUTEST1")
         return report
 
     monkeypatch.setattr(cli_app, "_with_order_path", walked)
     status, out = _cli("preflight", "--full")
     assert status == EXIT_OK
     assert out.startswith("IBKR full preflight:")
-    assert "DU1234567" not in out
+    assert "DUTEST1" not in out
     assert seen["telegram"] is True
 
 

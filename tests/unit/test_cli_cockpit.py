@@ -176,7 +176,7 @@ def test_serve_starts_again_on_changed_settings(
 ) -> None:
     monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
     monkeypatch.setenv("OBLISK_IBKR_TRANSPORT", "gateway")
-    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", "DU1234567")
+    monkeypatch.setenv("OBLISK_IBKR_ACCOUNT_ID", "DUTEST1")
     monkeypatch.setenv("OBLISK_IBKR_GATEWAY_USERNAME", "u")
     monkeypatch.setenv("OBLISK_IBKR_GATEWAY_PASSWORD", "p")
     runs: list[int] = []
