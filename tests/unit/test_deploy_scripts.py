@@ -53,7 +53,11 @@ echo "systemctl $*" >> "$STUB/calls"
 tag=$(sed -n 's/^OBLISK_IMAGE_TAG=//p' "$OBLISK_ETC/image.env")
 if [ "$1" = start ] && [ "$tag" != "$(cat "$STUB/first_tag")" ]; then
   "$SQLITE3" "$OBLISK_DATA/obliskiq.db" "CREATE TABLE IF NOT EXISTS migrated_by_new (x);"
+  [ -e "$STUB/start_fails" ] && exit 1
+  # The updater is signalled while the new version is coming up.
+  [ -e "$STUB/hangup_on_start" ] && kill -HUP "$PPID"
 fi
+[ "$1" = stop ] && [ -e "$STUB/stop_fails" ] && exit 1
 exit 0
 """
 
@@ -210,6 +214,46 @@ def test_an_unhealthy_update_is_rolled_back_with_the_store_restored(machine: Mac
     assert "update to 0.28.0 failed (no fresh, healthy heartbeat within 1 s)" in alert
     assert "rolled back to 0.27.0" in alert
     assert (machine.data / "PAUSED").exists()
+
+
+def test_a_new_version_that_does_not_start_is_rolled_back(machine: Machine) -> None:
+    """A unit that fails to start must not leave the machine on the new tag with nothing running
+    and nobody told (docs/AUDIT.md, 3)."""
+    _write(machine.stub / "start_fails", "")
+    done = machine.run("update.sh", "0.28.0")
+    assert done.returncode == 1
+    assert machine.tag() == "0.27.0"
+    assert machine.tables() == {"book"}
+    calls = machine.calls()
+    assert [c for c in calls if c.startswith("systemctl")][-1].startswith("systemctl start ")
+    (alert,) = [c for c in calls if c.startswith("curl")]
+    assert "update to 0.28.0 failed (the units did not start)" in alert
+    assert "rolled back to 0.27.0, which started" in alert
+
+
+def test_units_that_do_not_stop_leave_the_previous_version_running(machine: Machine) -> None:
+    _write(machine.stub / "stop_fails", "")
+    done = machine.run("update.sh", "0.28.0")
+    assert done.returncode == 1
+    assert machine.tag() == "0.27.0"
+    assert machine.tables() == {"book"}
+    calls = machine.calls()
+    assert [c for c in calls if c.startswith("systemctl")][-1].startswith("systemctl start ")
+    (alert,) = [c for c in calls if c.startswith("curl")]
+    assert "update to 0.28.0 failed (the units did not stop)" in alert
+
+
+def test_an_interrupted_update_is_rolled_back(machine: Machine) -> None:
+    """A closed terminal while the new version comes up: the updater is the only thing that would
+    have judged its health, so it goes back and says so."""
+    _write(machine.stub / "hangup_on_start", "")
+    done = machine.run("update.sh", "0.28.0")
+    assert done.returncode == 1
+    assert machine.tag() == "0.27.0"
+    assert machine.tables() == {"book"}
+    (alert,) = [c for c in machine.calls() if c.startswith("curl")]
+    assert "interrupted before the new version proved healthy" in alert
+    assert "rolled back to 0.27.0" in alert
 
 
 def test_an_update_that_loses_the_kill_switch_is_rolled_back(machine: Machine) -> None:
