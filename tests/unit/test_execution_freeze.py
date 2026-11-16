@@ -154,3 +154,26 @@ async def test_the_executor_places_no_buy_until_it_has_reconciled(rig: Any) -> N
     await rig.executor.cycle()
     assert await state() is IntentState.WORKING
     assert len(rig.broker.placements) == 1
+
+
+async def test_a_buy_staged_before_the_freeze_is_neither_funded_nor_placed_while_it_lasts(
+    rig: Any,
+) -> None:
+    """A dollar buy staged before an outage: on the first cycle after it no conversion is sent
+    for it (the gate would refuse it, with an alert); the cycle reconciles, the next one funds
+    and places."""
+    await rig.reconciled()
+    rig.broker.cash["USD"] = (rig.broker.cash["USD"][0] * 0, rig.broker.cash["USD"][1])
+    buy = await rig.staged()
+    rig.clock.advance(rig.settings.execution.reconcile.max_age_seconds + 1)
+    report = await rig.executor.cycle()
+    (step,) = [s for s in report.steps if s.intent_id == buy.intent.intent_id]
+    assert (step.action, step.detail) == ("frozen", "reconciliation freezes new risk")
+    assert rig.broker.placements == []
+    assert report.conversions == []
+    assert rig.alerts == []
+    assert (await rig.book.get(buy.intent.intent_id)).intent.state is IntentState.STAGED
+    after = await rig.executor.cycle()
+    actions = [s.action for s in after.steps if s.intent_id == buy.intent.intent_id]
+    assert actions
+    assert "frozen" not in actions  # the cycle's own reconciliation lifted the freeze

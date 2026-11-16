@@ -3,7 +3,7 @@
 New risk needs proof that the store and the broker agree now: the run in force is green and no
 older than ``execution.reconcile.max_age_seconds``. No run yet, a run that is not green and a green
 run that has aged all freeze it. Sells that reduce risk are never frozen. One rule for every
-reader: the pre-trade gate, the executor's staging and the rebalancers' surveys.
+reader: the pre-trade gate, the executor's staging and placing and the rebalancers' surveys.
 VERIFY-LIVE(the reconciliation's age in service): 900 s against IBKR's partial answers.
 
 A dry run writes nothing, so it cannot reconcile: its survey is a ``rehearsal`` of the cycle that
