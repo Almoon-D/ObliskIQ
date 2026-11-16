@@ -1,0 +1,15 @@
+# The backup once a night, at an hour no market's close and no digest sits on (03:17 UTC), with a
+# random delay so a fleet of machines never hits one remote at once. A missed run (the machine
+# was off) runs at the next boot.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Unit]
+Description=ObliskIQ nightly backup
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

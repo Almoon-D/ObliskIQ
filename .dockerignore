@@ -1,0 +1,13 @@
+# The image takes what deploy/Dockerfile copies and nothing else: no .git, no environment file,
+# no virtual environment, no legacy snapshot, no tests.
+**
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!.python-version
+!src/
+!config/
+!research/
+**/__pycache__
+research/explore/

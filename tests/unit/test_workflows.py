@@ -33,7 +33,7 @@ def _steps(workflow: dict[Any, Any], job: str) -> list[dict[str, Any]]:
 
 def test_ci_has_one_job_named_ci_that_runs_make_check():
     workflow = _load("workflows/ci.yml")
-    assert list(workflow["jobs"]) == ["ci"]
+    assert list(workflow["jobs"]) == ["ci", "image"]
     assert workflow["jobs"]["ci"]["name"] == "ci"
     commands = [step.get("run", "") for step in _steps(workflow, "ci")]
     assert "make check" in commands
@@ -73,7 +73,7 @@ def test_ci_only_reads_the_repository():
 def test_the_release_runs_on_pushes_to_main_with_write_access_alone():
     workflow = _load("workflows/release.yml")
     assert workflow[True] == {"push": {"branches": ["main"]}}
-    assert workflow["permissions"] == {"contents": "write"}
+    assert workflow["permissions"] == {"contents": "write", "packages": "write"}
     assert workflow["concurrency"]["cancel-in-progress"] is False
 
 
@@ -86,7 +86,7 @@ def test_only_the_release_workflow_may_write():
         for job in workflow["jobs"].values():
             assert "permissions" not in job, f"{path.name}: permissions are workflow-level"
         if path.name == "release.yml":
-            assert writes == {"contents"}
+            assert writes == {"contents", "packages"}
         else:
             assert not writes, f"{path.name} asks for write access: {writes}"
 
@@ -105,6 +105,34 @@ def test_the_release_is_idempotent_and_marks_prereleases():
     assert "--verify-tag" in publish, "an existing tag is never moved"
     assert '--target "$GITHUB_SHA"' in publish, "a new tag goes on the pushed commit"
     assert "--prerelease" in publish
+
+
+def test_the_image_follows_a_published_release_only_and_builds_its_tag():
+    workflow = _load("workflows/release.yml")
+    image = workflow["jobs"]["image"]
+    assert image["needs"] == "release"
+    assert image["if"] == "needs.release.outputs.published == 'true'"
+    checkout, *_, build = image["steps"]
+    assert checkout["with"]["ref"] == "${{ needs.release.outputs.tag }}"
+    assert build["with"]["platforms"] == "linux/amd64,linux/arm64"
+    assert build["with"]["tags"] == "${{ env.IMAGE }}:${{ needs.release.outputs.version }}"
+    assert image["env"]["IMAGE"] == "ghcr.io/almoon-d/obliskiq"
+    for step in image["steps"]:
+        if "uses" in step:
+            assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", step["uses"]), step["uses"]
+    publish = _steps(workflow, "release")[2]["run"]
+    assert publish.count('echo "published=') == 2
+
+
+def test_pull_requests_build_the_amd64_image():
+    build = next(
+        s
+        for s in _steps(_load("workflows/ci.yml"), "image")
+        if s.get("name") == "Build the amd64 image"
+    )
+    assert build["with"]["platforms"] == "linux/amd64"
+    assert build["with"]["push"] is False
+    assert build["with"]["file"] == "deploy/Dockerfile"
 
 
 # ── Dependabot ──

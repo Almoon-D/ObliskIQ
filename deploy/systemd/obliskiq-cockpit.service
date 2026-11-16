@@ -1,0 +1,31 @@
+# The owner's cockpit: `obliskiq cockpit serve` (the MCP server on 127.0.0.1:8765 and the Telegram
+# bot) in its own container. It opens no brokerage session, so it runs beside the service. It
+# shares the machine's network so it listens on the machine's loopback only; reach it through an
+# SSH tunnel or a TLS reverse proxy on the machine (docs/DEPLOY.md).
+#
+#   sudo systemctl enable --now obliskiq-cockpit.service
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Unit]
+Description=ObliskIQ cockpit (MCP and Telegram)
+Documentation=https://github.com/Almoon-D/ObliskIQ/blob/main/docs/DEPLOY.md
+After=docker.service network-online.target obliskiq.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/obliskiq/image.env
+ExecStartPre=-/usr/bin/docker rm --force obliskiq-cockpit
+ExecStart=/usr/bin/docker run --rm --name obliskiq-cockpit \
+    --env-file /etc/obliskiq/obliskiq.env \
+    --volume /var/lib/obliskiq:/var/lib/obliskiq \
+    --volume /etc/obliskiq/owner:/etc/obliskiq/owner \
+    --network host --no-healthcheck \
+    --log-driver journald --log-opt tag=obliskiq-cockpit \
+    ${OBLISK_IMAGE}:${OBLISK_IMAGE_TAG} cockpit serve
+ExecStop=/usr/bin/docker stop --time 30 obliskiq-cockpit
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

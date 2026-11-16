@@ -1,0 +1,36 @@
+# The bot: `obliskiq serve` in its container (deploy/Dockerfile). With transport `gateway` the
+# container also runs IBKR's pinned Client Portal Gateway and logs it in (docs/DEPLOY.md).
+#
+#   sudo systemctl enable --now obliskiq.service
+#
+# The image tag is /etc/obliskiq/image.env's (deploy/update.sh changes it); the secrets are
+# /etc/obliskiq/obliskiq.env's (0600, root); the store is /var/lib/obliskiq; the owner's settings
+# are /etc/obliskiq/owner/owner.yaml.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Unit]
+Description=ObliskIQ service
+Documentation=https://github.com/Almoon-D/ObliskIQ/blob/main/docs/DEPLOY.md
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/obliskiq/image.env
+ExecStartPre=-/usr/bin/docker rm --force obliskiq
+ExecStart=/usr/bin/docker run --rm --name obliskiq \
+    --env-file /etc/obliskiq/obliskiq.env \
+    --volume /var/lib/obliskiq:/var/lib/obliskiq \
+    --volume /etc/obliskiq/owner:/etc/obliskiq/owner \
+    --log-driver journald --log-opt tag=obliskiq \
+    --shm-size 256m \
+    ${OBLISK_IMAGE}:${OBLISK_IMAGE_TAG} serve
+# SIGTERM lets the job in hand finish and the Gateway stop.
+ExecStop=/usr/bin/docker stop --time 120 obliskiq
+TimeoutStopSec=150
+# A failed start is retried, but not fast: each start logs the paper username in again.
+Restart=always
+RestartSec=120
+
+[Install]
+WantedBy=multi-user.target
