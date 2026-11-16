@@ -68,6 +68,8 @@ log = get_logger("llm.panel")
 
 type PanelState = Literal["ok", "skipped", "incomplete", "budget_spent"]
 PERCENT: Final = 100.0
+#: How many missing ids an invalid batch's error names.
+SHOWN_MISSING: Final = 8
 
 PANEL_SYSTEM: Final = (
     "You are a systematic forecaster of funds and shares. You answer with one JSON object that "
@@ -279,7 +281,7 @@ def parse_answer(
             continue
         found[item.id] = (min(high, max(low, item.p_outperform)), item.expected_excess_pct)
     if len(found) < float(config.min_batch_coverage) * len(wanted):
-        missing = sorted(wanted - set(found))[:8]
+        missing = sorted(wanted - set(found))[:SHOWN_MISSING]
         raise ValueError(
             f"only {len(found)} of {len(wanted)} ids have a valid forecast (missing {missing})"
         )

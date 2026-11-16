@@ -33,7 +33,7 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from statistics import fmean, stdev
 from typing import Literal
 
@@ -46,6 +46,9 @@ from ..tax.lots import LotEngine
 ZERO = Decimal(0)
 ONE = Decimal(1)
 MONTHS_PER_YEAR = 12
+#: The twin's units are kept to this step, rounded down: a figure, never an order, whose lots
+#: must add up exactly when they are sold (a sum at Decimal's precision could exceed them).
+TWIN_UNIT = Decimal("1e-10")
 
 type Side = Literal["buy", "sell"]
 #: A security's value per unit in the base currency on a day; ``None``: no mark that fresh.
@@ -129,7 +132,7 @@ def twin_trades(book: Sequence[Trade], twin: TwinInputs) -> list[Trade] | str:
             cost = twin.cost(spent / close, close, "buy", trade.on)
             if cost is None:
                 return f"the cost model cannot price the twin's purchase on {trade.on.isoformat()}"
-            bought = (spent - cost) / close
+            bought = ((spent - cost) / close).quantize(TWIN_UNIT, rounding=ROUND_DOWN)
             if bought <= ZERO:
                 return f"the twin's costs exceed the amount spent on {trade.on.isoformat()}"
             found.append(Trade(mine, twin.security, "buy", trade.on, bought, bought * close, cost))
@@ -139,7 +142,11 @@ def twin_trades(book: Sequence[Trade], twin: TwinInputs) -> list[Trade] | str:
         before = held.get(mine, ZERO)
         if before <= ZERO or trade.quantity > before:
             return f"thesis {mine} sells more than it bought on {trade.on.isoformat()}"
-        sold = units[mine] * trade.quantity / before
+        sold = (
+            units[mine]
+            if trade.quantity == before
+            else (units[mine] * trade.quantity / before).quantize(TWIN_UNIT, rounding=ROUND_DOWN)
+        )
         cost = twin.cost(sold, close, "sell", trade.on)
         if cost is None:
             return f"the cost model cannot price the twin's sale on {trade.on.isoformat()}"

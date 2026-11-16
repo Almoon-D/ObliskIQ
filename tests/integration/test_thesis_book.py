@@ -857,3 +857,19 @@ async def test_each_cycle_records_the_book_s_capital_for_h13_even_with_no_idea(
     s.broker.unavailable.add("ledger")
     idle = await thesis_book.survey(ExecutionMode.SHADOW)
     assert (idle.capital, idle.blocked) == (None, None)
+
+
+async def test_a_held_back_analyst_segment_is_refused_on_the_live_account(
+    make: Any, shipped_settings: ObliskConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = await started(make, shipped_settings)
+    share = AllocationEvent(EUROPE, THESIS_BOOK, D("0.10"), "allocation rule", "exploration")
+    await s.rig.store(record_allocation, share)
+    stored = await idea(s)
+    monkeypatch.setattr(
+        rebalance_thesis.analyst_repo, "thesis_segments", lambda _s: {stored.thesis_id: "m1-abc"}
+    )
+    await _hold_back(s, "analyst:m1-abc")
+    refused = await book(s).survey(ExecutionMode.LIVE)
+    assert only(refused).action == "refuse"
+    assert "analyst segment is no longer traded" in only(refused).reason

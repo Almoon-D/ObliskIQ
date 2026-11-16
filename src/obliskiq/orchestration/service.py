@@ -155,14 +155,12 @@ class AlertHooks:
     def _flush_soon(self) -> None:
         self._soon(self._reporter.flush())
 
-    async def _record(self, alert: SessionAlert) -> None:
-        if self._worker is None:
-            return
+    async def _record(self, worker: StoreWorker, alert: SessionAlert) -> None:
         event = SessionEvent(
             alert.at, _SESSION_EVENTS[alert.kind], alert.detail or alert.kind.value
         )
         try:
-            await self._worker.run(record_session_event, event)
+            await worker.run(record_session_event, event)
         except Exception:  # the record must never stop the alert or the session's repair
             log.exception("a session event could not be recorded")
 
@@ -173,7 +171,7 @@ class AlertHooks:
         self._reporter.push(from_session(alert), "session")
         self._flush_soon()
         if self._worker is not None:
-            self._soon(self._record(alert))
+            self._soon(self._record(self._worker, alert))
 
     def calendar(self, found: Disagreement) -> None:
         self._reporter.push(from_disagreement(found, self._now()), "calendar")

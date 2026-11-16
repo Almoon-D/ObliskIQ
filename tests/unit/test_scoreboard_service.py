@@ -421,6 +421,8 @@ async def test_the_daily_and_monthly_runs_and_their_alerts(
     assert not verdict.passed
     assert len(board.sessions(date(2026, 11, 2), date(2026, 11, 8))) == 5
     assert previous_month(date(2026, 1, 15)) == "2025-12"
+    assert board._venue("NOT-AN-EXCHANGE") is None
+    assert board._venue("IBIS2") is not None
 
 
 async def test_the_report_inputs_and_the_tax_book(

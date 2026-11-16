@@ -177,7 +177,8 @@ def test_l1_reads_the_recorded_re_logins() -> None:
     assert _relogin(repaired, since).passed is True
     # Nothing recorded, or no whole trading day yet, is unmeasured: never passed.
     assert _relogin((), since).passed is None
-    assert _relogin(every_day, NOW - timedelta(hours=2)).passed is None
+    recent = (SessionEvent(NOW - timedelta(hours=1), "reauthenticated", "x"),)
+    assert _relogin(recent, NOW - timedelta(hours=2)).passed is None
     assert relogins(evidence(ExecutionMode.SHADOW, since), None).passed is None
 
 

@@ -362,3 +362,63 @@ def test_the_panel_s_grading_reads_its_latest_universe_only() -> None:
     new = Call(PANEL_LAYER, 2, "up", at + timedelta(days=7), "universe b; m", probability=0.5)
     assert current_universe([old, new]) == [new]
     assert current_universe([]) == []
+
+
+async def test_batches_are_paced_and_an_answer_invalid_twice_fails_closed(
+    store: Store, store_worker: StoreWorker, shipped_settings: ObliskConfig
+) -> None:
+    settings = settings_for(shipped_settings, batch_size=20)
+    settings = settings.model_copy(
+        update={
+            "llm": settings.llm.model_copy(
+                update={"panel": settings.llm.panel.model_copy(update={"batch_pause_seconds": 4})}
+            )
+        }
+    )
+    seeded = _seed_universe(store, settings)
+    pauses: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        pauses.append(seconds)
+
+    bad = httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+    replies: list[Any] = [bad, bad]
+
+    def answers(request: httpx.Request) -> httpx.Response:
+        return replies.pop(0) if replies else _forecasting(request)
+
+    with respx.mock(assert_all_called=False) as router:
+        router.post(COMPLETIONS).mock(side_effect=answers)
+        async with httpx.AsyncClient() as client:
+            panel = ForecastPanel(
+                settings, rules=RULES, client=client, worker=store_worker, key=KEY,
+                now=lambda: NOW, sleep=sleep,
+            )  # fmt: skip
+            result = await panel.run()
+    batches = math.ceil(len(seeded) / 20)
+    assert pauses == [4] * (batches - 1)
+    assert result.invalid == 1
+    (first, *_) = panel_repo.panel_calls(store)
+    assert (first.status, first.attempts, first.valid) == ("invalid", 2, 0)
+    assert first.error is not None
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"probability_bounds": (D("0.9"), D("0.1"))}, "lower bound to the upper"),
+        ({"momentum_skip_sessions": 300}, "skips fewer sessions"),
+        ({"asked_excess_range_pct": D(60)}, "inside the limit"),
+        ({"min_history_sessions": 10}, "below the 64"),
+    ],
+)
+def test_the_panel_s_configuration_is_coherent(
+    shipped_settings: ObliskConfig, changes: dict[str, Any], message: str
+) -> None:
+    from pydantic import ValidationError
+
+    from obliskiq.config.schema_llm import PanelConfig
+
+    fields = {**shipped_settings.llm.panel.model_dump(), **changes}
+    with pytest.raises(ValidationError, match=message):
+        PanelConfig.model_validate(fields)

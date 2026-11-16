@@ -363,9 +363,27 @@ SHAPE = {
         "drill_id:INTEGER*, at:TEXT!, kind:TEXT!, mode:TEXT!, passed:INTEGER!, actor:TEXT!, "
         "detail:TEXT!"
     ),
+    # 018_scoreboard_remainder
+    "session_events": "event_id:INTEGER*, at:TEXT!, kind:TEXT!, detail:TEXT!",
+    "book_capital": "mode:TEXT!*, on_day:TEXT!*, capital:TEXT!, recorded_at:TEXT!",
+    "h13_looks": (
+        "record:TEXT!*, grp:TEXT!*, month:TEXT!*, look:INTEGER!, months:INTEGER!, "
+        "closed:INTEGER!, mean:REAL, sd:REAL, t_up:REAL, t_down:REAL, c_up:REAL, c_down:REAL, "
+        "without_best:REAL, step:INTEGER!, back:INTEGER!, evaluable:INTEGER!, series:TEXT!, "
+        "detail:TEXT!, at:TEXT!"
+    ),
+    "panel_calls": (
+        "call_id:INTEGER*, week:TEXT!, universe:TEXT!, produced_at:TEXT!, provider:TEXT!, "
+        "model_id:TEXT!, prompt_hash:TEXT!, status:TEXT!, attempts:INTEGER!, asked:INTEGER!, "
+        "valid:INTEGER!, error:TEXT, input_tokens:INTEGER!, output_tokens:INTEGER!, "
+        "cost_usd:REAL!"
+    ),
 }
 
 INDEXES = {
+    # 018_scoreboard_remainder
+    "ix_session_events_at",
+    "ix_panel_calls_produced",
     # 017_scoreboard
     "ix_scoreboard_calls_layer",
     "ix_layer_events_layer",

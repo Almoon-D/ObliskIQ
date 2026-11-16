@@ -43,6 +43,7 @@ from ..store.h13 import (
     capital_before,
     h13_looks,
     record_h13_look,
+    record_of,
 )
 from ..tax.book import TaxFacts, security_key, tax_kind, universe_tax_facts
 from .h13 import (
@@ -407,9 +408,7 @@ def run_h13(
     previous = h13_looks(store)
     written: list[H13Look] = []
     for record in spec.records:
-        name = _record_name(record)
-        if name is None:
-            continue
+        name = record_of(record)
         book = read_book(store, name, valuer, until=end)
         if not book.first_buy:
             continue
@@ -442,13 +441,6 @@ def run_h13(
             if found is not None and record_h13_look(store, found):
                 written.append(found)
     return written
-
-
-def _record_name(mode: object) -> Record | None:
-    for name, modes in RECORD_MODES.items():
-        if mode in modes:
-            return name
-    return None
 
 
 def _look(
@@ -499,8 +491,8 @@ def _look(
         valuer=valuer,
     )
     closed = len(closed_theses(trades, end))
-    can_step = is_book and record == _record_name(spec.step.record)
-    can_back = any(record == _record_name(r) for r in spec.back_to_shadow.records)
+    can_step = is_book and record == record_of(spec.step.record)
+    can_back = any(record == record_of(r) for r in spec.back_to_shadow.records)
     without: list[MonthX] | None = None
     last_step: int | None = None
     if can_step:

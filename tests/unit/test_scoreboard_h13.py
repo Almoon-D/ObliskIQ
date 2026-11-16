@@ -337,10 +337,11 @@ def _filled(
     at: datetime,
     price: str,
     quantity: str = "10",
+    conid: int = EMIM_CONID,
 ) -> None:
     intent_id = uuid7()
     terms = OrderTerms(
-        conid=EMIM_CONID,
+        conid=conid,
         side=side,
         quantity=D(quantity),
         price=LimitPrice(limit=D(price)),
@@ -367,7 +368,7 @@ def _filled(
             Fill(
                 execution_id=f"x-{intent_id}",
                 coid=str(intent_id),
-                conid=EMIM_CONID,
+                conid=conid,
                 side=side,
                 quantity=D(quantity),
                 price=D(price),
@@ -611,3 +612,262 @@ def test_the_thesis_states_and_sources_used_are_the_domain_s() -> None:
     assert {s.value for s in ThesisSource} == {"owner", "analyst"}
     assert {c.value for c in Conviction} == {"normal", "high", "max"}
     assert ThesisState.CLOSED.value == "closed"
+
+
+# ── more of the record over the store ──
+
+
+def test_a_month_after_one_that_cannot_be_measured_and_a_wiped_out_month(
+    es: EsIrpfTaxPolicy,
+) -> None:
+    book = (Trade(1, "AAA", "buy", date(2027, 1, 10), D(10), D(1000), D(2)),)
+    twin = (Trade(1, "REF", "buy", date(2027, 1, 10), D(20), D(1000), D(2)),)
+    table = {
+        ("REF", date(2027, 2, 28)): "51",
+        ("AAA", date(2027, 2, 28)): "100",
+        ("REF", date(2027, 3, 31)): "51",
+        ("AAA", date(2027, 3, 31)): "101",
+    }
+    jan, feb, mar = series(
+        ["2027-01", "2027-02", "2027-03"],
+        Account(book, {"AAA": AAA}, es),
+        Account(twin, {"REF": REF}, es),
+        capital=lambda _m: D(10000),
+        value=_values(table),
+        reference="REF",
+    )
+    assert jan.x is None
+    assert feb.why == "the month before it cannot be measured"
+    assert mar.x is not None
+    (wiped,) = series(
+        ["2027-01"],
+        Account(book, {"AAA": AAA}, es),
+        Account(twin, {"REF": REF}, es),
+        capital=lambda _m: D(1),
+        value=_values({("REF", date(2027, 1, 31)): "51", ("AAA", date(2027, 1, 31)): "1"}),
+        reference="REF",
+    )
+    assert wiped.why == "a loss of the whole capital in the month"
+
+
+def test_the_tax_identity_of_a_thesis_s_instrument(
+    store: Store, shipped_settings: ObliskConfig, h13: ForwardBookSpec
+) -> None:
+    from tests.support.thesis_rig import instrument
+
+    from obliskiq.domain.enums import AssetClass
+    from obliskiq.scoreboard.h13_run import Valuer
+
+    valuer = Valuer(store, shipped_settings, h13, as_of=date(2027, 1, 31))
+    share = thesis(
+        instrument=instrument(conid=999, asset_class=AssetClass.STOCK, isin="US0378331005")
+    )
+    found = valuer.identity(999, share)
+    assert found is not None
+    assert (found.kind, found.isin) == (SecurityKind.SHARE, "US0378331005")
+    fund = thesis(instrument=instrument(conid=999, isin="IE00BKM4GZ66"))
+    assert valuer.identity(999, fund) is None  # a fund names its issuer and index
+    assert valuer.identity(999, thesis(instrument=instrument(conid=999))) is None  # no ISIN
+    future = thesis(
+        instrument=instrument(conid=999, asset_class=AssetClass.FUTURE, isin="US0378331005")
+    )
+    assert valuer.identity(999, future) is None
+    assert valuer.identity(4242, None) is None  # neither the universe nor a thesis names it
+    reference = valuer.identity(REFERENCE, None)
+    assert reference is not None
+    assert reference.kind is SecurityKind.ETF
+
+
+def test_a_pinned_share_s_isin_gives_its_tax_facts(
+    store: Store, shipped_settings: ObliskConfig, h13: ForwardBookSpec
+) -> None:
+    from tests.support.thesis_rig import instrument
+
+    from obliskiq.domain.enums import AssetClass
+    from obliskiq.scoreboard.h13_run import Valuer
+
+    candidate = thesis(
+        instrument=instrument(
+            symbol="AAPL", candidate_key="ishares:AAPL", conid=None, listing_exchange=None,
+            currency=None, asset_class=AssetClass.STOCK, isin="US0378331005",
+        )
+    )  # fmt: skip
+    stored = thesis_repo.insert_thesis(store, candidate, actor="owner")
+    thesis_repo.pin_instrument(
+        store, stored.thesis_id, conid=265598, symbol="AAPL", listing_exchange="NASDAQ",
+        currency="USD", at=datetime(2026, 10, 26, 10, tzinfo=UTC), actor="t",
+    )  # fmt: skip
+    valuer = Valuer(store, shipped_settings, h13, as_of=date(2027, 1, 31))
+    found = valuer.identity(265598, None)
+    assert found is None  # the universe does not declare it: its thesis says what it is
+    pinned = thesis_repo.get_thesis(store, stored.thesis_id)
+    assert pinned is not None
+    found = valuer.identity(265598, pinned)
+    assert found is not None
+    assert found.isin == "US0378331005"
+
+
+def _approve_and_fill(
+    store: Store,
+    *,
+    mode: ExecutionMode,
+    source: ThesisSource = ThesisSource.OWNER,
+    trades: list[tuple[OrderSide, datetime, str]],
+    close_at: datetime | None = None,
+    conid: int = EMIM_CONID,
+) -> int:
+    from tests.support.thesis_rig import instrument
+
+    stored = thesis_repo.insert_thesis(
+        store,
+        thesis(
+            source=source,
+            created_at=datetime(2027, 1, 4, tzinfo=UTC),
+            enter_by=date(2027, 1, 20),
+            instrument=instrument(conid=conid),
+        ),
+        actor=source.value,
+    )
+    thesis_repo.approve(
+        store, stored.thesis_id, mode=mode, size_base=D(460),
+        at=datetime(2027, 1, 5, 9, tzinfo=UTC), actor="t", detail="approved",
+    )  # fmt: skip
+    for side, at, price in trades:
+        _filled(
+            store, thesis_id=stored.thesis_id, mode=mode, side=side, at=at, price=price, conid=conid
+        )
+    if close_at is not None:
+        thesis_repo.move(
+            store, stored.thesis_id, ThesisState.ACTIVE, at=close_at, actor="t", detail="d"
+        )
+        thesis_repo.move(
+            store, stored.thesis_id, ThesisState.CLOSED, at=close_at, actor="t", detail="d"
+        )
+    return stored.thesis_id
+
+
+def _seed_marks(store: Store, mode: ExecutionMode) -> None:
+    seed_vehicle(store, REFERENCE, "XDWD")
+    seed_vehicle(store, EMIM_CONID, "EMIM")
+    days = [date(2026, 12, 20) + timedelta(days=i) for i in range(210)]
+    seed_closes(store, REFERENCE, {d: 100 + 0.05 * i for i, d in enumerate(days)})
+    seed_closes(store, EMIM_CONID, {d: 45 + 0.04 * i for i, d in enumerate(days)})
+    for month in months_from("2026-12", "2027-06"):
+        record_book_capital(
+            store, BookCapital(mode, month_end(month), D(4000), datetime(2027, 1, 1, tzinfo=UTC))
+        )
+
+
+def test_the_live_record_reads_each_thesis_s_window_its_option_and_its_groups(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    h13: ForwardBookSpec,
+    es: EsIrpfTaxPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from obliskiq.scoreboard import h13_run
+
+    _seed_marks(store, ExecutionMode.LIVE)
+    entry = datetime(2027, 1, 6, 10, tzinfo=UTC)
+    closed = _approve_and_fill(
+        store,
+        mode=ExecutionMode.LIVE,
+        trades=[
+            (OrderSide.BUY, datetime(2027, 1, 4, 10, tzinfo=UTC), "45"),  # before its approval
+            (OrderSide.BUY, entry, "45.7"),
+            (OrderSide.SELL, datetime(2027, 3, 2, 10, tzinfo=UTC), "47.1"),
+            (OrderSide.BUY, datetime(2027, 4, 2, 10, tzinfo=UTC), "48"),  # after its close
+        ],
+        close_at=datetime(2027, 3, 2, 11, tzinfo=UTC),
+    )
+    contract = 777001
+    seed_vehicle(store, contract, "EMIM C50")
+    days = [date(2026, 12, 20) + timedelta(days=i) for i in range(210)]
+    seed_closes(store, contract, {d: 1.2 + 0.001 * i for i, d in enumerate(days)})
+    option = _approve_and_fill(
+        store,
+        mode=ExecutionMode.LIVE,
+        source=ThesisSource.ANALYST,
+        trades=[(OrderSide.BUY, entry + timedelta(days=1), "1.2")],
+        conid=contract,
+    )
+    _approve_and_fill(
+        store, mode=ExecutionMode.LIVE, source=ThesisSource.ANALYST, trades=[], conid=4242
+    )
+    held_as = SimpleNamespace(option_conid=contract, currency="EUR", multiplier=100.0)
+    real_get = h13_run.link_repo.get
+    monkeypatch.setattr(
+        h13_run.link_repo, "get", lambda s, n: held_as if n == option else real_get(s, n)
+    )
+    monkeypatch.setattr(h13_run.analyst_repo, "thesis_segments", lambda _s: {option: "m1-abc"})
+    found = run_h13(
+        store, shipped_settings, h13, policy=es, venue_of=lambda _e: "XAMS",
+        month="2027-06", at=AT,
+    )  # fmt: skip
+    groups = {look.group: look for look in found}
+    assert set(groups) == {
+        "book",
+        "source:owner",
+        "source:analyst",
+        "analyst:m1-abc",
+        "conviction:normal",
+    }
+    book = groups["book"]
+    assert book.record == "live"
+    assert book.evaluable, book.detail
+    assert book.closed == 1
+    assert book.without_best is not None  # the live book is read without its best thesis
+    assert not book.step  # one closed thesis: far below the eight a first step needs
+    assert closed != option
+
+
+def test_a_fill_without_a_rate_or_a_reference_outside_the_universe_is_not_evaluable(
+    store: Store,
+    shipped_settings: ObliskConfig,
+    h13: ForwardBookSpec,
+    es: EsIrpfTaxPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from obliskiq.scoreboard import h13_run
+
+    _seed_marks(store, ExecutionMode.PAPER)
+    thesis_id = _approve_and_fill(
+        store,
+        mode=ExecutionMode.PAPER,
+        trades=[(OrderSide.BUY, datetime(2027, 1, 6, 10, tzinfo=UTC), "45.7")],
+    )
+    usd = SimpleNamespace(option_conid=EMIM_CONID, currency="USD", multiplier=100.0)
+    monkeypatch.setattr(h13_run.link_repo, "get", lambda _s, n: usd if n == thesis_id else None)
+    found = run_h13(
+        store, shipped_settings, h13, policy=es, venue_of=lambda _e: "XAMS",
+        month="2027-06", at=AT,
+    )  # fmt: skip
+    assert found
+    assert all(not look.evaluable for look in found)
+    assert "no USD rate" in found[0].detail
+    monkeypatch.setattr(h13_run.link_repo, "get", lambda _s, _n: None)
+    breaker = shipped_settings.portfolio_circuit_breaker.model_copy(
+        update={"equity_reference_conid": 4242}
+    )
+    elsewhere = shipped_settings.model_copy(update={"portfolio_circuit_breaker": breaker})
+    found = run_h13(
+        store, elsewhere, h13, policy=es, venue_of=lambda _e: "XAMS", month="2027-12", at=AT
+    )
+    assert found
+    assert all("not in the universe file" in look.detail for look in found)
+    again = run_h13(
+        store, elsewhere, h13, policy=es, venue_of=lambda _e: "XAMS",
+        month="2027-06", at=AT,
+    )  # fmt: skip
+    assert again == []  # the first look is recorded already, never repeated
+    assert len(h13_looks(store, "paper")) == 6
+
+
+def test_a_group_of_an_unknown_kind_holds_nothing_back(store: Store) -> None:
+    record_h13_look(store, _look("live", "desk:x", "2027-06", back=True))
+    found = holdbacks(store)
+    assert (found.sources, found.segments, found.convictions) == ({}, {}, {})
