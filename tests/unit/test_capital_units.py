@@ -27,6 +27,7 @@ from obliskiq.capital.twr import (
     ExternalFlow,
     Reading,
     account_flows,
+    reached_on,
     time_weighted_return,
 )
 from obliskiq.config import ObliskConfig
@@ -268,9 +269,41 @@ def test_only_the_owners_flows_that_reached_the_account_are_external() -> None:
     flows = account_flows(
         [shown, unseen, out, dividend], base="EUR", rate=lambda _currency, _on: D("0.9")
     )
-    assert flows == [ExternalFlow(day, D(100)), ExternalFlow(day, D(-18))]
+    # Each on the day the account's cash showed it, not the day the owner dated it.
+    assert flows == [ExternalFlow(AT.date(), D(100)), ExternalFlow(AT.date(), D(-18))]
     missing = account_flows([out], base="EUR", rate=lambda _currency, _on: None)
-    assert missing == "no USD rate was recorded on 2026-10-02"
+    assert missing == "no USD rate was recorded on 2026-10-21"
+
+
+def test_a_transfer_credited_after_its_date_is_never_a_loss_and_then_a_gain() -> None:
+    """docs/AUDIT.md, 2: the owner announces a deposit on the day of the transfer and the broker
+    credits it two days later. Placed on its announced day it read as a fall of the whole deposit
+    on that day and a rise on the day of the credit."""
+    announced = date(2026, 10, 19)
+    credited = AT.date()
+    assert credited == announced + timedelta(days=2)
+    deposit = _deposit("300", announced, matched_at=AT)
+    assert reached_on(deposit) == credited
+    assert reached_on(_deposit("300", announced)) is None
+    days = [announced + timedelta(days=n) for n in range(-1, 4)]
+    readings = [Reading(day, D(1300) if day >= credited else D(1000)) for day in days]
+    asked: list[date] = []
+
+    def rate(_currency: str, on: date) -> Decimal:
+        asked.append(on)
+        return D("0.9")
+
+    flows = account_flows([deposit], base="EUR", rate=rate)
+    assert flows == [ExternalFlow(credited, D(300))]
+    result = time_weighted_return(readings, flows, timing="in_reading")
+    assert result.value == 0
+    assert [period.ret for period in result.periods] == [D(0)] * 4
+    # A foreign flow is valued at the rate of the day it arrived.
+    dollars = Withdrawal(
+        amount=D(20), currency="USD", on=announced, recorded_at=AT, recorded_by="o", matched_at=AT
+    )
+    assert account_flows([dollars], base="EUR", rate=rate) == [ExternalFlow(credited, D(-18))]
+    assert asked == [credited]
 
 
 # ── external holdings (lite's external_positions) ──

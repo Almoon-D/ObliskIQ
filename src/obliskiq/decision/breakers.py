@@ -35,7 +35,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from ..capital.managed import CapitalReader, CapitalView, is_shadow_family
-from ..capital.twr import ExternalFlow, FlowTiming, Reading, time_weighted_return
+from ..capital.twr import ExternalFlow, FlowTiming, Reading, reached_on, time_weighted_return
 from ..config.schema import ObliskConfig
 from ..config.schema_engines import PortfolioCircuitBreakerConfig
 from ..domain.capital import Deposit, Withdrawal
@@ -346,23 +346,25 @@ def _report(
 def book_flows(store: Store, settings: ObliskConfig, *, as_of: date) -> list[ExternalFlow] | str:
     """The owner's deposits and withdrawals that move the managed book, in the base currency at
     the rate of their day; why, when one has no rate. In mode ``cap`` they are the recorded
-    flows that count toward the book (``capital/managed.py``); in mode ``whole_account`` the
-    ones that reached the account."""
+    flows that count toward the book (``capital/managed.py``), from the day the owner dated
+    them; in mode ``whole_account`` the ones that reached the account, on the day its cash showed
+    them (``capital/twr.py: reached_on``)."""
     base = settings.account.base_currency
     cap = settings.capital.mode == "cap"
     found: list[ExternalFlow] = []
     for flow in capital_repo.cash_flows(store, as_of=as_of):
         if not isinstance(flow, Deposit | Withdrawal) or not flow.live:
             continue
-        if not (flow.in_book if cap else flow.matched_at is not None):
+        on = (flow.on if flow.in_book else None) if cap else reached_on(flow)
+        if on is None:
             continue
         rate = ONE
         if flow.currency != base:
-            recorded = fx_repo.rate_on(store, flow.currency, flow.on)
+            recorded = fx_repo.rate_on(store, flow.currency, on)
             if recorded is None:
-                return f"no {flow.currency} rate was recorded on {flow.on.isoformat()}"
+                return f"no {flow.currency} rate was recorded on {on.isoformat()}"
             rate = recorded.rate_to_base
-        found.append(ExternalFlow(flow.on, flow.signed * rate))
+        found.append(ExternalFlow(on, flow.signed * rate))
     return found
 
 

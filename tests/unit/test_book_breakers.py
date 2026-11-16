@@ -481,6 +481,14 @@ def test_the_books_flows_are_the_capped_books_or_the_accounts(
     assert book_flows(store, whole, as_of=DAY) == []  # neither has reached the account's cash
     capital_repo.match_flow(store, 2, at=NOON)
     assert book_flows(store, whole, as_of=DAY) == [ExternalFlow(DAY, Decimal(-200))]
+    # A whole account's flow moves its NAV on the day its cash shows it, whatever day the owner
+    # dated it (docs/AUDIT.md, 2): dated the 24th and credited on the 26th, it is the 26th's.
+    flow(Deposit, "300", on=DAY - timedelta(days=2))
+    capital_repo.match_flow(store, 4, at=NOON)
+    assert book_flows(store, whole, as_of=DAY)[-1] == ExternalFlow(DAY, Decimal(300))
+    assert ExternalFlow(DAY - timedelta(days=2), Decimal(300)) in book_flows(
+        store, shipped_settings, as_of=DAY
+    )  # the capped book holds it from its day
     flow(Deposit, "100", currency="USD")
     assert "no USD rate was recorded on 2026-10-26" in str(
         book_flows(store, shipped_settings, as_of=DAY)
