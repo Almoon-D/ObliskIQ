@@ -36,7 +36,7 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 26 | Hunter engine | the mechanism 24 tested, on the live book | not run while no Hunter hypothesis is sufficient or inconclusive-positive (D168); a new hypothesis comes through Session 21 | |
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | done (on fixtures; the rules pre-registered and locked, #71; no layer active yet; H13's record and the panel's producer to 18a, D171) | v0.26.0 |
 | 18a | Scoreboard, the remainder | H13's after-tax monthly record and its looks, the weekly forecast panel's producer, the broker session's re-logins in the store | done (on fixtures; no thesis has a record yet; the panel waits on the analyst's key; no IBKR call) | v0.27.0 |
-| 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | after 18 | |
+| 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | done (image built and run in the session; the machine's deployment and the full preflight are the owner's list in docs/DEPLOY.md; no IBKR call) | v0.28.0 |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
@@ -59,6 +59,22 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 19 — Cockpit, settings and deployment (2026-11-16, v0.28.0)
+
+- **Landed:** the MCP cockpit (21 tools, bearer token, `/healthz`, `/dashboard`) and the Telegram
+  bot over one `Cockpit`, with no brokerage session (D178); CommandParser's grammar in English and
+  Spanish; `settings set|diff|history`, remote changes limited to `remote_settings` (D177), every
+  change audited and applied at the next cycle boundary (D176); `pause`; the board and the daily
+  dashboard after each digest; `preflight --full`; `cockpit serve`, `dashboard`, `health`.
+- **Deployment:** one image (Ubuntu 26.04, uv's Python 3.14, Temurin 11, Chromium's headless shell,
+  non-root) with the Gateway inside it (D175), built for amd64 in PR CI and for amd64 and arm64 on
+  each release to ghcr.io; systemd units, nightly backup, restore, `update.sh` with rollback,
+  journald and logrotate; `docs/DEPLOY.md`; the cockpit skill.
+- **Live findings.** The image was built and run in the session (x86_64): the cockpit served MCP
+  over HTTP behind its token and idled at 141 MiB; the image is 2.05 GB. No IBKR or Telegram call.
+- **Deferred:** the machine's first deployment and `preflight --full` (owner, docs/DEPLOY.md §3-§5).
+  **Prompts edited:** Session 16's CommandParser builds on Session 19's grammar.
 
 ### Session 18a — Scoreboard, the remainder (2026-11-15, v0.27.0)
 
@@ -358,6 +374,10 @@ settles it.
 | US stock, US option and Eurex option commission schedules | 2 | T1 (the paper order test), 18 (TCA) |
 | TCA on the first paper fills: the clearance's quote as arrival, the cost model's leg beside each fill (`scoreboard/tca.py`, `obliskiq scoreboard report weekly`) | 18 | the owner's order test and execution test |
 | The weekly and monthly reports and their Telegram summary on the deployed machine (`orchestration/scoreboard_jobs.py`) | 18 | the first week of `serve` after 18 |
+| `obliskiq preflight --full` on the machine with the paper login: auth, venue status, the whatif of XDWD's minimum quantity (never placed), the Telegram test message | 19 | the machine's first boot (docs/DEPLOY.md §5) |
+| The image on the machine: the Gateway installs and logs in from inside the container, the service's memory beside Java and a login's Chromium on a 1 GB machine, `update.sh` with a real pull, the backup pushed by rclone | 19 | the machine's first deployment |
+| The arm64 image (built under QEMU in `release.yml`) and the private package pulled with a `read:packages` token | 19 | the first release after 19 |
+| The cockpit from Claude through an SSH tunnel, and the Telegram bot's commands, `/confirm` and the pushed questions on the owner's chat | 19 | the machine's first deployment |
 | US Treasury commission and the EUR-bond schedule above EUR 8,500 of face | 2 | 19a (bond rule) |
 | Transaction taxes: FR's rate against CGI art. 235 ter ZD (Légifrance refused the container, 2026-10-22); IT's regulated-market rate and paying side in Legge 228/2012 art. 1 c. 491 and 494 (Legge 199/2025's 0.4 % standard rate read on Normattiva, 2026-10-22); GB, HK against a trade confirmation (ES's 0.2 % read in Ley 5/2020's BOE text, 2026-10-21). The core's ETFs and ETCs pay none of them | 2 | 15 (the first French or Italian share a thesis orders) |
 | Friction tiers (spread, slippage, impact, option half-spread) are legacy assumptions | 2 | 18 (TCA) |
@@ -486,8 +506,8 @@ settles it.
 - On the deployment machine, `obliskiq research data load-universe` fills the research store. The
   service reads the selector's tracking correlations and the swap partners' correlations from it,
   once a day (D143). Without it every reading is unmeasured: the selector ranks without tracking,
-  and a tilting variant has no partner. A needs neither. Session 19's deployment runs the load
-  with the machine's setup.
+  and a tilting variant has no partner. A needs neither. The deployment runs the load at its first
+  boot (docs/DEPLOY.md §5).
 - CFTC release exceptions: the 2025 government shutdown delayed the October–November reports,
   which the fixed lag of three days dates early; an exceptions list from the CFTC's notices before
   a backtest reads those weeks (D126).
@@ -583,8 +603,6 @@ settles it.
   answer for them; a session before the live account (Session 18 at the latest).
 - Session 15: `StrategyValue` for the satellite (probes, pending catalysts, exits it makes
   anyway); Session 17 for the decision layer (D108). The core's is D146.
-- Session 19: Telegram and MCP answers to owner questions and the cash commands (D109).
-- Session 19: the deployment's unit or container replaces docs/RUNBOOK.md's example systemd unit.
 - When IBKR's pacing binds (the first weeks of `serve` show it): the gate reads the live orders and
   the trades fresh for every clearance, and IBKR paces each at one request per 6 s here, so an
   exit beside a stop (check, cut, clear) takes about 18 s and a cycle of N orders at least 6·N s;
@@ -622,9 +640,8 @@ settles it.
   (SESSION_PROMPTS §A.5, T1 and the core's live paper cycle in docs/RUNBOOK.md); sessions build
   against fixtures. If the login fails there too, the owner chooses between a TWS API with IBC spike
   and a daily manual login (D68).
-- Session 19: the deployment image's base is the OS D96 chose (Ubuntu 26.04), with the Java
-  versions `ibkr.gateway.java_major_versions` lists after T1 and
-  `playwright install --with-deps chromium` for the locked Playwright.
+- The deployment image's Java follows `ibkr.gateway.java_major_versions`: when T1's side runs
+  admit 21 or 25, `deploy/Dockerfile`'s Temurin stage moves with it (D96, D175).
 - Session 10: the `macro` CHECK `release_date >= reference_date` rejects a flash estimate
   stamped with a period-end reference date, and the whole batch rolls back; relax or split it
   with the first live macro route.
@@ -694,8 +711,9 @@ settles it.
   (`legacy/lite/pyproject.toml`, `legacy/lite/requirements.txt`,
   `legacy/pulse/pyproject.toml`), so Dependabot alerts may name them until Session 20
   deletes `legacy/`; they are never installed.
-- Session 19: a release created with `GITHUB_TOKEN` does not trigger `on: release`
-  workflows, so the image build must be a job in `release.yml` (as its prompt says).
+- Release workflow: the image job runs only after a release the run published (a release created
+  with `GITHUB_TOKEN` triggers no `on: release` workflow); the arm64 build runs under QEMU there
+  and has not run yet (the first release after Session 19).
 - Release workflow: when a pending run is replaced by a newer push to `main`, the replaced
   version is never released (the newer commit carries its own version). Recovery: re-run the
   cancelled run from the Actions tab; it tags its own commit.

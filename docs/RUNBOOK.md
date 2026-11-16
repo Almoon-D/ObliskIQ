@@ -71,26 +71,14 @@ uv run obliskiq run-cycle --mode shadow --dry-run  # the plan; nothing written o
 uv run obliskiq serve                              # runs until SIGTERM or Ctrl-C
 ```
 
-Leave it under a supervisor so it restarts after a reboot. A systemd user unit, for example:
+Leave it under the deployment's units so it restarts after a reboot and updates with a rollback:
+`docs/DEPLOY.md` (one image, `obliskiq.service` and `obliskiq-cockpit.service`). There every
+command below runs as `sudo obliskiq <command>`, in a one-off container of the running image.
 
-```
-[Unit]
-Description=ObliskIQ service
-After=network-online.target
-
-[Service]
-WorkingDirectory=%h/ObliskIQ
-ExecStart=%h/.local/bin/uv run --locked obliskiq serve
-Restart=on-failure
-RestartSec=60
-KillSignal=SIGTERM
-TimeoutStopSec=120
-
-[Install]
-WantedBy=default.target
-```
-
-`systemctl --user enable --now obliskiq`, and `loginctl enable-linger` so it runs without a login.
+The owner's commands from afar (the MCP cockpit, Telegram), your settings (`obliskiq settings
+set|diff|history`, applied at the service's next cycle boundary) and the pause (`obliskiq pause
+on|off|status`: the cycles stop deciding, the protective exits and the brokerage session stay)
+are `docs/DEPLOY.md` §6.
 
 ## Move to paper
 
@@ -103,12 +91,12 @@ upgrade to paper is your command whatever the verdict, and the verdict is writte
 ```
 uv run obliskiq promotion status                    # the gate's verdict on paper
 uv run obliskiq run-cycle --mode shadow --dry-run   # still sensible?
-systemctl --user stop obliskiq                      # the lock: stop the service first
+sudo systemctl stop obliskiq.service                # the lock: stop the service first
 uv run obliskiq mode set paper --reason "start paper trading"
 uv run obliskiq run-cycle --mode paper --dry-run
 uv run obliskiq run-cycle --mode paper              # one real paper cycle, supervised
 uv run obliskiq status
-systemctl --user start obliskiq
+sudo systemctl start obliskiq.service
 ```
 
 `run-cycle --mode` must name the mode the store holds; it refuses otherwise.
@@ -134,7 +122,7 @@ your command (`obliskiq mode set live-small --reason ...`).
 
 ## Stop
 
-- **Stop the service**: `systemctl --user stop obliskiq` (SIGTERM) or Ctrl-C. The job in hand
+- **Stop the service**: `sudo systemctl stop obliskiq.service` (SIGTERM). The job in hand
   finishes, the health file says `stopped`. Resting orders stay at IBKR: day limits expire at the
   close, protective stops (the core carries none) keep resting.
 - **Kill switch**: `uv run obliskiq kill on --reason "…"` blocks every order that adds risk at
@@ -151,7 +139,7 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 
 | You see | Do |
 |---|---|
-| `status` shows the heartbeat STALE | The service is down or hung: `systemctl --user status obliskiq`, its journal, then restart it. |
+| `status` shows the heartbeat STALE | The service is down or hung: `sudo systemctl status obliskiq.service`, its journal (`sudo journalctl -u obliskiq.service`), then restart it. |
 | `reconciliation drift` (digest, alert) | New buys are frozen. `uv run obliskiq reconcile run` (stop the service first) shows the findings. If IBKR is right (a dividend, a manual trade), `uv run obliskiq reconcile accept --reason "…"`. |
 | `reconciliation incomplete` | IBKR's data was partial; the next heartbeat retries. If it persists, check the Gateway. |
 | `session.reauthentication_failed` | The Gateway could not log in again (after IBKR's daily reset, say). Protective stops rest at IBKR, so this costs cycles, not protection. Check the Gateway's log; the keepalive retries once its re-login interval passes. |
@@ -263,7 +251,7 @@ account (a preflight, a paper order test) takes the session over from the runnin
 mid-order. The service lock only guards processes on this machine. So before such a session:
 
 ```
-systemctl --user stop obliskiq
+sudo systemctl stop obliskiq.service
 ```
 
 and tell the session the bot is paused. Start the service again when the session is done.
@@ -277,7 +265,7 @@ part A "T1 (the paper order test)" and part D "the core's live paper cycle".
 
 Rules for every step:
 
-- The service is stopped (`systemctl --user stop obliskiq`) until part E, and no Claude session
+- The service is stopped (`sudo systemctl stop obliskiq.service`) until part E, and no Claude session
   is logged in to the paper username.
 - `preflight`, `collect`, `run-cycle` and `reconcile` each log in once: leave ten minutes between
   the starts of two of them. A locked username or a refused password ends the day's logins.
@@ -405,14 +393,14 @@ is allowed. Inside Xetra's order window (09:30 to 17:15 Madrid time), after a gr
 
 ### E. `serve` under the supervisor, and the ten shadow days
 
-24. `uv run obliskiq mode show` says `shadow`. Install the unit of "Run in shadow", then
-    `systemctl --user enable --now obliskiq` and `loginctl enable-linger`.
+24. `uv run obliskiq mode show` says `shadow`. Deploy the units (`docs/DEPLOY.md` §5, and §11
+    for the data of the T1 setup).
 25. Each trading day, for ten in a row, after the digest:
     - `uv run obliskiq status`: `mode shadow · kill switch off`; the heartbeat under ten minutes
       old, not `STALE`, `ok`; `reconciliation: green`; `open intents: 0`; `open alerts: 0`; no
       run marked `!`.
     - The digest's subject says `nothing needs attention`.
-    - `journalctl --user -u obliskiq --since yesterday | grep reauthenticat`: one
+    - `sudo journalctl -u obliskiq.service --since yesterday | grep reauthenticat`: one
       `reauthenticated` after IBKR's daily reset, and no `reauthentication_failed`.
 
     A day that fails any line starts the count again: L1 asks for ten consecutive trading days

@@ -69,12 +69,19 @@ class RecordingNotifier:
     """Keeps every message instead of sending it; ``fail`` makes sends fail."""
 
     sent: list[tuple[str, str]] = field(default_factory=list)
+    files: list[tuple[str, Path]] = field(default_factory=list)
     fail: bool = False
 
     async def send(self, subject: str, body: str) -> bool:
         if self.fail:
             return False
         self.sent.append((subject, body))
+        return True
+
+    async def send_document(self, caption: str, path: Path) -> bool:
+        if self.fail:
+            return False
+        self.files.append((caption, path))
         return True
 
     def subjects(self) -> list[str]:

@@ -187,7 +187,7 @@ async def oauth_handshake(
 type Step = Callable[[], Awaitable[str]]
 
 
-async def _step(report: PreflightReport, name: str, run: Step, known: tuple[str, ...]) -> bool:
+async def run_step(report: PreflightReport, name: str, run: Step, known: tuple[str, ...]) -> bool:
     try:
         detail = await run()
     except ObliskError as exc:
@@ -359,5 +359,5 @@ async def _walk(
         (STEP_SCHEDULE, schedule),
     ]
     for name, run in steps:
-        if not await _step(report, name, run, known):
+        if not await run_step(report, name, run, known):
             return

@@ -3883,3 +3883,51 @@ is older than the mark age, or too few fresh names, skips the week before any ca
 of 60 % or 20 names after the calls keeps nothing and is retried at the next run. Forecasts are
 calls `up` with `p_outperform` as their probability. Calls cost against the one LLM budget.
 Rejected: features in the base currency (a daily rate per name for a statistic the model reads).
+
+## Session 19 — Cockpit, settings and deployment (2026-11-16)
+
+### D175 · The Gateway runs inside the bot's container, as the bot's child (§5.12, §5.20; D42, D68, D96)
+
+The prompt names "a pinned Client Portal Gateway container beside the bot". The transport proven
+on T1 installs the pinned archive, generates its per-install certificate, starts the Gateway as its
+own child process, logs it in and, when it dies, restarts it and logs in again (`recover`). A
+second container would break the last two: the bot could not restart it, and its certificate pin
+would have to be shared between containers. So one image carries Java (Temurin 11, the version
+`java_major_versions` lists), Chromium's headless shell for the login and the service; the
+Gateway's install lives on the data volume; its health is the session's own (keepalive, re-login
+alerts, the heartbeat's `session`). Rejected: a separate Gateway container (above); IBeam's image
+(a second, unpinned login automation beside ours).
+
+### D176 · Settings apply by restarting the service's loop at a boundary; every change is audited (§5.17)
+
+The service is assembled once from its settings, so a change applies by stopping the loop before
+the next heartbeat or job (never inside a cycle) and starting again on the new panel: one
+consistent configuration, no part half-updated. A panel that does not validate changes nothing and
+alerts once. The cost is a fresh Gateway login per change, so changes are rare by design. Each
+start audits what changed since the last start and no command recorded, labelled by its source:
+the owner's file (a hand edit) or the expert defaults (a release). The panel is edited as text,
+comments kept, and the edit must parse back to exactly the intended change; anything else is
+refused and done by hand. Rejected: hot-swapping the settings object (every part holds its own
+copy); ruamel.yaml (a dependency to keep comments the verified text edit already keeps).
+
+### D177 · What a remote channel may change, and what acts without confirmation (§5.15, §5.17; D88, D156)
+
+Remote changes (Telegram `/set`, MCP `update_setting`) are limited to `remote_settings`: eight risk
+limits, each only in the direction that tightens it, and five budget and cash-flow settings, each
+inside bounds whose upper ends are the expert defaults. `thesis.max_positions` is not one: fewer
+positions means a larger base size. Commands that add risk or record money (a setting, a deposit, a
+reservation, an answer, an approval) are previews until confirmed (Telegram `/confirm <code>`
+within `server.telegram.confirm_minutes`); a rejection, a pause and the kill switch act at once.
+Turning the kill switch off loosens risk, so only the machine does it. A pause skips decision
+cycles and keeps the brokerage session; freeing the paper login for a cloud session means stopping
+the service.
+
+### D178 · The cockpit opens no brokerage session; the board carries what only the broker shows (§5.17; D47)
+
+IBKR allows one brokerage session per username and the service holds it. The cockpit (MCP and
+Telegram, its own process) reads the store and the service's files only; what needs a survey of
+the broker (capital, positions, targets, the thesis and reservation plans) reaches it through the
+board the service writes after each digest, with its age, labelled stale beyond
+`server.stale_after_days`. The same board renders the daily dashboard, so the page and the tools
+never disagree. CommandParser's deterministic grammar (MASTER_PLAN §5.10) is built here for
+Telegram's free text, in English and Spanish; Session 16 puts an LLM in front of it.

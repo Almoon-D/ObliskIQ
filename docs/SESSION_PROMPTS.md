@@ -2313,7 +2313,8 @@ DELIVERABLES
    registry as `idea`), ExposureMapper, DossierWriter, DevilsAdvocate, CommandParser (an
    owner message in any language → OwnerCommand: deposit, withdrawal reservation, setting
    change, answer to an OwnerQuestion; always returned for confirmation; plus a
-   deterministic grammar fallback that works with no LLM). Schemas forbid extra fields; no
+   deterministic grammar fallback that works with no LLM: Session 19's `server/commands.py`,
+   which Telegram already uses, beneath the LLM). Schemas forbid extra fields; no
    field can carry an order or a size.
 7. Evaluation: tests/fixtures/llm_eval/<role>/ with hand-labelled cases (inputs and
    expected outputs); `obliskiq llm eval <model>` scores validity, accuracy, cost and

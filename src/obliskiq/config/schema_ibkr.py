@@ -358,6 +358,7 @@ class PreflightConfig(FrozenModel):
     currency: CurrencyCode
     history_period: IbkrPeriod
     history_bar: IbkrPeriod
+    whatif_conid: Conid
     paper_order: PaperOrderConfig
     execution_test: ExecutionTestConfig
 

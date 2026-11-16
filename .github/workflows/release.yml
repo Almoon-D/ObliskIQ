@@ -3,14 +3,17 @@ name: Release
 # Publishes a GitHub Release when a version change reaches main: the tag v<version> on the
 # pushed commit, with that version's CHANGELOG.md section as notes; versions below 1.0.0
 # are pre-releases. A missing or empty section fails the run. Re-running is safe: an
-# existing release is left alone, and a tag left without its release gets one.
+# existing release is left alone, and a tag left without its release gets one. A release it
+# publishes is followed by the deployment image, built from the tag for linux/amd64 and
+# linux/arm64 and pushed to ghcr.io/almoon-d/obliskiq:<version> (the package stays private).
 on:
   push:
     branches: [main]
 
-# The only workflow allowed to write: it creates tags and releases.
+# The only workflow allowed to write: it creates tags and releases, and pushes the image.
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: release
@@ -22,6 +25,10 @@ jobs:
     # Pinned: release_notes.py runs on this image's own Python 3.12.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      published: ${{ steps.publish.outputs.published }}
     steps:
       # Pinned by commit: this is the one workflow that can write to the repository.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -34,6 +41,7 @@ jobs:
           --github-output "$GITHUB_OUTPUT"
 
       - name: Publish the release
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -66,6 +74,7 @@ jobs:
           release=$(exists "repos/$REPO/releases/tags/$TAG")
           if [ "$release" = "yes" ]; then
             echo "Release $TAG already exists; nothing to do."
+            echo "published=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -77,3 +86,43 @@ jobs:
             echo "Publishing $TAG on $GITHUB_SHA."
             gh release create "$TAG" --target "$GITHUB_SHA" "${flags[@]}"
           fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+  image:
+    name: image
+    # Only after a release this run published: a push that leaves the version alone must never
+    # rebuild a released tag from newer code.
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      IMAGE: ghcr.io/almoon-d/obliskiq
+    steps:
+      # Pinned by commit, as every action in this workflow.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push the multi-arch image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ needs.release.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}

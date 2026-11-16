@@ -1,0 +1,14 @@
+# The nightly backup (deploy/backup.sh): online copies of the store, checked, compressed and
+# pushed off the machine. Run by obliskiq-backup.timer; a failure alerts the owner.
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[Unit]
+Description=ObliskIQ nightly backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/obliskiq-deploy/deploy/backup.sh
+Nice=10
+IOSchedulingClass=idle

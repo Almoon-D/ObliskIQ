@@ -28,6 +28,7 @@ alerted once while it holds (``reporting/alerts.py``).
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import functools
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -38,6 +39,7 @@ from pydantic import SecretStr
 
 from .. import __version__
 from ..capital.planner import PlannerActions, ReservationPlan
+from ..config.changes import settings_fingerprint
 from ..config.schema import ObliskConfig
 from ..data.runner import source_health
 from ..decision.breakers import BREAKER_ACTOR, UNREADABLE, BreakerReport
@@ -52,14 +54,21 @@ from ..domain.orders import (
     OrderIntent,
     ReconcileStatus,
 )
+from ..env import repository_root
 from ..execution.executor import CycleReport
 from ..execution.runtime import OrderPath
 from ..logging_setup import get_logger
 from ..reporting.alerts import Alert, Severity, condition_key
-from ..reporting.digest import gather_digest, render_digest, venue_line
+from ..reporting.board import build_board, read_patterns, write_board, write_text_atomically
+from ..reporting.dashboard import render_dashboard
+from ..reporting.digest import Digest, gather_digest, render_digest, venue_line
 from ..reporting.reporter import Reporter
 from ..reporting.summary import CycleSummary, format_cycle
+from ..research.patterns import REGISTRY_PATH
+from ..scoreboard.run import PerformanceView
+from ..scoreboard.run import performance as scoreboard_performance
 from ..store import orders as repo
+from ..store import scoreboard as scoreboard_repo
 from ..store import sources as source_repo
 from .health import ping, write_heartbeat
 from .nav import NavCollector, NavOutcome
@@ -71,7 +80,7 @@ log = get_logger("orchestration.jobs")
 
 #: The run log's names for the steps of a cycle and of the digest.
 CYCLE_STEPS = ("nav", "breakers", "reserve", "rebalance", "thesis", "execute")
-DIGEST_STEPS = ("digest",)
+DIGEST_STEPS = ("digest", "dashboard")
 #: Alert sources: the job whose rounds raise and clear a condition.
 HEARTBEAT = "heartbeat"
 CYCLE = "cycle"
@@ -127,6 +136,8 @@ class Jobs:
         self._now = now
         self._ping_url = ping_url
         self._heartbeat_file = data_dir / settings.paths.heartbeat_file
+        self._fingerprint = settings_fingerprint(settings)
+        self._digest: Digest | None = None
         self._stuck = timedelta(minutes=settings.runtime.stuck_after_minutes)
         self._reset_done = False
         self.last_heartbeat: datetime | None = None
@@ -493,6 +504,7 @@ class Jobs:
             "session": session,
             "last_cycle": self.last_cycle,
             "problems": problems,
+            "settings": self._fingerprint,
         }
         try:
             facts["mode"] = (await self._path.modes.current()).value
@@ -530,6 +542,34 @@ class Jobs:
 
     # ── the digest ──
 
+    async def _dashboard(self, digest: Digest) -> bool:
+        """The board and the dashboard from the day's digest, written beside the store; the
+        dashboard is sent to the owner."""
+        settings = self._settings
+        day = digest.day
+        window = timedelta(days=settings.runtime.status_report_days)
+        try:
+            performance: PerformanceView | str = await self._path.worker.run(
+                scoreboard_performance, settings, since=day - window, as_of=day
+            )
+        except Exception as exc:  # shown as not measured, never left out
+            performance = f"the performance cannot be measured: {type(exc).__name__}"
+        shares = await self._path.worker.run(scoreboard_repo.current_shares)
+        root = repository_root()
+        patterns = (
+            "no research registry beside this installation"
+            if root is None
+            else read_patterns(root / REGISTRY_PATH)
+        )
+        board = build_board(
+            digest, settings, performance=performance, shares=shares, patterns=patterns
+        )
+        paths = settings.paths
+        write_board(self._data_dir / paths.board, board)
+        dashboard = self._data_dir / paths.dashboard
+        write_text_atomically(dashboard, render_dashboard(board))
+        return await self._reporter.report_file(f"ObliskIQ dashboard {day.isoformat()}", dashboard)
+
     async def digest(self, session_date: date) -> str:
         """Gather and send the daily digest, as a run record of one step."""
         path = self._path
@@ -562,13 +602,29 @@ class Jobs:
                 rows=self._settings.reporting.digest_rows,
                 base_currency=self._settings.account.base_currency,
             )
+            self._digest = digest
             return await self._reporter.report(subject, body)
 
         await record.step("digest", send, _judge_sent)
+        if self._digest is not None:
+            await record.step(
+                "dashboard", functools.partial(self._dashboard, self._digest), _judge_dashboard
+            )
+            self._digest = None
         status = await record.finish()
         if self._scoreboard is not None:
             await self._scoreboard.after_digest(session_date)
         return status
+
+
+def _judge_dashboard(sent: bool) -> StepOutcome:
+    return StepOutcome(
+        "dashboard",
+        OK if sent else DEGRADED,
+        "the board and the dashboard are written and the dashboard sent"
+        if sent
+        else "the board and the dashboard are written; the dashboard could not be sent",
+    )
 
 
 def _judge_nav(outcome: NavOutcome) -> StepOutcome:

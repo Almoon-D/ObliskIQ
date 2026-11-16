@@ -1,0 +1,12 @@
+# /etc/logrotate.d/obliskiq: the Client Portal Gateway's own output, which it writes beside its
+# install in the data directory (the service's log goes to the journal, journald-obliskiq.conf).
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+/var/lib/obliskiq/ibkr-gateway/gateway-stdout.log /var/lib/obliskiq/ibkr-gateway/logs/*.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

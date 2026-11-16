@@ -199,8 +199,9 @@ def test_serve_runs_the_service_until_it_stops(
     ran: list[str] = []
 
     class FakeService:
-        async def run(self, stop: Any) -> None:
+        async def run(self, stop: Any, *, watch: Any) -> bool:
             ran.append("ran")
+            return False
 
     @asynccontextmanager
     async def opened(*args: Any, **kwargs: Any) -> AsyncIterator[FakeService]:

@@ -1,6 +1,7 @@
 name: CI
 
-# One required job, `ci`, running exactly what a contributor runs locally: `make check`.
+# One required job, `ci`, running exactly what a contributor runs locally: `make check`; and
+# `image`, which builds the deployment image for linux/amd64 (deploy/Dockerfile) and runs it once.
 # Pushes are built on main only; every other branch is built through its pull request, so
 # a commit is never tested twice.
 on:
@@ -39,3 +40,35 @@ jobs:
 
       - name: make check
         run: make check
+
+  image:
+    name: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the amd64 image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: obliskiq:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: The image starts, as its non-root user, on the shipped configuration
+        run: |
+          set -euo pipefail
+          docker run --rm obliskiq:ci --version
+          test "$(docker run --rm --entrypoint id obliskiq:ci -u)" = 10001
+          mkdir -p "$RUNNER_TEMP/data" "$RUNNER_TEMP/owner"
+          cp config/owner.yaml "$RUNNER_TEMP/owner/"
+          sudo chown -R 10001:10001 "$RUNNER_TEMP/data" "$RUNNER_TEMP/owner"
+          docker run --rm -v "$RUNNER_TEMP/data:/var/lib/obliskiq" \
+            -v "$RUNNER_TEMP/owner:/etc/obliskiq/owner" obliskiq:ci config validate

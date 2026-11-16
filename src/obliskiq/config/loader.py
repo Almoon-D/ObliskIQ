@@ -3,7 +3,8 @@
 ``config/defaults/*.yaml`` hold the expert defaults; each top-level section lives in exactly
 one of them. ``config/universe.yaml``, ``config/sources.yaml`` and ``config/llm.yaml`` each hold
 one section of their own: the universe, the data sources and the LLM layer.
-``config/owner.yaml`` is the owner's panel and overrides any default, section by section and key
+``config/owner.yaml`` (or the file ``OBLISK_OWNER_FILE`` names, on a machine whose configuration
+ships in the image) is the owner's panel and overrides any default, section by section and key
 by key (a list or a scalar replaces what it overrides; mappings merge). The environment may
 override the logging block for one process. The merged tree is validated
 into :class:`~obliskiq.config.schema.ObliskConfig`; every value remembers where it came from.
@@ -69,6 +70,8 @@ class LoadedConfig:
     sources: Mapping[str, str]
     config_dir: Path
     files: tuple[str, ...]
+    #: The owner's panel this configuration was read from.
+    owner_file: Path
 
     def leaves(self) -> list[tuple[str, Any, str]]:
         """Every setting as ``(dotted key, value, source)``, sorted by key."""
@@ -223,9 +226,15 @@ def _nested(dotted: str, value: Any) -> dict[str, Any]:
 
 
 def load_config(
-    config_dir: Path, *, overrides: Mapping[str, tuple[Any, str]] | None = None
+    config_dir: Path,
+    *,
+    overrides: Mapping[str, tuple[Any, str]] | None = None,
+    owner_file: Path | None = None,
 ) -> LoadedConfig:
     """Load and validate the configuration in ``config_dir``.
+
+    ``owner_file`` is the owner's panel when it lives outside ``config_dir`` (default:
+    ``config_dir/owner.yaml``).
 
     ``overrides`` maps a dotted key to ``(value, source)``; the environment uses it for the
     logging block. Raises :class:`ConfigInvalid` with every problem found.
@@ -277,12 +286,13 @@ def load_config(
             config_dir, file_name, section, merged, sources, section_home, files
         )
 
-    owner_display = display_path(config_dir / OWNER_FILE, config_dir)
+    owner_path = config_dir / OWNER_FILE if owner_file is None else owner_file
+    owner_display = display_path(owner_path, config_dir)
     files.append(owner_display)
     try:
         merge_into(
             merged,
-            read_yaml_mapping(config_dir / OWNER_FILE, owner_display),
+            read_yaml_mapping(owner_path, owner_display),
             owner_display,
             sources,
         )
@@ -305,6 +315,7 @@ def load_config(
         sources=MappingProxyType(dict(sources)),
         config_dir=config_dir,
         files=tuple(files),
+        owner_file=owner_path,
     )
 
 
