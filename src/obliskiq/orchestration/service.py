@@ -23,6 +23,12 @@ hooks; :class:`AlertHooks` tags each with the job in hand (or ``session``, ``cal
 outside one) and the reporter sends it, once while its condition holds. Session alerts are sent at
 once, so a failed re-login reaches the owner within one heartbeat (DECISIONS D68).
 
+**Settings and pause.** Before each heartbeat or job (never inside a cycle) the service asks its
+:class:`~obliskiq.orchestration.settings_watch.SettingsWatch` whether the owner's panel changed:
+a change that validates stops the loop so the command line starts the service again on the new
+settings (the next cycle boundary); one that does not is alerted once and changes nothing. A cycle
+that falls due while the owner's pause holds (``orchestration/pause.py``) is recorded as skipped.
+
 **Downgrade.** ``runtime.downgrade_after_failed_cycles`` cycles in a row that end ``error`` or
 ``partial`` move a writing mode down to shadow, audited and alerted (MASTER_PLAN §5.12: downgrades
 are automatic, upgrades an owner command); where the store cannot record it, the
@@ -65,6 +71,7 @@ from .clock import Clock
 from .compute import ALL, ComputeRunner
 from .health import write_heartbeat
 from .jobs import Jobs
+from .pause import read_pause
 from .runlog import DEGRADED, ERROR, OK, PARTIAL, SKIPPED, RunRecord, StepOutcome
 from .schedule import (
     ANALYST,
@@ -79,6 +86,7 @@ from .schedule import (
     jobs_between,
     next_job,
 )
+from .settings_watch import SettingsWatch
 
 if TYPE_CHECKING:
     from ..data.halts import HaltFeed
@@ -106,6 +114,8 @@ _SESSION_EVENTS: dict[SessionAlertKind, SessionEventKind] = {
     SessionAlertKind.REAUTHENTICATED: "reauthenticated",
     SessionAlertKind.REAUTHENTICATION_FAILED: "reauthentication_failed",
 }
+#: The alert source of the settings watch.
+SETTINGS = "settings"
 #: The run log's name for an EventExtractor run.
 EXTRACT = "extract"
 #: Digits an extractor run's cost is recorded with (US dollars).
@@ -358,15 +368,58 @@ class Service:
 
     # ── the loop ──
 
-    async def run(self, stop: asyncio.Event, *, until: datetime | None = None) -> None:
-        """Start, then run heartbeats and jobs until ``stop`` (or the clock passes ``until``)."""
+    async def run(
+        self,
+        stop: asyncio.Event,
+        *,
+        until: datetime | None = None,
+        watch: SettingsWatch | None = None,
+    ) -> bool:
+        """Start, then run heartbeats and jobs until ``stop`` (or the clock passes ``until``).
+        ``True`` when it stopped because ``watch`` found a valid change of the owner's panel."""
         await self.start()
         try:
-            await self._loop(stop, until)
+            return await self._loop(stop, until, watch)
         finally:
             await self.close()
 
-    async def _loop(self, stop: asyncio.Event, until: datetime | None) -> None:
+    async def _settings_changed(self, watch: SettingsWatch) -> bool:
+        """Whether a valid change of the owner's panel waits; an invalid one is alerted."""
+        found = await asyncio.to_thread(watch.check)
+        if found.problem is not None:
+            self._reporter.push(
+                Alert(
+                    "settings.invalid",
+                    "settings.invalid",
+                    f"{watch.owner_file.name} changed but the configuration would be invalid, so "
+                    f"the settings in force stay: {found.problem}",
+                    Severity.WARNING,
+                    self._clock.now(),
+                ),
+                SETTINGS,
+            )
+            await self._reporter.end_round(SETTINGS)
+        elif found.changed:
+            log.warning("the owner's settings changed: restarting on them")
+            self._reporter.push(
+                Alert(
+                    "settings.applied",
+                    "settings.applied",
+                    f"{watch.owner_file.name} changed: the service restarts on the new settings "
+                    "before its next job",
+                    Severity.INFO,
+                    self._clock.now(),
+                    condition=False,
+                    clears=("settings.invalid",),
+                ),
+                SETTINGS,
+            )
+            await self._reporter.flush()
+        return found.changed
+
+    async def _loop(
+        self, stop: asyncio.Event, until: datetime | None, watch: SettingsWatch | None
+    ) -> bool:
         last = self._clock.now()
         beat = last
         while not stop.is_set():
@@ -380,10 +433,12 @@ class Service:
             )
             wake = beat if job is None else min(beat, job.at)
             if until is not None and wake > until:
-                return
+                return False
             await self._clock.sleep_until(wake, stop)
             if stop.is_set():
-                return
+                return False
+            if watch is not None and await self._settings_changed(watch):
+                return True
             now = self._clock.now()
             # Every job due since the last pass, two at the same moment included.
             for due in jobs_between(
@@ -401,6 +456,7 @@ class Service:
             if beat <= now:
                 await self._beat()
                 beat = self._clock.now() + self._heartbeat
+        return False
 
     async def _beat(self) -> None:
         """A heartbeat, after the day's first refresh of IBKR's schedule and a re-read of the
@@ -447,6 +503,8 @@ class Service:
         self.ran.append(job)
         self._hooks.source = job.kind
         try:
+            if job.kind == CYCLE and await self._paused(job):
+                return
             if job.kind == CYCLE:
                 result = await self._jobs.cycle(job.name, job.session_date)
                 await self._after_cycle(result.status)
@@ -464,6 +522,23 @@ class Service:
             log.exception("a job failed", extra={"job": job.command})
         finally:
             self._hooks.source = None
+
+    async def _paused(self, job: Job) -> bool:
+        """Record a cycle the owner's pause skips; ``False`` when no pause holds."""
+        pause = read_pause(self._path.data_dir / self._settings.paths.pause_flag)
+        if not pause.on:
+            return False
+        record = RunRecord(
+            self._path.worker,
+            command=job.command,
+            session_date=job.session_date,
+            steps=(),
+            now=self._clock.now,
+        )
+        await record.begin()
+        record.outcomes.append(StepOutcome("paused", SKIPPED, pause.describe()))
+        await record.finish()
+        return True
 
     async def _collect_job(self, job: Job) -> None:
         """One venue's collection after its close (``data/market/daily.py``)."""

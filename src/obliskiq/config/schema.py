@@ -8,8 +8,9 @@ with its first consumer.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from decimal import Decimal, InvalidOperation
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import AfterValidator, PositiveInt, model_validator
 
@@ -56,10 +57,23 @@ from .schema_runtime import (
     TradingConfig,
 )
 from .schema_scoreboard import PromotionConfig, ScoreboardConfig
+from .schema_server import RemoteSettingsConfig, ServerConfig
 from .schema_sources import SourcesConfig
 from .schema_thesis import ThesisBookConfig
 from .schema_universe import UniverseConfig
 from .schema_vehicles import BrokerCapabilitiesConfig, VehiclesConfig
+
+
+def _leaves(tree: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Dotted key -> value for every leaf of ``tree`` (mappings are walked, lists are leaves)."""
+    found: dict[str, Any] = {}
+    for key, value in tree.items():
+        dotted = f"{prefix}{key}"
+        if isinstance(value, dict) and value:
+            found |= _leaves(value, f"{dotted}.")
+        else:
+            found[dotted] = value
+    return found
 
 
 def _file_name_in_data_dir(value: str) -> str:
@@ -102,6 +116,11 @@ class PathsConfig(FrozenModel):
     heartbeat_file: DataFileName
     alert_state: DataFileName
     service_lock: DataFileName
+    settings_applied: DataFileName
+    board: DataFileName
+    dashboard: DataFileName
+    pause_flag: DataFileName
+    telegram_state: DataFileName
 
 
 class StoreConfig(FrozenModel):
@@ -168,6 +187,30 @@ class ObliskConfig(FrozenModel):
     thesis: ThesisBookConfig
     scoreboard: ScoreboardConfig
     promotion: PromotionConfig
+    server: ServerConfig
+    remote_settings: RemoteSettingsConfig
+
+    @model_validator(mode="after")
+    def _remote_settings_exist(self) -> Self:
+        """Every setting a remote channel may change is a numeric setting this tree holds."""
+        leaves = _leaves(self.model_dump(mode="json"))
+        problems: list[str] = []
+        remote = self.remote_settings
+        keys = [rule.key for rule in remote.tighten] + [rule.key for rule in remote.bounded]
+        for key in keys:
+            value = leaves.get(key)
+            if key not in leaves:
+                problems.append(f"remote_settings: {key} is not a setting")
+            elif isinstance(value, bool) or not isinstance(value, int | float | str):
+                problems.append(f"remote_settings: {key} is not a number")
+            else:
+                try:
+                    Decimal(str(value))
+                except InvalidOperation:
+                    problems.append(f"remote_settings: {key} is not a number")
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
 
     @model_validator(mode="after")
     def _calendar_references_resolve(self) -> Self:
@@ -473,6 +516,7 @@ class ObliskConfig(FrozenModel):
             ("ibkr.preflight.paper_order.conids", conid) for conid in preflight.paper_order.conids
         ]
         checked.append(("ibkr.preflight.execution_test.conid", preflight.execution_test.conid))
+        checked.append(("ibkr.preflight.whatif_conid", preflight.whatif_conid))
         return [
             f"{where}: {why}"
             for where, conid in checked

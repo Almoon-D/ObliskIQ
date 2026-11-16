@@ -123,6 +123,12 @@ class Environment(BaseSettings):
     # Deployment locations.
     config_dir: Path | None = Field(default=None, validation_alias="OBLISK_CONFIG_DIR")
     data_dir: Path | None = Field(default=None, validation_alias="OBLISK_DATA_DIR")
+    #: The owner's panel when it lives outside the configuration directory (the deployed image
+    #: carries the defaults; the machine keeps the owner's file).
+    owner_file: Path | None = Field(default=None, validation_alias="OBLISK_OWNER_FILE")
+
+    # The MCP cockpit's bearer token: required whenever it listens beyond loopback.
+    mcp_auth_token: SecretStr | None = Field(default=None, validation_alias="OBLISK_MCP_AUTH_TOKEN")
 
     # Per-process logging overrides.
     log_level: LogLevelName | None = Field(default=None, validation_alias="OBLISK_LOG_LEVEL")
@@ -167,7 +173,7 @@ class Environment(BaseSettings):
             raise ValueError(f"names no Java runtime (no bin/java under {resolved})")
         return resolved
 
-    @field_validator("config_dir", "data_dir")
+    @field_validator("config_dir", "data_dir", "owner_file")
     @classmethod
     def _expand(cls, value: Path | None) -> Path | None:
         return value.expanduser() if value is not None else None

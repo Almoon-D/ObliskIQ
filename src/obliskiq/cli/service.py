@@ -23,6 +23,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
+from ..config import LoadedConfig
+from ..config.audit import SettingsAuditLog
 from ..data.runner import source_health
 from ..decision.breakers import book_of, release, stored_report
 from ..domain.orders import (
@@ -35,14 +37,17 @@ from ..domain.orders import (
     Sleeve,
 )
 from ..domain.sources import SourceState
+from ..env import Environment
 from ..errors import ObliskError
 from ..execution.killswitch import file_flag_on
 from ..execution.modes import forced_shadow_on
+from ..jurisdiction import JurisdictionProfile
 from ..orchestration.assemble import build_notifier, build_reporter, open_service
 from ..orchestration.clock import SystemClock
 from ..orchestration.health import read_heartbeat
 from ..orchestration.lock import ServiceLock, ServiceLockedError
 from ..orchestration.runlog import exit_code
+from ..orchestration.settings_watch import SettingsWatch, audit_unrecorded
 from ..reporting.digest import breaker_lines
 from ..reporting.summary import CycleSummary, format_cycle
 from ..store import nav as nav_repo
@@ -69,35 +74,52 @@ def _lock(loaded: Loaded, command: str) -> ServiceLock:
 
 
 def _serve(loaded: Loaded, out: TextIO) -> int:
-    """Run the service until SIGTERM or SIGINT."""
-    from .app import _broker_refusal
+    """Run the service until SIGTERM or SIGINT; start it again on the owner's changed settings
+    at the next cycle boundary (``orchestration/settings_watch.py``)."""
+    from .app import Loaded, _broker_refusal, load_all
 
     refused = _broker_refusal(loaded.env, out)
     if refused is not None:
         return refused
-    settings = loaded.config.settings
     data_dir = loaded.env.require_data_dir()
+    config_dir = loaded.config.config_dir
 
-    async def serve() -> None:
-        stop = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        for signum in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(signum, stop.set)
-        reporter = build_reporter(settings, build_notifier(settings, loaded.env), data_dir)
+    async def serve(current: Loaded, stop: asyncio.Event) -> bool:
+        settings = current.config.settings
+        audit = SettingsAuditLog.for_settings(settings, current.env)
+        recorded = await asyncio.to_thread(
+            audit_unrecorded, current.config, data_dir, audit, at=datetime.now(UTC)
+        )
+        if recorded:
+            print(f"audited {len(recorded)} setting change(s) no command recorded", file=out)
+        watch = SettingsWatch(
+            current.config.owner_file, reload=lambda: load_all(config_dir, current.env).config
+        )
+        reporter = build_reporter(settings, build_notifier(settings, current.env), data_dir)
         async with open_service(
-            loaded.env,
+            current.env,
             settings,
-            loaded.profile,
+            current.profile,
             data_dir=data_dir,
             clock=SystemClock(),
             reporter=reporter,
         ) as service:
-            await service.run(stop)
+            return await service.run(stop, watch=watch)
+
+    async def supervise() -> None:
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, stop.set)
+        current = loaded
+        while await serve(current, stop):
+            current = Loaded(*_reloaded(current, config_dir), current.args)
+            print("settings changed: the service starts again on them", file=out)
 
     try:
         with _lock(loaded, "serve"):
             print("obliskiq service starting; SIGTERM or Ctrl-C stops it", file=out)
-            asyncio.run(serve())
+            asyncio.run(supervise())
     except ServiceLockedError as exc:
         print(f"refused: {exc}", file=out)
         return EXIT_INVALID
@@ -106,6 +128,16 @@ def _serve(loaded: Loaded, out: TextIO) -> int:
         return EXIT_INVALID
     print("obliskiq service stopped", file=out)
     return EXIT_OK
+
+
+def _reloaded(
+    current: Loaded, config_dir: Path
+) -> tuple[LoadedConfig, JurisdictionProfile, Environment]:
+    """The configuration and profile read again from ``config_dir``."""
+    from .app import load_all
+
+    fresh = load_all(config_dir, current.env)
+    return fresh.config, fresh.profile, fresh.env
 
 
 def _run_cycle(loaded: Loaded, out: TextIO) -> int:

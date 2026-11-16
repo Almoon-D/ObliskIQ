@@ -1,0 +1,49 @@
+# The owner's cockpit (server/; MASTER_PLAN §5.17): the MCP server, its Telegram bot and the
+# dashboard it serves. lite's `server` block (legacy/lite/config.yaml:720-740, @b1ebd49): the two
+# keys the cockpit consumes with lite's values; lite's `collectors` keys are not ported (this
+# cockpit starts no collector, the service runs them).
+server:
+  # No tool returns an unbounded table: a truncated answer that says it was truncated beats a
+  # complete one nobody reads. lite.
+  max_rows_per_response: 200
+  # A read older than this many days is labelled stale in the response. lite.
+  stale_after_days: 3
+  # Where the cockpit listens: the machine only. Reach it through an SSH tunnel or a TLS reverse
+  # proxy on the machine; off loopback it refuses to start without OBLISK_MCP_AUTH_TOKEN. A
+  # judgement.
+  host: 127.0.0.1
+  port: 8765
+  telegram:
+    # Long polling: Telegram holds a getUpdates call open this long when nothing arrives. A
+    # judgement, under the 60 s proxies commonly allow.
+    poll_timeout_seconds: 50
+    # A command echoed for /confirm waits this long for its code; then it is forgotten. A
+    # judgement.
+    confirm_minutes: 10
+    # After a failed poll the bot waits this long before the next one. A judgement.
+    retry_seconds: 15
+
+# The settings Telegram /set and MCP update_setting may change (MASTER_PLAN §5.17). Remote changes
+# may only tighten risk or manage budgets and cash flows within bounds; any other key, and
+# loosening a risk limit, needs `obliskiq settings set` on the machine. Every change is validated
+# with the whole configuration, audited and applied at the next cycle boundary.
+remote_settings:
+  # Risk limits, each with the direction that tightens it.
+  tighten:
+    - {key: portfolio_circuit_breaker.monthly_drawdown_pct, tighter: lower}
+    - {key: portfolio_circuit_breaker.hard_drawdown_pct, tighter: lower}
+    - {key: execution.pretrade.caps.max_order_fraction_of_nav, tighter: lower}
+    - {key: execution.pretrade.caps.max_daily_fraction_of_nav, tighter: lower}
+    - {key: execution.pretrade.caps.max_orders_per_day, tighter: lower}
+    - {key: execution.pretrade.cash_floor, tighter: higher}
+    - {key: thesis.caps.position, tighter: lower}
+    - {key: option_sleeve.max_concurrent_positions, tighter: lower}
+  # Budgets and cash-flow handling, each inside its bounds. The upper bounds are the expert
+  # defaults (the option premium at most 5 %, D88; the thesis book's tenth, D156), so a remote
+  # change can shrink a budget and restore it, never raise it past the default.
+  bounded:
+    - {key: capital.budgets.option_premium, min: "0", max: "0.05"}
+    - {key: thesis.capital_share, min: "0", max: "0.10"}
+    - {key: llm.budget.monthly_usd, min: "0", max: "5"}
+    - {key: capital.deployment.tranche_days, min: "1", max: "20"}
+    - {key: capital.reservations.buffer_days, min: "1", max: "10"}

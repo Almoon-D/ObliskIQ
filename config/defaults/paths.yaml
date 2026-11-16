@@ -21,3 +21,20 @@ paths:
   alert_state: alert-state.json
   # The lock one service or order command holds while it runs (one process runs the executor).
   service_lock: service.lock
+  # Every effective setting as the service last started with it: at each start the service audits
+  # what differs and no command recorded (a hand edit of the owner's file, a release's new
+  # default).
+  settings_applied: settings-applied.json
+  # The service's board after each digest: the book, its targets, the theses, the reservations,
+  # the venues and health as the service read them; the cockpit reads it without a broker session.
+  board: board.json
+  # The daily dashboard: one self-contained HTML file the service writes after each digest, sends
+  # through Telegram and the cockpit serves behind its token.
+  dashboard: dashboard.html
+  # The owner's pause: while this file exists, decision cycles are skipped (nothing new is
+  # decided or placed); the heartbeat, the kill switch's sweep, protective exits and the
+  # collections go on.
+  pause_flag: PAUSED
+  # The Telegram bot's state: the last update it handled and the questions it has pushed, so a
+  # restart never handles a message twice.
+  telegram_state: telegram-state.json
