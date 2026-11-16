@@ -64,7 +64,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XNYS"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "SEC Rule 15c6-1 as amended (Release 34-96930): T+1 from 2024-05-28"
@@ -96,7 +96,7 @@ venues:
         origin: "exchange_calendars 4.13.2: XNAS is an alias of the XNYS calendar"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "SEC Rule 15c6-1 as amended (Release 34-96930): T+1 from 2024-05-28"
@@ -127,7 +127,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XTSE"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "CSA amendments to NI 24-101: T+1 from 2024-05-27"
@@ -158,7 +158,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar BVMF"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "B3 equities settle D+2 (a move to D+1 is planned for 2028); secondary sources read 2026-10-21"
@@ -187,7 +187,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XMEX"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "Grupo BMV press release of 2024-05-27: T+1 from that day"
@@ -216,7 +216,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XSGO"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "Bolsa de Santiago cash market settles T+2 (nuam's move to T+1 is planned for 2027); secondary sources read 2026-10-21"
@@ -248,7 +248,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XLON"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "UK securities settle T+2; the UK's move to T+1 applies from 2027-10-11 (Accelerated Settlement Taskforce)"
@@ -280,7 +280,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XMAD"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
@@ -311,7 +311,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XETR"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
@@ -343,7 +343,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XPAR"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
@@ -375,7 +375,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XAMS"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
@@ -407,7 +407,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XMIL"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "CSDR art. 5(2), Regulation (EU) 909/2014: T+2; Regulation (EU) 2025/2075 moves it to T+1 from 2027-10-11"
@@ -438,7 +438,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XSWX"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "SIX: T+2 (Switzerland plans T+1 with the EU on 2027-10-11); secondary sources read 2026-10-21"
@@ -469,7 +469,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XTKS"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "JPX: T+2 since 2019-07-16"
@@ -500,7 +500,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XHKG"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "HKEX: Stock Connect and CCASS settle exchange trades T+2"
@@ -531,7 +531,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XSHG"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "China A shares: securities T+0, cash T+1 (SSE rules); secondary sources read 2026-10-21"
@@ -562,7 +562,7 @@ venues:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for XSHE"
         verify_live: true
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "China A shares: securities T+0, cash T+1 (SZSE rules); secondary sources read 2026-10-21"
@@ -593,7 +593,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XBOM"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "SEBI circular of 2021-09-07: T+1 phased in by 2023-01-27"
@@ -624,7 +624,7 @@ venues:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for XNSE"
         verify_live: true
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "SEBI circular of 2021-09-07: T+1 phased in by 2023-01-27"
@@ -655,7 +655,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XKRX"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "KRX equities settle T+2; secondary sources read 2026-10-21"
@@ -714,7 +714,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XTAI"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "TWSE equities settle T+2; secondary sources read 2026-10-21"
@@ -746,7 +746,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XSES"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "SGX: T+2 since 2018-12-10"
@@ -778,7 +778,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XASX"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "ASX Settlement Operating Rules: T+2 since 2016-03-07"
@@ -807,7 +807,7 @@ venues:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for CHIA"
         verify_live: true
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "Cboe Australia trades settle through ASX Settlement (CHESS): T+2"
@@ -838,7 +838,7 @@ venues:
         origin: "exchange_calendars 4.13.2 calendar XNZE"
         verify_live: false
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "NZX Clearing: T+2 since 2016-03-07"
@@ -867,7 +867,7 @@ venues:
         origin: "market-pulse-bot config/exchanges.yaml @900dbf4: session hours only; no holiday data exists for this venue and the library has no calendar for XSPX"
         verify_live: true
       phases:
-        origin: "market-pulse-bot config/exchanges.yaml @900dbf4 (legacy/pulse): offsets as source-checked there; not re-verified here"
+        origin: "market-pulse-bot config/exchanges.yaml @900dbf4: offsets as source-checked there; not re-verified here"
         verify_live: true
       settlement:
         origin: "South Pacific Stock Exchange: T+2 assumed; no primary source read"
@@ -973,27 +973,27 @@ ibkr_exchanges:
   ARCA:
     venue: XNYS
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   NYSE:
     venue: XNYS
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   AMEX:
     venue: XNYS
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   BATS:
     venue: XNYS
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   CBOE:
     venue: XNYS
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49); US equity options follow the NYSE calendar; ETF options trade later than the cash close, which this profile treats as closed"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49); US equity options follow the NYSE calendar; ETF options trade later than the cash close, which this profile treats as closed"
       verify_live: true
   NASDAQ:
     venue: XNAS
@@ -1003,7 +1003,7 @@ ibkr_exchanges:
   EUREX:
     venue: XEUR
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49); the Eurex option venue"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49); the Eurex option venue"
       verify_live: true
   IBIS:
     venue: XETR
@@ -1013,17 +1013,17 @@ ibkr_exchanges:
   BM:
     venue: XMAD
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   MEFFRV:
     venue: XMAD
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49); MEFF derivatives assumed to follow the Madrid calendar"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49); MEFF derivatives assumed to follow the Madrid calendar"
       verify_live: true
   SBF:
     venue: XPAR
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   MONEP:
     venue: XPAR
@@ -1033,32 +1033,32 @@ ibkr_exchanges:
   AEB:
     venue: XAMS
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   FTA:
     venue: XAMS
     source:
-      origin: "legacy/lite/universe.yaml option_exchange FTA, [MCP ✓ 2026-08-24] (lite @b1ebd49)"
+      origin: "lite's universe.yaml option_exchange FTA, [MCP ✓ 2026-08-24] (lite @b1ebd49)"
       verify_live: true
   LSE:
     venue: XLON
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   LSEETF:
     venue: XLON
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49)"
       verify_live: true
   TSE:
     venue: XTSE
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49) (IBKR TSE is Toronto)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49) (IBKR TSE is Toronto)"
       verify_live: true
   CDE:
     venue: XTSE
     source:
-      origin: "legacy/lite/calendars.yaml exchange-code mapping (lite @b1ebd49) (Montreal options keep the Canadian calendar)"
+      origin: "lite's calendars.yaml exchange-code mapping (lite @b1ebd49) (Montreal options keep the Canadian calendar)"
       verify_live: true
   BVME:
     venue: XMIL

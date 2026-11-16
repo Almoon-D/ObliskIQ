@@ -2,7 +2,7 @@
 the kill switch at the boundary (I3, I4), modes and the paper guard, and what each placement
 outcome does to the intent.
 
-Adapted from the legacy paper gate's enforced block (legacy/old/ObliskIQ/tests/test_paper_gate.py:
+Adapted from Inversor-Inteligente's paper gate's enforced block (tests/test_paper_gate.py:
 ``test_ibkr_write_blocked_when_live_disabled``, ``test_ibkr_place_order_blocked``): a write the
 rules do not allow raises before anything reaches the broker.
 

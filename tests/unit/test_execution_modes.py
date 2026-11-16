@@ -1,6 +1,6 @@
 """Execution modes: explicit, audited upgrades; automatic downgrades; what each mode may write.
 
-Adapted from the legacy paper gate (legacy/old/ObliskIQ/tests/test_paper_gate.py,
+Adapted from the legacy paper gate (Inversor-Inteligente's tests/test_paper_gate.py,
 ``test_assert_live_trading_allowed_raises_when_not_pass``): the live levels stay blocked until
 the promotion gate exists and passes; here it does not exist yet, so they are refused outright.
 

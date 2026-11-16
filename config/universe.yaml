@@ -11,7 +11,7 @@
 #  never declared here. A leveraged or inverse product is rejected at ingestion by its resolved
 #  description (instruments.leveraged_inverse_markers).
 #
-#  Ported from legacy/lite/universe.yaml @b1ebd49, all of it: lite's comments are kept in each
+#  Ported from lite's universe.yaml @b1ebd49, all of it: lite's comments are kept in each
 #  block, prefixed with the key they annotated. Tags: [CP ✓ date] read live on the Client Portal
 #  API, [MCP ✓ date] in IBKR's connector; lite's own readings keep lite's tags.
 #

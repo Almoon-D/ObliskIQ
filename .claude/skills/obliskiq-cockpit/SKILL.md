@@ -8,7 +8,7 @@ description: Reads and steers the owner's ObliskIQ bot through its MCP cockpit (
 ObliskIQ manages one Interactive Brokers account on its own: a reserve held by the core engine,
 a thesis book of written ideas graded forward, and a hard decision, risk and execution layer. The
 cockpit is the owner's window on it and the only remote way to change it. Adapted from the
-ObliskIQ-lite skill (`legacy/lite/_claude/skills/obliskiq-lite/SKILL.md` @b1ebd49): the gates,
+ObliskIQ-lite skill (`.claude/skills/obliskiq-lite/SKILL.md` in ObliskIQ-lite-MCP @b1ebd49): the gates,
 the evidence and the judgment now live in the bot; this skill reads them and never re-derives
 them.
 

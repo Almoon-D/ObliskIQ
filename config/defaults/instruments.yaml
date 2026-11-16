@@ -2,7 +2,7 @@
 # §5.12). Values marked "lite" are ObliskIQ-lite-MCP's (config.yaml @b1ebd49); docs/DECISIONS.md
 # says why each is what it is.
 
-# lite's `instruments` block (legacy/lite/config.yaml:270-332): the keys the pre-trade gate reads.
+# lite's `instruments` block (lite's config.yaml:270-332): the keys the pre-trade gate reads.
 instruments:
   # Never traded, by any role or side (reading them as data is always allowed). The mandate's
   # five categories are the minimum: configuration cannot drop one. lite.
@@ -34,7 +34,7 @@ instruments:
     - "DOUBLE LONG"
     - "DOUBLE SHORT"
 
-# lite's `tenor` block (legacy/lite/config.yaml:93-104): the keys the chain collector, the
+# lite's `tenor` block (lite's config.yaml:93-104): the keys the chain collector, the
 # pre-trade gate, the candidate gates and the options sleeve read.
 tenor:
   # The entry window for undated theses: the chain collector photographs only the expiries inside

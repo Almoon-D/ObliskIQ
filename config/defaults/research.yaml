@@ -76,7 +76,7 @@ research:
       # candidates and, on request, the stock candidates, read from Yahoo from this date or the
       # instrument's inception, whichever is later. A judgement: two decades of daily closes.
       universe_start: 2006-01-01
-      # Yahoo's symbol suffix for each IBKR listing exchange (legacy/old global_vehicles.py
+      # Yahoo's symbol suffix for each IBKR listing exchange (Inversor-Inteligente's global_vehicles.py
       # EXCHANGE_SUFFIX_MAP, re-keyed by IBKR code); a US venue has none. An exchange missing
       # here has no Yahoo symbol, and its instrument no research history.
       suffixes:

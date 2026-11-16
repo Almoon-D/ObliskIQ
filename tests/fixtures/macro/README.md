@@ -3,7 +3,7 @@
 A fixture is evidence about this build's parsing, never about the publisher's format; observed
 behaviour lives in `docs/knowledge/macro-sources.md`.
 
-Ported from lite (`legacy/lite/tests/fixtures/macro`, captured live on **2026-09-15**, history
+Ported from lite (`lite's tests/fixtures/macro`, captured live on **2026-09-15**, history
 trimmed):
 
 | file | route |

@@ -1,5 +1,5 @@
 # The options sleeve (MASTER_PLAN §5.6; engines/options_sleeve): lite's `option_sleeve` and
-# `zombie_test` blocks (legacy/lite/config.yaml:36-116, @b1ebd49) with lite's values, and the
+# `zombie_test` blocks (lite's config.yaml:36-116, @b1ebd49) with lite's values, and the
 # sleeve's activation condition (DECISIONS D66). docs/DECISIONS.md says why each is what it is.
 #
 # lite's `option_sleeve.budget_pct` is not here: the sleeve's budget is `capital.budgets

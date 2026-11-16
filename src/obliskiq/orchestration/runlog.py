@@ -1,6 +1,6 @@
 """Run records: every job the service runs leaves a row before it works and a verdict after.
 
-Ported from lite's ``SequenceRun`` and ``CollectorRun`` (legacy/lite collect/sequence.py,
+Ported from lite's ``SequenceRun`` and ``CollectorRun`` (lite's collect/sequence.py,
 runlog.py; DECISIONS "Running unattended"): the run's row goes in as ``running`` with the steps it
 plans **before** any step runs, each step's row before the step works, and each verdict as it
 lands, because the case these rows exist for is the one where the end never arrives. A killed

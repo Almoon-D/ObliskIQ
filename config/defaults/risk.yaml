@@ -1,4 +1,4 @@
-# The risk engine (engines/risk): lite's `equity_risk` block (legacy/lite/config.yaml:134-144,
+# The risk engine (engines/risk): lite's `equity_risk` block (lite's config.yaml:134-144,
 # @b1ebd49) with lite's values, and lite's `data.atr_period`, the window those stops are scaled by.
 # docs/DECISIONS.md says why each is what it is.
 equity_risk:
@@ -23,7 +23,7 @@ equity_risk:
   pre_earnings_range_decile_trigger: 0.90
 
 # The book's breakers (decision/breakers.py; MASTER_PLAN §5.11): lite's `portfolio_circuit_breaker`
-# block (legacy/lite/config.yaml:145-155, @b1ebd49) with lite's values, and the keys the hard
+# block (lite's config.yaml:145-155, @b1ebd49) with lite's values, and the keys the hard
 # breaker and the measurement need. Both breakers measure the managed book's fall, flows
 # neutralised, beyond the equity reference's fall over the same days, so a market's fall the
 # owner accepts trips neither (DECISIONS D147, D163). Neither sells anything.
