@@ -142,6 +142,7 @@ and a cycle missed in the last two hours runs at once; an older one is recorded 
 | `status` shows the heartbeat STALE | The service is down or hung: `sudo systemctl status obliskiq.service`, its journal (`sudo journalctl -u obliskiq.service`), then restart it. |
 | `reconciliation drift` (digest, alert) | New buys are frozen. `uv run obliskiq reconcile run` (stop the service first) shows the findings. If IBKR is right (a dividend, a manual trade), `uv run obliskiq reconcile accept --reason "…"`. |
 | `reconciliation incomplete` | IBKR's data was partial; the next heartbeat retries. If it persists, check the Gateway. |
+| a plan or an order says `no reconciliation has run yet` or `the latest green reconciliation … is … old` | New risk waits for a green reconciliation at most 15 minutes old (`execution.reconcile.max_age_seconds`). The service reconciles every heartbeat and before a cycle that finds none, so this lasts one heartbeat after a start; if it persists the heartbeat is failing: read `status`. Sells and stops are never frozen. |
 | `session.reauthentication_failed` | The Gateway could not log in again (after IBKR's daily reset, say). Protective stops rest at IBKR, so this costs cycles, not protection. Check the Gateway's log; the keepalive retries once its re-login interval passes. |
 | `session.competing_session` | Another login took the paper username: stop it (a Claude session, a browser). |
 | `service.downgraded` | Three cycles in a row failed; the mode is shadow. Read the run log (`status`, the digest's errors), fix the cause, then `mode set paper` again. |
@@ -284,6 +285,9 @@ window opens 30 minutes after its open and Xetra's closes 15 minutes before its 
 1. `uv run obliskiq mode set paper --reason "T1 paper order test"` prints the change to `paper`.
 2. `uv run obliskiq preflight --paper-order-test`. Expect `Every step passed.` under these lines:
    - `mode: paper`;
+   - `reconciliation: green`: the test reconciles before it places, because an order that adds
+     risk needs a green reconciliation at most 15 minutes old
+     (`execution.reconcile.max_age_seconds`). Any other status stops the test with its findings;
    - EXV1 (Xetra, euros): `identity`, `algos`, `quote`, `whatif`, `pre-trade: cleared`,
      `place: placed` with the ids of IBKR's replies, `cOID: listed as order_ref`, `status`, and
      `cancel: … then Cancelled`;
@@ -291,7 +295,7 @@ window opens 30 minutes after its open and Xetra's closes 15 minutes before its 
      `pre-trade: refused by the cash check, as expected` (the account holds no dollars);
    - `live orders: the `snapshot` flag of this session's first reads: <first>, then true`. The
      first is the pre-read's flag (`absent` on 2026-10-21); the second must be `true`, or the
-     gate has refused with `account_unreadable` and nothing was placed.
+     reconciliation is `incomplete` and nothing was placed.
 
    Paste the whole report, and from the log the two lines `live orders pre-read` and
    `live orders, the read after the pre-read` with their `snapshot` values.
@@ -307,8 +311,9 @@ converts 100 euros into dollars, buys FCX's size increment at the touch and prot
 stop-limit (`ibkr.preflight.execution_test`).
 
 5. `uv run obliskiq mode set paper --reason "execution test"`.
-6. `uv run obliskiq preflight --execution-test`. Expect `mode`, `FCX identity` and
-   `(a) conversion whatif` to pass. Then one of two outcomes:
+6. `uv run obliskiq preflight --execution-test`. Expect `mode`, `reconciliation: green` (the
+   test reconciles first, as the order test does), `FCX identity` and `(a) conversion whatif` to
+   pass. Then one of two outcomes:
    - `[FAIL] (a) conversion: failed: declined: … (IBKR: '…')`, and the test stops. The reply
      policy does not confirm `o10164` for a conversion (DECISIONS D101), so this is the outcome
      expected today and not a fault of the machine. The quoted text is IBKR's own.

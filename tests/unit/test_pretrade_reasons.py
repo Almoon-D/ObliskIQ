@@ -640,6 +640,31 @@ async def test_reason_option_expired(rig: Any) -> None:
     await cleared(rig, close)
 
 
+async def test_an_option_trades_on_its_last_session_and_not_the_day_after(rig: Any) -> None:
+    """docs/AUDIT.md, 10: the boundary of the last tradable session. A day early and the close
+    of an in-the-money option is refused on the one day left to make it."""
+    today = OPEN.date()
+    await rig.hold(OPTION, "1")
+    close = await rig.staged(OPTION, side=OrderSide.SELL, quantity="1", limit="4.98")
+    redescribe(rig, OPTION, expiry=today)
+    await cleared(rig, close)  # its last session is today: it still closes
+    redescribe(rig, OPTION, expiry=date(2026, 10, 12))
+    answer = await refused(rig, close, Reason.OPTION_EXPIRED)
+    assert "2026-10-12" in answer.reason
+
+
+async def test_the_mandatory_close_window_opens_on_its_first_day(rig: Any) -> None:
+    """An option on an ineligible ETP is not opened from the tenth session before its last:
+    the 13th for a last session on the 27th, and still allowed the day before the window."""
+    rig.broker.whatif_answer = whatif_answer("501.00", "USD")
+    entry = await rig.staged(OPTION + 1, quantity="1", limit="5")
+    redescribe(rig, OPTION + 1, expiry=date(2026, 10, 28))
+    await cleared(rig, entry)  # the window opens tomorrow, the 14th
+    redescribe(rig, OPTION + 1, expiry=date(2026, 10, 27))
+    answer = await refused(rig, entry, Reason.MANDATORY_CLOSE)
+    assert "2026-10-13" in answer.reason
+
+
 # ── the broker reads, the quote policy and the collar ──
 
 
@@ -914,6 +939,7 @@ async def test_reason_daily_notional_cap(rig: Any) -> None:
     answer = await refused(rig, third, Reason.DAILY_NOTIONAL_CAP)
     assert "2580.00" in answer.reason
     rig.clock.advance(24 * 3600)  # the window rolls on; those intents have expired since
+    await rig.reconciled()
     await cleared(rig, await rig.staged())
 
 

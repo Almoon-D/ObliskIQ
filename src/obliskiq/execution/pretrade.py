@@ -10,7 +10,8 @@ never from the object a caller holds.
 1. *Local*, before the broker is touched: the intent (stored, in a state that may be written,
    unexpired, the action's terms); the paper guard (profile paper ⇒ a paper-prefix account); the
    mode (the intent's, permitting writes under this profile); the kill switch and, for an order
-   that adds risk, a reconciliation that is not green (it freezes new risk); the instrument
+   that adds risk, the reconciliation freeze (``execution/freeze.py``: no run yet, a run that is
+   not green, or a green one that has aged); the instrument
    described; prohibited products; buy-side eligibility through the jurisdiction's
    :class:`EligibilityPolicy` (the mandatory close for an option on an ineligible ETP); approval;
    the calendars' act-now view at this instant (``Calendars.tradability``; an option also inside
@@ -84,7 +85,6 @@ from ..domain.orders import (
     OrderTerms,
     PretradeClearance,
     QuoteEvidence,
-    ReconcileStatus,
     RiskEffect,
 )
 from ..errors import CalendarError, ObliskError
@@ -102,6 +102,7 @@ from ..util.timeutil import utc_now
 from .account import AccountReader, CashRead, PositionsRead, QuoteRead
 from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, raise_alert
 from .exposure import SellRequest, UnreadableOrdersError, count_sells, store_position
+from .freeze import new_risk_frozen
 from .fx import ConversionLeg, conversion_leg, preview_terms
 from .instruments import InstrumentDirectory, prohibited_reasons
 from .killswitch import CONVERSION_SEC_TYPE, KillSwitch
@@ -292,6 +293,7 @@ class PretradeGate:
         self._held = frozenset(settings.execution.approval.sleeves)
         self._base = settings.account.base_currency
         self._close_sessions = settings.tenor.mandatory_close_trading_days
+        self._reconcile_age = timedelta(seconds=settings.execution.reconcile.max_age_seconds)
         # Every fill after a positions read in this window is in the trades IBKR serves.
         self._position_window = timedelta(days=settings.execution.orders.trades_lookup_days - 1)
 
@@ -479,12 +481,9 @@ class PretradeGate:
         if await self._kill.is_on():
             found.fail(Reason.KILL_SWITCH_ON, "the kill switch blocks orders that add risk")
         latest = await self._worker.run(repo.latest_reconciliation)
-        if latest is not None and latest.status is not ReconcileStatus.GREEN:
-            found.fail(
-                Reason.RECONCILIATION_FROZEN,
-                f"the latest reconciliation ({latest.at.isoformat()}) is {latest.status.value}: "
-                "new risk waits for a green one",
-            )
+        frozen = new_risk_frozen(latest, now=self._now(), max_age=self._reconcile_age)
+        if frozen is not None:
+            found.fail(Reason.RECONCILIATION_FROZEN, frozen)
 
     async def _mode(self, request: _Request, found: _Found) -> None:
         intent = request.intent

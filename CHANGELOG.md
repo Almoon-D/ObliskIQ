@@ -5,6 +5,35 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.0.0] - 2026-11-16
+
+Session 20: the build is complete. A failure-mode audit, three silent failures fixed, the guards
+proven by mutation, the legacy snapshot removed and the documents made true. Nothing has filled
+on paper yet: what remains is the owner's checklist in `docs/ROADMAP.md`.
+
+### Fixed
+
+- New risk needs a green reconciliation that exists and is at most 15 minutes old: a machine
+  that had never reconciled, or whose last run was days old, no longer clears, stages or plans a
+  buy (D179). The paper order test and the execution test reconcile before they place.
+- An owner's deposit or withdrawal enters the time-weighted return on the day the account's cash
+  showed it, so a transfer credited days after it was announced no longer reads as a loss and
+  can no longer trip a breaker (D180).
+- `update.sh` rolls back and alerts when a unit will not stop or start and when it is
+  interrupted, instead of leaving the machine on an unjudged version (D182).
+
+### Added
+
+- `docs/AUDIT.md`: the ten most probable silent failures, each with the test that fails without
+  its guard, and the mutation pass over the six money-path packages.
+- `docs/knowledge/legacy-findings.md` and the owner's ordered checklist in `docs/ROADMAP.md`.
+
+### Changed
+
+- `legacy/` and its tooling exclusions are removed; release `v0.28.0` holds the snapshot (D181).
+- `starlette` 1.10, `cryptography` 50 and `soupsieve` 4.1 replace versions with published
+  advisories.
+
 ## [0.28.0] - 2026-11-16
 
 Session 19: the owner watches, steers and stops the bot from Claude, Telegram or a daily

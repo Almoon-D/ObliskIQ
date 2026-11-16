@@ -5,7 +5,7 @@ carry-forward, the cross offset, withholding and its credit, and the hooks.
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -410,6 +410,70 @@ def test_tax_cost_of_a_buy_counts_the_loss_it_would_defer(engine):
     )
     partner = trade.model_copy(update={"security": "PARTNER"})
     assert engine.wash_sale_conflict(partner) is None
+
+
+def test_the_two_month_window_includes_its_first_and_last_day_and_only_homogeneous_names(
+    engine,
+):
+    """docs/AUDIT.md: the window's edges and the homogeneity test each survived a mutation.
+    A loss sold on 15 March is open to a homogeneous purchase from that day to 15 May."""
+    engine.acquire("WORLD", on=date(2025, 1, 2), quantity=D(100), cost=D(1000))
+    engine.acquire("PARTNER", on=date(2025, 1, 2), quantity=D(100), cost=D(1000))
+    sold, closes = date(2025, 3, 15), date(2025, 5, 15)
+    engine.dispose("WORLD", on=sold, quantity=D(100), proceeds=D(800))
+
+    def buy(security: str, on: date) -> ProposedTrade:
+        return ProposedTrade(security=security, side="buy", quantity=D(10), price=D(8), on=on)
+
+    for day, inside in (
+        (sold - timedelta(days=1), False),
+        (sold, True),
+        (closes, True),
+        (closes + timedelta(days=1), False),
+    ):
+        assert engine.purchase_defers_loss("WORLD", day) is inside, day
+        assert engine.purchase_defers_loss("WORLD_DIST", day) is inside, day
+        assert engine.purchase_defers_loss("PARTNER", day) is False, day
+    # The conflict names the loss's date only for a homogeneous purchase inside the window.
+    conflict = engine.wash_sale_conflict(buy("WORLD_DIST", closes))
+    assert conflict is not None
+    assert conflict.dates == (sold,)
+    assert engine.wash_sale_conflict(buy("PARTNER", closes)) is None
+    assert engine.wash_sale_conflict(buy("WORLD", closes + timedelta(days=1))) is None
+    # A purchase on the day of the sale itself is inside the window.
+    same_day = engine.wash_sale_conflict(buy("WORLD", sold))
+    assert same_day is not None
+    assert same_day.dates == (sold,)
+    # Another name's open loss is not this purchase's: only the homogeneous window is named.
+    engine.dispose("PARTNER", on=date(2025, 4, 10), quantity=D(100), proceeds=D(700))
+    named = engine.wash_sale_conflict(buy("WORLD_DIST", closes))
+    assert named is not None
+    assert named.dates == (sold,)
+    # A window whose units a purchase has used up is closed to the next one, and no longer named
+    # beside a later loss of the same name.
+    engine.acquire("WORLD", on=date(2025, 4, 1), quantity=D(100), cost=D(800))
+    assert engine.purchase_defers_loss("WORLD", date(2025, 4, 2)) is False
+    later = date(2025, 4, 20)
+    engine.dispose("WORLD", on=later, quantity=D(100), proceeds=D(600))
+    again = engine.wash_sale_conflict(buy("WORLD", date(2025, 5, 1)))
+    assert again is not None
+    assert again.dates == (later,)
+
+
+def test_the_basis_carries_deferred_losses_and_a_trial_prices_the_tax_added(engine):
+    engine.acquire("WORLD", on=date(2025, 1, 2), quantity=D(100), cost=D(1000))
+    engine.dispose("WORLD", on=date(2025, 3, 15), quantity=D(100), proceeds=D(800))
+    engine.acquire("WORLD", on=date(2025, 4, 1), quantity=D(100), cost=D(800))
+    assert engine.cost("WORLD") == D(800)
+    assert engine.basis("WORLD") == D(1000)  # the 200 deferred travels with the new units
+    # A year that already holds a gain: a second sale's tax is what it adds, not the year's.
+    engine.acquire("PARTNER", on=date(2025, 1, 2), quantity=D(200), cost=D(2000))
+    engine.dispose("PARTNER", on=date(2025, 6, 1), quantity=D(100), proceeds=D(2000))
+    more = ProposedTrade(
+        security="PARTNER", side="sell", quantity=D(100), price=D(20), on=date(2025, 6, 2)
+    )
+    assert engine.ledger.provisional(2025).tax_due == D(190)
+    assert engine.trial_tax([more]) == D(190)
 
 
 def test_a_loss_sale_beside_a_recent_purchase_is_a_conflict(engine):

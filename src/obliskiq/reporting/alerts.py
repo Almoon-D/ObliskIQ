@@ -15,7 +15,7 @@ sent again. An **event** (a re-login that succeeded, a downgrade) is sent every 
 
 The book is kept in a JSON file in the data directory (``paths.alert_state``), written atomically,
 so a restart does not repeat what the owner already heard; a file that cannot be read is set aside
-and the book starts empty (market-pulse-bot's state file, legacy/pulse notification_backend.py).
+and the book starts empty (market-pulse-bot's state file, its notification_backend.py).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """

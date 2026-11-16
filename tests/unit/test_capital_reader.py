@@ -65,6 +65,7 @@ async def rig(
         )
         skeleton_market(broker)
         built.clock.now = NOW
+        await built.reconciled()
         await built.to_paper()
         yield built
         await built.aclose()
@@ -154,6 +155,7 @@ async def test_a_deposit_is_deployed_in_tranches(rig: Any) -> None:
     # A quarter of the 800 released today: 1,800 less 600 held back and the floor of 25.
     assert plan.spendable == D(1800) - D(600) - D(25)
     rig.clock.now = NOW + timedelta(days=3)
+    await rig.reconciled()
     later = await make_rebalancer(rig, settings).survey(PAPER)
     assert later.spendable == D(1800) - D(25)
 

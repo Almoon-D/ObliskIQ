@@ -265,6 +265,7 @@ class ProtectiveConfig(FrozenModel):
 class ReconcileConfig(FrozenModel):
     grace_seconds: PositiveInt
     cash_tolerance_base: Money
+    max_age_seconds: PositiveInt
 
 
 class ExecutionConfig(FrozenModel):

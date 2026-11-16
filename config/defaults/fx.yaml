@@ -1,4 +1,4 @@
-# The FX engine (engines/fx): lite's `fx_inflation` block (legacy/lite/config.yaml:156-171,
+# The FX engine (engines/fx): lite's `fx_inflation` block (lite's config.yaml:156-171,
 # @b1ebd49) with lite's values. Every market return decomposes four ways (local nominal, local
 # real, base nominal, base real) and is ranked on base real only. lite's rank_on,
 # flagged_market_rule and require_physical_hedging are not keys here: each could take one value

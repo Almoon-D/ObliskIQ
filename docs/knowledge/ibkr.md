@@ -1,7 +1,7 @@
 # IBKR Client Portal Web API
 
 Observed behaviour of IBKR's Web API and the routes around it, with where and when each fact was
-seen. Condensed from ObliskIQ-lite-MCP's `references/ibkr-playbook.md` (legacy/lite, @b1ebd49),
+seen. Condensed from ObliskIQ-lite-MCP's `references/ibkr-playbook.md` (@b1ebd49),
 keeping every verified finding, plus what IBKR documents and what Session 3 measured. Values the
 code uses live in `config/defaults/ibkr.yaml`; why they were chosen is `docs/DECISIONS.md`.
 

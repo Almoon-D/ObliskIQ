@@ -170,6 +170,7 @@ async def cycle(s: ServiceRig) -> ThesisPlan:
 
 
 async def surveyed(s: ServiceRig) -> ThesisPlan:
+    await s.rig.heartbeat_reconciled()
     return await book(s).survey(ExecutionMode.SHADOW)
 
 

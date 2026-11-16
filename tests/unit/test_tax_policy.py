@@ -252,6 +252,52 @@ def test_the_lot_method_and_offsets_come_from_the_profile(es):
     assert es.policy_id == "es_irpf"
 
 
+def test_an_etf_and_a_fund_of_one_issuer_on_one_index_are_homogeneous_and_a_share_never_is(es):
+    """Collective vehicles are compared with one another whatever their wrapper; a share and a
+    fund of one issuer are different things, each way round."""
+    tracker = SecurityIdentity(
+        key="F", kind=SecurityKind.FUND, isin=None, issuer="iShares",
+        tracked_index="MSCI World", listed=False,
+    )  # fmt: skip
+    assert es.homogeneous(etf("A"), tracker)
+    assert es.homogeneous(tracker, etf("A"))
+    manager = SecurityIdentity(
+        key="ISH", kind=SecurityKind.SHARE, isin=None, issuer="iShares",
+        tracked_index="MSCI World", listed=True,
+    )  # fmt: skip
+    assert not es.homogeneous(manager, etf("A"))
+    assert not es.homogeneous(etf("A"), manager)
+    assert not es.homogeneous(manager, tracker)
+
+
+def test_a_fund_switch_needs_two_funds_and_both_unlisted(es, tax_profile):
+    supported = EsIrpfTaxPolicy(
+        tax_profile.model_copy(update={"fund_switch_deferral_at_broker": True})
+    )
+    assert not supported.switch_deferral(etf("A", listed=False), fund("G"))
+    assert not supported.switch_deferral(fund("F"), etf("A", listed=False))
+    assert not supported.switch_deferral(fund("F", listed=True), fund("G"))
+    assert not supported.switch_deferral(fund("F"), fund("G", listed=True))
+
+
+def test_a_homogeneous_vehicle_is_never_a_swap_partner_under_either_policy(es, tax_profile):
+    """docs/AUDIT.md: a swap into the same thing defers the loss the swap was meant to book."""
+    held = etf("A")
+    same = etf("B", isin=None)  # one issuer, one index: homogeneous
+    other = etf("C", issuer="Vanguard", index="FTSE All-World")
+    for policy in (es, GenericTaxPolicy("generic", tax_profile)):
+        assert policy.homogeneous(held, held)
+        assert not policy.swap_partner_allowed(held, held)
+        assert policy.swap_partner_allowed(held, other)
+    assert not es.swap_partner_allowed(held, same)
+    # Not homogeneous is not enough: a partner also differs as the profile's rule asks.
+    sibling = etf("D", index="FTSE All-World")  # another index, the same issuer
+    generic = GenericTaxPolicy("generic", tax_profile)
+    assert not generic.homogeneous(held, sibling)
+    assert tax_profile.swap_partner.differ_in_issuer
+    assert not generic.swap_partner_allowed(held, sibling)
+
+
 # ── the generic template ──
 
 

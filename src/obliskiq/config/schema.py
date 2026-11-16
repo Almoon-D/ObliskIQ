@@ -498,6 +498,19 @@ class ObliskConfig(FrozenModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _reconciliation_outlives_a_heartbeat(self) -> Self:
+        """Reconciliation runs with each heartbeat, so a green run must stay in force for longer
+        than one: otherwise new risk would be frozen between them (DECISIONS D179)."""
+        max_age = self.execution.reconcile.max_age_seconds
+        if max_age <= self.runtime.heartbeat_seconds:
+            raise ValueError(
+                f"execution.reconcile.max_age_seconds ({max_age}) must exceed "
+                f"runtime.heartbeat_seconds ({self.runtime.heartbeat_seconds}): reconciliation "
+                "runs once a heartbeat"
+            )
+        return self
+
     def _tradable(self, conid: int) -> str | None:
         """Why ``conid`` cannot be traded as configured: it must be a universe instrument pinned to
         it, a tradable candidate, with its resolved description. ``None`` when it can."""

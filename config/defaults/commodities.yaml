@@ -1,5 +1,5 @@
 # The commodity engine (engines/commodity): the keys of lite's `commodities` block
-# (legacy/lite/config.yaml:580-719, @b1ebd49) it reads, with lite's values. The buckets and the
+# (lite's config.yaml:580-719, @b1ebd49) it reads, with lite's values. The buckets and the
 # roots are the universe's (config/universe.yaml `futures_roots`, the commodity axis), the long
 # price history's window is sources.macro.commodity_history.window_years and positioning is
 # Session 10's reading (sources.positioning, DECISIONS D134): one owner each.

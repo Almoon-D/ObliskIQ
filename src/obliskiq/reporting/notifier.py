@@ -1,7 +1,8 @@
 """The owner's channel: Telegram when it is configured, the log always.
 
-Ported from the legacy ``TelegramNotifier`` (legacy/old modules/notifications/telegram_notifier.py)
-and the run summary's Telegram packaging (``run_summary.to_telegram_html``): the Bot API's
+Ported from Inversor-Inteligente's ``TelegramNotifier``
+(modules/notifications/telegram_notifier.py) and the run summary's Telegram packaging
+(``run_summary.to_telegram_html``): the Bot API's
 ``sendMessage`` in HTML mode, the text escaped, the headline bold, a long message split under
 Telegram's cap. As in the legacy delivery, a send **never raises**: a failure is logged and
 reported as ``False``, so the bot's work never waits on its messenger. The bot token is part of

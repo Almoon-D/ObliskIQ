@@ -12,8 +12,11 @@ day belongs:
   ``r = V1 / (V0 + F) - 1``.
 
 External flows are the owner's deposits and withdrawals that reached the account (matched to its
-cash): dividends, interest and fees are the book's own return, and a paper account's flows never
-reach its NAV. A period that cannot be measured (a non-positive base, a flow with no rate) makes
+cash), each on the day its cash showed it (:func:`reached_on`), not the day the owner dated it: a
+transfer announced today and credited two days later moves the NAV two days later, and a flow
+placed on any other day reads as a loss on one day and a gain on another (DECISIONS D180).
+Dividends, interest and fees are the book's own return, and a paper account's flows never reach
+its NAV. A period that cannot be measured (a non-positive base, a flow with no rate) makes
 the whole return unknown, never a partial number.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -111,19 +114,26 @@ def time_weighted_return(
     return TwrResult(tuple(periods), growth - 1, None)
 
 
+def reached_on(flow: CashFlow) -> date | None:
+    """The day the account's cash showed an owner's flow, which is the day the NAV moved by it;
+    ``None`` while it has not (or never will, as in a paper account)."""
+    return None if flow.matched_at is None else flow.matched_at.date()
+
+
 def account_flows(
     flows: Sequence[CashFlow], *, base: str, rate: Callable[[str, date], Decimal | None]
 ) -> list[ExternalFlow] | str:
-    """The owner's deposits and withdrawals that reached the account, in the base currency at the
-    rate of their day; why, when one has no rate."""
+    """The owner's deposits and withdrawals that reached the account, each on the day its cash
+    showed it and in the base currency at that day's rate; why, when one has no rate."""
     found: list[ExternalFlow] = []
     for flow in flows:
-        if not isinstance(flow, Deposit | Withdrawal) or not flow.live or flow.matched_at is None:
+        on = reached_on(flow)
+        if not isinstance(flow, Deposit | Withdrawal) or not flow.live or on is None:
             continue
-        fx = Decimal(1) if flow.currency == base else rate(flow.currency, flow.on)
+        fx = Decimal(1) if flow.currency == base else rate(flow.currency, on)
         if fx is None:
-            return f"no {flow.currency} rate was recorded on {flow.on.isoformat()}"
-        found.append(ExternalFlow(flow.on, flow.signed * fx))
+            return f"no {flow.currency} rate was recorded on {on.isoformat()}"
+        found.append(ExternalFlow(on, flow.signed * fx))
     return found
 
 

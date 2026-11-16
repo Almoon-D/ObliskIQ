@@ -178,6 +178,8 @@ class Jobs:
             )
             if watched is not None:
                 result.breakers, mode = watched
+            if not dry_run:
+                await self._reconcile_if_aged()
 
             async def reserve() -> tuple[ReservationPlan, PlannerActions]:
                 if not dry_run:
@@ -196,7 +198,7 @@ class Jobs:
                 self._reservation_alerts(*reserved)
 
             async def rebalance() -> tuple[RebalancePlan, list[OrderIntent]]:
-                plan = await self._rebalancer.survey(mode)
+                plan = await self._rebalancer.survey(mode, rehearsal=dry_run)
                 return plan, [] if dry_run else await self._rebalancer.apply(plan)
 
             planned = await record.step(
@@ -206,7 +208,7 @@ class Jobs:
                 result.plan, result.made = planned
 
             async def theses() -> tuple[ThesisPlan, list[OrderIntent]]:
-                plan = await self._thesis.survey(mode)
+                plan = await self._thesis.survey(mode, rehearsal=dry_run)
                 return plan, [] if dry_run else await self._thesis.apply(plan)
 
             booked = await record.step(
@@ -233,6 +235,19 @@ class Jobs:
             )
             await self._notify_cycle(name, mode=mode, result=result, errors=errors)
         return result
+
+    async def _reconcile_if_aged(self) -> None:
+        """A cycle that starts with no reconciliation in force, or an aged one (the service just
+        started, a heartbeat failed), reconciles before it decides: its plans would otherwise be
+        blocked for want of a fresh run. A failure is logged; the freeze then says why."""
+        path = self._path
+        try:
+            latest = await path.worker.run(repo.latest_reconciliation)
+            max_age = timedelta(seconds=self._settings.execution.reconcile.max_age_seconds)
+            if latest is None or self._now() - latest.at > max_age:
+                await path.reconciler.run()
+        except Exception:
+            log.exception("the reconciliation before the cycle failed")
 
     async def _read_nav(self, dry_run: bool) -> NavOutcome:
         """Today's NAV row and, from the same ledger read, the day's exchange rates (the rates a

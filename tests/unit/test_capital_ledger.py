@@ -562,7 +562,7 @@ async def test_the_accounts_return_values_a_foreign_flow_at_its_days_rate(
         await worker.run(nav_repo.record_nav, nav_repo.NavReading(day, D(nav), "EUR", "test", AT))
     dollars = Deposit(
         amount=D(100), currency="USD", on=date(2026, 10, 2), recorded_at=AT, recorded_by="o",
-        matched_at=AT,
+        matched_at=datetime(2026, 10, 2, 9, 0, tzinfo=UTC),  # credited on its day
     )  # fmt: skip
     await worker.run(repo.record_flow, dollars)
     since, until = date(2026, 9, 30), date(2026, 10, 2)

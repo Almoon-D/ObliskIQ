@@ -8,7 +8,7 @@ notifier; ``obliskiq status`` prints the same gathering on demand. Everything it
 from the store, the calendars and one survey of the book; it places nothing. A part that cannot be
 read says so instead of being left out: an empty digest must never read as a healthy one.
 
-Venue badges follow market-pulse-bot's language (legacy/pulse text_formatter.py ``PHASE_EMOJI``):
+Venue badges follow market-pulse-bot's language (its text_formatter.py ``PHASE_EMOJI``):
 🟢 regular, 🔵 auction, 🟣 extended hours, 🔘 lunch, ⚫️ closed, ⚪️ no session today, and for a
 venue blocked when it should trade 🚨 an incident, ♦️ an inconsistent schedule, 🔶 a disagreement
 with IBKR's schedule, ❔ a date the calendar does not cover.

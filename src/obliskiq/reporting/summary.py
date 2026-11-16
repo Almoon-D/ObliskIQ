@@ -1,6 +1,6 @@
 """The run summary: what one decision cycle did, in a message the owner reads.
 
-Ported in spirit from the legacy trade sheet (legacy/old modules/notifications/run_summary.py):
+Ported in spirit from Inversor-Inteligente's trade sheet (modules/notifications/run_summary.py):
 a subject that counts the buys and sells, then the trades with what they needed, what was held
 back and why, and a line that never lets the mode be mistaken. ObliskIQ places its own orders,
 so the summary reports what was done rather than what to do. Pure formatting.

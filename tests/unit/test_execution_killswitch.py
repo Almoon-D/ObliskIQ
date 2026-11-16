@@ -1,6 +1,6 @@
 """The kill switch: two flags that fail closed, and the sweep that cancels what adds risk (I4).
 
-Adapted from the legacy monitoring suite (legacy/old/ObliskIQ/tests/test_monitoring_suite.py,
+Adapted from the legacy monitoring suite (Inversor-Inteligente's tests/test_monitoring_suite.py,
 ``test_should_halt_reflexivity_*``, and tests/test_kill_switch_wiring.py): the legacy check
 answered "allowed" when its status could not be read; here a switch that cannot be read is ON.
 

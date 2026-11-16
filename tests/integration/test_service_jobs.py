@@ -196,6 +196,40 @@ def test_a_hook_outside_the_event_loop_queues_for_the_next_flush(make: Any) -> N
     assert asyncio.run(reporter.flush()) == 1
 
 
+EUROPE_CYCLE = datetime(2026, 10, 26, 9, 0, tzinfo=UTC)
+
+
+async def test_a_cycle_with_no_recent_reconciliation_reconciles_before_it_decides(
+    make: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """docs/AUDIT.md, 1: a cycle caught up at the start, before any heartbeat. The store's last
+    green run is days old, so the cycle reconciles first and then plans; when that run cannot be
+    made or is not green, it plans no new risk and says why."""
+    s = await make()
+    s.clock.wall.now = EUROPE_CYCLE
+    result = await s.service.jobs.cycle("europe", MONDAY)
+    assert result.plan is not None
+    assert result.plan.blocked is None
+    assert len(result.made) == 3
+
+    max_age = s.path.settings.execution.reconcile.max_age_seconds
+    s.clock.wall.now += timedelta(seconds=max_age + 1)
+
+    async def broken() -> Any:
+        raise RuntimeError("the reconciler broke")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(s.path.reconciler, "run", broken)
+        aged = await s.service.jobs.cycle("europe", MONDAY)
+    assert aged.plan is not None
+    assert "old, beyond" in str(aged.plan.blocked)
+
+    s.broker.snapshot = False  # the live orders are not a complete snapshot: an incomplete run
+    incomplete = await s.service.jobs.cycle("europe", MONDAY)
+    assert incomplete.plan is not None
+    assert ") is incomplete: new risk waits" in str(incomplete.plan.blocked)
+
+
 async def test_a_cycle_whose_mode_cannot_be_read_is_an_error(
     make: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

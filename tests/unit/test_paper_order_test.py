@@ -60,6 +60,7 @@ def path_of(rig: Any) -> OrderPath:
 @pytest.fixture
 def rig(order_rig: Any) -> Any:
     order_rig.ready()
+    order_rig.make_execution()  # the test reconciles before it places
     broker = order_rig.broker
     broker.contracts = {EUR_ETF: ("EXV1", "IBIS", "EUR"), STOCK: ("STK1", "NYSE", "USD")}
 
@@ -211,14 +212,32 @@ async def test_a_second_read_that_is_no_snapshot_fails_the_live_orders_step(rig:
     report = await PaperOrderTest(path_of(rig), now=rig.clock).run()
     found = steps(report)
     assert not report.ok
-    assert "account_unreadable" in found["EXV1 pre-trade"].detail
+    # The reconciliation makes the session's first reads: it is incomplete, so nothing is tried.
+    assert "not a complete snapshot" in found["reconciliation"].detail
+    assert "EXV1 pre-trade" not in found
     assert not found["live orders"].ok
     assert found["live orders"].detail.endswith("first reads: false, then false")
     assert rig.broker.placements == []
 
 
-async def test_no_live_orders_step_when_the_gate_refused_before_reading(rig: Any) -> None:
+async def test_the_reconciliation_reads_the_live_orders_before_the_gate_refuses(rig: Any) -> None:
     await rig.kill.turn_on(actor="test", reason="drill")
     report = await PaperOrderTest(path_of(rig), now=rig.clock).run()
-    assert rig.broker.live_order_reads == 0
-    assert "live orders" not in steps(report)
+    found = steps(report)
+    assert found["reconciliation"].ok
+    assert "kill_switch_on" in found["EXV1 pre-trade"].detail
+    assert found["live orders"].ok  # the reconciliation's reads: the pre-read, then a snapshot
+    assert rig.broker.placements == []
+
+
+async def test_a_machine_whose_reconciliation_has_aged_reconciles_before_it_places(
+    rig: Any,
+) -> None:
+    """docs/AUDIT.md, 1: the owner's command on a machine whose service is stopped. Without its
+    own reconciliation the gate would refuse every order of the test as frozen."""
+    rig.clock.advance(rig.settings.execution.reconcile.max_age_seconds + 1)
+    stale = await rig.gate.clear((await rig.staged()).intent)
+    assert "reconciliation_frozen" in stale.codes
+    report = await PaperOrderTest(path_of(rig), now=rig.clock).run()
+    assert report.ok, report.render()
+    assert [step.name for step in report.steps][:2] == ["mode", "reconciliation"]

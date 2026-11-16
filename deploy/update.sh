@@ -9,7 +9,9 @@
 #    them (the store's migrations run on start);
 # 4. wait up to OBLISK_UPDATE_TIMEOUT seconds for health: a heartbeat written after the update
 #    began (`obliskiq health --since`), `obliskiq status` succeeding, the kill switch as it was;
-# 5. on failure: stop them, restore the backup, start the previous tag and alert the owner.
+# 5. on failure — unhealthy, a unit that will not stop or start, or the script interrupted
+#    (a signal, a closed terminal): stop them, restore the backup, start the previous tag and
+#    alert the owner.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 set -euo pipefail
@@ -89,20 +91,36 @@ backup=$("$HERE/backup.sh" --local-only) || {
 }
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 log "updating $previous -> $tag (backup $backup, $kill_before)"
-"$SYSTEMCTL" stop "${UNITS[@]}"
-write_tag "$tag"
-"$SYSTEMCTL" start "${UNITS[@]}"
 
+# From here the machine is between two versions: whatever happens next (a unit that will not
+# stop or start, a signal, a closed terminal) ends on the new tag healthy or back on the
+# previous one with the owner alerted. Each step of the way back is tried whatever the one
+# before it did.
 why=""
+rollback() {
+    trap '' INT TERM HUP
+    local restored="restored $backup" running="started"
+    "$SYSTEMCTL" stop "${UNITS[@]}" || log "the units did not stop cleanly"
+    restore_archive "$backup" || restored="the backup $backup could NOT be restored"
+    write_tag "$previous"
+    "$SYSTEMCTL" start "${UNITS[@]}" || running="could NOT be started"
+    alert "update to $tag failed ($why): rolled back to $previous, which $running; $restored"
+    exit 1
+}
+trap 'why="interrupted before the new version proved healthy"; rollback' INT TERM HUP
+
+if ! "$SYSTEMCTL" stop "${UNITS[@]}"; then
+    why="the units did not stop"
+    rollback
+fi
+write_tag "$tag"
+if ! "$SYSTEMCTL" start "${UNITS[@]}"; then
+    why="the units did not start"
+    rollback
+fi
 if wait_healthy "$started" "$kill_before"; then
+    trap - INT TERM HUP
     log "updated to $tag"
     exit 0
 fi
-
-"$SYSTEMCTL" stop "${UNITS[@]}"
-restored="restored $backup"
-restore_archive "$backup" || restored="the backup $backup could NOT be restored"
-write_tag "$previous"
-"$SYSTEMCTL" start "${UNITS[@]}"
-alert "update to $tag failed ($why): rolled back to $previous; $restored"
-exit 1
+rollback

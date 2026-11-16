@@ -75,11 +75,6 @@ def test_the_wheel_ships_the_package_with_its_type_marker(built):
     assert all(name.startswith(allowed_roots) for name in names), names
 
 
-def test_neither_artifact_ships_the_legacy_snapshot(built):
-    for kind, names in built.items():
-        assert not [name for name in names if "/legacy/" in f"/{name}"], kind
-
-
 def test_the_sdist_ships_the_sources_and_the_licence(built):
     names = {name.split("/", 1)[1] for name in built["sdist"] if "/" in name}
     assert {"src/obliskiq/py.typed", "pyproject.toml", "LICENSE"} <= names

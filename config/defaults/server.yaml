@@ -1,5 +1,5 @@
 # The owner's cockpit (server/; MASTER_PLAN §5.17): the MCP server, its Telegram bot and the
-# dashboard it serves. lite's `server` block (legacy/lite/config.yaml:720-740, @b1ebd49): the two
+# dashboard it serves. lite's `server` block (lite's config.yaml:720-740, @b1ebd49): the two
 # keys the cockpit consumes with lite's values; lite's `collectors` keys are not ported (this
 # cockpit starts no collector, the service runs them).
 server:

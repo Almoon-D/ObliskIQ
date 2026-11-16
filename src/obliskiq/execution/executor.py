@@ -60,7 +60,6 @@ from ..domain.orders import (
     OrderIntent,
     OrderSide,
     ReconcileRun,
-    ReconcileStatus,
 )
 from ..errors import CalendarError, ObliskError
 from ..ibkr.models import Algo, ContractRules
@@ -74,6 +73,7 @@ from .account import AccountReader
 from .boundary import OrderAlert, OrderAlertHook, OrderAlertKind, WriteBoundary, raise_alert
 from .currency import ConversionOutcome, CurrencyManager
 from .exits import ExitCoordinator
+from .freeze import new_risk_frozen
 from .instruments import InstrumentDirectory
 from .intents import new_intent
 from .modes import Modes
@@ -92,6 +92,9 @@ ZERO = Decimal(0)
 REPRICED = "repriced"
 #: The fact an order cancelled for want of a fill carries: a successor follows at the next window.
 RETRY_NEXT_WINDOW = "cancelled to retry at the next tradable window"
+
+#: What a cycle says of an order that adds risk while reconciliation freezes it.
+FROZEN_DETAIL = "reconciliation freezes new risk"
 
 #: Refusals no later moment can lift: the intent is rejected. Any other leaves it staged.
 PERMANENT_REFUSALS: Final = frozenset(
@@ -205,6 +208,7 @@ class Executor:
         self._now = now
         self._held = frozenset(settings.execution.approval.sleeves)
         self._grace = timedelta(seconds=settings.execution.reconcile.grace_seconds)
+        self._reconcile_age = timedelta(seconds=settings.execution.reconcile.max_age_seconds)
         self._interval = timedelta(minutes=settings.execution.pricing.reprice_interval_minutes)
         self._since = now()
 
@@ -580,7 +584,7 @@ class Executor:
     # ── placing ──
 
     async def _place(self, report: CycleReport) -> None:
-        await self._stage(report)
+        frozen = await self._stage(report)
         try:
             mode = await self._modes.current()
         except Exception as exc:  # the mode unreadable: nothing is placed
@@ -597,6 +601,13 @@ class Executor:
                     await self._simulate(stored, report)
             return
         live = [s for s in staged if s.intent.mode is not ExecutionMode.SHADOW]
+        if frozen:
+            # A buy staged before the freeze waits here: funding it would send a conversion the
+            # gate refuses, and alert for it.
+            for stored in live:
+                if adds_risk(stored.intent):
+                    report.add(stored.intent.intent_id, "frozen", FROZEN_DETAIL)
+            live = [s for s in live if not adds_risk(s.intent)]
         funding = await self._currency.fund([s.intent for s in live])
         report.conversions += funding.conversions
         for stored in live:
@@ -607,9 +618,10 @@ class Executor:
             await self._place_one(stored, report)
         await self._retry_unknown(report)
 
-    async def _stage(self, report: CycleReport) -> None:
+    async def _stage(self, report: CycleReport) -> bool:
+        """Approve and stage; whether reconciliation freezes new risk in this cycle."""
         latest = await self._worker.run(repo.latest_reconciliation)
-        frozen = latest is not None and latest.status is not ReconcileStatus.GREEN
+        frozen = new_risk_frozen(latest, now=self._now(), max_age=self._reconcile_age) is not None
         proposed = await self._worker.run(repo.intents_in_states, [IntentState.PROPOSED])
         for stored in proposed:
             intent = stored.intent
@@ -624,9 +636,10 @@ class Executor:
             if intent.role in _MANAGED_ROLES:
                 continue
             if frozen and adds_risk(intent):
-                report.add(intent.intent_id, "frozen", "reconciliation freezes new risk")
+                report.add(intent.intent_id, "frozen", FROZEN_DETAIL)
                 continue
             await self._book.advance(intent.intent_id, IntentState.STAGED, "staged")
+        return frozen
 
     async def _place_one(self, stored: StoredIntent, report: CycleReport) -> None:
         intent = stored.intent

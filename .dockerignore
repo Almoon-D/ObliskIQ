@@ -1,5 +1,5 @@
 # The image takes what deploy/Dockerfile copies and nothing else: no .git, no environment file,
-# no virtual environment, no legacy snapshot, no tests.
+# no virtual environment, no tests.
 **
 !pyproject.toml
 !uv.lock

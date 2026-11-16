@@ -37,7 +37,8 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | done (on fixtures; the rules pre-registered and locked, #71; no layer active yet; H13's record and the panel's producer to 18a, D171) | v0.26.0 |
 | 18a | Scoreboard, the remainder | H13's after-tax monthly record and its looks, the weekly forecast panel's producer, the broker session's re-logins in the store | done (on fixtures; no thesis has a record yet; the panel waits on the analyst's key; no IBKR call) | v0.27.0 |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | done (image built and run in the session; the machine's deployment and the full preflight are the owner's list in docs/DEPLOY.md; no IBKR call) | v0.28.0 |
-| 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | after 19 | |
+| 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | done (three silent failures fixed, docs/AUDIT.md; no IBKR call; the owner's checklist below is what remains) | v1.0.0 |
+| 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
 | 17 | Decision layer, the rest | expression selection, calibrated sizing, expected shortfall, stress | when a funded layer needs it | |
@@ -59,6 +60,24 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 
 ## Session log
+
+### Session 20 — Red-team and cleanup (2026-11-16, v1.0.0)
+
+- **Audit (docs/AUDIT.md).** Ten silent failures ranked; three were real and are fixed: new risk
+  cleared on an account never or not recently reconciled (D179), an owner's flow dated by its
+  announced day, which read as a loss and reached the breakers (D180), and `update.sh` leaving
+  the machine on a version nobody judged (D182). The other seven are guarded, each proven by
+  removing its guard and seeing a named test fail.
+- **Mutation pass** over `decision/`, `execution/`, `capital/`, `tax/`, `jurisdiction/`,
+  `calendars/`: 3,392 mutants, 2,629 killed, 391 survived, 337 unconfirmed. 32 survivors closed
+  with tests (option dates, a partly filled order's retry, conversion arithmetic, flatten's
+  report, the two-month rule, homogeneity).
+- **Cleanup.** `legacy/` and its tooling exclusions deleted (D181); its findings in
+  `docs/knowledge/legacy-findings.md`; `starlette`, `cryptography` and `soupsieve` moved off
+  versions with advisories. The owner's ordered checklist is above the queue.
+- **Live findings.** None: no IBKR call.
+- **Deferred:** the 358 survivors and the unconfirmed, the reservation planner first (Session
+  20a). **Prompts edited:** the common header reads the snapshot at `v0.28.0`; 20a inserted.
 
 ### Session 19 — Cockpit, settings and deployment (2026-11-16, v0.28.0)
 
@@ -353,6 +372,55 @@ cryptography 50 (#9, #5) stays in Follow-ups (D96).
 **SESSION_PROMPTS edits.** None: later prompts name the core's `TargetPortfolio` and
 `StrategyValue` as built.
 
+## The owner's checklist
+
+Everything still unverified live, in the order to do it. Each step names where its commands are
+and what it settles in the queue below; paste each output into a short session, which records
+the readings by a reviewed change. One brokerage session at a time: stop the service, or leave
+it stopped, for every step that logs in (docs/RUNBOOK.md, "What runs").
+
+1. **Paper credentials on the machine.** A machine, the image and the secrets: the paper login,
+   Telegram, the cockpit's token, `GEMINI_API_KEY` (docs/DEPLOY.md §2 to §4). Never live keys.
+2. **Preflight.** `obliskiq preflight --full` in shadow (docs/DEPLOY.md §5): the login from
+   inside the container, the venue's status, a whatif never placed, the Telegram test.
+3. **First boot in shadow and the cockpit** (docs/DEPLOY.md §5, §6): the heartbeat, the health
+   file, `status`, the cockpit from Claude through the tunnel, the Telegram commands.
+4. **Sources and collection hours.** `sources run all` and `sources health` (docs/RUNBOOK.md,
+   "Session 10's sources"), then one `obliskiq collect daily` round: each venue's job after its
+   close, the snapshot fields and their availability, the daily bar's stamp, GDELT from the
+   machine.
+5. **Conid pinning.** `obliskiq universe pin` for TOPIX, BARN, LISN and JDEP and the resolved
+   descriptions of the pinned instruments; `run-cycle --mode shadow --dry-run` confirms the
+   core's vehicles against IBKR.
+6. **Algos and order types per venue.** `obliskiq universe capabilities --probe`
+   (docs/RUNBOOK.md, "Session 9's capability probe"): order types and algos by name, trading
+   permissions, Xetra's `IBIS2`, US and Eurex options; whatif only.
+7. **The paper order test** (docs/RUNBOOK.md, part A): the order shapes, the reply ids IBKR
+   sends and the policy's answer to each, the cOID as `order_ref`, routing, the `snapshot` flag,
+   the cancel; the Java 21 and 25 side runs.
+8. **Delayed-quote behaviour (`o354`).** In the same report: whether EXV1's quote is delayed,
+   whether `o354` is among the replies and that it was confirmed only inside the collar; with
+   the live account logged in elsewhere and not (the snapshot availability row).
+9. **The execution test and its `--finish`** (part B): the conversion as sent and IBKR's text of
+   `o10164` (a session then decides D101), **stop-limit behaviour** (`STOP_LIMIT`, `o10331`, a
+   GTC stop listed the next day and readable by id), IBKR's reporting lag, from which
+   `execution.reconcile.grace_seconds` is set.
+10. **The reserve on paper** (parts C and D), then **`serve` under the supervisor and the ten
+    shadow days** (part E): the trend brake's data, a whole cycle, the digest, the daily reset
+    re-logged in unattended, the weekly report.
+11. **Kill drill, cash-flow drill and breaker drill, in paper** (docs/RUNBOOK.md, "The
+    scoreboard, drills and the live levels" and "Money in and out"): the switch set, entries
+    refused, stops kept, cleared; a deposit and a dated withdrawal announced, planned and
+    answered; each recorded with `obliskiq promotion drill`.
+12. **Backup restore drill** (docs/DEPLOY.md §8, §9): a nightly archive restored on the machine,
+    then `status` and `reconcile run` green.
+13. **Update rollback drill** (docs/DEPLOY.md §7): one `update.sh` to the current release that
+    stays, and one with `OBLISK_UPDATE_TIMEOUT=1`, which must roll back, restart the previous
+    tag, restore the store and alert on Telegram.
+14. **L0 to L1** when `obliskiq promotion status` passes, at least eight weeks of autonomous
+    paper, then the owner's decision on L2 (MASTER_PLAN §10). The live account needs OAuth keys
+    on the machine and is never reached from a cloud session.
+
 ## Live verification queue
 
 Checks built against fixtures that still need a live reading. Each names the session that
@@ -360,6 +428,7 @@ settles it.
 
 | Item | Added | Settled by |
 |---|---|---|
+| The heartbeat's reconciliation keeps a green run in force on the machine: `execution.reconcile.max_age_seconds` (900) against a heartbeat of 300 s and IBKR's partial answers, so that new risk is not frozen by age in ordinary running (`VERIFY-LIVE(the reconciliation's age in service)`, D179) | 20 | the first week of `serve` |
 | A thesis's option on paper: the chain's contract id orders, its quote is real-time for the option and its underlying, its rules give a tick, and the entry and the exit fill (`decision/thesis_options.py`) | 29 | the first paper cycle with an option idea |
 | IBKR exchange codes → venues (38 codes in `ibkr_exchanges`; Sessions 8 and 9 pinned 57 universe conids with their listing exchanges through the owner's IBKR connector [MCP ✓ 2026-10-22]; the ten codes Session 8 added and Session 9's `IBIS2` are unverified on CP) | 2 | the collectors' live round |
 | Venue phase windows: pre-market, auctions and post-market per venue (pulse values, unmeasured) | 2 | T1 or the first command list after it |
@@ -457,6 +526,12 @@ settles it.
 
 ## Follow-ups
 
+- **Audit (Session 20):** `engines/risk` (volatility-scaled stops, the averaging-down and
+  pre-earnings rules) has no reader until a stock book exists (D181). `cryptography` deprecates
+  the finite-field Diffie-Hellman IBKR's OAuth handshake needs: the pin stays below 51 and the
+  maintenance session watches IBKR for another exchange (D182). A credit matched after the
+  day's last NAV reading is still counted in that reading (D180). The mutation pass's survivors
+  left open are listed in docs/AUDIT.md, with why each was left.
 - **Scoreboard (Session 18):** `capital.satellite_ceiling` (0.20) and its validator keep the
   core's budget, so D149's 50 % needs them reworked when a Hunter hypothesis exists (Session 26,
   D171). A layer's activation condition and pooled re-test are registered per layer when one
@@ -564,14 +639,6 @@ settles it.
   reserve on paper") decides `o10164` on a conversion from IBKR's text (D101), in a pull request
   of its own: until a conversion fills on paper no order in a foreign currency can be funded,
   and Session 26, if it ever runs, waits for it.
-- The reconciliation freeze passes while no run exists, and a green run never ages
-  (`execution/pretrade.py: _guards`, `execution/executor.py: _stage`,
-  `decision/rebalance_core.py: survey`). Decide a maximum age, with failure-branch tests, before
-  live-small (Session 20 at the latest).
-- Session 20: `grid/`, `data/events`, `data/insiders`, `data/positioning` and `llm/` feed the
-  analyst's fact sheet from Session 28 (D156). What still serves no order, verdict or fact line
-  then (`engines/commodity`, `engines/fx`, parts of `engines/options_sleeve`) is kept or deleted
-  by whether a layer reads it.
 - **Owner:** `GEMINI_API_KEY` on the deployment machine (the analyst and the extractor are
   skipped without it, and say so) and the monthly budget (`llm.budget.monthly_usd`, US$5); the
   thesis book's exploration share before the live account (a tenth of investable capital unless
@@ -681,7 +748,7 @@ settles it.
 - Session 11: positions held outside the universe (lite's portfolio union) are not collected. The
   vehicle selector ranks universe instruments only (D120), so a held instrument joins the universe
   by a reviewed entry; Session 11's views decide which ones to propose.
-- Session 15: lite's ADR map (legacy/old global_vehicles.py `ADR_MAP`): a company's US depositary
+- Session 15: the old repository's ADR map (`modules/config/global_vehicles.py`, `ADR_MAP`, in the snapshot at v0.28.0): a company's US depositary
   line as another listing of a stock candidate, chosen when a thesis first orders it (D121).
 - Session 18: the cost book prices an ETF of unknown market capitalisation at the illiquid friction
   tier (2.12 % a round trip, an assumption), so the selector separates European ETFs mostly by fee;
@@ -707,10 +774,6 @@ settles it.
 - **Owner:** after the merge, archive `Almoon-D/Inversor-Inteligente` (SESSION_PROMPTS §A.4).
 - **Owner:** the copyright notice and package author name the owner (`pyproject.toml`,
   `src/obliskiq/__init__.py`), as in ObliskIQ-lite-MCP; confirm or ask for a change.
-- GitHub's dependency graph also reads the manifests inside `legacy/`
-  (`legacy/lite/pyproject.toml`, `legacy/lite/requirements.txt`,
-  `legacy/pulse/pyproject.toml`), so Dependabot alerts may name them until Session 20
-  deletes `legacy/`; they are never installed.
 - Release workflow: the image job runs only after a release the run published (a release created
   with `GITHUB_TOKEN` triggers no `on: release` workflow); the arm64 build runs under QEMU there
   and has not run yet (the first release after Session 19).

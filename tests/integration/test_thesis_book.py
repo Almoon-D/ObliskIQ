@@ -115,6 +115,7 @@ async def started(make: Any, shipped_settings: ObliskConfig, **kw: Any) -> Servi
     paper = kw.pop("paper", False)
     s: ServiceRig = await make(settings=sized(shipped_settings, **kw), paper=paper)
     s.clock.wall.now = EUROPE
+    await s.rig.reconciled()
     s.broker.cash = {"EUR": (D(200000), None), "USD": (D(20000), D("0.86"))}
     s.broker.nav = D(250000)
     quote(s, SPPW, "45")
@@ -297,6 +298,7 @@ CURRENCY[XEON] = "EUR"
 
 
 async def surveyed(s: ServiceRig, **kw: Any) -> ThesisPlan:
+    await s.rig.heartbeat_reconciled()
     return await book(s, **kw).survey(ExecutionMode.SHADOW)
 
 
@@ -404,6 +406,22 @@ async def test_a_stale_quote_at_entry_withholds_the_idea_and_no_order_is_made(
     assert (only(plan).action, codes(plan)) == ("wait", ["working"])
 
 
+async def test_entries_wait_for_a_recent_reconciliation_and_a_dry_run_still_plans(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    """docs/AUDIT.md, 1: an aged green run blocks new entries as a drift does."""
+    s = await started(make, shipped_settings)
+    await idea(s)
+    thesis_book = book(s)
+    assert (await thesis_book.survey(ExecutionMode.SHADOW)).entries_blocked is None
+    s.clock.wall.now += timedelta(seconds=s.path.settings.execution.reconcile.max_age_seconds + 1)
+    aged = await thesis_book.survey(ExecutionMode.SHADOW)
+    assert "old, beyond 900 s: new risk waits for a fresh one" in str(aged.entries_blocked)
+    assert [f.code.value for f in aged.decisions[0].findings] == ["entries_blocked"]
+    rehearsal = await thesis_book.survey(ExecutionMode.SHADOW, rehearsal=True)
+    assert rehearsal.entries_blocked is None
+
+
 async def test_entries_wait_for_the_kill_switch_a_freeze_the_venue_and_cash(
     make: Any, shipped_settings: ObliskConfig
 ) -> None:
@@ -427,7 +445,7 @@ async def test_entries_wait_for_the_kill_switch_a_freeze_the_venue_and_cash(
         ),
     )
     plan = await surveyed(s)
-    assert plan.entries_blocked == "reconciliation is drift: new risk is frozen"
+    assert str(plan.entries_blocked).endswith(") is drift: new risk waits for a green one")
     # A frozen book enters nothing either (the breakers, decision/breakers.py).
     for days in (2, 1):
         day = MONDAY - timedelta(days=days)

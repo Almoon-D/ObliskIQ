@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "obliskiq"
-version = "0.28.0"
+version = "1.0.0"
 description = "An autonomous, risk-first portfolio manager for one Interactive Brokers account."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -18,7 +18,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "cryptography>=46,<47",
+    "cryptography>=50,<51",
     "exchange-calendars>=4.13.2,<5",
     "httpx>=0.28,<0.29",
     "mcp>=1.20,<2",
@@ -28,7 +28,7 @@ dependencies = [
     "pydantic-settings>=2.11,<3",
     "python-dotenv>=1.2.4,<2",
     "PyYAML>=6.0.3,<7",
-    "starlette>=0.49,<1",
+    "starlette>=1.3.1,<2",
     "uvicorn>=0.38,<1",
     "vadersentiment>=3.3.2,<4",
     "yfinance>=1.7,<2",
@@ -63,8 +63,7 @@ python-preference = "only-managed"
 packages = ["src/obliskiq"]
 
 [tool.hatch.build.targets.sdist]
-# An explicit list: legacy/ is a read-only snapshot for porting, never part of a
-# distribution, and nothing else is shipped by accident.
+# An explicit list, so nothing is shipped by accident.
 only-include = [
     "src",
     "tests",
@@ -83,13 +82,11 @@ only-include = [
     ".pre-commit-config.yaml",
     ".python-version",
 ]
-exclude = ["/legacy"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py314"
 src = ["src", "tests"]
-extend-exclude = ["legacy"]
 # The release workflow runs this script on its pinned runner's own Python 3.12.
 per-file-target-version = { ".github/scripts/*.py" = "py312" }
 
@@ -137,7 +134,7 @@ testpaths = ["tests"]
 pythonpath = ["tests/support"]
 norecursedirs = [
     ".*", "*.egg", "*.egg-info", "_darcs", "build", "CVS", "dist", "node_modules", "venv",
-    "{arch}", "__pycache__", "legacy",
+    "{arch}", "__pycache__",
 ]
 addopts = ["--strict-markers", "--strict-config", "-ra", "--import-mode=importlib"]
 asyncio_mode = "auto"
@@ -148,12 +145,15 @@ filterwarnings = [
     # timedelta; numpy 2.5 deprecates that. Library code, not ours: the filter names the
     # module and the message so nothing else is hidden.
     "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning:exchange_calendars.exchange_calendar_xhkg",
+    # cryptography 50 deprecates finite-field Diffie-Hellman, which IBKR's OAuth 1.0a handshake
+    # requires (docs/knowledge/ibkr.md): the exchange is IBKR's, not ours to change. The pin
+    # below 51 keeps a release that drops it out until the handshake is settled.
+    "ignore:Diffie-Hellman over finite fields:cryptography.utils.CryptographyDeprecationWarning",
 ]
 
 [tool.coverage.run]
 source = ["obliskiq"]
 branch = true
-omit = ["legacy/*"]
 
 [tool.coverage.report]
 precision = 1
@@ -185,12 +185,6 @@ name = "Test-only libraries never reach the package (the risk budget's independe
 type = "forbidden"
 source_modules = ["obliskiq"]
 forbidden_modules = ["skfolio", "scipy", "sklearn", "cvxpy"]
-
-[[tool.importlinter.contracts]]
-name = "Nothing imports the legacy snapshot"
-type = "forbidden"
-source_modules = ["obliskiq"]
-forbidden_modules = ["legacy"]
 
 [[tool.importlinter.contracts]]
 name = "The domain layer imports nothing else of ours"

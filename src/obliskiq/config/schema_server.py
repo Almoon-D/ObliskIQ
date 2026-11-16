@@ -1,6 +1,6 @@
 """The owner's cockpit (``server``) and the settings it may change remotely (``remote_settings``).
 
-``server`` is lite's block of the same name (legacy/lite/config.yaml:720-740, @b1ebd49), the keys
+``server`` is lite's block of the same name (lite's config.yaml:720-740, @b1ebd49), the keys
 the cockpit consumes, with where it listens and how its Telegram bot polls. ``remote_settings``
 says which settings Telegram ``/set`` and MCP ``update_setting`` may change and how
 (MASTER_PLAN §5.17): a ``tighten`` key only in the direction that lowers risk, a ``bounded`` key

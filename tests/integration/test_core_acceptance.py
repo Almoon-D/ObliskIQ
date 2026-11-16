@@ -83,6 +83,7 @@ async def rig(
         broker.cash = {"EUR": (Decimal(2_000_000), None)}
         broker.nav = Decimal(2_000_000)
         built.clock.now = OPEN
+        await built.reconciled()
         yield built
         await built.aclose()
 

@@ -71,6 +71,7 @@ async def rig(
         )
         skeleton_market(broker)
         built.clock.now = OPEN
+        await built.reconciled()
         yield built
         await built.aclose()
 

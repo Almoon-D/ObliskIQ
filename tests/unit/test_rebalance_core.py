@@ -80,6 +80,7 @@ async def rig(
         )
         skeleton_market(broker)
         built.clock.now = OPEN
+        await built.reconciled()
         yield built
         await built.aclose()
 
@@ -356,7 +357,7 @@ async def test_the_kill_switch_a_freeze_or_an_unreadable_account_stops_the_plan(
         ),
         anchor=False,
     )
-    assert "reconciliation is drift" in str((await survey.survey(ExecutionMode.SHADOW)).blocked)
+    assert ") is drift: new risk waits" in str((await survey.survey(ExecutionMode.SHADOW)).blocked)
     await rig.store(
         repo.record_reconciliation,
         ReconcileRun(at=OPEN, status=ReconcileStatus.GREEN, findings=()),
@@ -367,6 +368,21 @@ async def test_the_kill_switch_a_freeze_or_an_unreadable_account_stops_the_plan(
     rig.broker.unavailable.clear()
     rig.broker.nav = None
     assert "nothing is managed" in str((await survey.survey(ExecutionMode.SHADOW)).blocked)
+
+
+async def test_an_aged_reconciliation_stops_the_plan_and_a_dry_run_still_shows_it(
+    rig: Any,
+) -> None:
+    """docs/AUDIT.md, 1: the last green run says nothing about the account now."""
+    survey = rebalancer(rig)
+    assert (await survey.survey(ExecutionMode.SHADOW)).blocked is None
+    rig.clock.advance(rig.settings.execution.reconcile.max_age_seconds + 1)
+    aged = await survey.survey(ExecutionMode.SHADOW)
+    assert "old, beyond 900 s: new risk waits for a fresh one" in str(aged.blocked)
+    assert aged.decisions == []
+    rehearsal = await survey.survey(ExecutionMode.SHADOW, rehearsal=True)
+    assert rehearsal.blocked is None
+    assert rehearsal.decisions
 
 
 async def test_a_held_role_without_a_price_stops_the_plan(rig: Any) -> None:

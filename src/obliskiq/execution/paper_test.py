@@ -35,6 +35,7 @@ from ..domain.orders import (
     LimitPrice,
     OrderSide,
     OrderTerms,
+    ReconcileStatus,
     Sleeve,
     TimeInForce,
 )
@@ -89,6 +90,19 @@ class PaperOrderReport:
         return "\n".join(lines)
 
 
+async def reconciled(path: OrderPath, report: PaperOrderReport) -> bool:
+    """Reconcile before a test's orders: a buy or a conversion adds risk, which the gate clears
+    only under a recent green reconciliation (``execution/freeze.py``), and a machine running
+    its first command has none."""
+    try:
+        run = await path.reconciler.run()
+    except ObliskError as exc:
+        return report.add("reconciliation", False, f"it could not run: {exc}")
+    findings = "; ".join(f"{finding.kind}: {finding.detail}" for finding in run.findings)
+    detail = run.status.value + (f" ({findings})" if findings else "")
+    return report.add("reconciliation", run.status is ReconcileStatus.GREEN, detail)
+
+
 def passive_limit(bid: Decimal, offset: Decimal, tick: Decimal) -> Decimal | None:
     """``offset`` below the bid, rounded down to a whole tick; ``None`` when that is not a price."""
     limit = to_tick(bid * (1 - offset), tick, up=False)
@@ -119,15 +133,16 @@ class PaperOrderTest:
             )
             return report
         report.add("mode", True, "paper")
-        for conid in self._conids:
-            instrument = self._path.directory.describe(conid)
-            if instrument is None:  # pragma: no cover - the schema ties the conids to the universe
-                report.add(f"{conid}", False, "no universe instrument describes it")
-                continue
-            try:
-                await self._one(instrument, report)
-            except ObliskError as exc:
-                report.add(f"{instrument.symbol} stopped", False, str(exc))
+        if await reconciled(self._path, report):
+            for conid in self._conids:
+                instrument = self._path.directory.describe(conid)
+                if instrument is None:  # pragma: no cover - the schema ties them to the universe
+                    report.add(f"{conid}", False, "no universe instrument describes it")
+                    continue
+                try:
+                    await self._one(instrument, report)
+                except ObliskError as exc:
+                    report.add(f"{instrument.symbol} stopped", False, str(exc))
         flags = self._path.orders.first_live_orders_flags
         if flags:
             report.add(

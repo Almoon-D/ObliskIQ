@@ -7,7 +7,7 @@ deleting the line does not remove it from history, so the guard runs on every ch
   variables, ``.env`` (gitignored) holds values. Exempting a variable is a visible entry in
   :data:`NON_SECRET`, never a silent widening.
 * No key material (``.pem``, ``.key``, ``.p12``, …) and no filled ``.env`` is tracked.
-* Every tracked text file — ``legacy/`` included, because it is committed too — is scanned
+* Every tracked text file is scanned
   for private keys, IBKR account ids, API-token shapes and email addresses. The few
   placeholders that look like one are listed with the reason.
 
@@ -33,9 +33,6 @@ NON_SECRET: dict[str, str] = {}
 #: Environment templates that may be tracked, with the reason.
 TRACKED_ENV_FILES = {
     ".env.example": "names every variable ObliskIQ reads; every value is empty",
-    "legacy/pulse/.env.example": "market-pulse-bot's template: paths and display settings only",
-    "legacy/lite/.env.template": "ObliskIQ-lite-MCP's template: credential slots empty; only "
-    "paths, hosts, a port and log settings carry values",
 }
 
 KEY_MATERIAL_SUFFIXES = (".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", ".crt", ".der")

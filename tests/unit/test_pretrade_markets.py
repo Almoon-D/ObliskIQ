@@ -175,8 +175,10 @@ async def test_the_dst_change_moves_the_xetra_window_in_utc(rig: Any) -> None:
     friday = datetime(2026, 10, 23, 7, 45, tzinfo=UTC)
     monday = datetime(2026, 10, 26, 7, 45, tzinfo=UTC)
     rig.clock.now = friday
+    await rig.reconciled()
     assert await codes(rig, await rig.staged(EUR_ETF, quantity="1")) == ()
     rig.clock.now = monday
+    await rig.reconciled()
     stored = await rig.staged(EUR_ETF, quantity="1")
     answer = await rig.gate.clear(stored.intent)
     assert isinstance(answer, PretradeRefusal)
@@ -184,6 +186,7 @@ async def test_the_dst_change_moves_the_xetra_window_in_utc(rig: Any) -> None:
     assert "XETR" in answer.reason
     assert "outside_window" in answer.reason
     rig.clock.now = monday + timedelta(hours=1)
+    await rig.reconciled()
     assert await codes(rig, stored) == ()
 
 
@@ -191,6 +194,7 @@ async def test_the_window_edges_are_half_open(rig: Any) -> None:
     rig.broker.whatif_answer = whatif_answer("101.00", "EUR")
     opens = datetime(2026, 10, 26, 8, 30, tzinfo=UTC)
     rig.clock.now = opens
+    await rig.reconciled()
     stored = await rig.staged(EUR_ETF, quantity="1")
     assert await codes(rig, stored) == ()
     rig.clock.now = opens - timedelta(seconds=1)

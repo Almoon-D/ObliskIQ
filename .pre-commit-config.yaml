@@ -1,6 +1,5 @@
 # Local hooks run the locked tool versions from uv.lock, so a hook and `make check` can
-# never disagree. legacy/ is a read-only snapshot and is never touched.
-exclude: ^legacy/
+# never disagree.
 repos:
   - repo: local
     hooks:

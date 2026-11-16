@@ -1,4 +1,4 @@
-# lite's `positions` block (legacy/lite/config.yaml:118-133): the keys the currency manager and the
+# lite's `positions` block (lite's config.yaml:118-133): the keys the currency manager and the
 # external holdings read. Session 17 restates the others per sleeve, on look-through exposure
 # (DECISIONS D69).
 

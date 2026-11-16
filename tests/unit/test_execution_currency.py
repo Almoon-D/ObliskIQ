@@ -342,6 +342,81 @@ async def test_the_open_orders_and_conversions_of_a_currency_are_counted_once(ri
     assert body["fxQty"] == 1462
 
 
+async def test_open_orders_commit_only_what_they_have_not_filled(rig: Any) -> None:
+    """Sign flips in this arithmetic survived the suite: an order partly filled must free the
+    cash it has spent, never commit it twice."""
+    from order_rig import STOCK, terms
+
+    from obliskiq.domain.orders import Fill, OrderSide
+    from obliskiq.store import orders as repo
+
+    def fill(stored: Any, n: int, quantity: str, price: str, conid: int = STOCK) -> Fill:
+        return Fill(
+            execution_id=f"x{n}",
+            coid=stored.coid,
+            conid=conid,
+            side=stored.intent.side,
+            quantity=Decimal(quantity),
+            price=Decimal(price),
+            commission=None,
+            executed_at=rig.clock(),
+        )
+
+    sized = await rig.staged(quantity="5", state=IntentState.SUBMITTED)  # 500 dollars at 100
+    in_cash = await rig.intent(terms(cash="1000"), state=IntentState.SUBMITTED)
+    home = await rig.intent(
+        terms(conid=EURUSD, side=OrderSide.BUY, cash="233", limit="1.165", conversion=True),
+        role=IntentRole.CONVERSION,
+        reason="repatriation",
+        state=IntentState.SUBMITTED,
+    )  # buying EUR.USD sells dollars: 233 of them, for euros at 1.165
+    funds = manager(rig)
+    assert await funds._open("USD", set()) == (Decimal(1733), Decimal(0))
+    assert await funds._open("EUR", set()) == (Decimal(0), Decimal(200))
+    await rig.store(
+        repo.upsert_fills,
+        [
+            fill(sized, 1, "2", "100"),  # 2 of 5 filled: three fifths of 500 are left
+            fill(in_cash, 2, "4", "100"),  # 400 of the 1,000 spent
+            fill(home, 3, "100", "1.165", conid=EURUSD),  # 100 euros bought for 116.5 dollars
+        ],
+    )
+    assert await funds._open("USD", set()) == (Decimal(300) + Decimal(600) + Decimal("116.5"), 0)
+    committed, incoming = await funds._open("EUR", set())
+    assert (committed, incoming) == (Decimal(0), Decimal("116.5") / Decimal("1.165"))
+    assert await funds._open("USD", {sized.intent.intent_id}) == (Decimal("716.5"), 0)
+
+
+async def test_the_minimum_conversion_leaves_room_for_open_buys_and_the_currency_cap(
+    rig: Any,
+) -> None:
+    """The room for a conversion: the base cash less what working conversions out of it commit
+    and the floor, and never past the single-foreign-currency cap with the cash already held in
+    the currency."""
+    funds = manager(rig)
+    cash = await rig.reader.cash()
+    rate = Decimal("0.86")
+    assert await funds._room("USD", cash, rate) == Decimal(1000)  # the minimum conversion
+    from order_rig import terms
+
+    await rig.intent(
+        terms(conid=EURUSD, side=OrderSide.SELL, cash="9500", limit="1.165", conversion=True),
+        role=IntentRole.CONVERSION,
+        reason="funds buys",
+        state=IntentState.SUBMITTED,
+    )  # a conversion already working out of euros commits 9,500 of them
+    assert await funds._room("USD", cash, rate) == Decimal(475)  # 10,000 - 9,500 - 25
+    capped = rig.settings.model_copy(
+        update={
+            "positions": rig.settings.positions.model_copy(
+                update={"max_single_foreign_currency_pct": Decimal("0.001")}
+            )
+        }
+    )
+    # A cap of 100 euros on a NAV of 100,000, with 100 dollars (86 euros) already held.
+    assert await manager(rig, settings=whole_account(capped))._room("USD", cash, rate) == 14
+
+
 async def test_a_conversion_needs_the_rules_and_a_nav_to_reach_the_minimum(rig: Any) -> None:
     buy = await rig.staged(quantity="2")
     rig.broker.unavailable.add("rules")

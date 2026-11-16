@@ -24,7 +24,7 @@ costs:
       up_to_face: null
       scope_note: US-listed shares and ETFs on IBKR's fixed schedule
       source:
-        origin: legacy/old transaction_costs.py settings (RiskManagement) @68280e1; IBKR fixed schedule
+        origin: Inversor-Inteligente's transaction_costs.py settings (RiskManagement) @68280e1; IBKR fixed schedule
         verify_live: true
     - id: us_option
       venues: [XNYS, XNAS]
@@ -37,7 +37,7 @@ costs:
       up_to_face: null
       scope_note: US listed options (a venue profile maps CBOE and the other US option exchanges here); exchange and regulatory fees of a few cents per contract are not included
       source:
-        origin: legacy/old transaction_costs.py ($0.65 per contract) and legacy/lite config.yaml (USD 1.00 per-order minimum) @b1ebd49
+        origin: Inversor-Inteligente's transaction_costs.py ($0.65 per contract) and lite's config.yaml (USD 1.00 per-order minimum) @b1ebd49
         verify_live: true
     - id: eurex_option
       venues: [XEUR]
@@ -50,7 +50,7 @@ costs:
       up_to_face: null
       scope_note: Eurex single-stock options; no per-order minimum is established
       source:
-        origin: legacy/lite config.yaml, IBKR published fixed rate, documentation-derived and unverified @b1ebd49
+        origin: lite's config.yaml, IBKR published fixed rate, documentation-derived and unverified @b1ebd49
         verify_live: true
     # European shares, ETFs and ETCs on IBKR's fixed schedule, priced as IB SMARTROUTING, the way
     # the order path routes them (DECISIONS D97): 0.05 % of value with a minimum per currency,
@@ -244,7 +244,7 @@ costs:
   # analysis of the account's own fills replaces them. A fraction is a decimal (0.001 is 0.1 %).
   friction:
     source:
-      origin: legacy/old modules/config/settings.py RiskManagement and transaction_costs.py @68280e1; assumptions, not measurements
+      origin: Inversor-Inteligente's modules/config/settings.py RiskManagement and transaction_costs.py @68280e1; assumptions, not measurements
       verify_live: true
     equity:
       # A share whose market capitalisation (in USD) reaches this is liquid. Unknown is treated as

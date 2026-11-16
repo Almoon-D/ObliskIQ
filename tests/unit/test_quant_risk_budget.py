@@ -1,11 +1,11 @@
 """Risk budgeting against closed forms (a diagonal covariance, two assets at equal budgets), an
 independent Newton solve and an independent library (skfolio's ``RiskBudgeting``, a convex
 solver; test-only, never imported by the package), with the still-valid cases of the legacy
-optimiser's risk-parity tests (``legacy/old/ObliskIQ/tests/test_opportunistic_optimizer.py``
+optimiser's risk-parity tests (``Inversor-Inteligente's tests/test_opportunistic_optimizer.py``
 @68280e1: its sample data, equal contributions, a lower weight for the more volatile asset, one
 asset, ten assets, a near-zero variance, weights non-negative and finite for any positive-definite
 covariance). Its other methods (equal weight, Kelly, maximum Sortino, Black-Litterman), the crisis
-switch, leverage and the position cap are not ported (``legacy/MANIFEST.md``).
+switch, leverage and the position cap are not ported (MASTER_PLAN §6.2).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
