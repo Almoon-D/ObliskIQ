@@ -39,6 +39,9 @@ async def test_flatten_closes_each_managed_position_and_reports_the_rest(rig: An
     assert outcomes[999].outcome == "the instrument is not described"
     assert outcomes[OPTION].outcome.startswith("no bid")
     assert "a buy would add risk" in outcomes[LEVERAGED_SHORT].outcome
+    # Only the position with a working closing order says so: a line that failed or was skipped
+    # must never read as closing (a flatten that reports success while a position stays open).
+    assert [conid for conid, line in outcomes.items() if line.closing] == [STOCK]
     assert not report.ok
     rendered = report.render()
     assert f"conid {STOCK} (10.0): closing" in rendered
@@ -101,6 +104,7 @@ async def test_a_quote_that_cannot_be_read_is_reported(rig: Any) -> None:
     rig.broker.unavailable.add("snapshot")
     (line,) = (await rig.flattener.flatten(actor="owner")).lines
     assert line.outcome.startswith("no quote")
+    assert not line.closing
 
 
 def test_a_report_with_only_skipped_lines_is_ok() -> None:
@@ -137,4 +141,6 @@ async def test_one_position_that_fails_does_not_stop_the_others(
     report = await rig.flattener.flatten(actor="owner")
     outcomes = {line.conid: line for line in report.lines}
     assert outcomes[STOCK].outcome.startswith("stopped:")
+    assert not outcomes[STOCK].closing
+    assert not report.ok
     assert outcomes[EUR_ETF].closing

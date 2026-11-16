@@ -187,6 +187,10 @@ async def test_an_order_is_cancelled_before_the_window_ends_and_retried_the_next
     rig.clock.now = NEXT_MORNING
     report = await rig.executor.cycle()
     (retried,) = [s for s in report.steps if s.action == "retried"]
+    # The night's reconciliation has aged: the successor waits for this cycle's own run and is
+    # placed by the next (in service, the heartbeats kept one in force all night).
+    assert (await rig.book.get(retried.intent_id)).intent.state is IntentState.APPROVED
+    await rig.executor.cycle()
     assert (await rig.book.get(retried.intent_id)).intent.state is IntentState.WORKING
 
 
@@ -213,6 +217,38 @@ async def test_an_exit_cancelled_at_the_window_end_restores_its_stop(rig: Any) -
     assert rig.broker.orders[placed.order_id].quantity == Decimal(10)  # restored (I5)
     (resize,) = await rig.store(repo.stop_resizes_for_exit, exit_intent.intent.intent_id)
     assert resize.state is StopResizeState.RESTORED
+
+
+async def test_a_partly_filled_order_is_retried_for_what_is_left_and_no_more(rig: Any) -> None:
+    """A mutant that added the fills to the size instead of taking them off survived the suite:
+    the retry of an order filled 4 of 10 would have bought 14 more."""
+    stored = await entry(rig, stop=None, ttl=timedelta(days=2))
+    await rig.executor.cycle()
+    (order,) = orders_for(rig, stored)
+    rig.broker.fill(order.order_id, "4", price="99.95")
+    rig.clock.now = NEAR_CLOSE
+    await rig.executor.cycle()
+    assert await state_of(rig, stored) is IntentState.CANCELLED
+    rig.clock.now = NEXT_MORNING
+    report = await rig.executor.cycle()
+    (retried,) = [s for s in report.steps if s.action == "retried"]
+    successor = (await rig.book.get(retried.intent_id)).intent
+    assert successor.terms.quantity == Decimal(6)
+    assert successor.parent_id == stored.intent.intent_id
+
+
+async def test_a_filled_order_given_up_at_the_close_has_nothing_left_to_retry(rig: Any) -> None:
+    stored = await entry(rig, stop=None, ttl=timedelta(days=2))
+    await rig.executor.cycle()
+    (order,) = orders_for(rig, stored)
+    rig.broker.fill(order.order_id, "4", price="99.95")
+    rig.clock.now = NEAR_CLOSE
+    await rig.executor.cycle()
+    # The rest fills as the cancel crosses it: the trades show all ten.
+    rig.broker.fill(order.order_id, "6", price="99.95")
+    rig.clock.now = NEXT_MORNING
+    report = await rig.executor.cycle()
+    assert [s for s in report.steps if s.action == "retried"] == []
 
 
 async def test_the_kill_switch_during_a_reprice_keeps_the_protective_stop(rig: Any) -> None:
@@ -330,6 +366,7 @@ async def test_a_permanent_refusal_rejects_and_a_passing_one_waits(rig: Any) -> 
     await rig.executor.cycle()
     assert await state_of(rig, prohibited) is IntentState.REJECTED
     rig.clock.now = NEXT_MORNING.replace(hour=4)  # before the NYSE opens
+    await rig.reconciled()
     later = await entry(rig, stop=None)
     report = await rig.executor.cycle()
     assert await state_of(rig, later) is IntentState.STAGED
