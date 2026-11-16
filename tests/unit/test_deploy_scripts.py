@@ -12,10 +12,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import os
 import sqlite3
-from contextlib import closing
 import stat
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import pytest
