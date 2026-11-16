@@ -18,12 +18,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from ..config.schema_scoreboard import PromotionConfig
 from ..domain.orders import ExecutionMode, ModeChange
 from ..store.scoreboard import DRILL_KINDS, Drill
+from ..store.session_events import SessionEvent
 from .tca import TcaReport
 
 MONTHS_PER_YEAR = 12
@@ -80,7 +81,7 @@ class Evidence:
     runs: tuple[RunOutcome, ...]
     reconciliations: tuple[tuple[datetime, str], ...]
     stuck_intents: int
-    relogins_recorded: bool
+    session_events: tuple[SessionEvent, ...]
     placed: int
     filled: int
     fills_without_clearance: int
@@ -138,6 +139,49 @@ def _clean_period(evidence: Evidence, since: datetime) -> list[Criterion]:
     ]
 
 
+RELOGIN = "every daily reset re-logged unattended"
+
+
+def relogins(evidence: Evidence, since: datetime | None) -> Criterion:
+    """L1's last criterion from the recorded session events (DECISIONS D172). IBKR's daily reset
+    is detected, not scheduled (docs/knowledge/ibkr.md), and falls at midnight of the connecting
+    region, the day before or of a trading day in UTC; so every whole trading day of the period
+    needs a successful re-login on it or the day before, and no failed re-login may be left
+    without a successful one after it. Every re-login recorded is the bot's own. Nothing recorded
+    is unmeasured, never passed."""
+    if since is None:
+        return Criterion(RELOGIN, None, "the audit does not date the entry into shadow")
+    events = [e for e in evidence.session_events if since <= e.at <= evidence.now]
+    days = [d for d in evidence.sessions if since.date() < d <= evidence.now.date()]
+    if not events:
+        return Criterion(
+            RELOGIN, None, "no broker session event is recorded in the period: nothing measured"
+        )
+    if not days:
+        return Criterion(RELOGIN, None, "no whole trading day in the period yet")
+    relogged = {e.at.date() for e in events if e.kind == "reauthenticated"}
+    missed = [d for d in days if not {d, d - timedelta(days=1)} & relogged]
+    last_failure = max((e.at for e in events if e.kind == "reauthentication_failed"), default=None)
+    last_success = max((e.at for e in events if e.kind == "reauthenticated"), default=None)
+    unrecovered = last_failure is not None and (last_success is None or last_success < last_failure)
+    problems: list[str] = []
+    if missed:
+        problems.append(
+            f"{len(missed)} of {len(days)} trading days without a re-login on the day or the day "
+            f"before (first {missed[0].isoformat()})"
+        )
+    if unrecovered and last_failure is not None:
+        problems.append(f"the re-login that failed at {last_failure.isoformat()} was not repaired")
+    if problems:
+        return Criterion(RELOGIN, False, "; ".join(problems))
+    return Criterion(
+        RELOGIN,
+        True,
+        f"re-logged unattended for each of {len(days)} trading days ({len(relogged)} "
+        "days with a re-login)",
+    )
+
+
 def evaluate(target: ExecutionMode, evidence: Evidence, promotion: PromotionConfig) -> Verdict:
     """The verdict on an upgrade to ``target`` from the evidence of the current mode."""
     criteria: list[Criterion] = []
@@ -175,15 +219,7 @@ def evaluate(target: ExecutionMode, evidence: Evidence, promotion: PromotionConf
         )
         if since is not None:
             criteria += _clean_period(evidence, since)
-        criteria.append(
-            Criterion(
-                "every daily reset re-logged unattended",
-                None if not evidence.relogins_recorded else True,
-                "the broker session's re-logins are not recorded in the store"
-                if not evidence.relogins_recorded
-                else "re-logged every day",
-            )
-        )
+        criteria.append(relogins(evidence, since))
         return Verdict(target, tuple(criteria))
     if target is ExecutionMode.LIVE_SMALL:
         weeks = None if since is None else (evidence.now - since).days // DAYS_PER_WEEK

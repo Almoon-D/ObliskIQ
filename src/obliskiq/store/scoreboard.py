@@ -24,6 +24,8 @@ type Boundary = Literal["gap", "twin"]
 type DrillKind = Literal["breaker", "kill", "cash_flow"]
 
 DRILL_KINDS: tuple[DrillKind, ...] = ("breaker", "kill", "cash_flow")
+#: The layer of the weekly forecast panel's calls.
+PANEL_LAYER = "panel"
 
 
 @dataclass(frozen=True, slots=True)

@@ -9,7 +9,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import asyncio
+import sqlite3
 from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -24,6 +27,9 @@ from obliskiq.orchestration.assemble import session_state
 from obliskiq.orchestration.service import AlertHooks
 from obliskiq.reporting.alerts import AlertBook
 from obliskiq.reporting.reporter import Reporter
+from obliskiq.store import open_store
+from obliskiq.store.session_events import session_events
+from obliskiq.store.worker import StoreWorker
 from obliskiq.util.timeutil import utc_now
 
 BASE = "https://gw.test/v1/api"
@@ -93,6 +99,55 @@ async def test_a_session_lost_at_the_daily_reset_is_logged_in_again(
     ]
     # The re-login cleared the lost session's condition: a later loss is heard again.
     assert reporter.book.active == {}
+
+
+async def test_the_session_alerts_are_recorded_once_a_store_is_attached(
+    make_session: Callable[..., BrokerSession],
+    channel: Any,
+    fake_transport: Any,
+    shipped_settings: ObliskConfig,
+    tmp_path: Path,
+) -> None:
+    _, _, hooks = channel
+    worker = StoreWorker(lambda: open_store(shipped_settings, tmp_path))
+    hooks.attach(worker)
+    session = make_session(alert=hooks.session)
+    try:
+        with respx.mock(assert_all_called=False) as router:
+            gateway = Gateway(router)
+            await session.open()
+            gateway.alive = False  # IBKR's daily reset
+            await session.check_session()
+            await hooks.drain()
+        found = await worker.run(
+            session_events,
+            since=datetime(2000, 1, 1, tzinfo=UTC),
+            as_of=datetime(2100, 1, 1, tzinfo=UTC),
+        )
+    finally:
+        await worker.aclose()
+    assert [e.kind for e in found] == ["session_lost", "reauthenticated"]
+
+
+async def test_a_session_event_the_store_refuses_is_logged_and_the_alert_still_goes(
+    make_session: Callable[..., BrokerSession], channel: Any, fake_transport: Any
+) -> None:
+    _, notifier, hooks = channel
+
+    class Broken:
+        async def run(self, *_: object, **__: object) -> None:
+            raise sqlite3.OperationalError("disk I/O error")
+
+    hooks.attach(Broken())  # type: ignore[arg-type]
+    session = make_session(alert=hooks.session)
+    with respx.mock(assert_all_called=False) as router:
+        gateway = Gateway(router)
+        await session.open()
+        gateway.alive = False
+        await session.check_session()
+        await hooks.drain()
+    assert session.authenticated
+    assert "ObliskIQ alert: session.reauthenticated" in notifier.subjects()
 
 
 async def test_a_failed_relogin_reaches_the_owner_within_one_heartbeat(

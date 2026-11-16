@@ -39,6 +39,7 @@ from obliskiq.scoreboard.service import NEXT_LEVEL, Scoreboard, previous_month
 from obliskiq.scoreboard.tca import analyse
 from obliskiq.store import runs as run_repo
 from obliskiq.store import scoreboard as repo
+from obliskiq.store.h13 import H13Look
 from obliskiq.store.scoreboard import AllocationEvent, Call, LayerEvent, LayerMonth, Look
 from obliskiq.store.worker import StoreWorker
 
@@ -60,7 +61,7 @@ def research_copy(repo_root: Path, tmp_path: Path, *, registry: str | None = Non
     root = tmp_path / "repo"
     folder = root / "research" / "preregistrations"
     folder.mkdir(parents=True)
-    for name in ("scoreboard.md", "scoreboard.lock", "thesis-book.md"):
+    for name in ("scoreboard.md", "scoreboard.lock", "thesis-book.md", "thesis-book.lock"):
         shutil.copy(repo_root / "research" / "preregistrations" / name, folder / name)
     (root / "research" / "pattern_registry.yaml").write_text(
         registry or "patterns: []\n", encoding="utf-8"
@@ -271,6 +272,30 @@ def test_the_monthly_report_adds_looks_capital_and_tax() -> None:
     assert "Not computed: no tax book." in bare
     assert "top of the ladder" in bare
     assert "Not computed." in report.monthly(inputs(tax=None))
+    assert "No look of H13 fell this month." in bare
+
+    def h13(record: str, group: str, *, step: bool, back: bool, evaluable: bool) -> H13Look:
+        return H13Look(
+            record, group, "2026-10", 2, 12, 9, 0.0, 0.0, None, None, None, None, None,  # type: ignore[arg-type]
+            step, back, evaluable, "[]", "detail", NOW,
+        )  # fmt: skip
+
+    looked = report.monthly(
+        inputs(
+            h13=[
+                h13("live", "book", step=True, back=False, evaluable=True),
+                h13("paper", "source:analyst", step=False, back=True, evaluable=True),
+                h13("shadow", "book", step=False, back=False, evaluable=False),
+                h13("paper", "book", step=False, back=False, evaluable=True),
+            ]
+        )
+    )
+    assert "## The thesis book (H13)" in looked
+    assert "4 records and groups were looked at" in looked
+    assert "- live book, look 2: STEP" in looked
+    assert "- paper source:analyst, look 2: BACK TO SHADOW" in looked
+    assert "- shadow book, look 2: not evaluable" in looked
+    assert "- paper book, look 2: no change" in looked
 
 
 def test_a_report_says_what_it_could_not_compute() -> None:
@@ -344,8 +369,13 @@ async def test_the_h13_file_must_be_the_thesis_book_s(
     board_parts: tuple[Scoreboard, Modes, Path],
 ) -> None:
     board, _, root = board_parts
+    (root / H13_PATH).write_text("changed", encoding="utf-8")
+    assert "thesis-book.md is not the text its lock records" in str(board.rules())
+    (root / H13_PATH.with_suffix(".lock")).unlink()
+    assert "no readable lock (thesis-book.lock)" in str(board.rules())
     shutil.copy(root / RULES_PATH, root / H13_PATH)
-    assert "not the thesis book" in str(board.rules())
+    shutil.copy(root / RULES_PATH.with_suffix(".lock"), root / H13_PATH.with_suffix(".lock"))
+    assert "not a forward book" in str(board.rules())
     (root / RULES_PATH).write_text("changed", encoding="utf-8")
     assert "not the text" in str(board.rules())
 
@@ -365,6 +395,22 @@ async def test_the_daily_and_monthly_runs_and_their_alerts(
     flagged = board._alerts(Changes(events=[LayerEvent(NOW, "p", "freeze", "s", "gap")]), NOW)
     assert flagged[0].severity.value == "critical"
     assert not flagged[0].condition
+
+    def h13(step: bool, back: bool, group: str = "book") -> H13Look:
+        return H13Look(
+            "live", group, "2026-10", 1, 6, 8, 0.0, 0.0, None, None, None, None, None,
+            step, back, True, "[]", "d", NOW,
+        )  # fmt: skip
+
+    looked = board._alerts(
+        Changes(h13=[h13(True, False), h13(False, True, "source:analyst"), h13(False, False)]),
+        NOW,
+    )
+    assert [(a.kind, a.severity.value) for a in looked] == [
+        ("scoreboard.h13", "info"),
+        ("scoreboard.h13", "critical"),
+    ]
+    assert "source:analyst" in looked[1].text
     grades = await board.grades(NOW.date())
     assert isinstance(grades, GradeBook)
     assert "signal" in grades.records
@@ -375,6 +421,8 @@ async def test_the_daily_and_monthly_runs_and_their_alerts(
     assert not verdict.passed
     assert len(board.sessions(date(2026, 11, 2), date(2026, 11, 8))) == 5
     assert previous_month(date(2026, 1, 15)) == "2025-12"
+    assert board._venue("NOT-AN-EXCHANGE") is None
+    assert board._venue("IBIS2") is not None
 
 
 async def test_the_report_inputs_and_the_tax_book(

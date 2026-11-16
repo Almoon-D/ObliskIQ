@@ -24,14 +24,18 @@ from obliskiq.scoreboard.performance import (
 )
 from obliskiq.scoreboard.promotion import (
     MONTHLY_REPORT_COMMAND,
+    RELOGIN,
+    Criterion,
     Evidence,
     RunOutcome,
     evaluate,
     mode_since,
+    relogins,
 )
 from obliskiq.scoreboard.tca import Execution, analyse, measure
 from obliskiq.store.orders import IntentFill
 from obliskiq.store.scoreboard import Drill
+from obliskiq.store.session_events import SessionEvent
 
 D = Decimal
 NOW = datetime(2027, 3, 1, 12, tzinfo=UTC)
@@ -89,7 +93,14 @@ def evidence(mode: ExecutionMode, since: datetime, **changes: object) -> Evidenc
             for d in sessions
         ),
         stuck_intents=0,
-        relogins_recorded=True,
+        session_events=tuple(
+            SessionEvent(
+                datetime.combine(d, datetime.min.time(), UTC) + timedelta(hours=4, minutes=1),
+                "reauthenticated",
+                "the brokerage session was lost",
+            )
+            for d in days
+        ),
         placed=30,
         filled=29,
         fills_without_clearance=0,
@@ -120,7 +131,7 @@ def test_l1_passes_with_ten_clean_trading_days_of_shadow(shipped_settings: Oblis
 @pytest.mark.parametrize(
     ("changes", "failing"),
     [
-        ({"relogins_recorded": False}, "re-logged"),
+        ({"session_events": ()}, "re-logged"),
         ({"stuck_intents": 1}, "stuck"),
         ({"runs": ()}, "unhandled error"),
         ({"reconciliations": ()}, "clean reconciliation"),
@@ -137,6 +148,38 @@ def test_l1_cannot_pass_on_missing_data_or_a_fault(
     )
     assert not found.passed
     assert failing in found.summary()
+
+
+def _relogin(found_events: tuple[SessionEvent, ...], since: datetime) -> Criterion:
+    found = relogins(evidence(ExecutionMode.SHADOW, since, session_events=found_events), since)
+    assert found.name == RELOGIN
+    return found
+
+
+def test_l1_reads_the_recorded_re_logins() -> None:
+    since = NOW - timedelta(days=16)
+    every_day = evidence(ExecutionMode.SHADOW, since).session_events
+    assert _relogin(every_day, since).passed is True
+    # A reset that falls the evening before in UTC (Europe's midnight) still counts.
+    evening = tuple(replace(e, at=e.at - timedelta(hours=6)) for e in every_day)
+    assert _relogin(evening, since).passed is True
+    # A trading day with no re-login on it or the day before fails the criterion.
+    gap = tuple(e for e in every_day if e.at.date() not in {date(2027, 2, 24), date(2027, 2, 25)})
+    missed = _relogin(gap, since)
+    assert missed.passed is False
+    assert "2027-02-25" in missed.detail
+    # A failed re-login left without a successful one after it fails it.
+    failed = (*every_day, SessionEvent(NOW - timedelta(hours=1), "reauthentication_failed", "x"))
+    unrepaired = _relogin(failed, since)
+    assert unrepaired.passed is False
+    assert "not repaired" in unrepaired.detail
+    repaired = (*failed, SessionEvent(NOW - timedelta(minutes=5), "reauthenticated", "x"))
+    assert _relogin(repaired, since).passed is True
+    # Nothing recorded, or no whole trading day yet, is unmeasured: never passed.
+    assert _relogin((), since).passed is None
+    recent = (SessionEvent(NOW - timedelta(hours=1), "reauthenticated", "x"),)
+    assert _relogin(recent, NOW - timedelta(hours=2)).passed is None
+    assert relogins(evidence(ExecutionMode.SHADOW, since), None).passed is None
 
 
 def test_l1_needs_a_dated_entry_and_ten_sessions(shipped_settings: ObliskConfig) -> None:

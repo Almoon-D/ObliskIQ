@@ -107,6 +107,11 @@ def universe_tax_facts(universe: UniverseConfig) -> dict[int, TaxFacts]:
     }
 
 
+def tax_kind(asset_class: AssetClass) -> SecurityKind | None:
+    """What the tax rules take an asset class for; ``None``: no tax rule here."""
+    return _KINDS.get(asset_class)
+
+
 def security_key(conid: int) -> str:
     """How the live book names a contract as a security."""
     return str(conid)

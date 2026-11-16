@@ -3844,3 +3844,42 @@ is due; once one is due its share is nothing, since an unread boundary is never 
 satellite's live share is capped by `capital.satellite_ceiling` (0.20), whose validator keeps the
 core's budget: D149's 50 % and steps need that check reworked, which falls to Session 26 when a
 Hunter hypothesis exists. The panel's grading, calibration and its report are built now.
+
+## Session 18a — Scoreboard, the remainder (2026-11-15)
+
+### D172 · L1's re-logins are the session's own alerts, read per trading day (§5.19; D68, D170)
+
+The service records each broker-session alert (`session_events`). IBKR's reset is detected, not
+scheduled (its UTC and local times disagree, docs/knowledge/ibkr.md), and falls at midnight of
+the connecting region: the UTC day of a trading day or the one before. So L1's criterion passes
+when every whole trading day of the period has a successful re-login on it or the day before and
+no failed re-login is left unrepaired; nothing recorded is unmeasured. Every recorded re-login is
+the bot's. A day bridged by a restart instead of a re-login fails it (no login at start is
+recorded). Rejected: a window of 24 hours between re-logins (a weekend's maintenance would fail it).
+
+### D173 · How H13's record is read from the store (§5.5, §5.19; D156, D159, D171)
+
+- **K** is the book's capital as a cycle read it, the day's first reading kept; an idle book reads
+  it too. **A thesis's fills** are the satellite's fills of its instrument (or option) from its
+  approval to its close, as the book counts them; costs are the fill's commission.
+- **The twin** buys the equity reference the grading uses, at its last close inside the mark age,
+  costed by the cost model on its calendar venue. A look falls at month `6k` of each record and
+  group; anything unmeasurable (a mark, a rate, tax facts, K, a cost, no policy) records it not
+  evaluable, once.
+- **The share** is the exploration share plus a step per live look that stepped, to 0.50; nothing
+  once a live look sent the book back or a paper look found it below. A group's return refuses its
+  source's (or segment's) new ideas, or sizes its conviction as `normal`, on the live account; an
+  idea approved before keeps its entry. A book sent back keeps no parallel shadow record.
+
+Rejected: recomputing a look later from backfilled marks (H13: a look is not repeated).
+
+### D174 · The panel's universe, features and cohort (§5.19; scoreboard.md "The weekly forecast panel")
+
+The universe is the tradable candidates less the equity reference, hashed with the panel's prompt
+hash on every forecast; the grading reads the latest hash's calls alone. Features are trailing
+statistics of each name's closes in its own currency (legacy's: 21- and 63-session returns, 12-1
+momentum, 60-session volatility, distance from the 252-session high). A feed whose newest close
+is older than the mark age, or too few fresh names, skips the week before any call; a cohort short
+of 60 % or 20 names after the calls keeps nothing and is retried at the next run. Forecasts are
+calls `up` with `p_outperform` as their probability. Calls cost against the one LLM budget.
+Rejected: features in the base currency (a daily rate per name for a statistic the model reads).

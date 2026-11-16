@@ -23,24 +23,26 @@ from ..capital.allocation import (
 )
 from ..capital.twr import Reading, account_flows
 from ..config.schema import ObliskConfig
-from ..domain.orders import ExecutionMode, IntentRole, IntentState, OrderSide, Sleeve
+from ..domain.orders import ExecutionMode, IntentRole, IntentState, OrderSide
 from ..domain.thesis import ThesisState, View
 from ..quant.costs import CostBook
 from ..quant.costs import OrderTerms as CostTerms
-from ..research.prereg import ScoreboardSpec
+from ..research.prereg import ForwardBookSpec, ScoreboardSpec
 from ..store import analyst as analyst_repo
 from ..store import breakers as breaker_repo
 from ..store import capital as capital_repo
 from ..store import fx as fx_repo
+from ..store import h13 as h13_repo
 from ..store import nav as nav_repo
 from ..store import orders as order_repo
 from ..store import repos
 from ..store import runs as run_repo
 from ..store import scoreboard as repo
+from ..store import session_events as session_repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store.db import Store
-from ..store.scoreboard import AllocationEvent, Call, Direction, LayerEvent
+from ..store.scoreboard import PANEL_LAYER, AllocationEvent, Call, Direction, LayerEvent
 from .calibration import CalibrationState, calibration_state
 from .grading import GradedCall, PanelRecord, Record, dedupe, grade_call, panel_record, record
 from .layers import (
@@ -65,9 +67,6 @@ from .rules import GradingRules
 from .tca import Execution, analyse
 
 ZERO = Decimal(0)
-MONTHS_PER_YEAR = 12
-#: The layer of the weekly forecast panel's calls.
-PANEL_LAYER = "panel"
 #: Theses are graded per source (``thesis:owner``, ``thesis:analyst``) and the analyst's per
 #: segment (``analyst:<segment>``): an LLM nomination is an analyst thesis.
 THESIS_PREFIX = "thesis:"
@@ -80,7 +79,6 @@ _WORKING = frozenset(
 _FINISHED = frozenset(
     {IntentState.FILLED, IntentState.CANCELLED, IntentState.REJECTED, IntentState.EXPIRED}
 )
-_LIVE = frozenset({ExecutionMode.LIVE_SMALL, ExecutionMode.LIVE})
 _THESIS_STATES = frozenset({ThesisState.APPROVED, ThesisState.ACTIVE, ThesisState.CLOSED})
 
 
@@ -172,6 +170,15 @@ def all_calls(store: Store, *, as_of: date) -> dict[str, list[Call]]:
     return by_layer
 
 
+def current_universe(calls: Sequence[Call]) -> list[Call]:
+    """The panel's calls of its latest universe: each forecast names its universe's hash first in
+    its detail, and a change of universe or prompt starts a new record."""
+    if not calls:
+        return []
+    latest = calls[-1].detail.split(";", 1)[0]
+    return [call for call in calls if call.detail.split(";", 1)[0] == latest]
+
+
 @dataclass(frozen=True, slots=True)
 class GradeBook:
     """Every layer's record and calibration on a day, and the panel's."""
@@ -201,7 +208,8 @@ def grade_book(
     calibration: dict[str, CalibrationState] = {}
     graded_by: dict[str, list[GradedCall]] = {}
     panel: PanelRecord | None = None
-    for layer, calls in sorted(all_calls(store, as_of=as_of).items()):
+    for layer, every in sorted(all_calls(store, as_of=as_of).items()):
+        calls = current_universe(every) if layer == PANEL_LAYER else every
         layer_rules = panel_rules if layer == PANEL_LAYER else rules
         graded = [
             grade_call(c, mark=marks.mark, reference=reference, rules=layer_rules, as_of=as_of)
@@ -227,6 +235,7 @@ class Changes:
     events: list[LayerEvent] = field(default_factory=list)
     looks: list[repo.Look] = field(default_factory=list)
     shares: list[AllocationEvent] = field(default_factory=list)
+    h13: list[h13_repo.H13Look] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
 
@@ -262,28 +271,6 @@ def run_lifecycle(
     return changes
 
 
-def thesis_book_months(store: Store, *, as_of: date) -> tuple[int, int]:
-    """The months of the thesis book's paper and live-account records: from the month of each
-    record's first entry fill, counted whole."""
-    firsts: dict[str, date] = {}
-    for item in order_repo.intent_fills(store):
-        if item.sleeve is not Sleeve.SATELLITE or item.role is not IntentRole.ENTRY:
-            continue
-        record_name = (
-            "paper" if item.mode is ExecutionMode.PAPER else "live" if item.mode in _LIVE else None
-        )
-        day = item.fill.executed_at.date()
-        if record_name is not None and day <= as_of:
-            firsts.setdefault(record_name, day)
-
-    def months(first: date | None) -> int:
-        if first is None:
-            return 0
-        return (as_of.year - first.year) * MONTHS_PER_YEAR + as_of.month - first.month + 1
-
-    return months(firsts.get("paper")), months(firsts.get("live"))
-
-
 def run_month(
     store: Store,
     settings: ObliskConfig,
@@ -291,7 +278,7 @@ def run_month(
     layers: Sequence[RegistryLayer],
     *,
     month: str,
-    h13_first_look: int,
+    h13: ForwardBookSpec,
     activation: Activation,
     retest: Retest,
     at: datetime,
@@ -342,13 +329,12 @@ def run_month(
             retest=retest(layer, months),
         )
         _record_share(store, changes, key, step_share(current.get(key, ZERO), rule, evidence), at)
-    paper, live = thesis_book_months(store, as_of=at.date())
     decision = thesis_book_share(
         ThesisBookCapital(
             exploration=settings.thesis.capital_share,
-            paper_months=paper,
-            live_months=live,
-            first_look_month=h13_first_look,
+            share_step=h13.step.share_step,
+            share_ceiling=h13.step.share_ceiling,
+            looks=h13_repo.h13_looks(store),
         )
     )
     _record_share(store, changes, THESIS_BOOK, decision, at)
@@ -471,7 +457,7 @@ def promotion_evidence(
         runs=runs,
         reconciliations=reconciled,
         stuck_intents=stuck,
-        relogins_recorded=False,
+        session_events=tuple(session_repo.session_events(store, since=entered or now, as_of=now)),
         placed=placed,
         filled=filled,
         fills_without_clearance=violations,

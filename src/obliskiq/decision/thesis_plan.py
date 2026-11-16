@@ -17,6 +17,7 @@ from ..engines.options_sleeve.thesis_link import Chosen
 from ..engines.options_sleeve.zombie import OptionRisk
 from ..engines.thesis.gate import Finding
 from ..execution.account import CashRead
+from ..store.h13 import Holdbacks
 from ..store.orders import IntentFill
 from .vehicle_selector import VehicleMarket
 
@@ -146,3 +147,7 @@ class BookRead:
     owners: Mapping[int, str]
     today: date
     at: datetime
+    #: What H13's looks hold back on the live account (``None`` in shadow and paper), and each
+    #: analyst thesis's segment.
+    holdbacks: Holdbacks | None = None
+    segments: Mapping[int, str] = field(default_factory=dict)

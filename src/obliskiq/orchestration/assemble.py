@@ -41,6 +41,7 @@ from ..jurisdiction import ELIGIBILITY_POLICIES
 from ..jurisdiction.profile import JurisdictionProfile
 from ..llm.analyst import Analyst
 from ..llm.extractor import EventExtractor
+from ..llm.panel import ForecastPanel
 from ..quant.costs import CostBook
 from ..reporting.alerts import AlertBook
 from ..reporting.notifier import LogNotifier, Notifier, TelegramNotifier
@@ -48,7 +49,7 @@ from ..reporting.reporter import Reporter
 from ..research.patterns import REGISTRY_PATH
 from ..scoreboard.service import Scoreboard
 from ..util.http import RetryPolicy
-from .analyst import AnalystJob
+from .analyst import AnalystJob, panel_rules
 from .clock import Clock
 from .compute import ComputeRunner
 from .correlations import ResearchCorrelationSource
@@ -302,6 +303,15 @@ def build_service(
             ),
             worker=path.worker,
             now=clock.now,
+            panel=ForecastPanel(
+                settings,
+                rules=panel_rules(repository_root()),
+                client=http,
+                worker=path.worker,
+                key=(secrets or _no_secret)(settings.llm.analyst_provider().key_env),
+                now=clock.now,
+                sleep=sleep,
+            ),
         )
         if http is not None
         else None
@@ -369,6 +379,7 @@ async def open_service(
         ) as path,
         client_for(settings) as http,
     ):
+        hooks.attach(path.worker)
         correlations = ResearchCorrelationSource(settings, data_dir)
         try:
             yield build_service(

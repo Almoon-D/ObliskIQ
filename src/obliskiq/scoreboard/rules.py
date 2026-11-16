@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Final
 
 from ..errors import PreregistrationError
-from ..research.prereg import ScoreboardPrereg, ScoreboardSpec, load_any
+from ..research.prereg import ForwardBookPrereg, ScoreboardPrereg, ScoreboardSpec, load_any
 from ..research.registry import file_sha256, lock_path
 
 #: The scoreboard's pre-registration, relative to the repository root.
@@ -27,8 +27,7 @@ H13_PATH: Final = Path("research") / "preregistrations" / "thesis-book.md"
 DAYS_PER_WEEK: Final = 7
 
 
-def load_locked(path: Path) -> ScoreboardPrereg:
-    """The scoreboard's pre-registration at ``path`` when its lock records exactly this text."""
+def _check_lock(path: Path) -> None:
     lock = lock_path(path)
     try:
         payload = json.loads(lock.read_text(encoding="utf-8"))
@@ -40,9 +39,23 @@ def load_locked(path: Path) -> ScoreboardPrereg:
         ) from None
     if file_sha256(path) != locked:
         raise PreregistrationError(f"{path.name} is not the text its lock records")
+
+
+def load_locked(path: Path) -> ScoreboardPrereg:
+    """The scoreboard's pre-registration at ``path`` when its lock records exactly this text."""
+    _check_lock(path)
     prereg = load_any(path)
     if not isinstance(prereg, ScoreboardPrereg):
         raise PreregistrationError(f"{path.name} is not the scoreboard's rules")
+    return prereg
+
+
+def load_locked_book(path: Path) -> ForwardBookPrereg:
+    """H13's pre-registration at ``path`` when its lock records exactly this text."""
+    _check_lock(path)
+    prereg = load_any(path)
+    if not isinstance(prereg, ForwardBookPrereg):
+        raise PreregistrationError(f"{path.name} is not a forward book's pre-registration")
     return prereg
 
 

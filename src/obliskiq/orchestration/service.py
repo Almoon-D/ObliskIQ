@@ -34,7 +34,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import asyncio
 import contextlib
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -46,7 +46,7 @@ from ..errors import CalendarError
 from ..execution.boundary import OrderAlert
 from ..execution.killswitch import SweepReport
 from ..execution.runtime import OrderPath, schedule_references
-from ..ibkr.session import SessionAlert
+from ..ibkr.session import SessionAlert, SessionAlertKind
 from ..logging_setup import get_logger
 from ..reporting.alerts import (
     Alert,
@@ -58,7 +58,9 @@ from ..reporting.alerts import (
 )
 from ..reporting.reporter import Reporter
 from ..store import runs as run_repo
-from .analyst import AnalystJob, judge_analyst
+from ..store.session_events import SessionEvent, SessionEventKind, record_session_event
+from ..store.worker import StoreWorker
+from .analyst import PANEL, AnalystJob, judge_analyst, judge_panel
 from .clock import Clock
 from .compute import ALL, ComputeRunner
 from .health import write_heartbeat
@@ -97,6 +99,13 @@ LOOKBACK = timedelta(days=1)
 _FINISHED = frozenset({"ok", "degraded", "partial", "error", "skipped"})
 #: The alert source of the halt feed's rounds.
 HALTS = "halts"
+#: How each session alert is recorded.
+_SESSION_EVENTS: dict[SessionAlertKind, SessionEventKind] = {
+    SessionAlertKind.COMPETING: "competing_session",
+    SessionAlertKind.SESSION_LOST: "session_lost",
+    SessionAlertKind.REAUTHENTICATED: "reauthenticated",
+    SessionAlertKind.REAUTHENTICATION_FAILED: "reauthentication_failed",
+}
 #: The run log's name for an EventExtractor run.
 EXTRACT = "extract"
 #: Digits an extractor run's cost is recorded with (US dollars).
@@ -119,21 +128,41 @@ def _judge_extraction(result: ExtractorRun) -> StepOutcome:
 
 
 class AlertHooks:
-    """The synchronous hooks the order path, the session and the calendars report through."""
+    """The synchronous hooks the order path, the session and the calendars report through. Once
+    a store is attached, each session alert is also recorded there (``session_events``): the
+    promotion gate reads the re-logins from it."""
 
     def __init__(self, reporter: Reporter, *, now: Callable[[], datetime]) -> None:
         self._reporter = reporter
         self._now = now
         self.source: str | None = None
-        self._tasks: set[asyncio.Task[int]] = set()
+        self._tasks: set[asyncio.Task[object]] = set()
+        self._worker: StoreWorker | None = None
 
-    def _flush_soon(self) -> None:
+    def attach(self, worker: StoreWorker) -> None:
+        """Record the session's alerts in ``worker``'s store from now on."""
+        self._worker = worker
+
+    def _soon(self, work: Coroutine[object, object, object]) -> None:
         try:
-            task = asyncio.get_running_loop().create_task(self._reporter.flush())
+            task = asyncio.get_running_loop().create_task(work)
         except RuntimeError:  # no loop (a hook fired outside the service): the next flush sends
+            work.close()
             return
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    def _flush_soon(self) -> None:
+        self._soon(self._reporter.flush())
+
+    async def _record(self, worker: StoreWorker, alert: SessionAlert) -> None:
+        event = SessionEvent(
+            alert.at, _SESSION_EVENTS[alert.kind], alert.detail or alert.kind.value
+        )
+        try:
+            await worker.run(record_session_event, event)
+        except Exception:  # the record must never stop the alert or the session's repair
+            log.exception("a session event could not be recorded")
 
     def order(self, alert: OrderAlert) -> None:
         self._reporter.push(from_order(alert), self.source or "order")
@@ -141,6 +170,8 @@ class AlertHooks:
     def session(self, alert: SessionAlert) -> None:
         self._reporter.push(from_session(alert), "session")
         self._flush_soon()
+        if self._worker is not None:
+            self._soon(self._record(self._worker, alert))
 
     def calendar(self, found: Disagreement) -> None:
         self._reporter.push(from_disagreement(found, self._now()), "calendar")
@@ -469,21 +500,25 @@ class Service:
         await self._compute.run(ALL, as_of=job.session_date, dry_run=False, command=job.command)
 
     async def _analyst_job(self, job: Job) -> None:
-        """The analyst over the day's fact sheet (``orchestration/analyst.py``), as a run of its
-        own. A failure here never reaches the cycles: the job's exception stops at
+        """The analyst over the day's fact sheet, then the weekly forecast panel
+        (``orchestration/analyst.py``), as a run of its own. A failure here never reaches the
+        cycles: the job's exception stops at
         :meth:`_run_job`, and the run record says what happened."""
         if self._analyst is None:  # pragma: no cover - never planned
             return
         analyst = self._analyst
+        panel = analyst.panel
         record = RunRecord(
             self._path.worker,
             command=job.command,
             session_date=job.session_date,
-            steps=(ANALYST,),
+            steps=(ANALYST,) if panel is None else (ANALYST, PANEL),
             now=self._clock.now,
         )
         await record.begin()
         await record.step(ANALYST, functools.partial(analyst.run, job.session_date), judge_analyst)
+        if panel is not None:
+            await record.step(PANEL, panel.run, judge_panel)
         await record.finish()
 
     async def _after_cycle(self, status: str) -> None:

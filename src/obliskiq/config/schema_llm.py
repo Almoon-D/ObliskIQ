@@ -7,7 +7,8 @@ environment variable that holds its key, so a provider is added by an entry here
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from typing import Literal, Self
+from decimal import Decimal
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     Field,
@@ -84,12 +85,55 @@ class AnalystConfig(FrozenModel):
     fact_sheet: FactSheetConfig
 
 
+class PanelConfig(FrozenModel):
+    """The weekly forecast panel (``llm/panel.py``): the analyst's model and budget; the
+    pre-registration's horizon, mark age and minimums."""
+
+    prompt_version: PositiveInt
+    temperature: NonNegativeFloat
+    max_output_tokens: PositiveInt
+    request_timeout_seconds: PositiveInt
+    retries_on_invalid: NonNegativeInt
+    batch_size: PositiveInt
+    min_batch_coverage: Annotated[Decimal, Field(gt=0, le=1)]
+    max_consecutive_failures: PositiveInt
+    batch_pause_seconds: NonNegativeFloat
+    min_history_sessions: PositiveInt
+    return_sessions: list[PositiveInt] = Field(min_length=1)
+    momentum_lookback_sessions: PositiveInt
+    momentum_skip_sessions: PositiveInt
+    volatility_sessions: PositiveInt
+    min_volatility_returns: PositiveInt
+    high_sessions: PositiveInt
+    annualisation_sessions: PositiveInt
+    probability_bounds: tuple[
+        Annotated[Decimal, Field(gt=0, lt=1)], Annotated[Decimal, Field(gt=0, lt=1)]
+    ]
+    max_abs_excess_pct: Annotated[Decimal, Field(gt=0)]
+    asked_excess_range_pct: Annotated[Decimal, Field(gt=0)]
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        low, high = self.probability_bounds
+        if not low < high:
+            raise ValueError("probability_bounds runs from the lower bound to the upper")
+        if self.momentum_skip_sessions >= self.momentum_lookback_sessions:
+            raise ValueError("12-1 momentum skips fewer sessions than it looks back")
+        if self.asked_excess_range_pct > self.max_abs_excess_pct:
+            raise ValueError("the range asked for lies inside the limit an answer is held to")
+        needed = max(*self.return_sessions, self.volatility_sessions) + 1
+        if self.min_history_sessions < needed:
+            raise ValueError(f"min_history_sessions is below the {needed} the statistics need")
+        return self
+
+
 class LlmConfig(FrozenModel):
     providers: dict[Identifier, LlmProviderConfig] = Field(min_length=1)
     models: dict[Identifier, LlmModelConfig] = Field(min_length=1)
     budget: LlmBudgetConfig
     extractor: ExtractorConfig
     analyst: AnalystConfig
+    panel: PanelConfig
 
     def analyst_model(self) -> LlmModelConfig:
         return self.models[self.analyst.model]

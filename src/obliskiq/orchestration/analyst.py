@@ -1,5 +1,6 @@
 """The analyst's run in the service: the fact sheet, the LLM analyst, and its drafts handed to the
-thesis book's intake (MASTER_PLAN §5.5, §5.10).
+thesis book's intake (MASTER_PLAN §5.5, §5.10); then the weekly forecast panel, which keeps one
+cohort an ISO week (``llm/panel.py``) on the same model and budget.
 
 ``llm`` imports nothing from ``decision``: this module is where a draft crosses. Each valid draft
 goes through :class:`~..decision.thesis_intake.ThesisIntake` as source ``analyst``, exactly as an
@@ -14,6 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Final
 
 from ..config.schema import ObliskConfig
@@ -23,12 +25,16 @@ from ..engines.thesis.gate import describe
 from ..errors import ObliskError
 from ..grid.facts import build_fact_sheet
 from ..llm.analyst import Analyst, AnalystRun, facts_json
+from ..llm.panel import ForecastPanel, PanelRules, PanelRun
+from ..scoreboard.rules import RULES_PATH, load_locked
 from ..store import analyst as analyst_repo
 from ..store.worker import StoreWorker
 from .runlog import DEGRADED, OK, SKIPPED, StepOutcome
 
-#: The run log's name for an analyst run, and its one step.
+#: The run log's name for an analyst run, and its first step.
 ANALYST: Final = "analyst"
+#: The step of the weekly forecast panel.
+PANEL: Final = "panel"
 #: The actor the intake logs a draft as.
 ACTOR: Final = "analyst"
 #: Digits a run's cost is recorded with (US dollars).
@@ -56,11 +62,13 @@ class AnalystJob:
         analyst: Analyst,
         worker: StoreWorker,
         now: Callable[[], datetime],
+        panel: ForecastPanel | None = None,
     ) -> None:
         self._settings = settings
         self._analyst = analyst
         self._worker = worker
         self._intake = ThesisIntake(settings, worker=worker, now=now)
+        self.panel = panel
 
     async def run(self, as_of: date) -> AnalystOutcome:
         sheet = await self._worker.run(build_fact_sheet, self._settings, as_of=as_of)
@@ -107,6 +115,41 @@ class AnalystJob:
             count[DraftOutcome.REFUSED],
             count[DraftOutcome.DROPPED],
         )
+
+
+def panel_rules(root: Path | None) -> PanelRules | str:
+    """The panel's numbers from the scoreboard's locked rules, or why they cannot be read."""
+    if root is None:
+        return "no repository holds the research files (an installed wheel)"
+    try:
+        spec = load_locked(root / RULES_PATH).spec
+    except ObliskError as exc:
+        return str(exc)
+    return PanelRules(
+        horizon_days=spec.panel.horizon_days,
+        max_mark_age_days=spec.grading.max_mark_age_days,
+        min_names=spec.panel.min_names,
+        min_coverage=spec.panel.min_coverage,
+    )
+
+
+def judge_panel(run: PanelRun) -> StepOutcome:
+    """A panel run's verdict: skipped when no call was made (already kept, no key, no rules, a
+    stale feed, too few fresh names), degraded when calls kept no cohort (the week is tried
+    again) or a batch failed, ok otherwise."""
+    detail: dict[str, object] = {
+        "week": run.week,
+        "universe": run.universe,
+        "forecast": run.forecast,
+        "calls": run.calls,
+        "failed": run.failed,
+        "invalid": run.invalid,
+        "cost_usd": round(run.cost_usd, COST_DIGITS),
+    }
+    if run.state == "skipped" or (run.state == "incomplete" and run.calls == 0):
+        return StepOutcome(PANEL, SKIPPED, run.reason, detail)
+    status = OK if run.state == "ok" and not (run.failed or run.invalid) else DEGRADED
+    return StepOutcome(PANEL, status, run.reason, detail)
 
 
 def judge_analyst(outcome: AnalystOutcome) -> StepOutcome:

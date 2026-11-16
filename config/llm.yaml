@@ -85,3 +85,39 @@ llm:
       # Issuers with open-market purchases by officers or directors in the cluster window, the
       # most buyers first, at most this many.
       max_insider_lines: 15
+  panel:
+    # The weekly forecast panel (research/preregistrations/scoreboard.md "The weekly forecast
+    # panel"; ported from Inversor-Inteligente's modules/analytics/forecast_panel.py with its
+    # values). The provider, the model and the monthly budget are the analyst's; the horizon, the
+    # mark age, the minimum names and the coverage are the pre-registration's, not this block's.
+    # A change here (the prompt's hash) or of the universe starts a new record.
+    prompt_version: 1
+    temperature: 0
+    max_output_tokens: 8192
+    request_timeout_seconds: 120
+    # One retry with the validation error, then the batch fails closed.
+    retries_on_invalid: 1
+    # Names per call: about 40 compact rows fit every provider's window.
+    batch_size: 40
+    # A batch whose answer covers fewer of its names than this share is invalid.
+    min_batch_coverage: "0.8"
+    # Batches that failed in a row before the run stops spending calls (quota or outage).
+    max_consecutive_failures: 2
+    # Seconds between batches: the panel shares per-minute limits with the analyst.
+    batch_pause_seconds: 4
+    # A name needs this many stored closes to be forecast; 12-1 momentum needs its lookback and
+    # one more, and is given without a value below that.
+    min_history_sessions: 64
+    return_sessions: [21, 63]
+    momentum_lookback_sessions: 252
+    momentum_skip_sessions: 21
+    volatility_sessions: 60
+    min_volatility_returns: 20
+    high_sessions: 252
+    annualisation_sessions: 252
+    # A stated probability is clamped into these bounds; an expected excess beyond the limit
+    # (percent over the horizon) makes the forecast invalid, and the prompt asks for one inside
+    # the range.
+    probability_bounds: ["0.02", "0.98"]
+    max_abs_excess_pct: 50
+    asked_excess_range_pct: 25
