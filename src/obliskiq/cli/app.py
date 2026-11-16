@@ -2,7 +2,8 @@
 
 ``obliskiq config validate`` checks the whole configuration: the expert defaults, the
 owner's panel, the jurisdiction profile it selects and the policies that profile declares.
-``obliskiq settings show`` prints every effective setting and the file it comes from.
+``obliskiq settings show`` prints every effective setting and the file it comes from; ``settings
+set|diff|history`` and ``pause`` are ``cli/settings.py``.
 ``obliskiq kill on|off|status`` sets, clears or shows the kill switch; ``kill on`` works even when
 the configuration does not load (it then sets the file flag alone). ``obliskiq mode show|set``
 shows or changes the execution mode (upgrades by this explicit command, audited).
@@ -15,8 +16,9 @@ external`` and ``tax report`` are the owner's cash flows, questions, external ho
 lots (``cli/capital.py``). ``obliskiq idea add|list|show|withdraw`` are the owner's ideas for the
 thesis book (``cli/idea.py``). Every command that opens a brokerage session takes
 the service lock, so it refuses while the service runs.
-``obliskiq research data load|coverage``, ``research power``, ``research run`` and
-``research lock`` drive the research harness (``cli/research.py``).
+``obliskiq cockpit serve``, ``dashboard`` and ``health`` are the owner's cockpit
+(``cli/cockpit.py``). ``obliskiq research data load|coverage``, ``research power``, ``research
+run`` and ``research lock`` drive the research harness (``cli/research.py``).
 Any problem is printed for the owner, in plain words, with exit status 1 and no traceback.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -38,6 +40,7 @@ from ..domain.orders import ExecutionMode, KillSwitchRecord, ReconcileStatus
 from ..env import Environment, default_env_file, load_environment
 from ..errors import ConfigError, EnvVarError, ModeChangeRefusedError, ObliskError, StoreError
 from ..execution.approvals import ApprovalQueue
+from ..execution.full_preflight import FullPreflight
 from ..execution.killswitch import clear_file_flag, file_flag_on, set_file_flag
 from ..execution.live_test import ExecutionTest
 from ..execution.modes import Modes
@@ -56,11 +59,13 @@ from ..jurisdiction import (
 )
 from ..logging_setup import configure_logging
 from ..orchestration.lock import ServiceLock
+from ..reporting.notifier import TelegramNotifier
 from ..store import open_store
 from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .capital import add_capital_commands
+from .cockpit import add_cockpit_commands
 from .collect import add_collect_commands
 from .compute import add_compute_commands
 from .idea import add_idea_commands
@@ -68,6 +73,7 @@ from .llm import add_llm_commands
 from .research import add_research_commands
 from .scoreboard import add_scoreboard_commands, promotion_verdict
 from .service import add_service_commands
+from .settings import add_pause_commands, add_settings_actions
 from .sources import add_sources_commands
 
 EXIT_OK = 0
@@ -97,7 +103,7 @@ type Handler = Callable[[Loaded, TextIO], int]
 
 def load_all(config_dir: Path, env: Environment) -> Loaded:
     """Load the configuration and its jurisdiction profile, failing loudly on any problem."""
-    loaded = load_config(config_dir, overrides=env.config_overrides())
+    loaded = load_config(config_dir, overrides=env.config_overrides(), owner_file=env.owner_file)
     settings = loaded.settings
     configure_logging(settings.logging.level, settings.logging.format)
     profile = load_profile(config_dir, settings.jurisdiction)
@@ -173,6 +179,8 @@ def _preflight(loaded: Loaded, out: TextIO) -> int:
         return _paper_order_test(loaded, out)
     if loaded.args.execution_test:
         return _execution_test(loaded, out)
+    if loaded.args.full:
+        return _full_preflight(loaded, out)
     report = asyncio.run(run_read_only(env, loaded.config.settings, data_dir=env.data_dir))
     print(report.render((_account(env),)), file=out)
     return EXIT_OK if report.ok else EXIT_INVALID
@@ -205,6 +213,28 @@ def _paper_order_test(loaded: Loaded, out: TextIO) -> int:
         print(f"paper order test stopped: {exc}", file=out)
         return EXIT_INVALID
     print(report.render((_account(loaded.env),)), file=out)
+    return EXIT_OK if report.ok else EXIT_INVALID
+
+
+def _full_preflight(loaded: Loaded, out: TextIO) -> int:
+    """The whole path before deployment, a whatif for a core vehicle and a Telegram test."""
+    env = loaded.env
+    telegram = (
+        TelegramNotifier(
+            loaded.config.settings.reporting,
+            token=env.telegram_bot_token,
+            chat_id=env.telegram_chat_id,
+        )
+        if env.telegram_bot_token is not None and env.telegram_chat_id is not None
+        else None
+    )
+    try:
+        report = _with_order_path(loaded, lambda path: FullPreflight(path, telegram=telegram).run())
+    except ObliskError as exc:
+        print(f"preflight stopped: {exc}", file=out)
+        return EXIT_INVALID
+    text = report.render((_account(env),))
+    print(text.replace("IBKR read-only preflight", "IBKR full preflight", 1), file=out)
     return EXIT_OK if report.ok else EXIT_INVALID
 
 
@@ -472,6 +502,7 @@ def build_parser() -> argparse.ArgumentParser:
         "show", help="print every effective setting and where its value comes from"
     )
     show.set_defaults(handler=_settings_show)
+    add_settings_actions(settings_actions)
 
     preflight = commands.add_parser("preflight", help="check the IBKR connection end to end")
     how = preflight.add_mutually_exclusive_group(required=True)
@@ -493,6 +524,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="paper only: a conversion, a buy that fills, its protective stop and IBKR's "
         "reporting lag; then, with --finish in a new process, the stop after the restart and "
         "the sale (needs mode paper)",
+    )
+    how.add_argument(
+        "--full",
+        action="store_true",
+        help="before deployment: the read path, the venue's status, a whatif for the minimum "
+        "quantity of a core vehicle (never placed) and, with Telegram set, a test message",
     )
     preflight.add_argument(
         "--finish",
@@ -559,6 +596,8 @@ def build_parser() -> argparse.ArgumentParser:
     mode_set.set_defaults(handler=_mode_set)
 
     add_service_commands(commands)
+    add_pause_commands(commands)
+    add_cockpit_commands(commands)
     add_capital_commands(commands)
     add_idea_commands(commands)
     add_research_commands(commands)

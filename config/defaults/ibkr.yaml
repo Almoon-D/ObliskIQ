@@ -228,6 +228,10 @@ ibkr:
     currency: USD
     history_period: 1m
     history_bar: 1d
+    # `obliskiq preflight --full`: the core vehicle whose minimum quantity it previews through
+    # /whatif (nothing is placed). XDWD on Xetra, the reserve's world-equity vehicle under D50; a
+    # described tradable candidate of config/universe.yaml.
+    whatif_conid: 163606916
     # `obliskiq preflight --paper-order-test`: one buy of the minimum quantity per instrument, at a
     # limit that cannot fill, then a cancel. Each conid must be a described tradable candidate of
     # config/universe.yaml.
