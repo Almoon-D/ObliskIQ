@@ -79,7 +79,10 @@ if ! "$DOCKER" pull "$image:$tag"; then
     alert "update to $tag refused: $image:$tag could not be pulled; still on $previous"
     exit 1
 fi
-kill_before=$(kill_state)
+kill_before=$(kill_state) || {
+    alert "update to $tag refused: the kill switch's state cannot be read; still on $previous"
+    exit 1
+}
 backup=$("$HERE/backup.sh" --local-only) || {
     alert "update to $tag refused: the backup failed; still on $previous"
     exit 1

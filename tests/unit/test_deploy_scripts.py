@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import os
 import sqlite3
+from contextlib import closing
 import stat
 import subprocess
 import sys
@@ -41,7 +42,7 @@ case "$1" in
         fi
         exit 0 ;;
     esac ;;
-  run) cat "$STUB/kill"; exit 0 ;;
+  run) [ -e "$STUB/run_fails" ] && exit 1; cat "$STUB/kill"; exit 0 ;;
 esac
 exit 0
 """
@@ -78,6 +79,7 @@ else:
     for row in connection.execute(command):
         print("|".join(str(value) for value in row))
     connection.commit()
+connection.close()
 """
 
 ZSTD = r"""#!{python}
@@ -122,9 +124,10 @@ class Machine:
         _write(self.stub / "kill", "kill switch OFF\n")
         _write(self.stub / "calls", "")
         _write(self.data / "PAUSED", '{"actor": "owner"}\n')
-        with sqlite3.connect(self.data / "obliskiq.db") as db:
+        with closing(sqlite3.connect(self.data / "obliskiq.db")) as db:
             db.execute("CREATE TABLE book (conid INTEGER)")
             db.execute("INSERT INTO book VALUES (163606916)")
+            db.commit()
         python = sys.executable
         _write(self.bin / "docker", DOCKER, executable=True)
         _write(self.bin / "systemctl", SYSTEMCTL, executable=True)
@@ -167,7 +170,7 @@ class Machine:
         return (self.stub / "calls").read_text(encoding="utf-8").splitlines()
 
     def tables(self) -> set[str]:
-        with sqlite3.connect(self.data / "obliskiq.db") as db:
+        with closing(sqlite3.connect(self.data / "obliskiq.db")) as db:
             return {row[0] for row in db.execute("SELECT name FROM sqlite_master")}
 
 
@@ -227,6 +230,16 @@ def test_the_kill_switch_is_read_from_a_stopped_service_too(machine: Machine) ->
     assert any(
         c.startswith("docker run --rm") and c.endswith("kill status") for c in machine.calls()
     )
+
+
+def test_a_kill_switch_that_cannot_be_read_refuses_the_update(machine: Machine) -> None:
+    _write(machine.stub / "down", "")
+    _write(machine.stub / "run_fails", "")
+    done = machine.run("update.sh", "0.28.0")
+    assert done.returncode == 1
+    assert machine.tag() == "0.27.0"
+    assert not any(c.startswith("systemctl") for c in machine.calls())
+    assert any("kill switch's state cannot be read" in c for c in machine.calls())
 
 
 def test_a_tag_that_cannot_be_pulled_changes_nothing(machine: Machine) -> None:
@@ -310,14 +323,15 @@ def test_an_alert_without_telegram_goes_to_the_journal_only(machine: Machine) ->
 
 def test_a_restore_puts_the_store_and_the_settings_back(machine: Machine) -> None:
     archive = Path(machine.run("backup.sh", "--local-only").stdout.strip())
-    with sqlite3.connect(machine.data / "obliskiq.db") as db:
+    with closing(sqlite3.connect(machine.data / "obliskiq.db")) as db:
         db.execute("DELETE FROM book")
+        db.commit()
     (machine.data / "PAUSED").unlink()
     _write(machine.data / "KILL_SWITCH", "{}")
     _write(machine.etc / "owner" / "owner.yaml", "core:\n  variant: A\n")
     done = machine.run("restore.sh", str(archive))
     assert done.returncode == 0, done.stderr
-    with sqlite3.connect(machine.data / "obliskiq.db") as db:
+    with closing(sqlite3.connect(machine.data / "obliskiq.db")) as db:
         assert db.execute("SELECT conid FROM book").fetchall() == [(163606916,)]
     assert (machine.data / "PAUSED").exists()
     assert not (machine.data / "KILL_SWITCH").exists()
