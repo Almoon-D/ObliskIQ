@@ -14,11 +14,17 @@ An autonomous portfolio manager for one Interactive Brokers account.
   with no human in the loop. No leverage, no shorting, no written options, limit-capped
   orders only.
 
-**Status: pre-alpha. It does not trade yet.** Built so far: configuration, the store and
-calendars, the IBKR read and order paths with the kill switch and the pre-trade rails, the
-collectors, the core engine and the research harness with its first verdicts in
-[`research/reports/`](research/reports/). No order has filled on paper yet and no signal has
-passed its test; [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
+**Status: 1.0.0, built and not yet proven live. It has not filled an order.** The build is
+complete: configuration, the store and calendars, the IBKR read and order paths with the kill
+switch and the pre-trade rails, the collectors, the reserve's engine, the thesis book and its
+analyst, the scoreboard and promotion gate, the cockpit (Claude and Telegram), the deployment
+image with updates, backups and rollback, and the research harness with its verdicts in
+[`research/reports/`](research/reports/). The failure-mode audit is
+[`docs/AUDIT.md`](docs/AUDIT.md). What it has not done: no order has filled on paper, no signal
+has passed its test (the Hunter holds nothing), and no idea has been graded yet. What remains
+is the owner's, on the machine, with the paper account: the ordered checklist in
+[`docs/ROADMAP.md`](docs/ROADMAP.md), then at least eight weeks of autonomous paper before any
+decision about real money.
 
 ## Start here
 
@@ -27,6 +33,7 @@ passed its test; [`docs/ROADMAP.md`](docs/ROADMAP.md) says what comes next.
 | The design | [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) |
 | How work is done here | [`AGENTS.md`](AGENTS.md) |
 | Progress and what is open | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
+| Running it | [`docs/DEPLOY.md`](docs/DEPLOY.md), [`docs/RUNBOOK.md`](docs/RUNBOOK.md) |
 | Why things are as they are | [`docs/DECISIONS.md`](docs/DECISIONS.md) |
 
 ```

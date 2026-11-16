@@ -16,8 +16,8 @@ Find sections with `grep -n '^#'` and read them by line range. If the code contr
 
 Read what the work in front of you needs, when it needs it.
 
-- Legacy material is read per deliverable, when you start it, not all upfront. `legacy/` is frozen, so a `path:a-b` range in a prompt (a prose section or a YAML key) is exact. Code is named by symbol: read it with the helpers and types it uses; a module you port, read whole. A range or a symbol is where reading starts, not a fence: follow what it calls.
-- `legacy/MANIFEST.md` and lite's `config.yaml` are searched or read by range, never whole.
+- Legacy material is read per deliverable, when you start it, not all upfront. The snapshot of the three earlier repositories was deleted in Session 20; release `v0.28.0` is the last tree that holds it (`git fetch origin tag v0.28.0 --depth 1`, then `git show v0.28.0:legacy/<path>`; `docs/knowledge/legacy-findings.md` says what it was). It is frozen there, so a `legacy/…:a-b` range in a prompt (a prose section or a YAML key) is exact. Code is named by symbol: read it with the helpers and types it uses; a module you port, read whole. A range or a symbol is where reading starts, not a fence: follow what it calls.
+- The snapshot's `MANIFEST.md` and lite's `config.yaml` are searched or read by range, never whole.
   Large data files (a universe, fixtures, CSVs) are inspected by script, `head` or `grep`.
 - Read at the source yourself what you port or edit, and every money-path mechanic: broker replies and message ids, order types, failure modes, guards.
 - Never poll. Background subagents and CI report when they finish.
@@ -55,7 +55,7 @@ Read what the work in front of you needs, when it needs it.
 - Pydantic v2 only; domain models frozen with `extra="forbid"`.
 - `Decimal` at the order boundary; timezone-aware UTC datetimes; local time through `zoneinfo`; sessions through `exchange_calendars`. Never hardcode a trading time.
 - asyncio for I/O; numpy vectorisation for compute; no blocking calls in the event loop; no mutable module globals.
-- Port from `legacy/` (see `legacy/MANIFEST.md`), never from memory. Keep a legacy module's tests when porting it; adapt, don't delete, unless the plan drops the feature.
+- Port from the legacy snapshot at `v0.28.0` (see "Context budget"), never from memory. Keep a legacy module's tests when porting it; adapt, don't delete, unless the plan drops the feature.
 - Search before creating. Extend existing code rather than writing parallel versions.
 - `mypy --strict` on `src/`. Small commits with conventional prefixes (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 - Keep files tidy: documents state the current truth. No version banners or change narratives ("revised", "previously", "the new version") inside docs or code comments — history belongs in git, `CHANGELOG.md` and `DECISIONS.md`.
@@ -114,4 +114,4 @@ uv run obliskiq --help
 ## Layout
 
 `src/obliskiq/` per `docs/MASTER_PLAN.md` §8 · `config/` · `tests/` · `research/` ·
-`docs/` · `deploy/` · `legacy/` (temporary, read-only, excluded from all tooling; deleted in Session 20).
+`docs/` · `deploy/`.

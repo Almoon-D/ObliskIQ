@@ -47,7 +47,7 @@ outbound address, and Ubuntu 26.04 LTS (DECISIONS D96; 24.04 works the same with
 
 What is measured and what is not. Lite measured its own processes on a 1 GB-class x86_64 sandbox:
 the largest was its install at 127 MB, its compute step 68 MB, its MCP server 85 MB idle
-(`legacy/lite/ROADMAP.legacy.md`, 2026-10-04). This image's cockpit idles at 141 MiB (2026-11-16,
+(lite's `ROADMAP.md`, 2026-10-04). This image's cockpit idles at 141 MiB (2026-11-16,
 x86_64). Not yet measured on a real 1 GB machine: the service with the Gateway's Java process and
 the headless Chromium of a login running beside it (VERIFY-LIVE in `docs/ROADMAP.md`). Until it
 is, prefer 2 GB, or give a 1 GB machine 2 GB of swap.
@@ -76,7 +76,7 @@ sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapf
 The deployment's files, at the release you deploy (replace the version):
 
 ```bash
-sudo git clone --branch v0.28.0 https://github.com/Almoon-D/ObliskIQ.git /opt/obliskiq-deploy
+sudo git clone --branch v1.0.0 https://github.com/Almoon-D/ObliskIQ.git /opt/obliskiq-deploy
 ```
 
 The repository is private: give git a GitHub token that can read it when it asks.
@@ -131,7 +131,7 @@ sudo install -m 0644 /opt/obliskiq-deploy/deploy/image.env.example /etc/obliskiq
 ```
 
 ```bash
-sudo docker pull ghcr.io/almoon-d/obliskiq:0.28.0
+sudo docker pull ghcr.io/almoon-d/obliskiq:1.0.0
 ```
 
 **Your settings.** Start from the repository's panel and edit it there; it is the source of truth
@@ -253,8 +253,10 @@ sudo /opt/obliskiq-deploy/deploy/update.sh 0.29.0
 store up, stops both units, points `image.env` at the new tag and starts them (the store's
 migrations run on start). It then waits up to `OBLISK_UPDATE_TIMEOUT` seconds (900) for health: a
 heartbeat written after the update began, `obliskiq status` succeeding and the kill switch as it
-was. If any of that fails it stops the units, restores the backup, starts the previous tag and
-alerts you on Telegram. To go back by hand, run it with the previous version.
+was. If any of that fails, if a unit will not stop or start, or if the script is interrupted (a
+signal, a closed terminal), it stops the units, restores the backup, starts the previous tag and
+alerts you on Telegram, saying whether the previous version started and whether the backup was
+restored. To go back by hand, run it with the previous version.
 
 If a release changes a unit file, copy it again (§5) and `sudo systemctl daemon-reload` before
 `update.sh`.

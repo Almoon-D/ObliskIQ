@@ -247,6 +247,7 @@ records it.
 | 18 | Scoreboard, capital and promotion | Opus 5.5 | xhigh | Custom | — |
 | 19 | Cockpit, settings and deployment | Sonnet 5.5 | high | Custom | full preflight |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
+| 20a | Mutation pass, the remainder | Opus 5.5 | xhigh | Custom | — |
 
 Run in that order; 22 and 23 can run side by side, 27, then 28 and 29, follow 22 beside 23 and
 24 (the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. On a condition, not in
@@ -312,7 +313,10 @@ Before Session 16, add the API domain of the paid LLM provider you choose.
 
 > You are building ObliskIQ, session N. `AGENTS.md` is your operating manual and
 > `docs/MASTER_PLAN.md` is the design — follow them; do not re-derive or relitigate them.
-> Port from `legacy/` (see `legacy/MANIFEST.md`), never from memory. Nothing hardcoded:
+> Port from the legacy snapshot, never from memory: Session 20 deleted `legacy/`, so a
+> `legacy/…` path in a prompt is read at release `v0.28.0`, the last tree that holds it
+> (`git fetch origin tag v0.28.0 --depth 1`; `git show v0.28.0:legacy/<path>`; its
+> `MANIFEST.md` lists every file). Nothing hardcoded:
 > when you build the consumer of a block of lite's `config.yaml`, port the keys you
 > consume into `config/defaults/` with lite's values (a different value needs a
 > `DECISIONS.md` entry). IBKR: paper credentials only, under the rules in `AGENTS.md`;
@@ -2753,6 +2757,42 @@ ACCEPTANCE: every top-ten item has a test that fails without its guard; make che
 legacy/ gone; the ROADMAP checklist complete and ordered; release v1.0.0 published (not a
 pre-release) with its image.
 Finish with the end-of-session protocol in AGENTS.md.
+```
+
+---
+
+## Session 20a — Mutation pass, the remainder
+
+**Launcher:** `Execute Session 20a exactly as specified in docs/SESSION_PROMPTS.md on main.`
+
+```
+You are building ObliskIQ, session 20a. AGENTS.md is your operating manual; MASTER_PLAN.md
+the design (read §5.11, §5.12, §5.15, §5.16 and DECISIONS D179 to D182). Finish with the
+end-of-session protocol.
+
+PRECONDITION: Session 20 merged (v1.0.0). docs/AUDIT.md, "The mutation pass", holds the
+method, the counts per package and the survivors left open.
+
+GOAL: every mutant of decision/, execution/, capital/, tax/, jurisdiction/ and calendars/ is
+killed by a test or written down as equivalent with the reason.
+
+DELIVERABLES
+1. Reproduce the pass on main as docs/AUDIT.md describes it (one operator per mutant, the
+   tests that cover its line), this time running every covering test for a survivor, not the
+   most focused twenty.
+2. For each survivor, in this order: tax/ and capital/ (lots, the two-month rule, the
+   planner, the allocation), decision/ (sizes, gates, the rebalancers), execution/ (the
+   executor, exits, the owner's test commands), calendars/, jurisdiction/. A mutant that
+   changes money, a refusal or what the owner is told gets a failure-branch test; one that
+   cannot change behaviour is listed as equivalent with why.
+3. docs/AUDIT.md's section rewritten with the final counts; a real defect found on the way is
+   fixed under the money-path rules, with a DECISIONS entry.
+
+DO NOT BUILD: a mutation tool in the repository or in CI (the pass is a session's method, not
+a gate); new features; tests that assert message wording to kill a mutant of the wording.
+
+ACCEPTANCE: no survivor without a test or a written reason; make check green; a patch
+release.
 ```
 
 ---

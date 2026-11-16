@@ -3,7 +3,7 @@
 Observed behaviour of the macro, positioning, insider, event, news, halt and earnings sources
 `config/sources.yaml` declares, and of the LLM provider `config/llm.yaml` names: what each
 endpoint answered, with where and when. Condensed from ObliskIQ-lite-MCP's
-`references/macro-playbook.md` (legacy/lite, @b1ebd49), keeping every verified finding, plus what
+`references/macro-playbook.md` (@b1ebd49), keeping every verified finding, plus what
 Session 10 measured. The values the code uses live in `config/sources.yaml`; why they were chosen
 is `docs/DECISIONS.md` (D124–D129).
 

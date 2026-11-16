@@ -675,7 +675,10 @@ decision only when its activation condition holds (§2).
   earlier date.
 - **Intent → order.** `OrderIntent` (id = `uuid.uuid7()`) state machine → whatif → place
   with `cOID` → reply policy → status → reconcile, after a configured grace period for
-  IBKR's reporting lag before a missing order or position counts as drift. Restart-safe: the
+  IBKR's reporting lag before a missing order or position counts as drift. New risk needs a
+  green reconciliation that exists and is recent (`execution.reconcile.max_age_seconds`):
+  before the first run, on drift and once the last green run has aged, orders that add risk
+  are neither planned, staged nor cleared, and sells go on (DECISIONS D179). Restart-safe: the
   `cOID` is looked up before any placement. The cost model is given the listing venue,
   never `SMART`.
 - **Paper guard.** In `paper` mode every broker write is refused unless the account id has
@@ -932,9 +935,11 @@ observations.
 
 ## 6. Reuse map
 
-Session 1 copies everything below into `legacy/` with `legacy/MANIFEST.md` (repository,
-commit, path, licence, target, action). Later sessions port from `legacy/`, never from
-memory. Session 20 deletes `legacy/`.
+Session 1 copied everything below into `legacy/` with a `MANIFEST.md` (repository, commit,
+path, licence, target, action), and the sessions ported from it, never from memory. Session 20
+deleted `legacy/`: release `v0.28.0` is the last tree that holds it, where a later session
+reads what it ports (`git show v0.28.0:legacy/<path>`), and `docs/knowledge/legacy-findings.md`
+carries its findings and provenance (DECISIONS D181).
 
 ### 6.1 From ObliskIQ-lite-MCP @ b1ebd49 (the base)
 
@@ -1049,9 +1054,8 @@ src/obliskiq/   config, domain, store, calendars, ibkr, data, quant, grid, engin
 tests/    unit/ integration/ fixtures/ property/
 research/ preregistrations/ reports/ explore/ pattern_registry.yaml
 docs/     MASTER_PLAN.md DECISIONS.md ROADMAP.md SESSION_PROMPTS.md RUNBOOK.md DEPLOY.md
-          knowledge/
+          AUDIT.md knowledge/
 deploy/   Dockerfile  obliskiq.service  backup.sh  update.sh  env.example
-legacy/   temporary; MANIFEST.md; excluded from all tooling
 .github/  workflows/{ci,release}.yml  dependabot.yml  pull_request_template.md
 ```
 

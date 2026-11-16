@@ -3,7 +3,8 @@
 Why ObliskIQ is built the way it is, and what was rejected. Each entry says what was decided,
 on what evidence, and where it applies. A decision in `docs/MASTER_PLAN.md` changes only
 through a new entry here that names its evidence, with the plan edited in the same PR.
-Legacy evidence is cited by its path in the `legacy/` snapshot (see `legacy/MANIFEST.md`).
+Legacy evidence is cited by its path in the `legacy/` snapshot, which release `v0.28.0` is the
+last tree to hold (`git show v0.28.0:legacy/<path>`; D181, `docs/knowledge/legacy-findings.md`).
 
 ## The design (MASTER_PLAN, recorded in Session 1, 2026-10-08)
 
@@ -3931,3 +3932,56 @@ board the service writes after each digest, with its age, labelled stale beyond
 `server.stale_after_days`. The same board renders the daily dashboard, so the page and the tools
 never disagree. CommandParser's deterministic grammar (MASTER_PLAN §5.10) is built here for
 Telegram's free text, in English and Spanish; Session 16 puts an LLM in front of it.
+
+## Session 20 — Red-team and cleanup (2026-11-16)
+
+### D179 · New risk needs a green reconciliation that exists and is recent (§5.12; D47)
+
+The freeze read "the latest run is not green", so a machine that had never reconciled, and one
+whose last green run was days old, cleared orders that add risk on an account nobody had compared
+with the store (docs/AUDIT.md, 1; lite's "a health verdict is about age"). One rule now
+(`execution/freeze.py`), read by the pre-trade gate, the executor's staging and both rebalancers:
+no run yet, a run that is not green, or a green one older than
+`execution.reconcile.max_age_seconds` (900: three heartbeats, one may fail; the schema keeps it
+above `runtime.heartbeat_seconds`) freezes new risk; sells and stops are never frozen. A cycle
+that finds no run in force reconciles before it decides; the paper order test and the execution
+test reconcile before they place; a dry run, which writes nothing, plans as the cycle that
+reconciles first would and is blocked by drift alone. Rejected: reconciling inside the gate (a
+read path that writes); ageing the reservation planner's check (its sales reduce risk).
+
+### D180 · A flow enters the return on the day the account's cash showed it (§5.15; amends D111)
+
+D111 placed a matched deposit or withdrawal on the day the owner dated it. A transfer announced
+on Monday and credited on Wednesday then read as a fall of the whole deposit on Monday and a rise
+on Wednesday: the chained return keeps a loss of the deposit's share squared, and the rolling-month
+and peak-to-trough breakers read those returns (docs/AUDIT.md, 2). In `whole_account` mode a flow
+is now dated, and valued in the base currency, on the day reconciliation matched it to the
+broker's cash (`capital/twr.py: reached_on`); `capital.twr.flow_timing` still says which side of
+that day's reading it falls. A capped book is unchanged: its flows are the recorded ones, from
+their own day. Residual: a credit that arrives after the day's last NAV reading and is matched
+before midnight UTC is still counted in that reading.
+
+### D181 · `legacy/` is deleted; what survives it, and what stays unread (§6; D150)
+
+Release `v0.28.0` is the last tree with the snapshot; evidence cited as `legacy/…` in this file
+and in the prompts is read there. Its findings and provenance are
+`docs/knowledge/legacy-findings.md`. Lite decisions current rules rest on, condensed: the option
+sleeve was viable at the account's size (ten contracts cleared every gate at once against a floor
+of three; D2); the Client Portal API is the collection route of record, first run live on
+2026-09-10 (D8); a cell no collector can fill is `inapplicable`, declared where it is defined
+(D10); a health verdict is about age (D179); a guard is verified by mutation, not by being green
+(this session's method); a collector reads the clock once, at the top of its run. Kept although
+no layer reads them yet: `engines/risk` (the `equity_risk` limits of §2 a stock book must obey)
+and the commodity and FX engines (the compute step writes their views). The tooling exclusions,
+the import contract and the snapshot's tests are removed.
+
+### D182 · An update ends healthy or rolled back, whatever interrupts it (§5.20)
+
+`update.sh` ran under `set -e`: a unit that failed to start, or a closed terminal during the wait
+for health, ended the script with the machine on the new tag, nothing judged and nobody alerted
+(docs/AUDIT.md, 3). After the backup, every failure and every signal (INT, TERM, HUP) now goes
+through one rollback whose steps each run whatever the one before did, and the alert says
+whether the previous version started and whether the backup was restored. Dependencies:
+`starlette` 1.10 and `soupsieve` 4.1 replace versions with published advisories, and
+`cryptography` 50 does too, with its deprecation of finite-field Diffie-Hellman filtered in
+tests because IBKR's OAuth handshake requires it; the pin stays below 51 until that is settled.
