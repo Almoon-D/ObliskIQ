@@ -229,8 +229,3 @@ __marimo__/
 !.env.example
 secrets/
 *.pem
-
-# legacy/ is a verbatim snapshot (legacy/MANIFEST.md lists every file). These
-# two legacy paths are templates with empty values, not credentials.
-!/legacy/lite/.env.template
-!/legacy/lite/secrets/
