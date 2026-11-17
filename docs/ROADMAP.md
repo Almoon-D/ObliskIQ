@@ -3,6 +3,30 @@
 What is done and what is open. The design is `docs/MASTER_PLAN.md`; each session's task is
 its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DECISIONS.md`.
 
+## What runs next
+
+The build is complete and nothing has filled an order yet. In order of value:
+
+1. **Owner: the checklist below, steps 1 to 10.** The machine, the paper login, the order and
+   execution tests, the reserve on paper, `serve`. Every other step is worth nothing until an
+   order fills. Each paste is recorded by a short session (docs/RUNBOOK.md).
+2. **Owner: the analyst's key on the machine** (step 1). The thesis book is the only part
+   that can earn far more than the market, and its evidence is forward only: a week it does
+   not run is a week of record lost. Capital follows its graded record without a command.
+3. **Session 30** (stock screen for the thesis book): any time, beside 1 and 2. No key, no
+   bought data, no IBKR call.
+4. **Session 20a** (mutation pass, the remainder): any time.
+5. **Session 21** with a new batch, only for a hypothesis to which `obliskiq research power`
+   gives 0.5 or more. None has it today; Sessions 24 and 26 wait on it (D180).
+
+Not to do without a new decision: buy a price history, build a Hunter engine or a second one
+for free data, run Sessions 15, 16, 17 or 19a before their conditions.
+
+**The 50 % aim, as the evidence stands.** The reserve earned about 6.5 % a year after tax in
+its test. No tested signal adds to it. Only the thesis book, a few concentrated ideas held as
+shares or long options, can reach 50 %, and nothing yet shows that it does: about two years
+of graded calls will (§5.5).
+
 ## Sessions
 
 | # | Session | Outcome | Status | Release |
