@@ -377,6 +377,15 @@ is `satellite`.
 - **Capacity.** The book reports the capital at which a position would pass its liquidity
   floor; capital beyond it stays in the reserve.
 - **Until a test passes** the Hunter holds nothing and the reserve holds everything.
+- **The data source** is part of a registration, with the market and the span (DECISIONS
+  D180). A history that drops delisted companies is never tested on and no penalty stands in
+  for what it lacks. A source that is absent is the status `no_source` and zero weight;
+  configuring a vendor's credentials funds nothing; another source or market is another
+  registration. Bought or licensed data stays out of the repository, fixtures, CI and every
+  LLM prompt, and its loader runs where the licence allows: the owner's machine, or a cloud
+  session reading a personal API into the untracked research store. Free data is complete
+  only forward, from the day it is collected: its use is the stock screen of the thesis book
+  below.
 
 **The thesis book** (DECISIONS D156). A few concentrated positions, each on a written idea.
 A judgement about the economy, a sector or a company has no history to replay, so its only
@@ -386,6 +395,13 @@ honest test is forward: the book exists to produce that record and to trade on i
   sheet (the macro board, the grid, events, positioning; §5.7, §5.10); the owner, through
   `obliskiq idea add` and later the cockpit; a detector or pattern once its test is
   sufficient. The engine runs without the owner.
+- **The stock screen** (DECISIONS D180). Today's listed US common stocks that pass the
+  account's floors, with their free SEC fundamentals and free prices, collected forward and
+  kept, so a name that later disappears stays in the store. The fact sheet shows the top of
+  a ranking by cheapness, quality and industry trend, each line labelled untested. The
+  analyst may write theses from it, as a segment of its own; the screen sizes nothing, has
+  no weight in any gate and no performance record of its own. A collection that fails or is
+  throttled is a status, never a delisting.
 - **A thesis** names the instrument, what is expected and why, a target, a horizon and what
   would prove it wrong, all fixed before the first order (the lifecycle of item 5 below). An
   idea that lacks one of them is not traded.
@@ -560,7 +576,7 @@ Hypotheses by batch (DECISIONS D71):
 | Batch | Hypotheses |
 |---|---|
 | 1 (Sessions 4c, 4d) | the core verdict (§5.4); one selection hypothesis chosen by a data audit among H1 cross-asset and country momentum through UCITS (Asness, Moskowitz & Pedersen 2013), H2 insider-purchase clusters in SEC Form 4 (Cohen, Malloy & Pomorski 2012) and H4 a stock-level composite — nearness to the 52-week high (George & Hwang 2004), 12-1 momentum with a crash guard (Jegadeesh & Titman 1993; Daniel & Moskowitz 2016), profitability (Novy-Marx 2013); H5, whether a volatility-scaled stop adds value to that signal (Kaminski & Lo 2014) |
-| Hunter (Sessions 23, 24) | On a US price history that keeps delisted companies, in a fixed sequence that starts with the composite H12, cheap companies of good quality in industries whose trend is rising (H10 with industry momentum, Moskowitz & Grinblatt 1999), then its size tiers, then each alone: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
+| Hunter (Sessions 23, 24) | Not run: no test reaches a probability of a sufficient outcome of 0.5 (D162, D168), and a test returns only on D180's conditions. On a US price history that keeps delisted companies, in a fixed sequence that starts with the composite H12, cheap companies of good quality in industries whose trend is rising (H10 with industry momentum, Moskowitz & Grinblatt 1999), then its size tiers, then each alone: H2 insider-purchase clusters; H3 forced selling: spin-offs and index deletions (Cusatis, Miles & Woolridge 1993); H4 the stock-level composite; H10 cheapness with quality (Greenblatt 2005; Piotroski 2000; Asness et al. 2018); H11 post-earnings drift (Bernard & Thomas 1989) |
 | Later (Session 21) | H6 conditioning the reserve's risk on the variance risk premium (Bollerslev, Tauchen & Zhou 2009), the excess bond premium (Gilchrist & Zakrajšek 2012) and trend; H9 hedging pressure in COT for commodity ETCs (de Roon, Nijman & Veld 2000); the event sleeve's components and their agreement rule; the §6.4 re-test group; each only with power of at least 0.5 |
 | Forward only | H7 LLM-extracted event features beyond the price signal (a minimal extractor from Session 10); H8 an option against a share with a stop for a sufficient signal, on option surfaces collected from Session 8 or bought; H13 the thesis book, ideas from the analyst and the owner against the equity reference (Sessions 27, 28) |
 | Ideas | carry in bonds and equities (Koijen et al. 2018); defensive/low beta (Frazzini & Pedersen 2014); low volatility (Ang et al. 2006); VIX term-structure inversion; dollar strength and EM stress; oil shocks (Hamilton 2009); pre-FOMC drift (Lucca & Moench 2015) |
@@ -831,6 +847,8 @@ engine and tax ledger that call them.
 | Source | Use | Credential | Status |
 |---|---|---|---|
 | IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | the paper username and password for the Gateway's automated login (paper); OAuth keys for the live account where granted (DECISIONS D42) | read path verified live over OAuth (lite); Gateway route and order path new |
+| Stock history that keeps delisted companies (Sharadar, Norgate, CRSP through WRDS) | the Hunter's test, when one is registered on it (§5.5, DECISIONS D180) | the vendor's key or login, on the machine its licence allows; never in the repository | none held; no free source keeps delisted names (docs/knowledge/research-sources.md) |
+| SEC company tickers and XBRL frames; Yahoo daily bars | the stock screen, collected forward (§5.5) | none (a declared User-Agent for the SEC) | formats observed (docs/knowledge/research-sources.md); collectors are Session 30's |
 | FRED / ALFRED (+ API v2 bulk) | US and global rates, curves, breakevens, credit, CPI, Eurostat HICP redistribution | `FRED_API_KEY` | verified |
 | ECB Data Portal | €STR, deposit rate, FX reference rates, yield curves | none | verified |
 | Bank of Japan Time-Series API | JGB yields, FX, monetary base | none | verify |
@@ -1111,18 +1129,20 @@ subset and inserts an `Na` prompt for the remainder.
 | 28 | LLM analyst | the point-in-time fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas |
 | 29 | Options for theses | a thesis held as a long call or a long put through the existing sleeve, inside the book's capital and the option budget, graded beside its underlying |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, the universe floors and size tiers, power before data for each hypothesis; the owner buys the data it recommends |
-| 24 | Hunter: verdict | loaders, the stock-book strategy in the simulator, the pre-registration in its own pull request, one confirmation run |
+| 24 | Hunter: verdict | loaders, the stock-book strategy in the simulator, the pre-registration in its own pull request, one confirmation run; runs only when a hypothesis reaches a probability of a sufficient outcome of 0.5 and the owner holds a source that keeps delisted names (D168, D180) |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers |
 | 26 | Hunter engine | the mechanism Session 24 tested, on the live book: universe, ranking, the book with its keep buffer, rebalancer, capacity |
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule (§5.19), promotion |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 |
+| 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own (D180) |
 
 They run in that order (DECISIONS D150, D156); 27, 28 and 29 follow 22 at once and beside 23
 and 24, because the thesis book's evidence is forward only and a week it does not run is a week of
 record lost. Session 26 starts only after the reserve's paper cycle
 is recorded, and builds only what Session 24 left sufficient or inconclusive-positive; if it
-left nothing, the next research batch runs in its place. Built on a condition, not in sequence:
+left nothing, the next research batch runs in its place. Session 24 is not run (D168) and
+returns only on D180's conditions; Session 30 follows 20 and needs no bought data. Built on a condition, not in sequence:
 
 | # | Session | Runs when |
 |---|---|---|

@@ -5,6 +5,24 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.0.1] - 2026-11-17
+
+Design session: the owner's proposal of a paid and a free Hunter, challenged and decided
+(DECISIONS D180). No code changed.
+
+### Changed
+
+- One Hunter: the data source, market and span belong to a pre-registration and are never
+  switched at run time; a vendor's credentials alone fund nothing.
+- No backtest on a history that drops delisted companies, no penalty for incompleteness, no
+  automatic choice of market. Yahoo was found to drop delisted names in Japan, the United
+  Kingdom, Germany and the United States.
+- Session 24 returns only when a hypothesis reaches a probability of a sufficient outcome of
+  0.5 and the owner holds a source that passes a delisting adequacy check; Session 26's gate
+  is unchanged.
+- Session 30 is added: free US stock data collected forward and kept, and an untested stock
+  screen on the analyst's fact sheet, graded forward through the thesis book.
+
 ## [1.0.0] - 2026-11-16
 
 Session 20: the build is complete. A failure-mode audit, three silent failures fixed, the guards

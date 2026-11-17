@@ -31,14 +31,15 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 | 28 | LLM analyst | the fact sheet, theses the engine proposes on its own, a second opinion on the owner's ideas | done (on fixtures and one live provider; drafts and opinions in shadow, graded forward; no IBKR call) | v0.24.0 |
 | 29 | Options for theses | a thesis held as a long call or put through the existing sleeve, inside the book's capital and the option budget | done (on fixtures, in shadow; H8 registered with its forward grading rule; no IBKR call) | v0.25.0 |
 | 23 | Hunter: data and power | vendors of survivorship-free stock history, universe floors and size tiers, power before data; the owner buys what it recommends | done (no test reaches a probability of a sufficient outcome of 0.5: do not buy, D162) | v0.22.0 |
-| 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | not run (owner, 2026-11-15, D168): no history bought; no test reaches a probability of a sufficient outcome of 0.5 (D162) | |
+| 24 | Hunter: verdict | loaders, the stock book in the simulator, the pre-registration, one confirmation run | not run (owner, 2026-11-15, D168): no history bought; no test reaches a probability of a sufficient outcome of 0.5 (D162). Returns only when a hypothesis reaches 0.5 and the owner holds a source that keeps delisted names (D180) | |
 | 25 | Book breakers | rolling-month and peak-to-trough breakers on managed NAV, the freeze read by the rebalancers | done (on fixtures; no IBKR call) | v0.23.0 |
-| 26 | Hunter engine | the mechanism 24 tested, on the live book | not run while no Hunter hypothesis is sufficient or inconclusive-positive (D168); a new hypothesis comes through Session 21 | |
+| 26 | Hunter engine | the mechanism 24 tested, on the live book | not run while no Hunter hypothesis is sufficient or inconclusive-positive (D168); a new hypothesis comes through Session 21, tested on a source its registration names (D180) | |
 | 18 | Scoreboard, capital and promotion | TWR attribution, TCA, twins and monitoring, the automatic allocation rule, promotion | done (on fixtures; the rules pre-registered and locked, #71; no layer active yet; H13's record and the panel's producer to 18a, D171) | v0.26.0 |
 | 18a | Scoreboard, the remainder | H13's after-tax monthly record and its looks, the weekly forecast panel's producer, the broker session's re-logins in the store | done (on fixtures; no thesis has a record yet; the panel waits on the analyst's key; no IBKR call) | v0.27.0 |
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | done (image built and run in the session; the machine's deployment and the full preflight are the owner's list in docs/DEPLOY.md; no IBKR call) | v0.28.0 |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | done (three silent failures fixed, docs/AUDIT.md; no IBKR call; the owner's checklist below is what remains) | v1.0.0 |
 | 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
+| 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | next (D180); no bought data, no IBKR call | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
 | 17 | Decision layer, the rest | expression selection, calibrated sizing, expected shortfall, stress | when a funded layer needs it | |
@@ -58,8 +59,26 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule, the analyst's per segment; the analyst proposes from the service once its key is on the machine | `research/preregistrations/thesis-book.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run; the literature supports less than θ net of decay, costs and tax for every candidate | `research/reports/hunter-feasibility.md` |
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
+| Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Design session: the Hunter's data sources (2026-11-17, v1.0.1)
+
+- **Asked:** two Hunters, a paid one that takes over when its credentials exist and a free one
+  on incomplete history with a small penalty, chosen automatically.
+- **Decided** (D180, nine challenges): one Hunter; the source, market and span belong to the
+  pre-registration and are never switched at run time; no backtest on a history without
+  delisted names, no penalty, no automatic choice of market. Credentials alone fund nothing.
+- **Direct answer:** the Hunter's systematic book cannot run while D162's table stands, with
+  paid data or free: the constraint is the supported effect, not the data.
+- **Allowed now:** Session 30, free US data collected forward and kept, an untested stock
+  screen on the analyst's fact sheet, graded forward through the thesis book under H13.
+- **Gated:** Session 24 (a hypothesis at 0.5 or more and a source that keeps delisted names);
+  Session 26 (unchanged).
+- **Live findings.** Yahoo answers nothing for delisted names in Japan, the UK, Germany and
+  the US (docs/knowledge/research-sources.md). No IBKR call. **Prompts edited:** Sessions 24
+  and 26; Session 30 added; Session 21's note. **VERIFY-LIVE:** none.
 
 ### Session 20 — Red-team and cleanup (2026-11-16, v1.0.0)
 
@@ -420,6 +439,10 @@ it stopped, for every step that logs in (docs/RUNBOOK.md, "What runs").
 14. **L0 to L1** when `obliskiq promotion status` passes, at least eight weeks of autonomous
     paper, then the owner's decision on L2 (MASTER_PLAN §10). The live account needs OAuth keys
     on the machine and is never reached from a cloud session.
+15. **The Hunter's data (D180): nothing to buy and nothing to configure.** If the owner later
+    holds a history that keeps delisted companies (Sharadar, Norgate, or CRSP through WRDS),
+    he says so in a session with Session 21's prompt; a vendor key on the machine changes
+    nothing by itself. Session 30 needs no key.
 
 ## Live verification queue
 
@@ -549,6 +572,14 @@ settles it.
 - **Owner ruling (2026-11-15, D168):** no history is bought and Session 24 is not run. A Hunter
   test returns only through a new hypothesis whose probability of a sufficient outcome reaches
   0.5 (Session 21).
+- **Design session (2026-11-17, D180):** not built and not to be built without a new decision:
+  a second Hunter engine, a penalty for incomplete history, a source selector or port, a
+  coverage audit of free sources. Unverified and useful only if a hypothesis reaches 0.5:
+  whether stooq (from the machine), Tiingo's free key or an exchange's delisting list keeps
+  delisted names for a market; Session 24's step 0 checks it then.
+- Session 30: the stock screen's snapshots are the only survivorship-free stock data the
+  project will hold; a forward test on them is registered only if `research power` gives it
+  0.5 (D154), and none does today.
 - The cross-section harness Bonferroni-adjusts over every test of a confirmation run; a fixed
   sequence (D154) needs none. A pre-registration of the Hunter's sequence would need the
   adjustment named per test (a Hunter pre-registration, if one is ever written).
@@ -625,7 +656,8 @@ settles it.
   would make them evaluable: CRSP through WRDS, or Norgate US Platinum at US$630 a year
   (2026-10-17). Session 23 found that no test in the Hunter's sequence would reach a
   probability of a sufficient outcome of 0.5 (D162); the owner bought nothing and Session 24
-  is not run (D168). The Hunter has no tested signal (D87).
+  is not run (D168). The Hunter has no tested signal (D87). Free data is not a substitute:
+  it is used forward only (D180, Session 30).
 - **Owner:** the reserve runs D50 (D147). Open: an LLM provider key, or the minimal extractor
   waits (D70); whether a hedge inside a UCITS share class fits the mandate (D69); a deep
   emergency limit for protective exits (off by default, D67); buying option-surface history for

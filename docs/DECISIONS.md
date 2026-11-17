@@ -3985,3 +3985,71 @@ whether the previous version started and whether the backup was restored. Depend
 `starlette` 1.10 and `soupsieve` 4.1 replace versions with published advisories, and
 `cryptography` 50 does too, with its deprecation of finite-field Diffie-Hellman filtered in
 tests because IBKR's OAuth handshake requires it; the pin stays below 51 until that is settled.
+
+## Design session — the Hunter's data sources (2026-11-16)
+
+### D180 · One Hunter; a data source is registered, never switched; free data runs forward only (§5.5, §5.9, §5.18; D84, D150, D154, D156; affirms D162, D168; amends D166)
+
+The owner proposed two Hunters, one active at a time: a paid one that takes over when its
+credentials are configured, a free one on Yahoo or similar that uses incomplete history with a
+small penalty, and an automatic choice of source and market. The challenges, then the ruling.
+
+1. **Survivorship (D84, D162).** A history without delisted names biases a stock test by as
+   much as the effect, with unknown sign. A backtest on such a history never moves capital and
+   is not run, not even as exploration that shapes a registration.
+2. **The penalty.** A scalar cannot correct a bias whose sign is unknown, and its size could
+   only be measured on the complete data it stands in for: any value is a magic number.
+   Forward, incompleteness is bounded instead: a held name that stops quoting unresolved is
+   worth zero, a universe name its last price. The worst case needs no number.
+3. **Build for evidence (D150, D156).** H12 and the single hypotheses can be tested on
+   history, so they are not D156's kind. A forward test of them has fewer months than the
+   historical one and a lower probability of a sufficient outcome at the same supported effect:
+   D154 forbids registering it. No systematic book is built on free data, in shadow either.
+4. **Honest degradation.** A fallback from a paid source to a free one is an unlabelled
+   substitute: the book would mean something else with no record. An absent source is the
+   status `no_source` and zero weight.
+5. **A source switch changes what is measured.** A verdict belongs to a hypothesis on a
+   source, a market and a span. The pre-registration names all three; another source or market
+   is another registration and another trial, and the engine reads live inputs the registration
+   names as the tested ones' equivalent (D140).
+6. **Licensing.** Bought or licensed data (Sharadar, Norgate, CRSP through WRDS) never enters
+   the repository, a fixture, CI or an LLM prompt. An adapter is code in the repository, written
+   when a registered test needs it; it runs where the licence allows: the owner's machine (the
+   only place for WRDS), or a cloud session reading a personal API by key into the untracked
+   research store. Reports carry aggregates.
+7. **No free market is complete.** On 2026-11-16 Yahoo answered nothing for Toshiba
+   (`6502.T`), Morrisons (`MRW.L`), Wirecard (`WDI.DE`) and Twitter (`TWTR`) while serving
+   `7203.T` and `SPY`: it drops delisted names in Japan, the United Kingdom, Germany and the
+   United States. Unverified: stooq (unreachable from the cloud), Tiingo's free key, exchange
+   delisting lists. Completeness would not be enough: on the free-fundamentals span H12's
+   probability is at most 0.015 (D162).
+8. **Can the Hunter run while D162's table stands? No.** The binding constraint is the effect
+   the literature supports, not the data: no source, paid or free, lifts any test to 0.5.
+   Credentials alone would switch to a book without a verdict.
+9. **Choosing the market by where data is complete** is a selection on data availability, not
+   on evidence. The market is part of the registration.
+
+**Ruling.**
+
+- **(a) Two Hunters: modified.** There is one Hunter and one mechanism (D140). A source is a
+  field of the pre-registration, not a runtime mode; configuring credentials changes a status
+  line and nothing else. *Gated:* a loader for a history that keeps delisted names is written in
+  Session 24, which runs when (i) `obliskiq research power` gives a Hunter hypothesis a
+  probability of a sufficient outcome of at least 0.5 (it arrives through Session 21), and (ii)
+  the owner holds, for that hypothesis's market and span, a source that passes the delisting
+  adequacy check. Session 26 keeps its gate.
+- **(b) The free Hunter: the backtest and the penalty are rejected; a forward use is allowed
+  now.** Free data is complete only forward, from the day it is collected. Session 30 collects
+  today's listed US common stocks, their free SEC fundamentals and free prices, keeps every
+  snapshot (a name that later disappears stays in the store), and puts a stock screen on the
+  analyst's fact sheet, labelled untested. The analyst may write theses from it; they enter the
+  thesis book in shadow as a new segment and are graded forward under H13's locked rule, the
+  only route by which they reach capital (§5.19). The screen sizes nothing, ranks no order and
+  has no performance record of its own.
+- **(c) Automatic choice: rejected.** A registration lists its sources in order; the first that
+  passes its adequacy check is used and recorded with the run. Nothing chooses a market.
+
+Rejected: a second engine; a penalty key in config; a shadow systematic book on free data (a
+test D154 forbids, run by another name); a source port or selector now (built for later, D150);
+a coverage audit of free sources now (no result would let a test run); lowering θ or the 0.5
+floor; buying a history (D168 stands).
