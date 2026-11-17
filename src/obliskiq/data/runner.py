@@ -23,6 +23,7 @@ from ..config.schema import ObliskConfig
 from ..domain.sources import RunVerdict, SourceHealth, SourceRun, SourceState
 from ..errors import ConfigError
 from ..orchestration.runlog import RunRecord, StepOutcome
+from ..research.data import YahooHistory, yfinance_history
 from ..store import sources as source_repo
 from ..store.worker import StoreWorker
 from ..util.http import RetryPolicy
@@ -35,6 +36,9 @@ from .macro.fetchers import build_fetchers
 from .macro.pull import MacroPull
 from .market.plumbing import Collection, Pacer, Sleep, failure_text
 from .positioning.cot import CotCollector
+from .stocks.bars import BarsCollector
+from .stocks.fundamentals import FundamentalsCollector
+from .stocks.listings import ListingsCollector
 
 #: A run that failed outright.
 FAILED = "error"
@@ -67,6 +71,7 @@ class SourceRunner:
         now: Callable[[], datetime],
         sleep: Sleep,
         earnings: EarningsSource,
+        history: YahooHistory = yfinance_history,
     ) -> None:
         self._settings = settings
         self._client = client
@@ -75,6 +80,7 @@ class SourceRunner:
         self._now = now
         self._sleep = sleep
         self._earnings = earnings
+        self._history = history
         self._policy = RetryPolicy.from_settings(settings.http)
         self._pacer = Pacer(settings.collectors, sleep)
 
@@ -170,6 +176,8 @@ class SourceRunner:
                 worker=worker,
                 now=now,
             ).run(dry_run=dry_run)
+        if area == "stocks":
+            return await self._stocks(source, dry_run=dry_run)
         if source in ("polymarket", "kalshi"):
             markets = PredictionMarkets(
                 settings, client=client, policy=policy, pacer=self._pacer, worker=worker, now=now
@@ -201,6 +209,28 @@ class SourceRunner:
                 settings, pacer=self._pacer, fetch=self._earnings, worker=worker, now=now
             ).run(dry_run=dry_run, force=force)
         raise ConfigError(f"{source} is built but no collector runs it")  # pragma: no cover
+
+    async def _stocks(self, source: str, *, dry_run: bool) -> Collection:
+        settings, worker, now = self._settings, self._worker, self._now
+        if source == "stock_bars":
+            return await BarsCollector(
+                settings,
+                history=self._history,
+                worker=worker,
+                pacer=self._pacer,
+                sleep=self._sleep,
+                now=now,
+            ).run(dry_run=dry_run)
+        kind = ListingsCollector if source == "stock_listings" else FundamentalsCollector
+        return await kind(
+            settings,
+            client=self._client,
+            policy=self._policy,
+            worker=worker,
+            user_agent=self._secret(settings.sources.provider(source).credential),
+            sleep=self._sleep,
+            now=now,
+        ).run(dry_run=dry_run)
 
 
 def source_health(

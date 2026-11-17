@@ -244,6 +244,29 @@ uv run obliskiq idea withdraw T1                             # before its first 
   give the reserve everything. On the live account the book has no capital until the capital
   allocation rule exists.
 
+## The stock screen (owner, once)
+
+Free US stock data, collected forward for the thesis book's untested stock screen (DECISIONS
+D180). It needs `SEC_USER_AGENT` (a contact string the SEC asks for) in the env file and no
+broker session. Start it once by hand, then `serve` runs it on schedule:
+
+```
+uv run obliskiq sources run stock_listings && uv run obliskiq sources run stock_fundamentals \
+    && uv run obliskiq sources run stock_bars
+uv run obliskiq sources health      # stock_listings, stock_fundamentals, stock_bars
+```
+
+- **What runs.** The SEC's listing snapshot and the SIC of 600 new companies a day, its XBRL
+  frames, and Yahoo's bars of 400 names a run, four runs a day: every name about every four
+  days, each read catching up every session since the last.
+- **What it shows.** The digest's thesis book carries one line: names listed, names that left
+  the listings since the first snapshot, the screen's status. The screen stays `immature`, with
+  no names, until twelve months of bars are held; then the analyst's fact sheet carries its top
+  names, each labelled untested. It sizes nothing and no gate reads it.
+- **`stock_bars` failing with `throttled`.** Yahoo answered nothing for too many names in one
+  run: nothing is recorded about them and the next run asks them first. One name answering
+  nothing is `unresolved` in its run's detail, never a delisting.
+
 ## Before a Claude session with live IBKR checks
 
 IBKR allows one brokerage session per username. A Claude session that logs in to the paper

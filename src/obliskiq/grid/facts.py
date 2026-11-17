@@ -16,7 +16,14 @@ read. The sections, in order:
 * **market**: prediction markets, curated first, then the largest moves;
 * **pulse**: each GDELT query's newest day against its history;
 * **news**: the items collected in the lookback, newest first, with what the extractor read;
-* **insider**: issuers whose officers or directors bought in the open market in the cluster window.
+* **insider**: issuers whose officers or directors bought in the open market in the cluster window;
+* **stock_screen**: the untested stock screen (``grid/stock_screen.py``; DECISIONS D180): a header
+  that says it is no signal, then its first ``stock_screen_top`` names, each ending
+  ``untested (D180)``, and the names it could not rank counted on one line; a screen that is
+  immature or cannot be built is its status line and no name.
+
+The section list (:data:`SECTIONS`) is part of the analyst's segment (``analyst_prompt_hash``):
+theses written from a sheet with other sections are another group of the forward record.
 
 What is not measured is said, never filled: a view with nothing built is one ``n/a`` line, and the
 cells without a measured leaf are counted on one. Every read is bounded by ``as_of``. The sheet
@@ -46,6 +53,7 @@ from ..store import repos
 from ..store import sources as sources_repo
 from ..store.db import Store
 from .rankings import Rankings
+from .stock_screen import ScreenStatus, stock_screen
 from .views import equity_grid, macro_board
 
 #: The prefix of a line's reference.
@@ -54,6 +62,24 @@ REF_PREFIX: Final = "F"
 DIGITS: Final = 4
 #: The status of a news item no extraction has read.
 RAW: Final = "raw"
+#: The sheet's sections, in order.
+SECTIONS: Final = (
+    "instrument",
+    "macro",
+    "grid",
+    "ranking",
+    "positioning",
+    "market",
+    "pulse",
+    "news",
+    "insider",
+    "stock_screen",
+)
+#: The section of the stock screen, and what ends each of its names' lines.
+SCREEN: Final = "stock_screen"
+UNTESTED: Final = "untested (D180)"
+#: The status of a screen that could not be built.
+FAILED: Final = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +174,7 @@ class FactSheetBuilder:
         self._pulses(as_of)
         self._news(as_of)
         self._insiders(as_of)
+        self._stock_screen(as_of)
         lines = tuple(
             FactLine(f"{REF_PREFIX}{n}", day, status, section, text)
             for n, (day, status, section, text) in enumerate(self._drafts, start=1)
@@ -411,6 +438,50 @@ class FactSheetBuilder:
                 f"{inputs.window_days} days ({inputs.officers} officers, {inputs.directors} "
                 f"directors; {inputs.filings} filings; {number(inputs.shares)} shares, value "
                 f"{number(inputs.value)}; {inputs.unpriced_lines} lines unpriced)",
+            )
+
+    def _stock_screen(self, as_of: date) -> None:
+        head = (
+            "untested stock screen of listed US common stocks passing the account's floors, "
+            "ranked by cheapness, quality and industry trend: no signal, no weight in any gate, "
+            "no tested return (D180)"
+        )
+        try:
+            screen = stock_screen(self._store, self._settings, as_of=as_of)
+        except Exception as exc:  # the sheet stands without the screen; its status says why
+            self._add(as_of, FAILED, SCREEN, f"{head}; it cannot be built: {type(exc).__name__}")
+            return
+        if screen.status is not ScreenStatus.OK:
+            self._add(
+                as_of,
+                screen.status.value,
+                SCREEN,
+                f"{head}; {screen.status.value}: {screen.reason}",
+            )
+            return
+        self._add(
+            as_of,
+            MeasurementStatus.OK.value,
+            SCREEN,
+            f"{head}; {screen.listed} names listed, {screen.passing} pass the floors",
+        )
+        for line in screen.lines[: self._config.stock_screen_top]:
+            self._add(
+                line.session,
+                MeasurementStatus.OK.value,
+                SCREEN,
+                f"#{line.rank} {line.ticker} ({line.name}, SIC division {line.division}): close "
+                f"{number(line.close)}, earnings to price {number(line.earnings_yield)}, gross "
+                f"profit to assets {number(line.gross_profitability)}, industry 12-1 return "
+                f"{number(line.industry_trend)}, score {number(line.score)}; {UNTESTED}",
+            )
+        if screen.lacking:
+            self._add(
+                as_of,
+                MeasurementStatus.NA.value,
+                SCREEN,
+                f"{screen.lacking} of the {screen.passing} names that pass the floors lack an "
+                "input and are not ranked",
             )
 
 

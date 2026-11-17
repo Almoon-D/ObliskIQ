@@ -34,7 +34,7 @@ sources:
       - catalyst_window
       - promoted_patterns
       - llm_nomination
-    views: [equity_grid, macro_board, option_surface]
+    views: [equity_grid, macro_board, option_surface, stock_screen]
     safety: [instrument_halts]
 
   providers:
@@ -463,6 +463,61 @@ sources:
       bias_notes:
         - Research-grade, unofficial; an upcoming date may be an estimate and may move, and it is
           never decisive on its own.
+
+    # ── stocks: the thesis book's stock screen, collected forward (MASTER_PLAN §5.5; D180) ──
+    stock_listings:
+      name: SEC company tickers and exchanges, with each company's SIC from its submissions
+      area: stocks
+      status: built
+      credential: SEC_USER_AGENT
+      consumers: [view:stock_screen]
+      activation: null
+      # A snapshot is what the SEC lists on the day it is read; the file keeps no history.
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 150}]
+      stale_after_hours: 100
+      bias_notes:
+        - Today's listings only; history starts with the first snapshot and a name that later
+          leaves stays in the store. A ticker the SEC drops is left_listing, never a delisting
+          return.
+        - The SEC states no security type; common stocks are told by the ticker's form, so an
+          exchange-traded note or a fund can pass (it then lacks the screen's inputs).
+    stock_fundamentals:
+      name: SEC XBRL frames (the screen's inputs)
+      area: stocks
+      status: built
+      credential: SEC_USER_AGENT
+      consumers: [view:stock_screen]
+      activation: null
+      # A frame holds the last value filed for each company; it is stored as read, so a value
+      # is known from the day it was collected and a restatement is a new row.
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 160}]
+      stale_after_hours: 100
+      bias_notes:
+        - Point in time from the first run only; earlier values are as last filed.
+    stock_bars:
+      name: Yahoo Finance daily bars of the listed stocks (research-grade)
+      area: stocks
+      status: built
+      credential: null
+      consumers: [view:stock_screen]
+      activation: null
+      # A session's bar is kept from the run after it closed.
+      release_date_policy: as_collected
+      release_lag_days: 0
+      # Each run reads `stocks.bars.max_symbols_per_run` names, least recently read first.
+      schedule:
+        - {venue: XNYS, anchor: close, offset_minutes: 180}
+        - {venue: XNYS, anchor: close, offset_minutes: 330}
+        - {venue: XTKS, anchor: close, offset_minutes: 120}
+        - {venue: XETR, anchor: close, offset_minutes: 120}
+      stale_after_hours: 50
+      bias_notes:
+        - Survivors only, and forward only. A name Yahoo stops serving is unresolved, never a
+          delisting or a zero price.
 
     # ── halts (a safety rule) ──
     nasdaq_trader:
@@ -980,6 +1035,74 @@ sources:
                     kind: issuer, region: spain, symbol: SAN, user_agent_env: SEC_USER_AGENT, read_filing: true}
       tte_filings: {url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000879764&type=6-K&owner=include&count=40&output=atom",
                     kind: issuer, region: france, symbol: TTE, user_agent_env: SEC_USER_AGENT, read_filing: true}
+
+  # ── stocks (the stock screen; MASTER_PLAN §5.5, DECISIONS D180) ──
+  stocks:
+    listings:
+      url: https://www.sec.gov/files/company_tickers_exchange.json
+      # The SEC's exchange names kept, each with the venue its commission is read on.
+      exchanges: {NYSE: XNYS, Nasdaq: XNAS}
+      # A common stock's ticker: one to five letters, a class letter after a dash (BRK-B). Read
+      # 2026-11-17: preferreds are -P plus a letter or -P alone, warrants -WT or a fifth letter W
+      # on Nasdaq, units -UN or U, rights -RI or R.
+      ticker_pattern: "^[A-Z]{1,5}(-[A-Z])?$"
+      excluded_pattern: "^[A-Z]{4}[WUR]$|-P$"
+      # A snapshot that lists fewer than this share of the previous one's names is refused and
+      # records nothing as leaving: a truncated file is not thousands of departures.
+      min_kept_share: "0.95"
+      # Each company's SIC comes from its submissions; at most this many companies a run.
+      submissions_url_template: https://data.sec.gov/submissions/CIK{cik:010d}.json
+      sic_per_run: 600
+    fundamentals:
+      frames_url_template: https://data.sec.gov/api/xbrl/frames/{taxonomy}/{tag}/{unit}/{period}.json
+      # The screen's inputs, each one XBRL frame: an annual duration or a quarter-end instant.
+      inputs:
+        earnings_per_share: {taxonomy: us-gaap, tag: EarningsPerShareDiluted, unit: USD-per-shares, kind: annual}
+        gross_profit: {taxonomy: us-gaap, tag: GrossProfit, unit: USD, kind: annual}
+        assets: {taxonomy: us-gaap, tag: Assets, unit: USD, kind: instant}
+      # Annual frames of the current calendar year and the ones before it; instants of the last
+      # completed quarter ends. A frame not built yet (HTTP 404) is not a failure.
+      annual_years: 3
+      instant_quarters: 2
+      # A value whose period ended longer ago than this is not used (a company that stopped
+      # filing). A judgement: a fiscal year and a half.
+      max_age_days: 550
+    bars:
+      # Names read per run, least recently read first; one Yahoo request each.
+      max_symbols_per_run: 400
+      # Seconds between two requests (Yahoo throttles silently past about 100 symbols in 20
+      # seconds, docs/knowledge/research-sources.md).
+      request_spacing_seconds: 0.3
+      # A name read for the first time is read this many days back (its first session has no
+      # change to chain from).
+      first_read_days: 7
+      # A run whose share of empty answers exceeds this is throttled as a whole: nothing about an
+      # empty symbol is recorded. 150 listed names sampled on 2026-11-17 answered every one.
+      max_empty_share: "0.2"
+      # Sessions are dated in New York; the day a run is in is never stored (its bar may move).
+      timezone: America/New_York
+    screen:
+      # The floors are taken for a position of this size, in USD: the thesis book's base size
+      # at EUR 50,000 managed (a tenth over eight positions, at 1.10), Session 23's middle row.
+      # The sheet reads no account (D166), so the owner raises it as capital grows.
+      position_usd: "700"
+      # The industry trend: the 12-1 return (twelve months back, skipping the last one) of the
+      # names of the company's SIC division, equally weighted. Fewer months of bars held: the
+      # view is immature.
+      trend_months: 12
+      skip_months: 1
+      # SIC divisions by two-digit major group (the SEC's SIC manual).
+      sic_divisions:
+        - {code: A, name: "Agriculture, forestry and fishing", first: 1, last: 9}
+        - {code: B, name: Mining, first: 10, last: 14}
+        - {code: C, name: Construction, first: 15, last: 17}
+        - {code: D, name: Manufacturing, first: 20, last: 39}
+        - {code: E, name: "Transportation, communications and utilities", first: 40, last: 49}
+        - {code: F, name: Wholesale trade, first: 50, last: 51}
+        - {code: G, name: Retail trade, first: 52, last: 59}
+        - {code: H, name: "Finance, insurance and real estate", first: 60, last: 67}
+        - {code: I, name: Services, first: 70, last: 89}
+        - {code: J, name: Public administration, first: 91, last: 99}
 
   # ── halts ──
   halts:
