@@ -241,16 +241,17 @@ records it.
 | 28 | LLM analyst | Opus 5.5 | high | **Full** | — |
 | 29 | Options for theses | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 23 | Hunter: data and power | Opus 5.5 | high | **Full** | — |
-| 24 | Hunter: verdict | Opus 5.5 | xhigh | **Full** | — |
 | 25 | Book breakers | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
-| 26 | Hunter engine | Fable 5.1 (else Opus 5.5) | xhigh | Custom | the owner's command list |
 | 18 | Scoreboard, capital and promotion | Opus 5.5 | xhigh | Custom | — |
 | 19 | Cockpit, settings and deployment | Sonnet 5.5 | high | Custom | full preflight |
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 20a | Mutation pass, the remainder | Opus 5.5 | xhigh | Custom | — |
+| 30 | Stock screen for the thesis book | Sonnet 5.5 | high | **Full** | — |
 
 Run in that order; 22 and 23 can run side by side, 27, then 28 and 29, follow 22 beside 23 and
-24 (the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. On a condition, not in
+24 (the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. Session 24 is
+not run and Session 26 waits (DECISIONS D168, D180: each prompt's precondition says when it
+returns); Session 30 runs after 20 and needs neither. On a condition, not in
 sequence (MASTER_PLAN §10):
 
 | # | Session | Runs when | Model | Effort | Network |
@@ -260,6 +261,8 @@ sequence (MASTER_PLAN §10):
 | 17 | Decision layer, the rest | a funded layer needs the expression selector, calibrated sizing or expected shortfall | Fable 5.1 (else Opus 5.5) | xhigh | Custom |
 | 19a | Capacity and scale | managed capital reaches an activation condition it serves | Opus 5.5 | high | Custom |
 | 21 | Research: later batches | any time, for hypotheses with power of at least 0.5 | Opus 5.5 | xhigh | **Full** |
+| 24 | Hunter: verdict | a Hunter hypothesis reaches a probability of a sufficient outcome of 0.5 and the owner holds a source that keeps delisted names (D180) | Opus 5.5 | xhigh | **Full** |
+| 26 | Hunter engine | the registry holds a Hunter hypothesis that is sufficient or inconclusive-positive; its live steps are the owner's command list | Fable 5.1 (else Opus 5.5) | xhigh | Custom |
 
 The paper Gateway login does not complete from a cloud container (docs/knowledge/ibkr.md):
 until T1 succeeds, the live steps in this column are queued `VERIFY-LIVE`; from T1 on, each
@@ -1897,12 +1900,27 @@ obtained. No version change if only research/ and docs/ change.
 
 ```
 You are building ObliskIQ, session 24. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D85, D140, D148–D150, D153–D155). Network is
+design (read §5.5, §5.9, §5.19 and DECISIONS D62–D64, D75, D84, D85, D140, D148–D150, D153–D155, D162, D168, D180). Network is
 open. Finish with the end-of-session protocol.
 
-PRECONDITION: Session 23 merged, and the history it recommended is bought and reachable where
-Session 23 said the run happens: this session, or the owner's machine, for which steps 1 and
-3 end in one command the owner runs and pastes. Otherwise STOP and say what is missing.
+PRECONDITION (DECISIONS D168, D180), all three, else STOP and say which is missing; do not
+argue for an exception:
+(1) Session 23 merged.
+(2) `uv run obliskiq research power` reports, for at least one Hunter hypothesis in
+    research/pattern_registry.yaml, a probability of a sufficient outcome of at least
+    `research.decision.min_sufficient_probability`. On 2026-11-16 none does (H12 at most 0.009).
+    A new hypothesis is added by Session 21's prompt, never here, and theta is not changed.
+(3) The owner has stated in the launching message which history he holds for that hypothesis's
+    market and where it is readable: this session (a personal API key in the environment), or
+    only his machine (WRDS always), for which steps 0, 1 and 3 end in one command he runs and
+    pastes. Yahoo, IBKR bars and any source that drops delisted names do not qualify.
+
+STEP 0 — the delisting adequacy check, before any loader is trusted: from a list of delistings
+independent of the source (Tiingo's ticker list with end dates, SEC Form 25 filings), draw the
+names delisted in each year of the span and report the share the source serves through the
+last trading day, and whether it gives a delisting return. Thresholds are config keys with a
+DECISIONS entry. A source that fails is `survivors_only`: STOP. No penalty or adjustment
+stands in for missing names.
 
 GOAL: each registered Hunter hypothesis ends sufficient, insufficient, inconclusive or not
 evaluable, from one confirmation run of the book as it would trade.
@@ -1912,10 +1930,14 @@ returns and for the point-in-time fundamentals and events, with adequacy checks.
 stock-book strategy in the simulator: Session 23's universe floors, a score, the top names
 equally weighted within caps, the keep buffer, the registered rebalance dates, spreads by
 liquidity tier, integer shares, `es` tax lots. It lives where Session 26 can run it on the
-live book (D140). A toy study runs end to end. The bought data never enters the repository.
+live book (D140). A toy study runs end to end. The bought data never enters the repository,
+a fixture, CI or an LLM prompt; fixtures are synthetic; reports carry aggregates only.
 
 STEP 2 — the pre-registration, its own pull request, no version change:
-research/preregistrations/hunter-us.md from the template. The fixed sequence Session 23 kept
+research/preregistrations/hunter-us.md from the template. It names the source, the market and
+the span, and the live inputs Session 26 will read as their equivalent; a run on another
+source or market is another registration and another trial (D180). The sequence starts with
+the hypothesis that met precondition (2); where it is D162's own, the fixed sequence Session 23 kept
 (D154): the composite H12 on the whole universe, then its size tiers, then each hypothesis
 alone; a test runs only if the one before it was sufficient. Primary statistic: the book's
 annualised after-tax log growth minus that of its own universe bought and held; beside it,
@@ -1930,7 +1952,7 @@ STEP 3 — exploration only where a specification is not the published one, on i
 sample with every trial registered; one confirmation run; research/reports/hunter-us.md; the registry's statuses.
 
 DO NOT BUILD: a live engine; a signal that is not registered; a second run with changed
-constants.
+constants; a fallback to another source; a penalty for incomplete data; a source selector.
 
 ACCEPTANCE: the pre-registration is on main before the results pull request; the verdict
 reproduces with one command on a machine that holds the data; perturbing data after as_of
@@ -1993,7 +2015,7 @@ session built (log the edit).
 
 ```
 You are building ObliskIQ, session 26. AGENTS.md is your operating manual; MASTER_PLAN.md the
-design (read §5.5, §5.11, §5.19 and DECISIONS D140, D148–D151, D153). Money paths fail closed.
+design (read §5.5, §5.11, §5.19 and DECISIONS D140, D148–D151, D153, D168, D180). Money paths fail closed.
 Finish with the end-of-session protocol.
 
 PRECONDITION: Sessions 22, 24 and 25 merged; the reserve's paper cycle and a conversion filled
@@ -2008,7 +2030,10 @@ DELIVERABLES
 1. engines/hunter/ (sleeve `satellite`): the strategy Session 24 registered, shared with the
    simulator: the universe on a date, the score, the target book. A parity test as the core's.
 2. Collectors for what the score reads on the live side (fundamentals, events, daily bars for
-   the universe), point in time, each with a status.
+   the universe), point in time, each with a status: the live inputs the registration names
+   as the tested source's equivalent, and no other (D180). Session 30's collectors serve
+   where they are those inputs. An input that is absent or stale is `no_source` and the book
+   places no entry order; nothing falls back to another source.
 3. decision/rebalance_hunter.py: trades on the registered rebalance dates only (D151); the
    live guards the core's rebalancer applies; the breakers' freeze; limit-capped orders; a
    funding conversion first for a foreign currency; the registered exits.
@@ -2023,7 +2048,7 @@ DELIVERABLES
    next rebalance date and each withheld trade with its reason.
 
 DO NOT BUILD: the event sleeve, the LLM layer, the expression selector, options, calibrated
-sizing.
+sizing, a second engine for another data source, a source selector.
 
 ACCEPTANCE: parity with the simulator on a fixture history at every rebalance date; between
 rebalance dates a cycle places no Hunter order except a registered exit (test); a frozen book
@@ -2797,13 +2822,93 @@ release.
 
 ---
 
+## Session 30 — Stock screen for the thesis book
+
+**Launcher:** `Execute Session 30 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
+
+```
+You are building ObliskIQ, session 30. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.7, §5.10, §5.18 and DECISIONS D84, D128, D154, D156,
+D165, D166, D180; docs/knowledge/research-sources.md rows "SEC company tickers and XBRL
+frames", "Yahoo, delisted US stocks" and "Yahoo, delisted stocks outside the US"). Network is
+open for the SEC and Yahoo, to record fixtures. No IBKR call. No bought data. Finish with the
+end-of-session protocol. Decide what this prompt leaves open by the rule that costs least
+machinery, and record it in DECISIONS; nobody is available to ask.
+
+PRECONDITION: Sessions 20 and 28 merged and DECISIONS holds D180. Otherwise STOP.
+
+GOAL: free stock data is collected forward and kept, and the analyst's fact sheet shows an
+untested stock screen from it, so that theses on single stocks enter the thesis book in shadow
+and are graded forward under H13. Nothing here is a test, a signal with weight or an engine.
+
+READ FIRST, in the code: src/obliskiq/data/candidates.py and data/runner.py (how a collector
+is registered, scheduled and given a status), data/insiders (an SEC source: its User-Agent and
+pacing), the fact sheet's builder and `analyst_prompt_hash` in src/obliskiq/llm/, the yfinance
+reader in src/obliskiq/research/data.py, research/reports/hunter-feasibility.md "The universe"
+(the account's floors). Extend these; write no parallel reader.
+
+DELIVERABLES
+1. A collector `stocks` (under src/obliskiq/data/), each part with its own status and run
+   record, every stored row stamped with the time it was collected (`known_at`), every read
+   bounded by `as_of`:
+   a. Listings: the SEC's company_tickers_exchange.json, filtered to common stocks on the
+      exchanges named in config. Each snapshot is kept. A name present in one snapshot and
+      absent from the next is recorded as `left_listing` with both dates; no row is deleted.
+   b. Fundamentals: the XBRL frames for the tags the screen reads (config), stored as read on
+      the collection day, so the store becomes point in time from its first day; a later
+      restatement is a new row, never an overwrite.
+   c. Daily bars from Yahoo for the listed names, one request per symbol at a pace from
+      config. An empty answer for a symbol still on the SEC list is `unresolved` for that
+      symbol; a run in which the share of empty answers exceeds a configured limit is
+      `throttled` as a whole and stores nothing as a disappearance. An empty answer is never a
+      delisting and never a zero price.
+   Cadence, pace, exchanges, tags and limits are keys in config/defaults/ with a consumer each.
+2. A view `stock_screen`: the names that pass the account's floors (price and traded value,
+   the keys Session 23 measured with; reuse them), ranked by the mean of three percentile
+   ranks: cheapness (earnings to price), quality (gross profit to assets), and the 12-1 return
+   of the name's industry (SIC division, equal weight). A name lacking an input is ranked
+   on none and counted on one `n/a` line. Fewer than a configured number of months of bars
+   held → the industry trend is `immature` and the whole view is `immature`, shown as such
+   with no ranking. The view's status and its as_of travel with it.
+3. The fact sheet gains one section, the first `fact_sheet.stock_screen_top` names (a config
+   key), each line dated and ending `untested (D180)`, and a header line that says the screen
+   is no signal. No account identifier or balance (the existing scan test covers it).
+4. The analyst's segment: the sheet's section list becomes part of `analyst_prompt_hash` if
+   it is not already, so theses written with the screen are a new segment (D128, H13 "a new
+   segment is a new group"). research/preregistrations/thesis-book.md and its lock are not
+   edited; if a change to them seems needed, STOP and report.
+5. `obliskiq sources health` (or the existing equivalent) shows the collector's three
+   statuses; the digest shows one line: names listed, names left since the first snapshot,
+   the screen's status. docs/RUNBOOK.md gains the command the owner runs once to start it.
+6. docs/knowledge/research-sources.md: what the SEC and Yahoo answered, dated. ROADMAP,
+   DECISIONS (real decisions only), CHANGELOG, version (minor).
+
+DO NOT BUILD: a backtest or any return of the screen; a performance record, weight or gate
+that reads the screen; a Hunter engine, book or rebalancer; a second universe outside the US;
+a paid-vendor adapter, a source port or selector; a penalty for incomplete data; a coverage
+audit of free sources; a pre-registration (a forward test of the screen is registered only
+when `obliskiq research power` gives it 0.5 or more, D154, and that is another session); any
+change to sizing, the thesis gate or `llm/` imports of `decision/` or `execution/`.
+
+ACCEPTANCE: fixtures recorded from the SEC and Yahoo with sidecar notes, no network in tests;
+perturbing any row with `known_at` after `as_of` changes neither the view nor the sheet (test);
+a name dropped from the listings stays readable at an earlier `as_of` (test); a throttled run
+and an unresolved symbol produce their statuses and no `left_listing` (tests); an immature or
+failed screen puts a status line and no names on the sheet (test); the sheet with and without
+the section gives different segment hashes (test); `make check` green.
+```
+
+---
+
 ## Session 21 — Research: second batch
 
 **Launcher:** `Execute Session 21 exactly as specified in docs/SESSION_PROMPTS.md on main.` (network: Full)
 
 Runs any time after Session 4d, for a batch whose hypotheses each have power of at least 0.5
 before data (DECISIONS D150); the event sleeve's components and their agreement rule need
-Session 15. The stock-level hypotheses are Session 24's. Later batches reuse this prompt with a
+Session 15. A stock-level hypothesis is added to the registry here, with the effect the
+literature supports net of decay, costs and tax, and tested by Session 24 only if
+`research power` gives it 0.5 or more (DECISIONS D180). Later batches reuse this prompt with a
 new batch list.
 
 ```
