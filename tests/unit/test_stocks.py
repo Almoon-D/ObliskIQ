@@ -23,7 +23,7 @@ from obliskiq.data.stocks.bars import BarsCollector, chain, read_order
 from obliskiq.data.stocks.fundamentals import FundamentalsCollector, frame_periods, parse_frame
 from obliskiq.data.stocks.listings import ListingsCollector, parse_listings, parse_sic
 from obliskiq.domain.stocks import StockBar, StockFact, StockListing
-from obliskiq.errors import UpstreamError
+from obliskiq.errors import StoreError, UpstreamError
 from obliskiq.grid.stock_screen import (
     ScreenStatus,
     months_before,
@@ -642,3 +642,174 @@ def test_the_digest_line_counts_the_listed_and_the_departed(
     )
     line = screen_summary(store, shipped_settings, as_of=AS_OF)
     assert line.startswith("stock screen (untested, D180): 1 names listed, 4 left since 2025-10-01")
+
+
+# ── failure branches ──
+
+
+def test_answers_of_another_shape_are_refused(shipped_settings: ObliskConfig) -> None:
+    config = shipped_settings.sources.stocks.listings
+    with pytest.raises(UpstreamError, match="not \\{fields, data\\}"):
+        parse_listings([], config)
+    fields = ["cik", "name", "ticker", "exchange"]
+    with pytest.raises(UpstreamError, match="another shape"):
+        parse_listings({"fields": fields, "data": [[1, "x"]]}, config)
+    with pytest.raises(UpstreamError, match="not a number"):
+        parse_sic({"sic": "12a"})
+    with pytest.raises(UpstreamError, match="is not"):
+        parse_frame([], input_name="assets", period="CY2026Q3I", known_at=DAY1)
+    with pytest.raises(StoreError, match="at least one"):
+        stocks_repo.save_snapshot(None, [], known_at=DAY1, content_sha256="0" * 64)  # type: ignore[arg-type]
+
+
+@respx.mock
+async def test_a_dry_run_keeps_nothing_and_a_file_without_stocks_or_a_company_fails(
+    shipped_settings: ObliskConfig, store_worker: StoreWorker, store: Store
+) -> None:
+    full = body("sec_company_tickers_exchange.json")
+    otc_only = {**full, "data": [row for row in full["data"] if row[3] == "OTC"]}
+    respx.get(TICKERS).mock(
+        side_effect=[
+            httpx.Response(200, json=full),
+            httpx.Response(200, json=otc_only),
+            httpx.Response(200, json=full),
+        ]
+    )
+    respx.get(url__regex=r"https://data\.sec\.gov/submissions/.*").mock(
+        return_value=httpx.Response(503, text="down")
+    )
+    async with httpx.AsyncClient() as client:
+        dry = await listings_collector(shipped_settings, client, store_worker, DAY1).run(
+            dry_run=True
+        )
+        empty = await listings_collector(shipped_settings, client, store_worker, DAY1).run()
+        kept = await listings_collector(shipped_settings, client, store_worker, DAY2).run()
+    assert dry.status == "ok"
+    assert stocks_repo.latest_snapshot_held(store) is not None
+    assert "no common stock" in empty.outcomes[0].reason
+    sic = next(o for o in kept.outcomes if o.target == "sic")
+    assert sic.degraded
+    assert "HTTP 503" in sic.reason
+    assert stocks_repo.company_sics(store, as_of=DAY2.date()) == {}
+
+
+async def test_a_broken_answer_fails_its_name_and_a_dry_run_records_nothing(
+    shipped_settings: ObliskConfig, store_worker: StoreWorker, store: Store
+) -> None:
+    await seed_snapshot(store, ["AAPL", "BBB", "CCC", "DDD", "EEE", "TWTR", "OLD"], DAY1)
+    stocks_repo.save_bars(
+        store,
+        [StockBar(symbol="OLD", session=date(2026, 11, 16), close=1.0, volume=1.0, known_at=DAY1)],
+    )
+
+    def history(symbol: str, start: date, end: date) -> Frame:
+        if symbol == "BBB":
+            raise RuntimeError("connection reset")
+        return Frame.from_fixture("yahoo_twtr_empty.csv" if symbol == "TWTR" else "yahoo_aapl.csv")
+
+    settings = fast(shipped_settings)
+    dry = await bars_collector(settings, store_worker, history, DAY1).run(dry_run=True)
+    assert source_repo.target_attempts(store, "stock_bars", "bars:") == {}
+    assert next(o for o in dry.outcomes if o.target == "OLD").reason == "up to date"
+    run = await bars_collector(settings, store_worker, history, DAY1).run()
+    assert run.status == "partial"
+    assert "RuntimeError" in next(o for o in run.outcomes if o.target == "BBB").reason
+    assert set(source_repo.target_attempts(store, "stock_bars", "bars:")) == {
+        "AAPL",
+        "BBB",
+        "CCC",
+        "DDD",
+        "EEE",
+        "TWTR",
+        "OLD",
+    }
+
+
+def test_the_screen_s_floors_and_inputs_leave_out_what_they_should(
+    shipped_settings: ObliskConfig, store: Store
+) -> None:
+    seed_screen(store)
+    later = START + timedelta(hours=1)
+    # A second listing of company 1, less traded: one line for the company.
+    # A name too dear for one share at the position, a name with a stale close, a name whose
+    # facts are too old, and a company with no SIC.
+    extra = [
+        ("AAB", 1, 50.0, 10_000.0, AS_OF - timedelta(days=1)),
+        ("DEAR", 6, 5_000.0, 1_000_000.0, AS_OF - timedelta(days=1)),
+        ("STALE", 7, 50.0, 1_000_000.0, AS_OF - timedelta(days=30)),
+        ("OLDF", 8, 50.0, 1_000_000.0, AS_OF - timedelta(days=1)),
+        ("NOSIC", 9, 50.0, 1_000_000.0, AS_OF - timedelta(days=1)),
+    ]
+    stocks_repo.save_snapshot(
+        store,
+        [
+            *stocks_repo.listed(store, stocks_repo.snapshot_as_of(store, as_of=AS_OF)),  # type: ignore[arg-type]
+            *(
+                StockListing(cik=cik, ticker=t, name=f"{t} Corp", exchange="NYSE", venue="XNYS")
+                for t, cik, *_ in extra
+            ),
+        ],
+        known_at=later,
+        content_sha256="2" * 64,
+    )
+    for t, cik, close, volume, last in extra:
+        if cik != 9:
+            stocks_repo.save_company(store, cik, 3571, known_at=later)
+        else:
+            stocks_repo.save_company(store, 9, None, known_at=later)
+        end = date(2020, 1, 31) if cik == 8 else date(2026, 9, 30)
+        stocks_repo.save_facts(
+            store,
+            [
+                StockFact(
+                    cik=cik,
+                    input=name,
+                    period="CY2025",
+                    period_end=end,
+                    value=1.0,
+                    accession="0000000000-26-000003",
+                    known_at=later,
+                )
+                for name in ("earnings_per_share", "gross_profit", "assets")
+            ],
+        )
+        days = weekdays(last - timedelta(days=40), last)
+        stocks_repo.save_bars(
+            store,
+            [
+                StockBar(
+                    symbol=t, session=d, close=close, volume=volume, change=None, known_at=later
+                )
+                for d in days
+            ],
+        )
+    screen = stock_screen(store, shipped_settings, as_of=AS_OF)
+    tickers = [line.ticker for line in screen.lines]
+    assert "AAB" not in tickers
+    assert "AAA" in tickers
+    assert not {"DEAR", "STALE"} & {line.ticker for line in screen.lines}
+    assert not {"OLDF", "NOSIC"} & set(tickers)
+    assert screen.passing == 6  # AAA, BBB, CCC, DDD, OLDF, NOSIC
+    assert screen.lacking == 3
+
+
+def test_a_screen_with_no_complete_name_ranks_none(
+    shipped_settings: ObliskConfig, store: Store
+) -> None:
+    seed_screen(store)
+    screen = stock_screen(store, shipped_settings, as_of=AS_OF)
+    stocks = shipped_settings.sources.stocks
+    fundamentals = stocks.fundamentals.model_copy(update={"max_age_days": 1})
+    settings = shipped_settings.model_copy(
+        update={
+            "sources": shipped_settings.sources.model_copy(
+                update={"stocks": stocks.model_copy(update={"fundamentals": fundamentals})}
+            )
+        }
+    )
+    empty = stock_screen(store, settings, as_of=AS_OF)
+    assert screen.lines
+    assert empty.status is ScreenStatus.OK
+    assert empty.lines == ()
+    assert empty.lacking == empty.passing
+    assert stocks_repo.save_bars(store, []) == 0

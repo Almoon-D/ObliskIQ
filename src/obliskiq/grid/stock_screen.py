@@ -29,7 +29,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import calendar
-import math
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -85,6 +84,20 @@ class StockScreen:
     passing: int = 0
     lacking: int = 0
     lines: tuple[ScreenLine, ...] = field(default_factory=tuple)
+
+
+#: The inputs a name is ranked on, each a percentile rank; the score is their mean.
+RANKED_ON: Final = ("earnings_yield", "gross_profitability", "industry_trend")
+
+
+@dataclass(frozen=True, slots=True)
+class _Ranked:
+    listing: StockListing
+    last: HeldBar
+    division: str
+    earnings_yield: float
+    gross_profitability: float
+    industry_trend: float
 
 
 def months_before(day: date, months: int) -> date:
@@ -275,7 +288,7 @@ class _Screen:
         self,
         passing: Sequence[tuple[StockListing, HeldBar, float]],
         trends: Mapping[str, float],
-    ) -> list[tuple[StockListing, HeldBar, str, float, float, float]]:
+    ) -> list[_Ranked]:
         """The passing names with all three inputs."""
         latest = self._latest(stocks_repo.facts(self._store, as_of=self._as_of))
         sics = stocks_repo.company_sics(self._store, as_of=self._as_of)
@@ -290,41 +303,44 @@ class _Screen:
                 continue
             if division is None or trend is None:
                 continue
-            ratios = (eps.value / last.close, profit.value / assets.value)
-            if not all(math.isfinite(r) for r in ratios):
-                continue
-            complete.append((listing, last, division.code, *ratios, trend))
+            complete.append(
+                _Ranked(
+                    listing,
+                    last,
+                    division.code,
+                    earnings_yield=eps.value / last.close,
+                    gross_profitability=profit.value / assets.value,
+                    industry_trend=trend,
+                )
+            )
         return complete
 
     @staticmethod
-    def _rank(
-        inputs: Sequence[tuple[StockListing, HeldBar, str, float, float, float]],
-    ) -> list[ScreenLine]:
+    def _rank(inputs: Sequence[_Ranked]) -> list[ScreenLine]:
         if not inputs:
             return []
-        cheap = percentile_ranks([found[3] for found in inputs])
-        quality = percentile_ranks([found[4] for found in inputs])
-        trend = percentile_ranks([found[5] for found in inputs])
+        ranks = [percentile_ranks([getattr(r, name) for r in inputs]) for name in RANKED_ON]
         scored = sorted(
-            (((cheap[i] + quality[i] + trend[i]) / 3, found) for i, found in enumerate(inputs)),
-            key=lambda pair: (-pair[0], pair[1][0].ticker),
+            (
+                (sum(column[i] for column in ranks) / len(RANKED_ON), found)
+                for i, found in enumerate(inputs)
+            ),
+            key=lambda pair: (-pair[0], pair[1].listing.ticker),
         )
         return [
             ScreenLine(
                 rank=n,
-                ticker=listing.ticker,
-                name=listing.name,
-                division=division,
-                earnings_yield=earnings,
-                gross_profitability=profitability,
-                industry_trend=industry,
+                ticker=found.listing.ticker,
+                name=found.listing.name,
+                division=found.division,
+                earnings_yield=found.earnings_yield,
+                gross_profitability=found.gross_profitability,
+                industry_trend=found.industry_trend,
                 score=score,
-                close=last.close,
-                session=last.session,
+                close=found.last.close,
+                session=found.last.session,
             )
-            for n, (score, (listing, last, division, earnings, profitability, industry)) in (
-                enumerate(scored, start=1)
-            )
+            for n, (score, found) in enumerate(scored, start=1)
         ]
 
 
