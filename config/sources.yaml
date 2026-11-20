@@ -514,7 +514,9 @@ sources:
         - {venue: XNYS, anchor: close, offset_minutes: 330}
         - {venue: XTKS, anchor: close, offset_minutes: 120}
         - {venue: XETR, anchor: close, offset_minutes: 120}
-      stale_after_hours: 50
+      # A weekend leaves about 54 hours between Saturday's last run and Monday's first; a
+      # holiday Monday about a day more.
+      stale_after_hours: 80
       bias_notes:
         - Survivors only, and forward only. A name Yahoo stops serving is unresolved, never a
           delisting or a zero price.
