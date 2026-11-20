@@ -23,7 +23,9 @@ dependencies = [
     "httpx>=0.28,<0.29",
     "mcp>=1.20,<2",
     "numpy>=2.3,<3",
-    "playwright>=1.64,<2",
+    # The Gateway login is verified on 1.64 only (docs/knowledge/ibkr.md): held there until the
+    # machine's first login on a newer version passes (.github/dependabot.yml ignores newer ones).
+    "playwright>=1.64,<1.65",
     "pydantic>=2.12,<3",
     "pydantic-settings>=2.11,<3",
     "python-dotenv>=1.2.4,<2",

@@ -10,6 +10,11 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # The Gateway's automated login is verified on Playwright 1.64 only (docs/knowledge/ibkr.md);
+      # held until the machine's first login on a newer version passes.
+      - dependency-name: playwright
+        versions: [">=1.65"]
     groups:
       minor-and-patch:
         update-types: [minor, patch]
