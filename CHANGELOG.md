@@ -5,6 +5,21 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.1.1] - 2026-11-20
+
+Maintenance: dependencies, and one decision number corrected. No IBKR call.
+
+### Changed
+
+- Minor and patch updates of the Python dependencies and of `setup-uv`; playwright is held at
+  1.64.x, the only version the Gateway login is verified on, and Dependabot ignores newer ones.
+- Session 20's flow-timing decision is D184; D180 is the Hunter ruling alone.
+
+### Fixed
+
+- `stock_bars` no longer reads as stale on Monday mornings: its health allows 80 hours, past a
+  weekend's gap between runs.
+
 ## [1.1.0] - 2026-11-17
 
 Session 30: free US stock data collected forward and kept, and an untested stock screen on the

@@ -87,6 +87,20 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 
 ## Session log
 
+### Maintenance (2026-11-20, v1.1.1)
+
+- **Merged:** Session 30 (Almoon-D/ObliskIQ#78) once CI ran again; the minor-and-patch group
+  (Almoon-D/ObliskIQ#79), with playwright held at 1.64.1, pyee at 13.0.1 and a Dependabot
+  ignore for playwright 1.65 and later; setup-uv 10.3.3 (Almoon-D/ObliskIQ#54).
+- **Closed as superseded:** cryptography 50 (Almoon-D/ObliskIQ#9, Almoon-D/ObliskIQ#5): main
+  locks 50.0.2 since Session 20. Almoon-D/ObliskIQ#58 had been superseded by #79.
+- **DECISIONS:** two entries were numbered D180; Session 20's flow timing is now D184, with
+  its references in `capital/twr.py`, AUDIT, ROADMAP and CHANGELOG. The Hunter ruling keeps
+  D180, which prompts, code and config cite.
+- **Fixed:** `stock_bars` was stale after 50 hours, short of a weekend between its runs (80).
+- **Python 3.15** waits (dependency currency, Follow-ups). Dated values were not refreshed this
+  round (not in the owner's list). No IBKR call.
+
 ### Session 30 — Stock screen for the thesis book (2026-11-17, v1.1.0)
 
 - **Landed:** three built sources, `stock_listings` (SEC snapshots kept whole, `left_listing`,
@@ -731,8 +745,6 @@ settles it.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
   ceiling, so the owner's 50 % (D149) cannot be written until the budget reader lets the reserve
   shrink. Until then the defaults stand: the Hunter is inactive and its share stays in the reserve.
-- Maintenance session (SESSION_PROMPTS §F.2): Almoon-D/ObliskIQ#54 and Almoon-D/ObliskIQ#58
-  (Dependabot, minor and patch).
 - Research harness: the moving-block bootstrap draws a sample's first and last months less often
   than the others, so on a short sample its interval can sit beside the mean (Session 4e's
   forecast check on 46 development months). A circular block bootstrap would not; a change applies
