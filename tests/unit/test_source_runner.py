@@ -94,6 +94,9 @@ async def test_every_runnable_source_reaches_its_collector_and_records_its_healt
     assert {"fred", "cftc", "sec_edgar", "polymarket", "kalshi", "gdelt", "rss"} <= set(names)
     assert ran["fred"].step == "fred"
     assert ran["earnings"].status == "degraded"  # Yahoo listed nothing; no HTTP involved
+    assert ran["stock_listings"].status == "error"  # the SEC is down
+    assert ran["stock_fundamentals"].status == "error"
+    assert ran["stock_bars"].status == "skipped"  # no snapshot yet: Yahoo is not asked
     runs = source_repo.source_runs(store)
     assert set(runs) == set(names)
     assert runs["polymarket"].last_status == "error"

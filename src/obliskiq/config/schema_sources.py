@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import re
 from datetime import date
+from decimal import Decimal
 from typing import Annotated, Literal, Self
 
 from pydantic import (
@@ -36,7 +37,9 @@ type ReleaseDatePolicy = Literal[
 type Frequency = Literal["daily", "weekly", "monthly", "quarterly", "annual"]
 #: Which FRED vintage supplies a value; the release date always comes from the initial release.
 type ValueVintage = Literal["initial", "latest"]
-type SourceArea = Literal["macro", "positioning", "insiders", "events", "news", "calendar", "halts"]
+type SourceArea = Literal[
+    "macro", "positioning", "insiders", "stocks", "events", "news", "calendar", "halts"
+]
 type SourceStatus = Literal["built", "declared"]
 type FeedKind = Literal["central_bank", "regulator", "issuer"]
 
@@ -303,6 +306,117 @@ class InsidersConfig(FrozenModel):
     cluster_window_days: PositiveInt
 
 
+# ── stocks (the stock screen) ──
+
+#: A share inside (0, 1], quoted.
+type QuotedFraction = Annotated[Decimal, Field(gt=0, le=1, allow_inf_nan=False)]
+#: An amount of money, quoted, finite and positive.
+type QuotedAmount = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
+#: The kind of XBRL frame an input is read from: an annual duration or a quarter-end instant.
+type FrameKind = Literal["annual", "instant"]
+#: The inputs the stock screen reads (``grid/stock_screen.py``).
+STOCK_INPUTS = ("earnings_per_share", "gross_profit", "assets")
+
+
+def _pattern(value: str) -> str:
+    try:
+        re.compile(value)
+    except re.error as exc:
+        raise ValueError(f"not a regular expression: {exc}") from None
+    return value
+
+
+type Pattern = Annotated[str, AfterValidator(_pattern)]
+
+
+class StockListingsConfig(FrozenModel):
+    url: Url
+    #: The SEC's exchange name -> the venue (MIC) a listing there trades on.
+    exchanges: dict[NonEmptyText, Mic] = Field(min_length=1)
+    ticker_pattern: Pattern
+    excluded_pattern: Pattern
+    min_kept_share: QuotedFraction
+    submissions_url_template: Annotated[str, Field(pattern=r"^https://\S*\{cik(:[0-9a-z]+)?\}\S*$")]
+    sic_per_run: NonNegativeInt
+
+
+class FrameInputConfig(FrozenModel):
+    taxonomy: Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*$")]
+    tag: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9]*$")]
+    unit: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9-]*$")]
+    kind: FrameKind
+
+
+class StockFundamentalsConfig(FrozenModel):
+    frames_url_template: Annotated[
+        str,
+        Field(pattern=r"^https://\S*\{taxonomy\}\S*\{tag\}\S*\{unit\}\S*\{period\}\S*$"),
+    ]
+    inputs: dict[Identifier, FrameInputConfig]
+    annual_years: PositiveInt
+    instant_quarters: PositiveInt
+    max_age_days: PositiveInt
+
+    @model_validator(mode="after")
+    def _every_input(self) -> Self:
+        if set(self.inputs) != set(STOCK_INPUTS):
+            raise ValueError(f"inputs must be exactly {', '.join(STOCK_INPUTS)}")
+        return self
+
+
+class StockBarsConfig(FrozenModel):
+    max_symbols_per_run: PositiveInt
+    request_spacing_seconds: NonNegativeFloat
+    first_read_days: PositiveInt
+    max_empty_share: QuotedFraction
+    timezone: TimeZoneName
+
+
+class SicDivisionConfig(FrozenModel):
+    """One SIC division: the two-digit major groups it spans."""
+
+    code: Annotated[str, Field(pattern=r"^[A-Z]$")]
+    name: NonEmptyText
+    first: Annotated[int, Field(ge=0, le=99)]
+    last: Annotated[int, Field(ge=0, le=99)]
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        if self.first > self.last:
+            raise ValueError(f"SIC division {self.code} ends before it starts")
+        return self
+
+
+class StockScreenConfig(FrozenModel):
+    position_usd: QuotedAmount
+    trend_months: PositiveInt
+    skip_months: NonNegativeInt
+    sic_divisions: list[SicDivisionConfig] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        if self.skip_months >= self.trend_months:
+            raise ValueError("skip_months must be fewer than trend_months")
+        groups = [g for d in self.sic_divisions for g in range(d.first, d.last + 1)]
+        if len(groups) != len(set(groups)):
+            raise ValueError("SIC divisions overlap")
+        return self
+
+    def division(self, sic: int | None) -> SicDivisionConfig | None:
+        """The division of a four-digit SIC code; ``None`` for none or an unmapped group."""
+        if sic is None:
+            return None
+        group = sic // 100
+        return next((d for d in self.sic_divisions if d.first <= group <= d.last), None)
+
+
+class StocksConfig(FrozenModel):
+    listings: StockListingsConfig
+    fundamentals: StockFundamentalsConfig
+    bars: StockBarsConfig
+    screen: StockScreenConfig
+
+
 class PolymarketConfig(FrozenModel):
     gamma_url: Url
     curated_events: list[NonEmptyText]
@@ -426,6 +540,7 @@ class SourcesConfig(FrozenModel):
     macro: MacroConfig
     positioning: PositioningConfig
     insiders: InsidersConfig
+    stocks: StocksConfig
     events: EventsConfig
     news: NewsConfig
     halts: HaltsConfig
@@ -470,6 +585,9 @@ class SourcesConfig(FrozenModel):
         for area, name in (
             ("positioning", "cftc"),
             ("insiders", "sec_edgar"),
+            ("stocks", "stock_listings"),
+            ("stocks", "stock_fundamentals"),
+            ("stocks", "stock_bars"),
             ("events", "polymarket"),
             ("events", "kalshi"),
             ("events", "gdelt"),

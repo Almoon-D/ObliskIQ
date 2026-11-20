@@ -29,7 +29,16 @@ SOURCE_DIR = ROOT / "src" / "obliskiq"
 SECTION_FILES = {
     "universe.yaml": frozenset({"markets", "regions", "cells"}),
     "sources.yaml": frozenset(
-        {"providers", "contracts", "queries", "feeds", "markets", "tone_lexicon"}
+        {
+            "providers",
+            "contracts",
+            "queries",
+            "feeds",
+            "markets",
+            "tone_lexicon",
+            "exchanges",
+            "inputs",
+        }
     ),
     "llm.yaml": frozenset({"providers", "models"}),
 }
