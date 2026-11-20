@@ -120,6 +120,24 @@ def absent(response: httpx.Response) -> bool:
     return response.status_code == HTTP_FORBIDDEN and STORAGE_DENIAL in response.text
 
 
+async def sec_get(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    policy: RetryPolicy,
+    user_agent: str | None,
+    spacing: float,
+    sleep: Callable[[float], Any],
+) -> httpx.Response:
+    """One request to the SEC with the declared User-Agent, then the fair-access pause
+    (``insiders.request_spacing_seconds``). Without a User-Agent nothing is asked."""
+    if user_agent is None:
+        raise UpstreamError("SEC_USER_AGENT is unset; EDGAR refuses a request without one")
+    response = await get_with_retry(client, url, policy=policy, headers={"User-Agent": user_agent})
+    await sleep(spacing)
+    return response
+
+
 def index_url(template: str, day: date) -> str:
     quarter = (day.month - 1) // MONTHS_PER_QUARTER + 1
     return template.format(year=day.year, quarter=quarter, day=day.strftime("%Y%m%d"))
@@ -152,13 +170,14 @@ class Form4Collector:
         self._sleep = sleep
 
     async def _get(self, url: str) -> httpx.Response:
-        if self._user_agent is None:
-            raise UpstreamError("SEC_USER_AGENT is unset; EDGAR refuses a request without one")
-        response = await get_with_retry(
-            self._client, url, policy=self._policy, headers={"User-Agent": self._user_agent}
+        return await sec_get(
+            self._client,
+            url,
+            policy=self._policy,
+            user_agent=self._user_agent,
+            spacing=self._config.request_spacing_seconds,
+            sleep=self._sleep,
         )
-        await self._sleep(self._config.request_spacing_seconds)
-        return response
 
     async def run(self, *, dry_run: bool = False) -> Collection:
         collection = Collection(STEP)

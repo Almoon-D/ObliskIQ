@@ -4053,3 +4053,19 @@ Rejected: a second engine; a penalty key in config; a shadow systematic book on 
 test D154 forbids, run by another name); a source port or selector now (built for later, D150);
 a coverage audit of free sources now (no result would let a test run); lowering θ or the 0.5
 floor; buying a history (D168 stands).
+
+## Session 30 — Stock screen for the thesis book (2026-11-17)
+
+### D183 · What the stock screen's prompt left open (§5.5, §5.7; D129, D165, D166, D180)
+
+- **Three built sources** (`stock_listings`, `stock_fundamentals`, `stock_bars`), each with its
+  run record and health. Bars: 400 names a run, least recently read first, each read chaining
+  from the last session held; jobs run inline (D129) and a full pass takes over an hour.
+- **Guards.** Common stocks by ticker form (the SEC states no type); a snapshot below 95 % of the
+  last is refused; SIC once per company; a throttled run is a failed run, so it shows `failing`.
+- **Inputs.** Diluted EPS over the close; `GrossProfit` over `Assets`, never rebuilt from other
+  tags; one line per company, its most traded ticker. Returns chain each session's change from
+  one answer's adjusted closes; no year of survivor-only history is loaded (D180).
+- **Floors** are the thesis book's, at `stocks.screen.position_usd`: the sheet reads no account.
+- **The analyst still names only the sheet's instruments** (D165); a screen name as a thesis
+  needs an ISIN and a contract route outside the universe file: a follow-up, a money path.

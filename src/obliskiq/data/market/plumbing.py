@@ -8,7 +8,8 @@ symbol after it. A target is retried whole with capped exponential backoff after
 have spent the session's own retries; a failure that a second attempt cannot change (a contract
 that does not exist, an ambiguous resolution, a request IBKR will never accept) is not retried.
 A collection's verdict is the run log's rule: every target failed is ``error``, some ``partial``,
-a fallback ``degraded``, no target ``skipped`` with the reason, never ``ok`` over nothing.
+a fallback ``degraded``, no target ``skipped`` with the reason, never ``ok`` over nothing; a run
+that failed as a whole (``run_failure``) is ``error`` whatever its targets did.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -62,6 +63,8 @@ class Collection:
     notes: dict[str, Any] = field(default_factory=dict)
     #: Why there were no targets, when there were none.
     empty_reason: str = ""
+    #: Why the run failed as a whole whatever its targets did (a throttled source): ``error``.
+    run_failure: str = ""
 
     def succeeded(
         self, target: str, rows: int, *, degraded: bool = False, reason: str = "", **detail: Any
@@ -82,6 +85,8 @@ class Collection:
 
     @property
     def status(self) -> str:
+        if self.run_failure:
+            return ERROR
         if not self.outcomes:
             return SKIPPED
         failed = sum(1 for outcome in self.outcomes if not outcome.ok)
@@ -94,7 +99,9 @@ class Collection:
         failures = [o for o in self.outcomes if not o.ok]
         degraded = [o for o in self.outcomes if o.ok and o.degraded]
         reason = (
-            self.empty_reason
+            self.run_failure
+            if self.run_failure
+            else self.empty_reason
             if not self.outcomes
             else "; ".join(
                 f"{o.target}: {o.reason}" for o in (failures or degraded)[:SHOWN_FAILURES]

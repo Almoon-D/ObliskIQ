@@ -421,12 +421,14 @@ def _iso_date(text: str, where: str) -> date:
 
 @dataclass(frozen=True, slots=True)
 class YahooBar:
-    """One session of a Yahoo history: the close, the adjusted close and the dividend."""
+    """One session of a Yahoo history: the close, the adjusted close, the dividend and, where
+    the frame carries it, the volume."""
 
     session: date
     close: float
     adj_close: float
     dividend: float
+    volume: float | None = None
 
 
 class _Stamp(Protocol):
@@ -447,10 +449,21 @@ class YahooFrame(Protocol):
 YAHOO_CLOSE: Final = "Close"
 YAHOO_ADJ_CLOSE: Final = "Adj Close"
 YAHOO_DIVIDENDS: Final = "Dividends"
+YAHOO_VOLUME: Final = "Volume"
 
 
-def yahoo_bars(frame: YahooFrame, symbol: str) -> tuple[YahooBar, ...]:
-    """The sessions of a yfinance history frame; the stamp's own date is the session."""
+def _volume(row: _Row) -> float | None:
+    """The session's volume; ``None`` where the frame carries none or it is not a count."""
+    try:
+        volume = float(row[YAHOO_VOLUME])
+    except KeyError, TypeError, ValueError:
+        return None
+    return None if math.isnan(volume) or volume < 0 else volume
+
+
+def yahoo_sessions(frame: YahooFrame, symbol: str) -> tuple[YahooBar, ...]:
+    """The priced sessions of a yfinance history frame, by session; empty when Yahoo answered
+    nothing. The stamp's own date is the session."""
     bars: list[YahooBar] = []
     for stamp, row in frame.iterrows():
         try:
@@ -464,10 +477,16 @@ def yahoo_bars(frame: YahooFrame, symbol: str) -> tuple[YahooBar, ...]:
             continue
         if close <= 0 or adjusted <= 0 or dividend < 0:
             raise DataSourceError(f"Yahoo's history for {symbol} on {session} is not a price")
-        bars.append(YahooBar(session, close, adjusted, dividend))
+        bars.append(YahooBar(session, close, adjusted, dividend, _volume(row)))
+    return tuple(sorted(bars, key=lambda bar: bar.session))
+
+
+def yahoo_bars(frame: YahooFrame, symbol: str) -> tuple[YahooBar, ...]:
+    """The sessions of a yfinance history frame; a history with no price is refused."""
+    bars = yahoo_sessions(frame, symbol)
     if not bars:
         raise DataSourceError(f"Yahoo returned no prices for {symbol}")
-    return tuple(sorted(bars, key=lambda bar: bar.session))
+    return bars
 
 
 def _yahoo_content(bars: Sequence[YahooBar]) -> bytes:

@@ -25,6 +25,7 @@ from ..config.schema import ObliskConfig
 from ..domain.base import DomainModel, NonEmptyText
 from ..domain.sources import Probability
 from ..domain.thesis import Thesis, View
+from ..grid.facts import SECTIONS
 from .prompts import render
 
 #: The longest text an answer may carry (a thesis's reasoning, a critique).
@@ -183,8 +184,9 @@ def opinion_prompt(*, as_of: date, thesis: Thesis, facts: str) -> str:
     return render(opinion_template(as_of.isoformat(), describe_idea(thesis), facts))
 
 
-def analyst_prompt_hash(settings: ObliskConfig) -> str:
-    """The Analyst's identity besides the model: what its answers depend on."""
+def analyst_prompt_hash(settings: ObliskConfig, *, sections: Sequence[str] = SECTIONS) -> str:
+    """The Analyst's identity besides the model: what its answers depend on, the fact sheet's
+    sections included (a sheet with another section list is another segment, D128)."""
     config = settings.llm.analyst
     identity = {
         "drafts_system": DRAFTS_SYSTEM,
@@ -199,6 +201,7 @@ def analyst_prompt_hash(settings: ObliskConfig) -> str:
         "retries_on_invalid": config.retries_on_invalid,
         "max_horizon_days": config.max_horizon_days,
         "fact_sheet": config.fact_sheet.model_dump(mode="json"),
+        "fact_sheet_sections": list(sections),
         "min_gain_to_loss": str(settings.thesis.min_gain_to_loss),
     }
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()

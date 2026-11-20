@@ -85,6 +85,8 @@ llm:
       # Issuers with open-market purchases by officers or directors in the cluster window, the
       # most buyers first, at most this many.
       max_insider_lines: 15
+      # The stock screen's first names the sheet carries, each labelled untested (D180).
+      stock_screen_top: 20
   panel:
     # The weekly forecast panel (research/preregistrations/scoreboard.md "The weekly forecast
     # panel"; ported from Inversor-Inteligente's modules/analytics/forecast_panel.py with its

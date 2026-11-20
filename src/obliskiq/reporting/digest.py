@@ -45,6 +45,7 @@ from ..engines.thesis.grading import GroupRecord, PairRecord, opinion_record, pa
 from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
+from ..grid.stock_screen import screen_summary
 from ..store import analyst as analyst_repo
 from ..store import capital as capital_repo
 from ..store import nav as nav_repo
@@ -134,6 +135,8 @@ class Digest:
     #: The analyst's second opinions on the owner's open theses, and their graded record.
     opinions: list[tuple[Thesis, SecondOpinion, AnalystCall]] = field(default_factory=list)
     opinion_scores: list[OpinionScore] = field(default_factory=list)
+    #: The stock screen in one line (names listed, names left, its status).
+    stock_screen: str | None = None
     questions: list[OwnerQuestion] = field(default_factory=list)
     cash_events: list[CashEvent] = field(default_factory=list)
     intents: list[StoredIntent] = field(default_factory=list)
@@ -219,6 +222,10 @@ async def gather_digest(
     given = await worker.run(analyst_repo.opinions, as_of=day)
     digest.opinion_scores = opinion_record(given, grades)
     digest.opinions = await worker.run(_open_opinions, given, day)
+    try:
+        digest.stock_screen = await worker.run(screen_summary, settings, as_of=day)
+    except Exception as exc:  # shown as unreadable, never left out
+        digest.problems.append(f"the stock screen cannot be read: {type(exc).__name__}")
     digest.questions = await worker.run(
         lambda store: capital_repo.questions(store, states=[QuestionState.OPEN])
     )
@@ -453,6 +460,8 @@ def thesis_lines(digest: Digest, rows: int) -> list[str]:
         f"{score.brier:.3f} (0 is a certain, right call; 0.25 a coin's)"
         for score in digest.opinion_scores
     ]
+    if digest.stock_screen is not None:
+        lines.append(f"  {digest.stock_screen}")
     return lines
 
 

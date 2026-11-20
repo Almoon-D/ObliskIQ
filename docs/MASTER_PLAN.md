@@ -848,7 +848,7 @@ engine and tax ledger that call them.
 |---|---|---|---|
 | IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | the paper username and password for the Gateway's automated login (paper); OAuth keys for the live account where granted (DECISIONS D42) | read path verified live over OAuth (lite); Gateway route and order path new |
 | Stock history that keeps delisted companies (Sharadar, Norgate, CRSP through WRDS) | the Hunter's test, when one is registered on it (§5.5, DECISIONS D180) | the vendor's key or login, on the machine its licence allows; never in the repository | none held; no free source keeps delisted names (docs/knowledge/research-sources.md) |
-| SEC company tickers and XBRL frames; Yahoo daily bars | the stock screen, collected forward (§5.5) | none (a declared User-Agent for the SEC) | formats observed (docs/knowledge/research-sources.md); collectors are Session 30's |
+| SEC company tickers and XBRL frames; Yahoo daily bars | the stock screen, collected forward (§5.5) | none (a declared User-Agent for the SEC) | collected forward by `stock_listings`, `stock_fundamentals` and `stock_bars` (DECISIONS D183) |
 | FRED / ALFRED (+ API v2 bulk) | US and global rates, curves, breakevens, credit, CPI, Eurostat HICP redistribution | `FRED_API_KEY` | verified |
 | ECB Data Portal | €STR, deposit rate, FX reference rates, yield curves | none | verified |
 | Bank of Japan Time-Series API | JGB yields, FX, monetary base | none | verify |
