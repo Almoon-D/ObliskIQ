@@ -54,7 +54,7 @@ on paper yet: what remains is the owner's checklist in `docs/ROADMAP.md`.
   buy (D179). The paper order test and the execution test reconcile before they place.
 - An owner's deposit or withdrawal enters the time-weighted return on the day the account's cash
   showed it, so a transfer credited days after it was announced no longer reads as a loss and
-  can no longer trip a breaker (D180).
+  can no longer trip a breaker (D184).
 - `update.sh` rolls back and alerts when a unit will not stop or start and when it is
   interrupted, instead of leaving the machine on an unjudged version (D182).
 

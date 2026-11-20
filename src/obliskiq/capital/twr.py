@@ -14,7 +14,7 @@ day belongs:
 External flows are the owner's deposits and withdrawals that reached the account (matched to its
 cash), each on the day its cash showed it (:func:`reached_on`), not the day the owner dated it: a
 transfer announced today and credited two days later moves the NAV two days later, and a flow
-placed on any other day reads as a loss on one day and a gain on another (DECISIONS D180).
+placed on any other day reads as a loss on one day and a gain on another (DECISIONS D184).
 Dividends, interest and fees are the book's own return, and a paper account's flows never reach
 its NAV. A period that cannot be measured (a non-positive base, a flow with no rate) makes
 the whole return unknown, never a partial number.
