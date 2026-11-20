@@ -23,7 +23,9 @@ jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The suite takes about 20 minutes on a hosted runner (19.5 on main on 2026-11-17); a cap at
+    # that edge cancels a green run.
+    timeout-minutes: 30
     env:
       UV_PYTHON_PREFERENCE: only-managed
     steps:

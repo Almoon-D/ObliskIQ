@@ -13,8 +13,8 @@ The build is complete and nothing has filled an order yet. In order of value:
 2. **Owner: the analyst's key on the machine** (step 1). The thesis book is the only part
    that can earn far more than the market, and its evidence is forward only: a week it does
    not run is a week of record lost. Capital follows its graded record without a command.
-3. **Session 30** (stock screen for the thesis book): any time, beside 1 and 2. No key, no
-   bought data, no IBKR call.
+3. **Owner: start the stock screen once** (docs/RUNBOOK.md, "The stock screen"): `serve` then
+   collects it; it ranks nothing until twelve months of bars are held.
 4. **Session 20a** (mutation pass, the remainder): any time.
 5. **Session 21** with a new batch, only for a hypothesis to which `obliskiq research power`
    gives 0.5 or more. None has it today; Sessions 24 and 26 wait on it (D180).
@@ -63,7 +63,7 @@ of graded calls will (§5.5).
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | done (image built and run in the session; the machine's deployment and the full preflight are the owner's list in docs/DEPLOY.md; no IBKR call) | v0.28.0 |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | done (three silent failures fixed, docs/AUDIT.md; no IBKR call; the owner's checklist below is what remains) | v1.0.0 |
 | 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
-| 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | next (D180); no bought data, no IBKR call | |
+| 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; immature until twelve months of bars are held; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0 |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
 | 17 | Decision layer, the rest | expression selection, calibrated sizing, expected shortfall, stress | when a funded layer needs it | |
@@ -86,6 +86,20 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Session 30 — Stock screen for the thesis book (2026-11-17, v1.1.0)
+
+- **Landed:** three built sources, `stock_listings` (SEC snapshots kept whole, `left_listing`,
+  SIC), `stock_fundamentals` (XBRL frames as read; a restatement is a new row) and `stock_bars`
+  (Yahoo, chained forward; `unresolved` and `throttled`, never a delisting); the `stock_screen`
+  view; its section on the fact sheet, labelled untested; the sheet's sections in the analyst's
+  segment hash; one digest line; the owner's start command in the runbook. D183.
+- **Live findings.** The SEC refuses a User-Agent without a contact (403); 6,399 common-stock
+  tickers of 6,003 companies on NYSE and Nasdaq; 150 sampled names all answered Yahoo; `ACH` is
+  on the SEC's list and unknown to Yahoo (docs/knowledge/research-sources.md). No IBKR call.
+- **Stop-condition note:** the goal's single-stock theses from the screen are not reachable yet:
+  drafts name only the sheet's instruments (D165) and a share outside the universe and holdings
+  files has no ISIN route (Follow-ups). **VERIFY-LIVE:** none. **Prompts edited:** none.
 
 ### Design session: the Hunter's data sources (2026-11-17, v1.0.1)
 
@@ -604,6 +618,12 @@ settles it.
 - Session 30: the stock screen's snapshots are the only survivorship-free stock data the
   project will hold; a forward test on them is registered only if `research power` gives it
   0.5 (D154), and none does today.
+- Session 30 (D183): a route by which the analyst names a screen stock, so its theses reach the
+  book: the stock's ISIN and its contract through IBKR's search, for a share in neither the
+  universe file nor a holdings file (a money path: does the search answer the ISIN?). Until
+  then the screen informs drafts on the sheet's instruments and the owner's ideas.
+- Session 30: DECISIONS holds two entries numbered D180 (Session 20's flow timing and the design
+  session's Hunter ruling); prompts and code cite the second. Renumbering is a docs pass.
 - The cross-section harness Bonferroni-adjusts over every test of a confirmation run; a fixed
   sequence (D154) needs none. A pre-registration of the Hunter's sequence would need the
   adjustment named per test (a Hunter pre-registration, if one is ever written).

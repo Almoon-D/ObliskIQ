@@ -378,9 +378,28 @@ SHAPE = {
         "valid:INTEGER!, error:TEXT, input_tokens:INTEGER!, output_tokens:INTEGER!, "
         "cost_usd:REAL!"
     ),
+    # 019_stocks
+    "stock_snapshots": (
+        "snapshot_id:INTEGER*, known_at:TEXT!, listed:INTEGER!, content_sha256:TEXT!"
+    ),
+    "stock_members": "snapshot_id:INTEGER!*, ticker:TEXT!*, cik:INTEGER!*",
+    "stock_names": (
+        "ticker:TEXT!*, cik:INTEGER!*, name:TEXT!, exchange:TEXT!, venue:TEXT!, known_at:TEXT!"
+    ),
+    "stock_left": ("ticker:TEXT!*, cik:INTEGER!*, last_snapshot:INTEGER!, left_snapshot:INTEGER!*"),
+    "stock_companies": "cik:INTEGER*, sic:INTEGER, known_at:TEXT!",
+    "stock_facts": (
+        "cik:INTEGER!*, input:TEXT!*, period:TEXT!*, period_end:TEXT!, value:REAL!, "
+        "accession:TEXT!, known_at:TEXT!*"
+    ),
+    "stock_bars": (
+        "symbol:TEXT!*, session:TEXT!*, close:REAL!, volume:REAL, change:REAL, known_at:TEXT!"
+    ),
 }
 
 INDEXES = {
+    # 019_stocks
+    "ix_stock_bars_session",
     # 018_scoreboard_remainder
     "ix_session_events_at",
     "ix_panel_calls_produced",

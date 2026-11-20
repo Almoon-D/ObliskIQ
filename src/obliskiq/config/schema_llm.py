@@ -68,6 +68,7 @@ class FactSheetConfig(FrozenModel):
     max_news_lines: NonNegativeInt
     max_market_lines: NonNegativeInt
     max_insider_lines: NonNegativeInt
+    stock_screen_top: NonNegativeInt
 
 
 class AnalystConfig(FrozenModel):

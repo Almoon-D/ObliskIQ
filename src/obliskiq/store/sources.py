@@ -201,6 +201,22 @@ def succeeded_targets(store: Store, source: str, prefix: str) -> tuple[str, ...]
     return tuple(row["target"] for row in rows)
 
 
+def target_attempts(store: Store, source: str, prefix: str) -> dict[str, datetime]:
+    """When each target of a source named with ``prefix`` was last attempted, by its name
+    without the prefix."""
+    rows = store.execute(
+        "SELECT target, last_attempt_at FROM source_targets WHERE source = ? "
+        "AND substr(target, 1, ?) = ?",
+        (source, len(prefix), prefix),
+    ).fetchall()
+    return {
+        row["target"].removeprefix(prefix): read_stamp(
+            row["last_attempt_at"], "source_targets", "last_attempt_at"
+        )
+        for row in rows
+    }
+
+
 # ── CFTC positioning ──
 
 

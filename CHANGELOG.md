@@ -5,6 +5,24 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.1.0] - 2026-11-17
+
+Session 30: free US stock data collected forward and kept, and an untested stock screen on the
+analyst's fact sheet (DECISIONS D183). No IBKR call.
+
+### Added
+
+- Three sources: `stock_listings` (the SEC's listing snapshots, the names that leave them, each
+  company's SIC), `stock_fundamentals` (XBRL frames stored as read) and `stock_bars` (Yahoo's
+  daily bars, chained forward; an empty answer is `unresolved`, too many make the run
+  `throttled`, never a delisting).
+- The `stock_screen` view: the names passing the thesis book's floors, ranked by cheapness,
+  quality and their industry's 12-1 return; `immature` until twelve months of bars are held.
+- The fact sheet's `stock_screen` section, each name labelled `untested (D180)`; the sheet's
+  sections are part of the analyst's segment, so theses written with it are a new group.
+- One digest line (names listed, names left, the screen's status) and the owner's start command
+  in the runbook.
+
 ## [1.0.1] - 2026-11-17
 
 Design session: the owner's proposal of a paid and a free Hunter, challenged and decided
