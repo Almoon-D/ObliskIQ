@@ -87,6 +87,20 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 
 ## Session log
 
+### Maintenance (2026-11-20, v1.1.1)
+
+- **Merged:** Session 30 (Almoon-D/ObliskIQ#78) once CI ran again; the minor-and-patch group
+  (Almoon-D/ObliskIQ#79), with playwright held at 1.64.1, pyee at 13.0.1 and a Dependabot
+  ignore for playwright 1.65 and later; setup-uv 10.3.3 (Almoon-D/ObliskIQ#54).
+- **Closed as superseded:** cryptography 50 (Almoon-D/ObliskIQ#9, Almoon-D/ObliskIQ#5): main
+  locks 50.0.2 since Session 20. Almoon-D/ObliskIQ#58 had been superseded by #79.
+- **DECISIONS:** two entries were numbered D180; Session 20's flow timing is now D184, with
+  its references in `capital/twr.py`, AUDIT, ROADMAP and CHANGELOG. The Hunter ruling keeps
+  D180, which prompts, code and config cite.
+- **Fixed:** `stock_bars` was stale after 50 hours, short of a weekend between its runs (80).
+- **Python 3.15** waits (dependency currency, Follow-ups). Dated values were not refreshed this
+  round (not in the owner's list). No IBKR call.
+
 ### Session 30 — Stock screen for the thesis book (2026-11-17, v1.1.0)
 
 - **Landed:** three built sources, `stock_listings` (SEC snapshots kept whole, `left_listing`,
@@ -122,7 +136,7 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 
 - **Audit (docs/AUDIT.md).** Ten silent failures ranked; three were real and are fixed: new risk
   cleared on an account never or not recently reconciled (D179), an owner's flow dated by its
-  announced day, which read as a loss and reached the breakers (D180), and `update.sh` leaving
+  announced day, which read as a loss and reached the breakers (D184), and `update.sh` leaving
   the machine on a version nobody judged (D182). The other seven are guarded, each proven by
   removing its guard and seeing a named test fail.
 - **Mutation pass** over `decision/`, `execution/`, `capital/`, `tax/`, `jurisdiction/`,
@@ -591,7 +605,7 @@ settles it.
   pre-earnings rules) has no reader until a stock book exists (D181). `cryptography` deprecates
   the finite-field Diffie-Hellman IBKR's OAuth handshake needs: the pin stays below 51 and the
   maintenance session watches IBKR for another exchange (D182). A credit matched after the
-  day's last NAV reading is still counted in that reading (D180). The mutation pass's survivors
+  day's last NAV reading is still counted in that reading (D184). The mutation pass's survivors
   left open are listed in docs/AUDIT.md, with why each was left.
 - **Scoreboard (Session 18):** `capital.satellite_ceiling` (0.20) and its validator keep the
   core's budget, so D149's 50 % needs them reworked when a Hunter hypothesis exists (Session 26,
@@ -622,8 +636,6 @@ settles it.
   book: the stock's ISIN and its contract through IBKR's search, for a share in neither the
   universe file nor a holdings file (a money path: does the search answer the ISIN?). Until
   then the screen informs drafts on the sheet's instruments and the owner's ideas.
-- Session 30: DECISIONS holds two entries numbered D180 (Session 20's flow timing and the design
-  session's Hunter ruling); prompts and code cite the second. Renumbering is a docs pass.
 - The cross-section harness Bonferroni-adjusts over every test of a confirmation run; a fixed
   sequence (D154) needs none. A pre-registration of the Hunter's sequence would need the
   adjustment named per test (a Hunter pre-registration, if one is ever written).
@@ -678,16 +690,22 @@ settles it.
   the BoE, the SNB and the rest of the regional list in `config/sources.yaml`.
 
 - Dependency currency (D96), each with its review date:
-  - by 2026-11-30: Python 3.15. Widen `requires-python` to `<3.16`, try 3.15 in CI, then move
-    `.python-version`, CI, mypy's and ruff's targets, `tests/unit/test_packaging.py` and
-    MASTER_PLAN §7. The machine verifies it with one `preflight --read-only`.
+  - Python 3.15: not before the reserve's first paper cycle has filled. PyYAML 6.0.3, cvxpy
+    1.9.3 and its qdldl 0.1.9.post1 publish no cp315 wheel, and cvxpy holds sparsediffpy below
+    0.7, whose releases have none either (PyPI, 2026-11-20). Then widen `requires-python` to
+    `<3.16`, try 3.15 in CI, and move `.python-version`, CI, mypy's and ruff's targets,
+    `tests/unit/test_packaging.py` and MASTER_PLAN §7; the machine verifies it with one
+    `preflight --read-only`.
+  - Playwright stays at 1.64.x (`pyproject.toml`; Dependabot ignores 1.65 and later): the
+    Gateway login is verified on 1.64 only. A newer version follows the machine's first login
+    on it.
   - next Dependabot round: one uv version for CI and the machine, in `[tool.uv]
     required-version`, read by `setup-uv` in place of `ci.yml`'s `version: "0.12.23"` (whether
     setup-uv reads that key is to be confirmed in that pull request's CI log).
-  - before the live account's OAuth runs: cryptography 50 (Almoon-D/ObliskIQ#9, red;
-    Almoon-D/ObliskIQ#5 is the same update). Parse the DH parameter file without
-    `load_pem_parameters`, whose finite-field DH is deprecated (`oauth.py`); the exchange is
-    already `pow`.
+  - before cryptography 51 or the live account's OAuth, whichever comes first: parse the DH
+    parameter file without `load_pem_parameters` (`oauth.py`). Cryptography 50 is locked
+    since Session 20; it deprecates finite-field DH, the tests filter the warning, and the pin
+    stays below 51. The exchange is already `pow`.
   - Every venue of a tradable candidate or option underlying is covered through
     `calendars.horizon_years` (a test); XSHG holds data only (510300), and past 2026-12-31 its
     collection folds into New York's job. A tradable candidate on XSHG, XBOM or XSES needs a
@@ -727,8 +745,6 @@ settles it.
 - Session 26: `capital.satellite_ceiling`'s validation reserves a fixed core budget beside the
   ceiling, so the owner's 50 % (D149) cannot be written until the budget reader lets the reserve
   shrink. Until then the defaults stand: the Hunter is inactive and its share stays in the reserve.
-- Maintenance session (SESSION_PROMPTS §F.2): Almoon-D/ObliskIQ#54 and Almoon-D/ObliskIQ#58
-  (Dependabot, minor and patch).
 - Research harness: the moving-block bootstrap draws a sample's first and last months less often
   than the others, so on a short sample its interval can sit beside the mean (Session 4e's
   forecast check on 46 development months). A circular block bootstrap would not; a change applies

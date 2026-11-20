@@ -3949,7 +3949,7 @@ test reconcile before they place; a dry run, which writes nothing, plans as the 
 reconciles first would and is blocked by drift alone. Rejected: reconciling inside the gate (a
 read path that writes); ageing the reservation planner's check (its sales reduce risk).
 
-### D180 · A flow enters the return on the day the account's cash showed it (§5.15; amends D111)
+### D184 · A flow enters the return on the day the account's cash showed it (§5.15; amends D111)
 
 D111 placed a matched deposit or withdrawal on the day the owner dated it. A transfer announced
 on Monday and credited on Wednesday then read as a fall of the whole deposit on Monday and a rise
