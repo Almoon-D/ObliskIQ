@@ -21,7 +21,7 @@ dependencies = [
     "cryptography>=50,<51",
     "exchange-calendars>=4.13.2,<5",
     "httpx>=0.28,<0.29",
-    "mcp>=1.20,<2",
+    "mcp>=1.20,<3",
     "numpy>=2.3,<3",
     # The Gateway login is verified on 1.64 only (docs/knowledge/ibkr.md): held there until the
     # machine's first login on a newer version passes (.github/dependabot.yml ignores newer ones).
