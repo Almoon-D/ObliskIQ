@@ -42,7 +42,7 @@ from decimal import Decimal
 from ..capital.managed import CapitalReader, CapitalView, is_shadow_family
 from ..capital.twr import ExternalFlow, FlowTiming, Reading, reached_on, time_weighted_return
 from ..config.schema import ObliskConfig
-from ..config.schema_engines import LossBrakeConfig, PortfolioCircuitBreakerConfig
+from ..config.schema_engines import LossBrakeStep, PortfolioCircuitBreakerConfig
 from ..domain.capital import Deposit, Withdrawal
 from ..domain.orders import ExecutionMode
 from ..errors import ObliskError
@@ -125,20 +125,20 @@ class LossBrake:
 
 
 def loss_brake(
-    config: LossBrakeConfig, scope: Sequence[tuple[ManagedReading, Decimal]], index: Decimal
+    steps: Sequence[LossBrakeStep], scope: Sequence[tuple[ManagedReading, Decimal]], index: Decimal
 ) -> LossBrake:
     """The brake over the closes of ``scope`` (each with its flow-neutral index), measured on
     ``index``."""
     since, peak = max(scope, key=lambda found: (found[1], found[0].as_of))
     fall = max(ZERO, ONE - index / peak)
     size = ONE
-    for step in config.steps:
+    for step in steps:
         if fall >= step.fall:
             size = step.entry_size
     what = f"the book fell {_percent(fall)} from its highest close, of {since.as_of.isoformat()}"
     if size == ONE:
         return LossBrake(
-            OK, ONE, f"{what}; it brakes from {_percent(config.steps[0].fall)}", fall, since.as_of
+            OK, ONE, f"{what}; it brakes from {_percent(steps[0].fall)}", fall, since.as_of
         )
     effect = (
         "no new thesis is entered until it recovers"
@@ -356,7 +356,7 @@ def judge(
         span="since the last reset" if reset is not None else "so far",
     )
     brake = (
-        loss_brake(config.loss_brake, since_reset, index)
+        loss_brake(config.loss_brake.steps, since_reset, index)
         if len(since_reset) >= config.min_observations
         else None
     )

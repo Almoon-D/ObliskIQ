@@ -75,7 +75,7 @@ def test_the_first_start_records_the_settings_only(config_dir: Path, tmp_path: P
     audit = SettingsAuditLog(tmp_path / "audit.jsonl")
     assert audit_unrecorded(loaded, tmp_path, audit, at=AT) == ()
     snapshot = json.loads((tmp_path / loaded.settings.paths.settings_applied).read_text())
-    assert snapshot["core.variant"] == "D50"
+    assert snapshot["core.variant"] == "A"
 
 
 def test_a_hand_edit_and_a_new_default_are_audited_by_their_source(
@@ -217,7 +217,7 @@ def test_settings_diff_says_whether_the_service_runs_on_them(
 ) -> None:
     status, out = _run("settings", "diff")
     assert status == EXIT_OK
-    assert "core.variant: D50 (default A)" in out
+    assert "core.variant: A (default A)" in out
     assert "no heartbeat says" in out
     settings = load_config(config_dir).settings
     write_heartbeat(data_dir / "heartbeat.json", AT, {"settings": settings_fingerprint(settings)})
