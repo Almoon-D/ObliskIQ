@@ -4271,3 +4271,35 @@ in safer assets. `core.variant` is A in `config/owner.yaml`.
 - The price is about three points a year on capital that waits. It is the owner's to pay.
 
 Rejected: a reserve that turns defensive only after a fall (a timing rule with no test, D95).
+
+### D195 · A stock on the SEC's listings is a thesis, and reaches the broker with its ISIN (§5.5; amends D161, D165)
+
+- **Identity.** A name on the latest `stock_listings` snapshot is a thesis under the SEC's
+  identity (`sec:<CIK>`, the SEC's ticker), resolved by the existing contract search on the
+  IBKR exchange its SEC exchange maps to. Its sector is its SIC division; its issuer country is
+  the home country when its submissions state a US state of incorporation, else unstated.
+- **The ISIN.** Shadow needs none. On paper and live the entry waits with `no_isin` until the
+  owner gives one (`obliskiq idea isin`, form and check digit checked, while a candidate). The
+  broker's contract info is not read for it until a live read shows the field
+  (`obliskiq universe contract`, VERIFY-LIVE): tax lots stay keyed by ISIN (D161).
+- **Shadow** prices a share's transaction tax by its issuer country; without one, no fill.
+  **The analyst** names a stock from the screen or an instrument, and says which (D128).
+
+Rejected: the broker's contract info as the ISIN's source before it is seen; a stock without a
+stated issuer country priced as untaxed.
+
+### D196 · The hunting share and the reserve's funding sale (§5.4, §5.5; amends D159, D185)
+
+- `thesis.capital_share` is 1 in `config/owner.yaml`: the book's capital is all investable
+  capital less the cash floor in shadow and paper. Live stays under the allocation rule, the
+  satellite ceiling and H13's locked ceiling (follow-up: an owner ruling to change them).
+- The reserve's budget is investable less what the thesis book holds or has approved. The
+  thesis book decides first in each cycle, so an idea takes free cash before the reserve does.
+- **The funding sale.** When an approved thesis lacks free cash, the reservation planner's
+  seller sells the reserve pro rata (largest first, as few holdings as the minimum trade needs,
+  net of costs), all or nothing; a sale the two-month rule would defer, or unreadable lots,
+  leave a holding out. The thesis is approved at funding; one funding a cycle; working sales
+  count toward it.
+
+Rejected: a second seller; counting candidates in the commitment (the reserve would sell for an
+idea the gate then refuses).

@@ -2051,7 +2051,8 @@ DELIVERABLES
 4. Capital: inconclusive-positive → shadow at zero weight, graded; sufficient → the budget
    reader gives the Hunter its share, up to 50 %, and the reserve the rest
    (`capital.satellite_ceiling` and the schema rule that reserves a fixed core budget change
-   with it, D149). The steps beyond 50 % are Session 18's.
+   with it, D149; the reserve's budget already gives up what the thesis book holds or has
+   approved, D196). The steps beyond 50 % are Session 18's.
 5. The Hunter's StrategyValue for the reservation planner; the digest shows the book, its
    next rebalance date and each withheld trade with its reason.
 

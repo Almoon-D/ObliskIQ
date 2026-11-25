@@ -210,8 +210,11 @@ uv run obliskiq idea add FCX --expect "copper tightens as mines close" \
     --target 60 --invalidation 38 --horizon 2027-06-30       # a symbol of config/universe.yaml
 uv run obliskiq idea add SGLD --bearish --expect "equities fall" \
     --target 400 --invalidation 300 --horizon 2027-03-31     # a bearish view: a defensive instrument
+uv run obliskiq idea add --stock NVDA --expect "..." \
+    --target 220 --invalidation 150 --horizon 2027-06-30     # a US stock on the SEC's listings
+uv run obliskiq idea isin T3 US67066G1040                    # its ISIN, before it is approved
 uv run obliskiq idea add --candidate jp:toyota_motor --isin JP3633400001 --expect "..." \
-    --target 4000 --invalidation 2500 --horizon 2027-06-30   # a share outside the universe file
+    --target 4000 --invalidation 2500 --horizon 2027-06-30   # a share of a holdings file
 uv run obliskiq idea add SPY --bearish --as option --expect "US equities fall" \
     --target 420 --invalidation 530 --horizon 2027-03-15     # its own fall: a long put or nothing
 uv run obliskiq idea add SPY --as auto --expect "..." \
@@ -228,7 +231,12 @@ uv run obliskiq idea withdraw T1                             # before its first 
 - **Options.** `--conviction high` or `max` multiplies the size (1.5 and 2 times a normal idea)
   inside the position cap. `--entry-max` enters only at or below a price. `--enter-by` is the last
   day to enter; without it the idea may be entered for `thesis.entry_window_days` (20).
-- **A share outside the universe file** is named by its stock candidate's key (the holdings files
+- **A US stock** on the SEC's latest listings is named by its ticker (`--stock`; the stock
+  screen must have run once). In shadow it trades at once; on paper and live it waits with
+  `no_isin` until you give its ISIN with `idea isin`, while it is still a candidate (the tax
+  lots are kept by it; the form and check digit are checked). Its ISIN is on the company's
+  filings or any market data site.
+- **A share of a holdings file** is named by its stock candidate's key (the holdings files
   `obliskiq collect candidates` reads) with its ISIN, which the tax lots are kept by. The service
   resolves it through IBKR's contract search at its next cycle. A fund, ETF or ETC enters through
   a reviewed entry in `config/universe.yaml`, because its eligibility is judged on its declared
@@ -239,10 +247,12 @@ uv run obliskiq idea withdraw T1                             # before its first 
   in the digest, until its entry window ends. Once approved its text never changes. It leaves at
   its target, its invalidation or its horizon; on paper a stop rests at the broker at the
   invalidation. A closed idea is graded against what it wrote.
-- **Capital.** In shadow and on paper the book works on `thesis.capital_share` of investable
-  capital (a tenth), an eighth of it for a normal idea; set it to `"0"` in `config/owner.yaml` to
-  give the reserve everything. On the live account the book has no capital until the capital
-  allocation rule exists.
+- **Capital.** In shadow and on paper the book hunts with `thesis.capital_share` of investable
+  capital (1 in `config/owner.yaml`: all of it, less the cash floor), an eighth of it for a
+  normal idea. Capital no thesis holds waits in the reserve; when an approved idea needs more
+  cash than is free, the reserve sells for it pro rata (never a sale the two-month rule would
+  defer) and the idea enters at a later cycle. On the live account the book's share is the
+  capital allocation rule's, inside the satellite ceiling and H13's (DECISIONS D196).
 
 ## The stock screen (owner, once)
 
@@ -270,6 +280,18 @@ uv run obliskiq sources health      # stock_listings, stock_fundamentals, stock_
 - **`stock_bars` failing with `throttled`.** Yahoo answered nothing for too many names in one
   run: nothing is recorded about them and the next run asks them first. One name answering
   nothing is `unresolved` in its run's detail, never a delisting.
+
+## A listed stock's ISIN (owner, once, after the paper login works)
+
+Whether IBKR's contract info states a share's ISIN decides whether `idea isin` stays the only
+route to paper (DECISIONS D195). With the Gateway logged in, on the machine:
+
+```
+uv run obliskiq universe contract AAPL MSFT NVDA
+```
+
+It reads each name's contract search and contract info (read-only) and prints the fields
+IBKR answers, and any field whose name says ISIN. Paste the output into a Claude session.
 
 ## Before a Claude session with live IBKR checks
 
