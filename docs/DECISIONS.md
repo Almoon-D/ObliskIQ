@@ -4180,3 +4180,60 @@ company says. The sheet carried neither.
 
 Rejected: paid calendars and transcripts before the ledger shows a use; a detector with weight
 for any event (untested); a survivor-only event study (D180).
+
+### D190 · The stock screen loads its first year, labelled (§5.5, §5.7; amends D180, D183)
+
+The screen is the only place the analyst sees a stock, and it would have ranked no name until
+twelve months after the collection starts: a first read went back seven days and the industry
+trend needs twelve months of bars. D183 loaded no history because it holds survivors only. That
+is a backtest's reason: a survivor-only history corrupts a test of returns. The screen is no
+test; it ranks today's listed names, and a listed name's past year is a fact about it.
+
+- A name's first read goes back `stocks.bars.first_read_days`, past the trend window, so the
+  screen ranks after the first pass (about four days).
+- One input is affected: the industry trend lacks the names that left before the first
+  snapshot. The sheet's header says so, with the day it ends, twelve months after that snapshot.
+- Unchanged: the screen is untested and sizes nothing (D180); no backtest reads loaded bars.
+
+Rejected: a year's wait with the return engine blind to stocks; loading without the label.
+
+### D191 · A replay after the training cutoff: months of the analyst's record in days (§5.5, §5.9, §5.10; amends D70; D154, D187, D188)
+
+D70 holds before a model's training cutoff. After it the model knows nothing of what followed,
+so a sheet rebuilt as of a past date after the cutoff gives calls whose outcomes are already
+known. The forward ledger needs months for a first reading; a replay gives one in days.
+
+- **A fourth record, `replay`,** never pooled with shadow, paper or live. H15, registered in
+  its own pull request before the code that runs it (Session 35).
+- **Guards.** Only a dated model snapshot whose provider documents its cutoff; sheet dates after
+  the cutoff plus a margin; no tool or search in the call; only sections that can be rebuilt
+  point in time, the rest omitted and said so. A leak control: the same segments on sheets
+  before the cutoff, reported beside. A name with no price today is not evaluable and counted;
+  the measure is the excess over the replay universe's own evaluable names, so what survivorship
+  does falls on both sides.
+- **It decides** which segments run in the forward ledger, their budget shares, and which is
+  proposed to the owner as the trading segment. It moves no capital; H13 and H14 are not edited.
+  D154's floor is for a test that funds: this one funds nothing and a budget key caps its cost.
+
+Rejected: a replay before the cutoff (D70); choosing a model with no record, or six months late.
+
+### D192 · The challenge of 2026-11-25: the clock first, and two rulings put to the owner (§1, §5.11, §5.19, §11; D147, D163, D185)
+
+Found: thirty sessions, no order filled, no call graded, no collector running. The plan's clock
+is the owner's checklist, not its design; D185 chose the right engine and left three gaps.
+
+- **Order of work.** The screen starts now: it needs no broker. The checklist's order test
+  follows. Sessions 31 and 32, then 33, then 35 (the replay), then 34.
+- **Put to the owner, his to rule, nothing built until he does.** (1) The bar read as compound
+  growth over three years, with a loss brake in absolute terms: the book's new entries halve
+  after a first fall of the account from its peak and stop at a second. D163's breakers measure
+  the fall beyond the equity reference's, so a year in which everything falls trips nothing; and
+  a year at +50 % then one at −50 % leaves −25 %. (2) The reserve as a defensive place to wait
+  (variant A): D147 chose D50 when the reserve was most of the account, and its job is now to
+  hold what the next thesis will spend, most needed after a fall.
+- **The owner's examples.** "Someone always rises" is known after the fact; what is tested is
+  whether the analyst's probabilities hold before it (D187, D191). An IPO allocation to a small
+  account is scarce exactly when the offer is wanted (Rock 1986): D186's live check stands, and
+  what can be traded of a listing is its dated events (D189).
+
+Rejected: recording either ruling for the owner; a brake that raises risk to recover a miss.

@@ -448,14 +448,19 @@ def weekdays(first: date, last: date) -> list[date]:
     return [d for d in days if d.weekday() < 5]
 
 
-def seed_screen(store: Store, *, since: date = date(2025, 10, 1)) -> None:
+def seed_screen(
+    store: Store, *, since: date = date(2025, 10, 1), collected: datetime | None = None
+) -> None:
+    """Bars from ``since``; with ``collected``, everything was first read then (a first read
+    loads the bars' history), otherwise each bar was collected on its own day."""
+    listed_at = collected or START
     listings = [
         StockListing(cik=cik, ticker=t, name=f"{t} Corp", exchange="NYSE", venue="XNYS")
         for t, cik, *_ in COMPANIES
     ]
-    stocks_repo.save_snapshot(store, listings, known_at=START, content_sha256="0" * 64)
+    stocks_repo.save_snapshot(store, listings, known_at=listed_at, content_sha256="0" * 64)
     for t, cik, sic, eps, profit, assets, change, close, volume in COMPANIES:
-        stocks_repo.save_company(store, cik, sic, known_at=START)
+        stocks_repo.save_company(store, cik, sic, known_at=listed_at)
         facts = [("earnings_per_share", "CY2025", eps), ("assets", "CY2026Q3I", assets)]
         if profit is not None:
             facts.append(("gross_profit", "CY2025", profit))
@@ -469,7 +474,7 @@ def seed_screen(store: Store, *, since: date = date(2025, 10, 1)) -> None:
                     period_end=date(2026, 9, 30),
                     value=value,
                     accession="0000000000-26-000001",
-                    known_at=START,
+                    known_at=listed_at,
                 )
                 for name, period, value in facts
             ],
@@ -484,8 +489,8 @@ def seed_screen(store: Store, *, since: date = date(2025, 10, 1)) -> None:
                     close=close,
                     volume=volume,
                     change=None if n == 0 else change,
-                    known_at=datetime.combine(d, datetime.min.time(), tzinfo=UTC)
-                    + timedelta(hours=23),
+                    known_at=collected
+                    or datetime.combine(d, datetime.min.time(), tzinfo=UTC) + timedelta(hours=23),
                 )
                 for n, d in enumerate(days)
             ],
@@ -519,6 +524,42 @@ def test_bars_held_for_less_than_the_trend_leave_the_screen_immature(
     assert stock_screen(store, shipped_settings, as_of=date(2025, 9, 1)).status is (
         ScreenStatus.NO_DATA
     )
+
+
+def screen_header(store: Store, settings: ObliskConfig) -> str:
+    from obliskiq.grid.facts import build_fact_sheet
+
+    lines = build_fact_sheet(store, settings, as_of=AS_OF).lines
+    return next(line.text for line in lines if line.section == "stock_screen")
+
+
+def test_a_first_read_s_history_ranks_at_once_and_is_labelled_survivors_only(
+    shipped_settings: ObliskConfig, store: Store
+) -> None:
+    collected = datetime(2026, 11, 10, 22, 0, tzinfo=UTC)
+    seed_screen(store, collected=collected)
+    screen = stock_screen(store, shipped_settings, as_of=AS_OF)
+    assert screen.status is ScreenStatus.OK
+    assert [line.ticker for line in screen.lines] == ["AAA", "CCC", "BBB"]
+    assert screen.collected_from == date(2026, 11, 10)
+    assert screen.survivors_only_until == date(2027, 11, 10)
+    # Before the first read nothing was known, whatever sessions the bars carry.
+    assert stock_screen(store, shipped_settings, as_of=date(2026, 11, 9)).status is (
+        ScreenStatus.NO_DATA
+    )
+    header = screen_header(store, shipped_settings)
+    assert "until 2027-11-10" in header
+    assert "still listed on 2026-11-10" in header
+    assert "survivors only" in header
+
+
+def test_a_window_inside_the_collection_carries_no_survivors_label(
+    shipped_settings: ObliskConfig, store: Store
+) -> None:
+    seed_screen(store)
+    screen = stock_screen(store, shipped_settings, as_of=AS_OF)
+    assert (screen.collected_from, screen.survivors_only_until) == (None, None)
+    assert "survivors only" not in screen_header(store, shipped_settings)
 
 
 def test_what_was_collected_after_the_date_changes_nothing(

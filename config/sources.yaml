@@ -1076,8 +1076,10 @@ sources:
       # seconds, docs/knowledge/research-sources.md).
       request_spacing_seconds: 0.3
       # A name read for the first time is read this many days back (its first session has no
-      # change to chain from).
-      first_read_days: 7
+      # change to chain from): past the screen's trend window (screen.trend_months), so the
+      # screen ranks after the first pass and not after a year of collection. That history is of
+      # today's listed names only and the sheet labels it (DECISIONS D190).
+      first_read_days: 400
       # A run whose share of empty answers exceeds this is throttled as a whole: nothing about an
       # empty symbol is recorded. 150 listed names sampled on 2026-11-17 answered every one.
       max_empty_share: "0.2"
@@ -1089,8 +1091,8 @@ sources:
       # The sheet reads no account (D166), so the owner raises it as capital grows.
       position_usd: "700"
       # The industry trend: the 12-1 return (twelve months back, skipping the last one) of the
-      # names of the company's SIC division, equally weighted. Fewer months of bars held: the
-      # view is immature.
+      # names of the company's SIC division, equally weighted. Fewer months of bars held
+      # (bars.first_read_days loads them at a name's first read): the view is immature.
       trend_months: 12
       skip_months: 1
       # SIC divisions by two-digit major group (the SEC's SIC manual).

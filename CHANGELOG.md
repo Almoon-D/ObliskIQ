@@ -5,6 +5,25 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.2.0] - 2026-11-25
+
+Challenge and redesign: the stock screen ranks days after it starts, not a year, and the
+analyst's models get a fast first reading (DECISIONS D190 to D192). No IBKR call.
+
+### Changed
+
+- A stock's first read loads 400 days of bars (`stocks.bars.first_read_days`), so the screen
+  ranks after its first pass. While the trend window reaches back before the first listing
+  snapshot, the sheet says that the industry trend counts only the names listed then.
+
+### Added
+
+- Session 35, a replay of the analyst after each model's training cutoff under a
+  pre-registration of its own (H15): a record apart that chooses among segments and moves no
+  capital.
+- The roadmap starts with the screen, which needs no broker, and holds two rulings put to the
+  owner: how the 50 % bar is read with a loss brake in absolute terms, and a defensive reserve.
+
 ## [1.1.3] - 2026-11-25
 
 Truth pass after the design session: no document describes the earlier direction. Documents only.
