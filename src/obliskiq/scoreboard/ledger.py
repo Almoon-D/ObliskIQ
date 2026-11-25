@@ -172,7 +172,7 @@ def cost_model(
         venue = venue_of(described.listing_exchange)
         rate = marks.rate(described.currency, found.start)
         if venue is None or rate is None:
-            missing = "a venue" if venue is None else f"a {described.currency} rate"
+            missing = "venue" if venue is None else f"{described.currency} rate"
             return f"{call.symbol} has no {missing} to price its round trip"
         units = (spec.outcome.cost_trade_value / (found.start_close * rate)).to_integral_value(
             rounding=ROUND_FLOOR

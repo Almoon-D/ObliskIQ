@@ -229,7 +229,7 @@ def test_a_reference_or_a_cost_that_cannot_be_read_leaves_the_call_unmarked(
     assert book.not_evaluable == {"no mark of the equity reference within the age allowed": 1}
     seed_closes(store, REFERENCE, dict.fromkeys(d, 100.0))
     unpriced = grade_ledger(store, shipped_settings, spec, as_of=d[-1], venue_of=lambda _e: None)
-    assert unpriced.not_evaluable == {"AAA has no a venue to price its round trip": 1}
+    assert unpriced.not_evaluable == {"AAA has no venue to price its round trip": 1}
     nowhere = grade_ledger(store, shipped_settings, spec, as_of=d[-1], venue_of=lambda _e: "XNYS")
     (why,) = nowhere.not_evaluable
     assert why.startswith("the cost model cannot price AAA's round trip")
@@ -406,3 +406,29 @@ def test_the_ledger_rules_are_read_only_when_locked(repo_root: Path, tmp_path: P
 
 def test_a_book_that_could_not_be_graded_says_why() -> None:
     assert ledger_lines("no lock") == ["Not graded: no lock."]
+
+
+def test_a_call_on_an_instrument_the_store_does_not_hold_or_mark_is_not_evaluable(
+    store: Store, shipped_settings: ObliskConfig, spec: IdeaLedgerSpec
+) -> None:
+    d = days(3)
+    found = ledger.CallPath("target", d[1], d[2], None, D(50), D(61))
+    cost = ledger.cost_model(store, shipped_settings, spec, venue)
+    assert cost(call(), found) == "AAA is not in the instrument store"
+    unmarked = ledger.grade(call(), found, price=lambda _c, _d: None, reference=REFERENCE,
+                            cost=lambda _c, _p: 0.002)  # fmt: skip
+    assert unmarked.graded.reason == "AAA has no mark in the base currency"
+    assert unmarked.held_days == 1
+    assert ledger.grade(call(), call_path(call(), [], as_of=d[0], max_age_days=7),
+                        price=lambda _c, _d: None, reference=REFERENCE,
+                        cost=lambda _c, _p: 0.002).held_days is None  # fmt: skip
+
+
+def test_the_registration_s_own_rules_are_checked(spec: IdeaLedgerSpec) -> None:
+    data = spec.model_dump()
+    with pytest.raises(ValueError, match="at least the record's minimum"):
+        IdeaLedgerSpec.model_validate(
+            {**data, "calibration": {**data["calibration"], "min_effective": "10"}}
+        )
+    with pytest.raises(ValueError, match="never sizes"):
+        IdeaLedgerSpec.model_validate({**data, "never": ["size", "size", "gate"]})

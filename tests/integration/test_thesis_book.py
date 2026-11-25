@@ -371,12 +371,14 @@ async def test_a_full_book_withholds_the_next_idea_in_order_of_arrival(
     assert len(await log(s, 2)) == 2  # the same reason is not logged again every cycle
 
 
-async def two_ideas_one_slot(s: ServiceRig, *, passed: bool) -> ThesisPlan:
-    """SPPW then XEON for one slot; XEON states 0.7 and the owner's segment is graded."""
+async def two_ideas_one_slot(
+    s: ServiceRig, *, passed: bool, probability: float = 0.7
+) -> ThesisPlan:
+    """SPPW then XEON for one slot; XEON states ``probability``, the owner's segment is graded."""
     quote(s, XEON, "45")
     await seed_bars(s, XEON, 45.0)
     await idea(s)
-    await idea(s, symbol="XEON", probability=0.7)
+    await idea(s, symbol="XEON", probability=probability)
     graded = SegmentState("owner", MONDAY - timedelta(days=1), passed, 0.5, 0.5, "graded")
     await s.rig.store(ledger_repo.record_segment, graded, at=EUROPE - timedelta(days=1))
     return await book(s).survey(ExecutionMode.SHADOW)
@@ -405,6 +407,15 @@ async def test_a_segment_that_did_not_pass_leaves_the_order_of_arrival(
 ) -> None:
     s = await started(make, shipped_settings, max_positions=1)
     plan = await two_ideas_one_slot(s, passed=False)
+    assert [(d.thesis.thesis_id, d.action) for d in plan.decisions] == [(1, "enter"), (2, "wait")]
+
+
+async def test_a_trusted_segment_s_idea_without_an_expected_gain_waits_its_turn(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, max_positions=1)
+    # Believed 0.25 of a 15 gain against 0.75 of a 5 loss: nothing expected, arrival decides.
+    plan = await two_ideas_one_slot(s, passed=True, probability=0.0)
     assert [(d.thesis.thesis_id, d.action) for d in plan.decisions] == [(1, "enter"), (2, "wait")]
 
 
