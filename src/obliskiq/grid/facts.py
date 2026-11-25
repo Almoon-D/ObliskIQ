@@ -459,11 +459,18 @@ class FactSheetBuilder:
                 f"{head}; {screen.status.value}: {screen.reason}",
             )
             return
+        loaded = (
+            ""
+            if screen.survivors_only_until is None or screen.collected_from is None
+            else f"; until {screen.survivors_only_until.isoformat()} the industry trend counts "
+            f"only the names still listed on {screen.collected_from.isoformat()} (loaded "
+            "history, survivors only)"
+        )
         self._add(
             as_of,
             MeasurementStatus.OK.value,
             SCREEN,
-            f"{head}; {screen.listed} names listed, {screen.passing} pass the floors",
+            f"{head}; {screen.listed} names listed, {screen.passing} pass the floors{loaded}",
         )
         for line in screen.lines[: self._config.stock_screen_top]:
             self._add(

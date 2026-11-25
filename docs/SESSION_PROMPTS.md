@@ -2,7 +2,7 @@
 
 Committed by Session 1 as `docs/SESSION_PROMPTS.md`. One session is one PR (a pre-registration
 in a PR of its own), merged and released by the agent itself (protocol in `AGENTS.md`). Sessions
-1–30 are done or closed; the run order from here is §C's: 31 to 34 (DECISIONS D185), with 15, 16,
+1–30 are done or closed; the run order from here is §C's: 31 to 35 (DECISIONS D185, D191), with 15, 16,
 17, 19a, 21, 24 and 26 on the condition §C names for each (DECISIONS D150). There is no Session 14. The design lives in `docs/MASTER_PLAN.md`; this file says
 what each session does. Section F holds the templates for feature and maintenance sessions
 after the build.
@@ -251,12 +251,13 @@ records it.
 | 32 | Idea ledger | Opus 5.5 | xhigh | Custom | — |
 | 33 | Analyst registry and passes | Sonnet 5.5 | high | **Full** | — |
 | 34 | Events and company text | Sonnet 5.5 | high | **Full** | — |
+| 35 | Replay after the cutoff | Opus 5.5 | xhigh | **Full** | — |
 
 Run in that order; 22 and 23 can run side by side, 27, then 28 and 29, follow 22 beside 23 and
 24 (the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. Session 24 is
 not run and Session 26 waits (DECISIONS D168, D180: each prompt's precondition says when it
 returns); Session 30 runs after 20 and needs neither. Sessions 31 to 34 give the thesis book its
-means (DECISIONS D185): 31 and 32 in either order, then 33, then 34. On a condition, not in
+means (DECISIONS D185): 31 and 32 in either order, then 33, then 35 (the replay, DECISIONS D191), then 34. On a condition, not in
 sequence (MASTER_PLAN §10):
 
 | # | Session | Runs when | Model | Effort | Network |
@@ -3163,6 +3164,101 @@ with `known_at` after `as_of` changes neither the sheet nor a dossier (test); a 
 prospectus does not state yields no date (test); a failed fetch yields its status (test); a
 call written from an event line carries its kind into the ledger (integration test);
 `make check` green.
+```
+
+---
+
+## Session 35 — Replay after the cutoff
+
+**Launcher:** `Execute Session 35 exactly as specified in docs/SESSION_PROMPTS.md on main.` (model: Opus 5.5, effort xhigh; network: Full)
+
+```
+You are building ObliskIQ, session 35. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.9, §5.10 and DECISIONS D62, D64, D70, D128, D154,
+D165, D180, D187, D188, D190, D191; research/preregistrations/idea-ledger.md and
+scoreboard.md whole). Network is open for the providers' documentation, the free data
+sources and, with keys in the environment, the replay's own calls. No IBKR call. Finish with
+the end-of-session protocol. Decide what this prompt leaves open by the rule that costs
+least machinery and record it in DECISIONS.
+
+PRECONDITION: Sessions 31, 32 and 33 merged and DECISIONS holds D191. Otherwise STOP.
+
+GOAL: within days, and not months, the owner reads which of the analyst's segments made
+calls that beat chance on dates the model could not have known, how far each one's stated
+probabilities held, and how much of any result is memory of the past and not judgement.
+
+READ FIRST, in the code: the ledger's grader and calibration (Session 32), the analyst's
+registry, segments and passes (Session 33), llm/panel.py (a fixed-horizon forecast with a
+probability), grid/facts.py and grid/stock_screen.py (what a sheet reads and how each read
+is bounded by `as_of`), data/stocks and data/insiders (what the SEC dates), research/
+prereg.py. Extend these; write no second grader, sheet builder or transport.
+
+STEP 1, in its own pull request, merged before Step 2 (AGENTS.md workflow, no version
+change): research/preregistrations/analyst-replay.md from the template, with its lock, H15
+in the pattern registry. It fixes, before any replay call is made:
+- The models: only a dated snapshot id whose provider documents a training cutoff, read
+  from the provider's own page and dated in config (`training_cutoff`); an alias that may
+  be refreshed, or a model with no documented cutoff, is the status `no_cutoff` and is not
+  replayed.
+- The dates: weekly sheets from each model's cutoff plus a margin (a config key, justified)
+  to the last date that leaves the primary horizon resolved; and, as the leak control, the
+  same number of weekly sheets ending a margin before the cutoff.
+- The sheet: only sections that can be rebuilt as of a past date from a source that carries
+  its own publication time (SEC filings by acceptance time, prices, macro series by release
+  date or a documented lag). A section that cannot (news, prediction markets, anything
+  stored only since it was first collected) is omitted and the sheet says so. The replay
+  sheet's shape is in the segment hash: a replay segment is never the forward one.
+- The universe at each date: the names the SEC's own records show as filing then; a name
+  with no free price over the horizon is `not evaluable` and counted, never dropped in
+  silence, and a cohort whose not-evaluable share passes a registered limit is not
+  evaluable whole.
+- The primary statistic: at a fixed horizon in sessions, the mean excess return of a
+  segment's calls over the equally weighted return of the replay universe's evaluable names
+  on that date, per weekly cohort with Newey-West, under D62's rule; beside it, the excess
+  over the equity reference, the ledger's own grading of each call at its levels where it
+  resolved, and the calibration of the stated probabilities.
+- The leak measure: the same statistic before the cutoff minus after it, with its interval.
+  A segment that is sufficient only before the cutoff is reported as remembering, and its
+  verdict is the one after the cutoff.
+- Power before any call: the excess each segment's sample can detect at 0.5. If none can
+  detect the registered effect, say so in the pre-registration and register the calibration
+  and leak readings alone.
+- What a verdict may change: the segments that keep a share of the forward budget, and the
+  one proposed to the owner as `analyst.trading_segment` (his setting, audited, D177).
+  Nothing else. The replay record is never pooled with shadow, paper or live, never read
+  by H13 or H14, and moves no capital.
+- The cost: the most the replay may spend, a key in config/llm.yaml the owner sets.
+
+STEP 2
+1. A sheet builder entry for a past date that reads the store bounded by that date after
+   the replay's loaders have filled it from the registered sources, every row stamped with
+   the time its source published it. Perturbing any row published after the date changes
+   no sheet (test).
+2. `obliskiq research replay`: runs the registered segments over the registered dates with
+   tools and search off, temperature as registered, each output stored with model id,
+   prompt hash, sheet date and the record `replay`; resumable, so a stopped run repeats no
+   paid call; refused when its worst-case cost would pass the budget key.
+3. Grading through the ledger's grader under H15; `research/reports/analyst-replay.md`
+   written by the command: per segment, calls, not evaluable, the statistic with its
+   interval after and before the cutoff, the leak measure, calibration, the verdict, and
+   three sentences a non-specialist reads.
+4. `obliskiq scoreboard ledger` shows the replay record beside the forward one, never
+   summed with it.
+5. One confirmation run with the owner's keys if they are in the environment; otherwise
+   the command list for the owner in docs/RUNBOOK.md and the item queued VERIFY-LIVE.
+6. ROADMAP, DECISIONS (real decisions only), CHANGELOG, version (minor).
+
+DO NOT BUILD: a replay on any date before a model's cutoff other than the leak control; any
+path from the replay to capital, size, a slot or the gate; an automatic change of the
+trading segment; a change to H13, H14 or their locks; a re-run with another prompt after
+the verdict (a new prompt is a new segment and a new registered run); bought data; a
+backtest of the screen or of any rule (Session 21 under D154).
+
+ACCEPTANCE: the pre-registration and lock are on main before the code; a model without a
+documented cutoff is refused (test); a sheet date inside the margin is refused (test); a
+row published after the sheet date changes nothing (test); a name without prices is counted
+not evaluable (test); a stopped run resumes without repeating a call (test); the replay
+record never enters H13's or H14's reads (test); no network in tests; `make check` green.
 ```
 
 ---

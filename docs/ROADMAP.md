@@ -9,22 +9,30 @@ The owner's ruling of 2026-11-25 (DECISIONS D185): this is a wealth manager that
 whole account, not a manager of ETFs; the thesis book is the return engine and 50 % a year is
 the bar. Nothing has filled an order yet. In order:
 
-1. **Owner: the checklist below, steps 1 to 10.** The machine, the paper login, the order and
-   execution tests, the reserve on paper, `serve`. Every other step is worth nothing until an
-   order fills. Each paste is recorded by a short session (docs/RUNBOOK.md).
-2. **Owner: the analyst's key on the machine** (step 1) and the stock screen started once
-   (docs/RUNBOOK.md, "The stock screen"). The thesis book's evidence is forward only: a week
-   it does not run is a week of record lost.
-3. **Session 31** (Opus 5.5, xhigh): any listed stock as a thesis, the hunting share, the
+1. **Owner: start the stock screen today** (docs/RUNBOOK.md, "The stock screen"). It needs no
+   broker and no paper login, only the SEC's contact string, and it ranks after its first pass,
+   about four days (D190). Until it runs the analyst sees no stock.
+2. **Owner: the checklist below, steps 1 to 10.** The machine, the paper login, the order and
+   execution tests, the reserve on paper, `serve`. Nothing is worth anything to the account
+   until an order fills. Each paste is recorded by a short session (docs/RUNBOOK.md).
+3. **Owner: the analyst's key on the machine** (step 1). The forward record counts calendar
+   time: a week the analyst does not run is a week of record lost.
+4. **Owner: two rulings** (D192): how the 50 % bar is read and whether a loss brake in
+   absolute terms joins the breakers; whether the reserve becomes a defensive place to wait.
+   A session builds what he rules.
+5. **Session 31** (Opus 5.5, xhigh): any listed stock as a thesis, the hunting share, the
    reserve's funding sale.
-4. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first. Sessions 31
-   and 32 run in either order, and beside steps 1 and 2.
-5. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
+6. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first. Sessions 31
+   and 32 run in either order, and beside steps 1 to 4.
+7. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
    side, the scan, the dossier and the weekly review. The owner adds an Anthropic key and sets
    the monthly budget (the session writes the steps).
-6. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
-7. **A design review** (the strongest model available) when the ledger has its first verdict
-   or six months of calls, whichever comes first: keep, change or stop each segment.
+8. **Session 35** (Opus 5.5, xhigh), after 33: the replay after each model's training cutoff,
+   its pre-registration first (D191). It gives the first reading of which analyst is worth
+   running in days, where the forward ledger needs months.
+9. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
+10. **A design review** (the strongest model available) when the replay or the ledger has its
+    first verdict: keep, change or stop each segment.
 
 No build session needs a model above Opus 5.5 (SESSION_PROMPTS §C). Session 20a (mutation
 pass) waits until an order has filled. Not to do without a new decision: buy a price history,
@@ -34,7 +42,8 @@ the mandate (D186).
 **The 50 % bar, as the evidence stands.** The reserve earned about 6.5 % a year after tax in
 its test. No tested signal adds to it. Only the thesis book can reach 50 %, and nothing yet
 shows that it does; no unlevered record has sustained it on a whole account. The ledger
-(Session 32) is what shortens the answer from about two years to months.
+(Session 32) and the replay (Session 35) are what shorten the answer from about two years to
+months, and the replay's first reading to days.
 
 ## Sessions
 
@@ -72,11 +81,12 @@ shows that it does; no unlevered record has sustained it on a whole account. The
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates | done (image built and run in the session; the machine's deployment and the full preflight are the owner's list in docs/DEPLOY.md; no IBKR call) | v0.28.0 |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | done (three silent failures fixed, docs/AUDIT.md; no IBKR call; the owner's checklist below is what remains) | v1.0.0 |
 | 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
-| 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; immature until twelve months of bars are held; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0 |
+| 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; ranks after the first pass since v1.2.0, D190; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0, v1.2.0 |
 | 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | next (D185) | |
 | 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | next, in either order with 31 (D187) | |
 | 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | after 31 and 32 (D188) | |
 | 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
+| 35 | Replay after the cutoff | H15 pre-registered first; the segments' calls on point-in-time sheets after each model's training cutoff, graded at once, with a leak control | after 33, before 34 (D191) | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
 | 17 | Decision layer, the rest | expression selection, calibrated sizing, expected shortfall, stress | when a funded layer needs it | |
@@ -100,6 +110,23 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Challenge and redesign (2026-11-25, v1.2.0)
+
+- **Asked** (owner): a full challenge of what is built, of the day's redesign and of his own
+  ideas, the 50 % floor among them; then to implement what brings the aim closer.
+- **Found:** no order filled, no call graded, no collector running after thirty sessions. The
+  stock screen would have shown the analyst no stock for a year after its start. Both breakers
+  measure the fall beyond the equity reference's, so a year in which everything falls trips
+  neither. The reserve, now the place capital waits, is all equities.
+- **Built:** a name's first read loads the trend window (`stocks.bars.first_read_days`), so
+  the screen ranks after its first pass; the sheet labels the industry trend survivors only
+  until twelve months after the first snapshot (D190).
+- **Decided:** D191 (a replay after the training cutoff, H15, Session 35), D192 (the clock
+  first; two rulings put to the owner, nothing built for them).
+- **Prompts edited:** Session 35 added; §C's table and order. No IBKR call.
+- **VERIFY-LIVE:** the first pass of `stock_bars` at 400 days a name (Yahoo's answer size
+  and pacing) is read on the owner's first run.
 
 ### Design session: a wealth manager that hunts (2026-11-25, v1.1.2)
 
@@ -631,6 +658,7 @@ settles it.
 | The equity reference's quote beside each managed NAV: that XDWD (IBIS2) returns a usable delayed or closing quote at every cycle, the Asian morning and New York's last hour included (`VERIFY-LIVE(the equity reference's quote outside its venue's hours)`); without one a fall is not excused | 25 | the first week of `serve` |
 | IBKR's daily reset as the session reports it on the machine: a `session_lost` then a `reauthenticated` in `session_events` on or the day before each trading day, so L1's re-login criterion passes (`VERIFY-LIVE(the daily reset in session_events)`, D172) | 18a | the first week of `serve` |
 | The weekly forecast panel's first live cohort: the model answers 40 ids a call inside the schema, the coverage reaches 60 %, and the cost per week against the budget (`VERIFY-LIVE(the panel's first cohort)`, D174) | 18a | the first week of `serve` with the analyst's key |
+| The stock bars' first pass: Yahoo answers a 400-day first read for 400 names a run inside the pacing, and the screen's status turns `ok` after the pass (`stocks.bars.first_read_days`, D190; Yahoo is not reachable from the cloud session that set it) | challenge of 2026-11-25 | the owner's first `sources run stock_bars` |
 
 ## Follow-ups
 

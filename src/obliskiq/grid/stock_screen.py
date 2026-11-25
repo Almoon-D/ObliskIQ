@@ -20,8 +20,11 @@ window, from a bar held before it; a name that left the listings counts to its l
 industry is not of survivors only; a name whose chain breaks counts for nothing. A name lacking
 any input is ranked on none of them and counted on one line.
 
-**Maturity.** The bars are collected forward only. While the store holds no bar from before the
-window's start, the industry trend is ``immature`` and so is the whole view: no ranking.
+**Maturity.** While the store holds no bar from before the window's start, the industry trend is
+``immature`` and so is the whole view: no ranking. A name's first read loads the window's history
+(``stocks.bars.first_read_days``; DECISIONS D190), so the view matures with the first pass. Until
+the window starts on or after the first listing snapshot, that history is of the names listed
+then, survivors only: the view says so, with the day it ends (``survivors_only_until``).
 
 Every read is bounded by ``as_of`` (``known_at``): what was collected after it changes nothing.
 
@@ -84,6 +87,10 @@ class StockScreen:
     passing: int = 0
     lacking: int = 0
     lines: tuple[ScreenLine, ...] = field(default_factory=tuple)
+    #: The first listing snapshot's day, and the day from which the trend window lies inside the
+    #: collection; set while the window reaches back into loaded history (survivors only).
+    collected_from: date | None = None
+    survivors_only_until: date | None = None
 
 
 #: The inputs a name is ranked on, each a percentile rank; the score is their mean.
@@ -102,7 +109,7 @@ class _Ranked:
 
 def months_before(day: date, months: int) -> date:
     """The same day ``months`` calendar months earlier (the month's last day where it is
-    shorter)."""
+    shorter); later for a negative ``months``."""
     index = day.year * MONTHS_PER_YEAR + day.month - 1 - months
     year, month = divmod(index, MONTHS_PER_YEAR)
     month += 1
@@ -176,6 +183,9 @@ class _Screen:
         trends = self._industry_trends(start, end)
         inputs = self._inputs(passing, trends)
         ranked = self._rank(inputs)
+        began = stocks_repo.snapshot_as_of(store, as_of=as_of, first=True) or snapshot
+        collected_from = began.known_at.date()
+        loaded = start < collected_from
         return StockScreen(
             as_of,
             ScreenStatus.OK,
@@ -185,6 +195,10 @@ class _Screen:
             passing=len(passing),
             lacking=len(passing) - len(ranked),
             lines=tuple(ranked),
+            collected_from=collected_from if loaded else None,
+            survivors_only_until=(
+                months_before(collected_from, -self._config.trend_months) if loaded else None
+            ),
         )
 
     # ── the floors ──

@@ -409,7 +409,9 @@ honest test is forward: the book exists to produce that record and to trade on i
   a ranking by cheapness, quality and industry trend, each line labelled untested. The
   analyst may write theses from it, as a segment of its own; the screen sizes nothing, has
   no weight in any gate and no performance record of its own. A collection that fails or is
-  throttled is a status, never a delisting.
+  throttled is a status, never a delisting. A name's first read loads the trend window's
+  history, so the screen ranks after the first pass; for twelve months the industry trend is
+  of the names listed at the first snapshot only, and the sheet says so (DECISIONS D190).
 - **Events and text** (DECISIONS D189). Earnings dates and results, 8-K items, IPO filings
   with their pricing and lock-up dates, spin-off registrations and index changes, collected
   forward from free sources and stored with the time they were known; each is a dated line
@@ -425,6 +427,11 @@ honest test is forward: the book exists to produce that record and to trade on i
   whether or not it trades, under H14's pre-registration. The ledger compares segments,
   event types and stated probabilities; it moves no capital. Once a segment's calibration
   passes H14's minimum, its calibrated rank orders the slots; until then, order of arrival.
+- **The replay** (DECISIONS D191). Each segment whose model has a documented training cutoff
+  is run on sheets rebuilt as of past dates after that cutoff and graded at once, under H15's
+  pre-registration, with the same segments before the cutoff as a leak control. A record of
+  its own, never pooled with the forward one: it says which segments are worth running and
+  which to propose as the trading segment, and moves no capital.
 - **A thesis** names the instrument, what is expected and why, a target, a horizon and what
   would prove it wrong, all fixed before the first order (the lifecycle of item 5 below). An
   idea that lacks one of them is not traded.
@@ -635,7 +642,10 @@ identifiers or balances. `llm` cannot import `decision` or `execution`.
 
 **Evidence is forward only** (DECISIONS D70). A model trained after a news item can carry
 what followed it, so a backtest of an LLM-derived signal on history before the model's
-training cutoff proves nothing. Only outputs produced live and stamped when produced count, so
+training cutoff proves nothing. After the cutoff the model knows nothing of what followed: a
+replay on point-in-time sheets dated there is a record of its own that chooses among
+segments and funds nothing (D191). Only outputs produced live and stamped when produced count
+for capital, so
 a minimal EventExtractor starts in Session 10 with the first news collectors, under H7's
 pre-registration (do its features add to the price signal), and Session 16 builds the rest of
 the layer on its stored series. A role runs in shadow within its cost share of NAV and influences a
@@ -873,7 +883,7 @@ engine and tax ledger that call them.
 |---|---|---|---|
 | IBKR Client Portal Web API | bars, snapshots, chains, curves, contract rules, trading schedules, market scanner, account, positions, NAV, orders | the paper username and password for the Gateway's automated login (paper); OAuth keys for the live account where granted (DECISIONS D42) | read path verified live over OAuth (lite); Gateway route and order path new |
 | Stock history that keeps delisted companies (Sharadar, Norgate, CRSP through WRDS) | the Hunter's test, when one is registered on it (§5.5, DECISIONS D180) | the vendor's key or login, on the machine its licence allows; never in the repository | none held; no free source keeps delisted names (docs/knowledge/research-sources.md) |
-| SEC company tickers and XBRL frames; Yahoo daily bars | the stock screen, collected forward (§5.5) | none (a declared User-Agent for the SEC) | collected forward by `stock_listings`, `stock_fundamentals` and `stock_bars` (DECISIONS D183) |
+| SEC company tickers and XBRL frames; Yahoo daily bars | the stock screen, collected forward from a first read that loads the trend window (§5.5, D190) | none (a declared User-Agent for the SEC) | collected forward by `stock_listings`, `stock_fundamentals` and `stock_bars` (DECISIONS D183) |
 | FRED / ALFRED (+ API v2 bulk) | US and global rates, curves, breakevens, credit, CPI, Eurostat HICP redistribution | `FRED_API_KEY` | verified |
 | ECB Data Portal | €STR, deposit rate, FX reference rates, yield curves | none | verified |
 | Bank of Japan Time-Series API | JGB yields, FX, monetary base | none | verify |
@@ -1167,6 +1177,7 @@ subset and inserts an `Na` prompt for the remainder.
 | 32 | Idea ledger | H14's pre-registration first; every draft that passes the gate graded forward as a call, calibration per segment, the calibrated rank that may order the slots (D187) |
 | 33 | Analyst registry and passes | providers and models in a registry, segments side by side in shadow, the daily scan, the dossier pass and the weekly review, one budget (D188) |
 | 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors stored forward; event lines and tags; the dossier's filing sections (D189) |
+| 35 | Replay after the cutoff | H15's pre-registration first; point-in-time sheets rebuilt for past dates after each model's training cutoff, the segments' calls graded at once, a leak control before the cutoff; runs after 33 and before 34 (D191) |
 
 They run in that order (DECISIONS D150, D156); 27, 28 and 29 follow 22 at once and beside 23
 and 24, because the thesis book's evidence is forward only and a week it does not run is a week of
@@ -1219,7 +1230,8 @@ on L2.
 | 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. Any eligible instrument, a long call or put included (D157); bearish only through a defensive instrument or a put. At most eight positions, more as capital grows. Capital: the hunting share on the live account (the owner's key: all investable capital, D185), kept while the forward record stays above its boundary. |
 | 23 | A wealth manager, not a fund of ETFs (D185, D186) | The thesis book is the return engine and gets any listed stock, a ledger of every idea, models chosen by their record, events and company text. All of the account hunts; capital without a thesis waits in the reserve, and a hedge is a thesis on a safer asset or a long put. The mandate is not widened to reach a figure: no margin, no leveraged product, no certificate. |
 
-Open: the LLM
+Open: the reading of the 50 % bar and a loss brake in absolute terms, and whether the reserve
+becomes a defensive place to wait (both put to the owner on 2026-11-25, D192); the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
 holdings to release; the paper managed-capital cap; buying the price history Session 23
 recommends; whether
