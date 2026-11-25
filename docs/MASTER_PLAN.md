@@ -201,7 +201,7 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
 | Testing each component alone before any combination. | Rejected. A few combinations with a stated mechanism are pre-registered and tested beside their components, every trial counted (§5.9, D63). | An edge may exist only conditionally; an unregistered search for combinations would multiply false discoveries. |
 | A market order to escalate a protective exit after a gap. | Rejected. Sizing by gap-adjusted loss, a stop spec that follows volatility and gaps, and a triggered stop repriced through the gate (§5.11, §5.12, D67). | AGENTS.md forbids plain market orders; a stop-limit's loss at the stop is not a maximum loss. |
 | Capabilities gated by account size. | Rejected. Each runs when a computed activation condition holds (§2); what pays only at larger capital is built in Session 19a (D66). | No magic NAV threshold; one codebase serves a small account and a large one. |
-| "Buffett made 50 % a year on small sums and Medallion more, so the system can." | The figures are an aspiration. What transfers is Buffett's hunting ground, companies too small for institutions, and Simons's validation before trust (D148). | Buffett picked tiny companies by hand; Medallion uses leverage, short horizons and infrastructure the mandate excludes, and is closed to outside money. Neither is evidence about this system. |
+| "Buffett made 50 % a year on small sums and Medallion more, so the system can." | The figure is the owner's bar (D185), not a forecast. What transfers is Buffett's hunting ground, companies too small for institutions, and Simons's validation before trust (D148). | Buffett picked tiny companies by hand; Medallion uses leverage, short horizons and infrastructure the mandate excludes, and is closed to outside money. Neither is evidence about this system. |
 | Holding equities only when no fall is expected. | The reserve's trend brake reacts to a fall under way; a rule that forecasts one earns weight only by passing a test (D147, D150). | Session 4e found no risk-timing rule sufficient; a forecast nobody has tested is a guess with a cost in tax and missed recoveries. |
 | Building every engine, then testing what it trades. | An engine is built for a hypothesis its test left sufficient or inconclusive-positive, as the mechanism the test ran (D150). | Thirteen build sessions produced no filled order and no sufficient signal. |
 | Rebuilding the book at every cycle. | A cycle works pending intents, exits and cash flows; selection changes on registered rebalance dates (D151). | Turnover and realised gains are costs; a change of mind six hours later is noise. |
@@ -224,9 +224,10 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
    views: equity grid · macro board · option surface · correlations · fx · curves
           ▼                                   ▼
  RESERVE (the core engine)             HUNTER (the return engine)
- global equity with a slow,            stocks of any size ranked by tested signals,
- tax-aware trend brake; holds          by size tier → a diversified book with a keep
- what the Hunter does not              buffer → registered rebalances and exits
+ global equity with a slow,            the thesis book: the analyst's and the owner's
+ tax-aware trend brake; where          written ideas → one gate → up to eight positions,
+ capital without a thesis waits;       shares or long options → the thesis's own exits;
+ sells to fund an approved thesis      every idea graded in the ledger
           └──────────────┬────────────────────┘
                          ▼
  DECISION: vehicle selector · expression selector · evidence-based sizing ·
@@ -245,7 +246,7 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
 
 | Pillar | Role | Why it earns a place |
 |---|---|---|
-| **Company-level inefficiency** (Graham and Schloss; the early Buffett partnerships; Greenblatt) | The Hunter: a diversified book of stocks of any size that are cheap for their quality, bought by their insiders, sold by forced sellers or drifting after news. | Mispricing is expected to last longest in small companies, where institutions cannot deploy and a small account can; costs are also highest there. The test reports each size tier after costs and tax, and the book goes where it passed (§5.9, D153). |
+| **Company-level inefficiency** (Graham and Schloss; the early Buffett partnerships; Greenblatt) | The Hunter. Its thesis book: written ideas on single companies, from their filings, their events and the screen, graded forward (D185). Its stock book, designed and unbuilt: a diversified book of stocks of any size that are cheap for their quality, bought by their insiders, sold by forced sellers or drifting after news. | Mispricing is expected to last longest in small companies, where institutions cannot deploy and a small account can; costs are also highest there. The test reports each size tier after costs and tax, and the book goes where it passed (§5.9, D153). |
 | **Statistical discipline** (Simons; Thorp) | Validation before trust, multiple-testing control, cost-aware execution, sizing bounded by evidence, the scoreboard. | Not a strategy here; the reason the others can be trusted. |
 | **Trend following** (the CTA tradition: Dennis and the Turtles, Seykota, Harding) | The reserve's brake: a slow, tax-aware reduction of equities in a fall under way. | The most robust systematic effect documented across a century of markets (Moskowitz, Ooi & Pedersen 2012; Hurst, Ooi & Pedersen 2017), and the cheapest crisis protection. |
 | **Measured diversification** (Dalio) | Whole-book risk: concentration, correlation clusters and stress scenarios measured on the book, never assumed (§5.11). The risk-balanced variants stay registered. | Small caps across markets fall together in a liquidity shock; the book must know its own exposure. |
@@ -382,7 +383,7 @@ Unbuilt: no test of it reaches a probability of a sufficient outcome of 0.5 (D16
   5.46 % a year on country momentum).
 - **Capacity.** The book reports the capital at which a position would pass its liquidity
   floor; capital beyond it stays in the reserve.
-- **Until a test passes** the Hunter holds nothing and the reserve holds everything.
+- **Until a test passes** the stock book holds nothing.
 - **The data source** is part of a registration, with the market and the span (DECISIONS
   D180). A history that drops delisted companies is never tested on and no penalty stands in
   for what it lacks. A source that is absent is the status `no_source` and zero weight;
@@ -450,7 +451,7 @@ honest test is forward: the book exists to produce that record and to trade on i
   convictions are better.
 - **The book.** At most a configured number of positions (eight by default; the owner
   raises it as capital grows), equal base sizes, slots filled in order of arrival among the
-  ideas that pass. The caps per sector, country and currency keep them from being one bet. Exits are the thesis's
+  ideas that pass until the ledger's rank applies (above). The caps per sector, country and currency keep them from being one bet. Exits are the thesis's
   own: the target, the invalidation, the horizon's end, a protective stop.
 - **Capital** follows the forward record (§5.19): shadow and paper first; on the live account
   the hunting share the owner sets (H13's exploration share; `thesis.capital_share`, all
@@ -458,7 +459,7 @@ honest test is forward: the book exists to produce that record and to trade on i
   boundary, by source.
 - **Expectation.** Nothing shows that such a book earns 50 % a year, and most lose to the
   index. An edge that large shows in about two years of graded calls; a small or absent one
-  keeps the book at its exploration share or returns it to shadow.
+  returns it to shadow at one of H13's looks.
 
 **The event sleeve — the Asymmetry Hunter.** Deferred: it is built when a research batch leaves
 one of its components sufficient or inconclusive-positive (DECISIONS D148, D150). Its design:
@@ -620,7 +621,7 @@ latency, so a new model is compared before it replaces an old one.
 |---|---|---|
 | EventExtractor | `ExtractedEvent` (entities, region, sector, type, tone, novelty, sources) | each collector run |
 | HypothesisScout | `HypothesisDraft`, also feeding the pattern registry as ideas | weekly and on event spikes |
-| Analyst | `ThesisDraft` for the thesis book (instrument, expectation, target, horizon, invalidation, the dated facts it rests on) and a second opinion on an owner's idea (§5.5) | weekly and on event spikes |
+| Analyst | `ThesisDraft` for the thesis book (instrument, expectation, target, horizon, invalidation, the dated facts it rests on) and a second opinion on an owner's idea (§5.5); from Session 33 a daily scan, a dossier pass and a weekly review, on several models side by side (D188) | daily after New York's close; the review weekly |
 | ExposureMapper | `ExposureAssessment` (purity, channel, confidence) | on candidate |
 | DossierWriter | `Dossier` (readable, cites data) | on approval |
 | DevilsAdvocate | `ChallengeReport` | weekly |
@@ -933,11 +934,13 @@ proof. The allocation is automatic in both directions (DECISIONS D149):
   and the twin's own returns count for nothing here: both are simulations (D155).
 - The thesis book is funded by its forward record alone, under a pre-registration locked
   before its first thesis (D156): nothing in shadow; on the live account the exploration
-  share the owner sets (a tenth of investable capital by default) while its paper record is
-  not below its boundary; more at pre-registered looks when its realised live-account growth
-  over the equity reference's clears a sequential boundary; back to shadow below one. A
+  share the owner sets, the hunting share (all investable capital by his ruling, D185; the
+  expert default is a tenth), while its paper record is not below its boundary; where the
+  share is smaller, more at pre-registered looks when its realised live-account growth over
+  the equity reference's clears a sequential boundary; back to shadow below one. A
   source whose own record falls below its boundary is logged and no longer traded.
-- The reserve holds whatever the Hunter does not, less the cash floor.
+- The reserve holds whatever the Hunter does not, less the cash floor, and sells pro rata to
+  fund an approved thesis (D185).
 - No step needs an owner command. The steps beyond 50 % are slow unless the edge is large,
   because a live record adds evidence slowly.
 
