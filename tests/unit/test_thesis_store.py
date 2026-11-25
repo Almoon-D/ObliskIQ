@@ -21,6 +21,7 @@ from obliskiq.domain.thesis import (
     ThesisSource,
     ThesisState,
     parse_ref,
+    sec_key,
     thesis_ref,
 )
 from obliskiq.engines.thesis.grading import grade
@@ -101,8 +102,12 @@ def test_a_thesis_that_does_not_hold_together_is_refused(
     [
         ({"conid": None}, "names its conid"),
         ({"conid": None, "listing_exchange": None, "currency": None}, "pinned when the idea"),
-        ({"candidate_key": "US:APPLE"}, "carries its ISIN"),
+        (
+            {"candidate_key": "US:APPLE", "asset_class": AssetClass.STOCK},
+            "holdings file carries its ISIN",
+        ),
         ({"candidate_key": "US:APPLE", "isin": ISIN}, "is a share"),
+        ({"candidate_key": "sec:320193"}, "is a share"),
     ],
 )
 def test_an_instrument_is_pinned_whole_and_a_candidate_is_a_share(
@@ -123,6 +128,21 @@ def test_a_candidate_waits_for_its_pin() -> None:
     )
     assert not waiting.pinned
     assert instrument().pinned
+
+
+def test_a_stock_the_sec_lists_may_wait_for_its_isin() -> None:
+    listed = instrument(
+        candidate_key=sec_key(320193),
+        symbol="AAPL",
+        isin=None,
+        asset_class=AssetClass.STOCK,
+        conid=None,
+        listing_exchange=None,
+        currency=None,
+    )
+    assert listed.sec_cik == 320193
+    assert listed.isin is None
+    assert instrument().sec_cik is None
 
 
 def test_a_reference_names_its_thesis() -> None:

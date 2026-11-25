@@ -2,11 +2,12 @@
 # a written idea from the owner or the LLM analyst, graded forward. Read by engines/thesis and
 # decision/rebalance_thesis.py. Shares and multiples are QUOTED.
 thesis:
-  # The book's share of investable capital in shadow and in paper, taken from the equity
-  # satellite's budget (capital.budgets.equity_satellite) by the budget reader; "0" gives the
-  # book nothing and leaves it all in the reserve. On the live account the share is the capital
-  # allocation rule's (Session 18), and until that rule exists the book has none there. The
-  # owner's exploration share, a tenth (D156).
+  # The hunting share: the book's capital in shadow and in paper, as a share of investable
+  # capital (never past what capital.budgets.cash_floor leaves); "0" gives the book nothing. What
+  # the book does not hold or has not approved waits in the reserve, which sells to fund an
+  # approved thesis (D185, D195). On the live account it is H13's exploration share, stepped by
+  # the capital allocation rule. The expert default is a tenth (D156); the owner set 1 in
+  # config/owner.yaml (D185).
   capital_share: "0.10"
   # The most positions the book holds; the base size is the book's capital over it. The owner
   # raises it as capital grows (D156).

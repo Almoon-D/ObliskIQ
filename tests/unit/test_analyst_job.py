@@ -37,6 +37,7 @@ SHEET = FactSheet(
 
 def written(**changes: Any) -> dict[str, Any]:
     fields: dict[str, Any] = {
+        "section": "instrument",
         "symbol": "SPPW",
         "view": "bullish",
         "expectation": "world equities hold their trend",

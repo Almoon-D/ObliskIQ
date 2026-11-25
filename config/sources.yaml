@@ -1055,6 +1055,19 @@ sources:
       # Each company's SIC comes from its submissions; at most this many companies a run.
       submissions_url_template: https://data.sec.gov/submissions/CIK{cik:010d}.json
       sic_per_run: 600
+      # A thesis on a listed stock is resolved through IBKR's contract search on the listing
+      # exchange its SEC exchange maps to, in this currency (DECISIONS D195).
+      # VERIFY-LIVE(IBKR's listing exchange of a SEC NYSE or Nasdaq listing).
+      ibkr_exchanges: {NYSE: NYSE, Nasdaq: NASDAQ}
+      currency: USD
+      # A company incorporated in a US state or the District of Columbia (its EDGAR code in the
+      # submissions' stateOfIncorporation) has the US as its issuer country, for the transaction
+      # tax its shares carry; any other code (EDGAR's foreign codes, none) leaves it unstated, and
+      # a share's tax then cannot be priced (D195).
+      home_country: US
+      home_incorporations: [AL, AK, AZ, AR, CA, CO, CT, DE, DC, FL, GA, HI, ID, IL, IN, IA, KS, KY,
+        LA, ME, MD, MA, MI, MN, MS, MO, MT, NE, NV, NH, NJ, NM, NY, NC, ND, OH, OK, OR, PA, RI, SC,
+        SD, TN, TX, UT, VT, VA, WA, WV, WI, WY]
     fundamentals:
       frames_url_template: https://data.sec.gov/api/xbrl/frames/{taxonomy}/{tag}/{unit}/{period}.json
       # The screen's inputs, each one XBRL frame: an annual duration or a quarter-end instant.

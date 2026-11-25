@@ -7,10 +7,13 @@ core, Session 17's rule, so an inactive satellite never strands capital as idle 
 account the capital allocation rule moves the satellite's share (``capital/allocation.py``),
 never above ``capital.satellite_ceiling``.
 
-**The thesis book** is the satellite's one layer that trades (MASTER_PLAN §5.5): in shadow and in
-paper it takes ``thesis.capital_share`` of investable capital out of the satellite's budget, and
-the rest of that budget stays in the core (:func:`book_allocation`, DECISIONS D159). On the live
-account its share is the capital allocation rule's (``capital/allocation.py``).
+**The thesis book** is the return engine (MASTER_PLAN §5.5, DECISIONS D185): in shadow and in
+paper its capital is ``thesis.capital_share`` of investable capital, at most what the cash floor
+leaves (:func:`book_allocation`); on the live account its share is the capital allocation
+rule's (``capital/allocation.py``). **The reserve** (the core) is budgeted what no other layer
+takes; what the thesis book holds or has approved is taken from it at the moment it is
+committed (``allocation.reserve_budget``, D159 amended), so capital without a thesis waits in
+the reserve and not as cash.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -24,6 +27,7 @@ from ..config.schema_runtime import CapitalConfig
 from ..domain.orders import ExecutionMode, Sleeve
 
 ZERO = Decimal(0)
+ONE = Decimal(1)
 
 #: The modes in which the thesis book takes its configured share: no real money is at risk there.
 _THESIS_MODES = frozenset({ExecutionMode.SHADOW, ExecutionMode.PAPER})
@@ -38,7 +42,7 @@ class Allocation:
     satellite: Decimal
     options: Decimal
     cash_floor: Decimal
-    #: The thesis book's part of the satellite (all of it in shadow and paper).
+    #: The thesis book's capital: what its base size divides (``engines/thesis/book.py``).
     thesis_book: Decimal = Decimal(0)
 
     def of(self, sleeve: Sleeve) -> Decimal:
@@ -108,14 +112,14 @@ def thesis_share(settings: ObliskConfig, mode: ExecutionMode) -> Decimal:
 
 
 def book_allocation(settings: ObliskConfig, investable: Decimal, mode: ExecutionMode) -> Allocation:
-    """What each sleeve may use of ``investable`` in shadow and paper: the core, and the
-    satellite's one trading layer there, the thesis book, when it has a share. On the live
-    account the shares are the allocation rule's (``capital/allocation.py``)."""
+    """What each sleeve may use of ``investable`` in shadow and paper: the reserve every budget
+    but the cash floor (no other layer trades there), and the thesis book its hunting share of
+    investable capital, never past what the cash floor leaves. The two overlap by design: the
+    reserve gives up what the book commits (``allocation.reserve_budget``). On the live account
+    the shares are the allocation rule's (``capital/allocation.py``)."""
     share = thesis_share(settings, mode)
-    budgets = SleeveBudgets(settings.capital)
-    if share > ZERO:
-        found = budgets.allocate(
-            investable, active={Sleeve.CORE, Sleeve.SATELLITE}, satellite_share=share
-        )
-        return replace(found, thesis_book=found.satellite)
-    return budgets.allocate(investable, active={Sleeve.CORE})
+    found = SleeveBudgets(settings.capital).allocate(investable, active={Sleeve.CORE})
+    if share <= ZERO:
+        return found
+    book = investable * min(share, ONE - settings.capital.budgets.cash_floor)
+    return replace(found, satellite=book, thesis_book=book)

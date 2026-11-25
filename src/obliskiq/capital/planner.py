@@ -31,6 +31,13 @@ expected to do well, and a protected one, is held to the last ``hold_sessions`` 
 with a later date offered to the owner when its expected return is strong — and is never held past
 the last safe session. An expected return counts only from a layer whose outcome is sufficient.
 
+**The funding sale** (DECISIONS D185, D195). The same path funds a thesis approved without the
+cash for it: :meth:`ReservationPlanner.plan_funding` sells the reserve (the core) pro rata, as many
+of its holdings as the minimum trade lets the amount be spread over, the largest first; a holding
+an order already works on, or whose sale the two-month rule would defer a loss on, is left out.
+What cannot be raised in full is not sold at all, and the thesis waits. Its intents are exits with
+the reason ``funding``, made by :meth:`ReservationPlanner.sell` as a withdrawal's are.
+
 :meth:`ReservationPlanner.survey` reads and writes nothing; :meth:`ReservationPlanner.apply` asks
 the questions the survey found and makes today's sales intents (exits with the reason
 ``withdrawal``). The plan is surveyed again at every cycle, so what was sold, what arrived and what
@@ -44,6 +51,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from enum import StrEnum
+from typing import Protocol
 
 from ..calendars.service import Calendars
 from ..config.schema import ObliskConfig
@@ -77,7 +85,7 @@ from ..store import orders as repo
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook, TaxHooks
 from ..util.timeutil import utc_now
-from .allocation import allocation_now
+from .allocation import allocation_now, committed_now
 from .managed import BookHolding, CapitalReader, CapitalView, book_fills
 from .questions import OwnerQuestions
 from .strategy import ExpectedReturn, PositionFacts, Protected, StrategyValue
@@ -90,6 +98,8 @@ ZERO = Decimal(0)
 REASON = "withdrawal"
 #: Who the audit names for a question the planner asks.
 PLANNER_ACTOR = "reservation planner"
+#: The exit reason a funding sale gives (``discipline.exit_reasons_allowed``).
+FUNDING_REASON = "funding"
 
 
 class Category(StrEnum):
@@ -212,6 +222,49 @@ class PlannerActions:
     waiting: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True, slots=True)
+class FundingSale:
+    """One sale of the reserve that funds a thesis: whole units at about ``proceeds`` before its
+    ``cost``."""
+
+    conid: int
+    symbol: str
+    venue: str
+    units: Decimal
+    proceeds: Decimal
+    cost: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class FundingPlan:
+    """The reserve's sales that raise ``need`` net of their costs, or why it cannot be raised
+    (``refused``; then there is no sale)."""
+
+    need: Decimal
+    sales: tuple[FundingSale, ...] = ()
+    refused: str | None = None
+
+    @property
+    def raised(self) -> Decimal:
+        return sum((sale.proceeds - sale.cost for sale in self.sales), ZERO)
+
+
+@dataclass(frozen=True, slots=True)
+class _Held:
+    """A reserve holding a funding sale may take from."""
+
+    conid: int
+    symbol: str
+    venue: str
+    units: Decimal
+    unit: Decimal
+    holding: BookHolding
+
+    @property
+    def value(self) -> Decimal:
+        return self.units * self.unit
+
+
 @dataclass
 class _Slice:
     units: Decimal
@@ -270,6 +323,51 @@ def _cash_only(run: ReconcileRun) -> bool:
 
 def _whole(value: Decimal, rounding: str) -> Decimal:
     return value.to_integral_value(rounding=rounding)
+
+
+class Sellable(Protocol):
+    """A holding a funding sale may take from: its units and their value each, in the base."""
+
+    @property
+    def conid(self) -> int: ...
+    @property
+    def symbol(self) -> str: ...
+    @property
+    def venue(self) -> str: ...
+    @property
+    def units(self) -> Decimal: ...
+    @property
+    def unit(self) -> Decimal: ...
+
+
+def spread_funding[H: Sellable](
+    chosen: Sequence[H], need: Decimal, cost: Callable[[H, Decimal], Decimal | None]
+) -> list[FundingSale] | str:
+    """``need`` spread over ``chosen`` in proportion to their values, in whole units rounded
+    up, grossed up for the sales' own costs (``cost``: a sale's, in the base; ``None`` when it
+    cannot be priced); why not, when the holdings cannot raise it net of those costs."""
+    total = sum((held.units * held.unit for held in chosen), ZERO)
+    if need <= ZERO or total <= ZERO:
+        return "nothing to raise" if need <= ZERO else "the reserve holds nothing to sell"
+    gross = need
+    sales: list[FundingSale] = []
+    for _ in range(2):
+        sales = []
+        for held in chosen:
+            units = min(held.units, _whole(held.units * gross / total, ROUND_CEILING))
+            priced = cost(held, units)
+            if priced is None:
+                return f"{held.symbol}: the sale's cost cannot be priced"
+            sales.append(
+                FundingSale(held.conid, held.symbol, held.venue, units, units * held.unit, priced)
+            )
+        raised = sum((sale.proceeds - sale.cost for sale in sales), ZERO)
+        if raised >= need:
+            return sales
+        gross += need - raised
+        if gross > total:
+            break
+    return f"the reserve's sales raise {sum((s.proceeds - s.cost for s in sales), ZERO):.2f}"
 
 
 class ReservationPlanner:
@@ -366,9 +464,11 @@ class ReservationPlanner:
             )
         return plan
 
-    async def _working(self, mode: ExecutionMode, view: CapitalView) -> tuple[set[int], Decimal]:
-        """Conids an open intent of this mode works on, and the proceeds the open withdrawal
-        sales will still bring."""
+    async def _working(
+        self, mode: ExecutionMode, view: CapitalView, reason: str = REASON
+    ) -> tuple[set[int], Decimal]:
+        """Conids an open intent of this mode works on, and the proceeds the open sales made for
+        ``reason`` (a withdrawal's, or a funding sale's) will still bring."""
         open_states = [s for s in IntentState if s not in TERMINAL_STATES]
         busy: set[int] = set()
         pending = ZERO
@@ -377,7 +477,7 @@ class ReservationPlanner:
             if intent.mode is not mode or intent.terms.conversion:
                 continue
             busy.add(intent.conid)
-            if intent.side is OrderSide.SELL and intent.reason == REASON:
+            if intent.side is OrderSide.SELL and intent.reason == reason:
                 holding = view.holding(intent.conid)
                 unit = None if holding is None else holding.unit.unit
                 quantity = intent.terms.quantity or ZERO
@@ -409,6 +509,12 @@ class ReservationPlanner:
         # capital, which is the reservation itself.
         before = view.investable + view.reserved
         allocation = await allocation_now(self._worker, self._settings, before, mode)
+        committed = await committed_now(self._worker, view, mode, today=today)
+        budgets = {
+            Sleeve.CORE: max(ZERO, allocation.core - committed),
+            Sleeve.SATELLITE: allocation.satellite,
+            Sleeve.OPTIONS: allocation.options,
+        }
         found: list[_Candidate] = []
         for holding in view.holdings:
             unit, instrument = holding.unit.unit, holding.unit.instrument
@@ -432,7 +538,7 @@ class ReservationPlanner:
                 slices.append(_Slice(rest, Category.EXIT_ANYWAY))
                 rest = ZERO
             elif (weight := self._strategy.target_weight(facts, today=today)) is not None:
-                target = weight * allocation.of(holding.sleeve)
+                target = weight * budgets[holding.sleeve]
                 over = _whole(max(ZERO, holding.units - target / unit), ROUND_FLOOR)
                 if over > ZERO:
                     slices.append(_Slice(min(over, rest), Category.OVERWEIGHT))
@@ -664,15 +770,21 @@ class ReservationPlanner:
         return with_it - without
 
     def _trading_of(self, candidate: _Candidate, units: Decimal, on: date) -> Decimal | None:
-        instrument = candidate.holding.unit.instrument
-        rate = candidate.holding.unit.rate
+        return self._sale_cost(candidate.holding, candidate.unit, candidate.venue, units, on)
+
+    def _sale_cost(
+        self, holding: BookHolding, unit: Decimal, venue: str, units: Decimal, on: date
+    ) -> Decimal | None:
+        """A sale's commission, spread and slippage in the base currency (``None``: unknown)."""
+        instrument = holding.unit.instrument
+        rate = holding.unit.rate
         assert instrument is not None  # a candidate is described
         assert rate is not None  # and priced
-        price = candidate.unit / (instrument.multiplier * rate)
+        price = unit / (instrument.multiplier * rate)
         try:
             leg = self._costs.leg_cost(
                 CostTerms(
-                    venue=candidate.venue,
+                    venue=venue,
                     asset_class=instrument.asset_class,
                     currency=instrument.currency,
                     quantity=units,
@@ -979,25 +1091,176 @@ class ReservationPlanner:
             first, units = today.get(sale.conid, (sale, ZERO))
             today[sale.conid] = (first, units + sale.today_units)
         for conid, (sale, units) in sorted(today.items()):
-            why = self._closed(sale, plan.at)
-            if why is not None:
-                actions.waiting.append(f"{sale.symbol}: {why}")
-                continue
-            made = await self._maker.make(
-                conid=conid,
-                side=OrderSide.SELL,
-                quantity=units,
-                sleeve=sale.sleeve,
-                reason=REASON,
-                mode=plan.mode,
+            made = await self._sell(
+                conid, sale.symbol, sale.venue, units, sale.sleeve, REASON, plan.mode, plan.at
             )
             if isinstance(made, str):
-                actions.waiting.append(f"{sale.symbol}: {made}")
+                actions.waiting.append(made)
                 continue
             actions.intents.append(made)
         return actions
 
-    def _closed(self, sale: PlannedSale, at: datetime) -> str | None:
-        """Why the sale's venue is not tradable now, or ``None`` when it is."""
-        status = self._calendars.tradability(sale.venue, at, conid=sale.conid)
-        return None if status.ok else f"{sale.venue} is not tradable now ({status.reason})"
+    async def sell(
+        self, funding: FundingPlan, mode: ExecutionMode, at: datetime
+    ) -> tuple[list[OrderIntent], list[str]]:
+        """The funding plan's sales as intents (exits for ``funding``), and each sale that waits
+        for a later window, with why."""
+        made: list[OrderIntent] = []
+        waiting: list[str] = []
+        for sale in funding.sales:
+            intent = await self._sell(
+                sale.conid, sale.symbol, sale.venue, sale.units, Sleeve.CORE,
+                FUNDING_REASON, mode, at,
+            )  # fmt: skip
+            if isinstance(intent, str):
+                waiting.append(intent)
+            else:
+                made.append(intent)
+        return made, waiting
+
+    async def _sell(
+        self,
+        conid: int,
+        symbol: str,
+        venue: str,
+        units: Decimal,
+        sleeve: Sleeve,
+        reason: str,
+        mode: ExecutionMode,
+        at: datetime,
+    ) -> OrderIntent | str:
+        """One sale as an intent at a window its venue is tradable in, or why it waits."""
+        status = self._calendars.tradability(venue, at, conid=conid)
+        if not status.ok:
+            return f"{symbol}: {venue} is not tradable now ({status.reason})"
+        made = await self._maker.make(
+            conid=conid, side=OrderSide.SELL, quantity=units, sleeve=sleeve, reason=reason,
+            mode=mode,
+        )  # fmt: skip
+        return f"{symbol}: {made}" if isinstance(made, str) else made
+
+    # ── the funding sale ──
+
+    async def funding_pending(self, mode: ExecutionMode, view: CapitalView) -> Decimal:
+        """What the funding sales still working will bring."""
+        _, pending = await self._working(mode, view, FUNDING_REASON)
+        return pending
+
+    async def plan_funding(
+        self, mode: ExecutionMode, view: CapitalView, need: Decimal, *, minimum: Decimal
+    ) -> FundingPlan:
+        """The reserve's sales that raise ``need`` net of their costs: pro rata over as many of
+        its holdings as ``minimum`` (the smallest sale worth making) allows, the largest first;
+        nothing when it cannot all be raised."""
+        today = self._now().date()
+        busy, _ = await self._working(mode, view)
+        left_out: list[str] = []
+        held = self._reserve_holdings(view, busy, left_out)
+        try:
+            hooks: TaxHooks | None = await self._tax.hooks()
+        except TaxError as exc:
+            hooks = None
+            left_out.append(f"the tax lots cannot be read ({exc}): the two-month rule is unchecked")
+        allowed = [h for h in held if self._lots_read(h, mode, hooks, left_out)]
+        allowed.sort(key=lambda h: h.value, reverse=True)
+        why = "; ".join(left_out)
+        count = len(allowed)
+        while count > 0:
+            chosen = allowed[:count]
+            total = sum((h.value for h in chosen), ZERO)
+            if total < need:
+                break
+            sales = spread_funding(
+                chosen,
+                need,
+                lambda held, units: self._sale_cost(
+                    held.holding, held.unit, held.venue, units, today
+                ),
+            )
+            if isinstance(sales, str):
+                why = "; ".join([*left_out, sales])
+                count -= 1
+                continue
+            barred = self._deferring(sales, chosen, mode, hooks, today, left_out)
+            if barred:
+                # The two-month rule bars these sales at these sizes: try without them.
+                allowed = [h for h in allowed if h.conid not in barred]
+                count = min(count, len(allowed))
+                why = "; ".join(left_out)
+                continue
+            if all(sale.proceeds >= minimum for sale in sales):
+                return FundingPlan(need, tuple(sales))
+            count -= 1
+        value = sum((h.value for h in allowed), ZERO)
+        found = f"the reserve can sell {value:.2f} toward {need:.2f}"
+        if allowed and value >= need:
+            found += f", not in sales of at least {minimum:.2f} each"
+        return FundingPlan(need, refused=f"{found}{f' ({why})' if why else ''}")
+
+    def _reserve_holdings(
+        self, view: CapitalView, busy: set[int], left_out: list[str]
+    ) -> list[_Held]:
+        found: list[_Held] = []
+        for holding in view.holdings:
+            unit, instrument = holding.unit.unit, holding.unit.instrument
+            if holding.sleeve is not Sleeve.CORE or holding.units <= 0:
+                continue
+            name = str(holding.conid) if instrument is None else instrument.symbol
+            if holding.conid in busy:
+                left_out.append(f"{name}: an order works on it")
+                continue
+            if unit is None or instrument is None or holding.unit.rate is None:
+                left_out.append(f"{name}: it is not valued now")
+                continue
+            try:
+                venue = self._calendars.venue_for_ibkr(instrument.listing_exchange)
+            except CalendarError:
+                left_out.append(f"{name}: its venue has no calendar")
+                continue
+            found.append(_Held(holding.conid, name, venue, holding.units, unit, holding))
+        return found
+
+    @staticmethod
+    def _lots_read(
+        held: _Held, mode: ExecutionMode, hooks: TaxHooks | None, left_out: list[str]
+    ) -> bool:
+        """Whether the two-month rule can be read for ``held``. The shadow book keeps no tax
+        lots, so there the rule is not read; elsewhere lots that do not account for the holding
+        leave it out (fail closed)."""
+        if mode is ExecutionMode.SHADOW:
+            return True
+        if hooks is None or not hooks.complete(held.conid, held.units):
+            left_out.append(f"{held.symbol}: its tax lots do not account for it")
+            return False
+        return True
+
+    @staticmethod
+    def _deferring(
+        sales: Sequence[FundingSale],
+        chosen: Sequence[_Held],
+        mode: ExecutionMode,
+        hooks: TaxHooks | None,
+        on: date,
+        left_out: list[str],
+    ) -> set[int]:
+        """The holdings whose sale, at its size, the two-month rule bars: a sale that would
+        defer a loss is not made, and lots that cannot price it bar it (fail closed). None in
+        shadow, which keeps no tax lots."""
+        if mode is ExecutionMode.SHADOW or hooks is None:
+            return set()
+        unit = {held.conid: held.unit for held in chosen}
+        barred: set[int] = set()
+        for sale in sales:
+            try:
+                conflict = hooks.wash_sale_conflict(
+                    sale.conid, side=OrderSide.SELL, units=sale.units, price=unit[sale.conid],
+                    on=on,
+                )  # fmt: skip
+            except TaxError:
+                left_out.append(f"{sale.symbol}: its tax lots cannot price the sale")
+                barred.add(sale.conid)
+                continue
+            if conflict is not None:
+                left_out.append(f"{sale.symbol}: the two-month rule would defer its loss")
+                barred.add(sale.conid)
+        return barred

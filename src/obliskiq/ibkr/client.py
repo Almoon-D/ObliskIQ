@@ -274,8 +274,13 @@ class Secdef:
         return list(matches[:1]) if self._ibkr.secdef.accept_first_on_no_exact_match else []
 
     async def info(self, conid: int) -> ContractInfo:
+        return decode_contract_info(int(conid), await self.info_fields(conid))
+
+    async def info_fields(self, conid: int) -> dict[str, Any]:
+        """``/iserver/contract/{conid}/info`` as answered: which fields it carries is read on
+        the machine before any is relied on (an ISIN's, D195). VERIFY-LIVE(contract info ISIN)."""
         body = await self._session.request("GET", f"iserver/contract/{int(conid)}/info")
-        return decode_contract_info(int(conid), body)
+        return dict(body) if isinstance(body, Mapping) else {}
 
     async def strikes(
         self, underlying_conid: int, *, month: str, exchange: str, sec_type: str = "OPT"

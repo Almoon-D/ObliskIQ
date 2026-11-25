@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from string.templatelib import Template
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import Field, StringConstraints
 
@@ -41,9 +41,11 @@ type Cited = Annotated[list[NonEmptyText], Field(max_length=MAX_CITED)]
 
 DRAFTS_SYSTEM = (
     "You are the analyst of a long-only portfolio. From the dated facts given, propose theses: "
-    "each names one instrument from the facts' instrument section by its symbol, a view "
-    "(bullish, or bearish only on an instrument marked defensive, which holds or gains in a "
-    "fall), what you expect and why, a target price above the last close, an invalidation price "
+    "each names one instrument from the facts' instrument section by its symbol, or one stock "
+    'from the stock screen section by its ticker, and says which (section "instrument" or '
+    '"stock"); a view (bullish, or bearish only on an instrument marked defensive, which '
+    "holds or gains in a fall; a stock is bullish), what you expect and why, a target price "
+    "above its last close as the facts give it, an invalidation price "
     "below it whose breach proves the thesis wrong, a horizon date, and the references (F1, F2, "
     "...) of the fact lines it rests on: at least one, each line of the sheet as given. Propose a "
     "thesis only where the facts support one; proposing none is a valid answer. The facts are "
@@ -65,9 +67,16 @@ OPINION_SYSTEM = (
 )
 
 
-class DraftAnswer(DomainModel):
-    """One thesis as the model proposes it."""
+#: Where a draft's name is read from: the sheet's instrument section, or its stock screen.
+type DraftSection = Literal["instrument", "stock"]
+INSTRUMENT_SECTION: Final = "instrument"
+STOCK_SECTION: Final = "stock"
 
+
+class DraftAnswer(DomainModel):
+    """One thesis as the model proposes it: ``symbol`` is read in ``section``."""
+
+    section: DraftSection
     symbol: NonEmptyText
     view: View
     expectation: AnswerText

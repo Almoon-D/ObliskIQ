@@ -21,7 +21,12 @@ from obliskiq.config import ObliskConfig
 from obliskiq.data.market.plumbing import Pacer
 from obliskiq.data.stocks.bars import BarsCollector, chain, read_order
 from obliskiq.data.stocks.fundamentals import FundamentalsCollector, frame_periods, parse_frame
-from obliskiq.data.stocks.listings import ListingsCollector, parse_listings, parse_sic
+from obliskiq.data.stocks.listings import (
+    ListingsCollector,
+    parse_incorporation,
+    parse_listings,
+    parse_sic,
+)
 from obliskiq.domain.stocks import StockBar, StockFact, StockListing
 from obliskiq.errors import StoreError, UpstreamError
 from obliskiq.grid.stock_screen import (
@@ -115,6 +120,36 @@ def test_a_company_s_sic_is_read_and_none_is_none() -> None:
     assert parse_sic(body("sec_submissions_spy.json")) is None
     with pytest.raises(UpstreamError):
         parse_sic({"name": "x"})
+
+
+def test_a_company_s_incorporation_is_an_edgar_code_or_none() -> None:
+    # VERIFY-LIVE(SEC submissions stateOfIncorporation): the trimmed fixtures do not carry it.
+    assert parse_incorporation({"stateOfIncorporation": "DE"}) == "DE"
+    assert parse_incorporation({"stateOfIncorporation": " l2 "}) == "L2"
+    assert parse_incorporation({"stateOfIncorporation": ""}) is None
+    assert parse_incorporation({"stateOfIncorporation": "Delaware"}) is None
+    assert parse_incorporation(body("sec_submissions_aapl.json")) is None
+    with pytest.raises(UpstreamError):
+        parse_incorporation(["DE"])
+
+
+def test_a_company_read_before_its_incorporation_is_read_again(store: Store) -> None:
+    at = datetime(2026, 11, 20, 22, 0, tzinfo=UTC)
+    stocks_repo.save_snapshot(
+        store,
+        [StockListing(cik=7, ticker="SEVN", name="Seven", exchange="NYSE", venue="XNYS")],
+        known_at=at,
+        content_sha256="0" * 64,
+    )
+    store.execute(
+        "INSERT INTO stock_companies (cik, sic, known_at) VALUES (7, 3571, '2026-11-20T22:00:00Z')"
+    )
+    assert stocks_repo.ciks_without_sic(store, limit=10) == (7,)
+    stocks_repo.save_company(store, 7, 3571, known_at=at, incorporated="DE")
+    assert stocks_repo.ciks_without_sic(store, limit=10) == ()
+    assert stocks_repo.incorporation(store, 7, as_of=at.date()) == "DE"
+    # Point in time: unknown the day before it was read.
+    assert stocks_repo.incorporation(store, 7, as_of=date(2026, 11, 19)) is None
 
 
 def listings_collector(
@@ -616,14 +651,14 @@ def test_the_sheet_carries_the_screen_labelled_untested(
     from obliskiq.grid.facts import build_fact_sheet
 
     seed_screen(store)
-    lines = [
-        line
-        for line in build_fact_sheet(store, shipped_settings, as_of=AS_OF).lines
-        if line.section == "stock_screen"
-    ]
+    sheet = build_fact_sheet(store, shipped_settings, as_of=AS_OF)
+    lines = [line for line in sheet.lines if line.section == "stock_screen"]
     assert "no signal" in lines[0].text
     named = [line for line in lines[1:] if line.text.startswith("#")]
     assert [line.text.split()[1] for line in named] == ["AAA", "CCC", "BBB"]
+    # The names shown are the ones a draft may name from the screen, at their closes (D195).
+    assert sheet.stocks == ("AAA", "CCC", "BBB")
+    assert set(sheet.stock_closes) == {"AAA", "CCC", "BBB"}
     assert all(line.text.endswith("untested (D180)") for line in named)
     assert all(line.day == date(2026, 11, 16) for line in named)
     assert lines[-1].status == "n/a"

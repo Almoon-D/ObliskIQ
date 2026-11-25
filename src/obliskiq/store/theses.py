@@ -248,6 +248,16 @@ def pin_instrument(
         return _required(store, thesis_id)
 
 
+def give_isin(store: Store, thesis_id: int, isin: str, *, at: datetime, actor: str) -> Thesis:
+    """Keep a candidate thesis's ISIN (a listed stock's, given after its intake)."""
+    with store.transaction():
+        store.execute("UPDATE theses SET isin = ? WHERE thesis_id = ?", (isin, thesis_id))
+        append_log(
+            store, thesis_id, at=at, actor=actor, kind=LogKind.RESOLVED, detail=f"ISIN {isin}"
+        )
+        return _required(store, thesis_id)
+
+
 def approve(
     store: Store,
     thesis_id: int,
@@ -406,13 +416,16 @@ class PinnedShare:
     listing_exchange: str
     currency: str
     description: str
-    isin: str
+    #: ``None`` for a listed stock whose ISIN is not given yet: it trades in shadow alone.
+    isin: str | None
+    #: The issuer's country, where the thesis states it.
+    country: str | None = None
 
 
 def pinned_shares(store: Store) -> list[PinnedShare]:
     """The shares outside the universe file the order path must describe, one per conid."""
     rows = store.execute(
-        "SELECT conid, symbol, listing_exchange, currency, description, isin FROM theses "
+        "SELECT conid, symbol, listing_exchange, currency, description, isin, country FROM theses "
         "WHERE candidate_key IS NOT NULL AND conid IS NOT NULL ORDER BY thesis_id"
     ).fetchall()
     found: dict[int, PinnedShare] = {}

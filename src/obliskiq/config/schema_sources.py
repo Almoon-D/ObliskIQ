@@ -24,7 +24,7 @@ from pydantic import (
     model_validator,
 )
 
-from ..domain.base import CountryCode, NonEmptyText
+from ..domain.base import CountryCode, CurrencyCode, NonEmptyText
 from ..domain.calendar import Mic, TimeZoneName
 from .base import FrozenModel, Identifier
 from .schema_runtime import Anchor
@@ -338,6 +338,25 @@ class StockListingsConfig(FrozenModel):
     min_kept_share: QuotedFraction
     submissions_url_template: Annotated[str, Field(pattern=r"^https://\S*\{cik(:[0-9a-z]+)?\}\S*$")]
     sic_per_run: NonNegativeInt
+    #: The SEC's exchange name -> the IBKR listing exchange a thesis on a listed stock is
+    #: resolved on (``decision/thesis_intake.py``), and the currency it trades in.
+    ibkr_exchanges: dict[NonEmptyText, NonEmptyText] = Field(min_length=1)
+    currency: CurrencyCode
+    #: The issuer country of a company incorporated in one of these EDGAR codes (its home
+    #: states); any other code leaves the country unstated (``decision/thesis_intake.py``).
+    home_country: CountryCode
+    home_incorporations: frozenset[Annotated[str, Field(pattern=r"^[A-Z0-9]{2}$")]] = Field(
+        min_length=1
+    )
+
+    @model_validator(mode="after")
+    def _routed(self) -> Self:
+        unknown = sorted(set(self.ibkr_exchanges) - set(self.exchanges))
+        if unknown:
+            raise ValueError(
+                f"ibkr_exchanges names exchanges the listings keep no venue for: {unknown}"
+            )
+        return self
 
 
 class FrameInputConfig(FrozenModel):

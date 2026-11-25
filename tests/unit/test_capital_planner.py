@@ -181,7 +181,8 @@ async def test_the_cash_line_meets_a_reservation_at_once_and_investable_drops(ri
     # The rebalancer spends nothing that is reserved, and recomputes its targets on 700.
     rebalance = await make_rebalancer(rig).survey(PAPER)
     assert rebalance.spendable == D(1000) - D(300) - D(25)
-    assert rebalance.core_capital == D(595)  # 85 % of 700: the thesis book keeps its 10 %
+    # 95 % of 700: the thesis book holds and has approved nothing, so the reserve gives up none.
+    assert rebalance.core_capital == D(665)
     assert "R1" in plan.render()
     assert "from the cash line" in plan.render()
 
@@ -799,3 +800,94 @@ async def test_unexplained_cash_alone_never_stops_a_withdrawal(rig: Any) -> None
         anchor=False,
     )
     assert "reconciliation is drift" in str((await survey(parts)).blocked)
+
+
+# ── the funding sale (D195) ──
+
+
+async def funding_view(parts: CapitalParts) -> Any:
+    view = await parts.capital.read(PAPER, cash=await parts.capital.cash())
+    assert not isinstance(view, str), view
+    return view
+
+
+async def test_a_funding_sale_is_pro_rata_net_of_its_costs_and_counts_while_it_works(
+    rig: Any,
+) -> None:
+    await bought(rig, IBGM, "30", "150", sleeve=Sleeve.CORE, at=NOW - timedelta(days=200))
+    await bought(rig, EMIM, "100", "40", sleeve=Sleeve.CORE, at=NOW - timedelta(days=200))
+    parts = capital_parts(rig)
+    await parts.tax.catch_up()
+    view = await funding_view(parts)
+    funding = await parts.planner.plan_funding(PAPER, view, D(2000), minimum=D(100))
+    assert funding.refused is None
+    assert funding.raised >= D(2000)
+    by_symbol = {sale.symbol: sale for sale in funding.sales}
+    assert set(by_symbol) == {"IBGM", "EMIM"}
+    # Pro rata: each sells about the same share of what it holds (5,325 and 4,642 held).
+    shares = [by_symbol[s].proceeds / value for s, value in (("IBGM", 5325), ("EMIM", 4642))]
+    assert abs(shares[0] - shares[1]) < D("0.05")
+    made, waiting = await parts.planner.sell(funding, PAPER, NOW)
+    assert waiting == []
+    assert {(i.conid, i.side, i.role, i.reason, i.sleeve) for i in made} == {
+        (IBGM, OrderSide.SELL, IntentRole.EXIT, "funding", Sleeve.CORE),
+        (EMIM, OrderSide.SELL, IntentRole.EXIT, "funding", Sleeve.CORE),
+    }
+    # The working sales count toward the thesis, and the holdings they work on are left alone.
+    assert await parts.planner.funding_pending(PAPER, view) > D(0)
+    again = await parts.planner.plan_funding(PAPER, view, D(2000), minimum=D(100))
+    assert again.sales == ()
+    assert again.refused is not None
+    assert "an order works on it" in again.refused
+
+
+async def test_the_two_month_rule_keeps_a_holding_out_of_the_funding_sale(rig: Any) -> None:
+    # Bought ten days ago above today's price: a sale now would defer its loss.
+    await bought(rig, IBGM, "30", "200", sleeve=Sleeve.CORE, at=NOW - timedelta(days=10))
+    parts = capital_parts(rig)
+    await parts.tax.catch_up()
+    view = await funding_view(parts)
+    funding = await parts.planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert funding.sales == ()
+    assert funding.refused is not None
+    assert "IBGM: the two-month rule would defer its loss" in funding.refused
+    # With a second holding the rule allows, the sale is made from it alone.
+    await bought(rig, EMIM, "100", "40", sleeve=Sleeve.CORE, at=NOW - timedelta(days=200))
+    await parts.tax.catch_up()
+    view = await funding_view(parts)
+    funding = await parts.planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert [sale.symbol for sale in funding.sales] == ["EMIM"]
+
+
+async def test_a_funding_sale_is_all_or_nothing_and_respects_the_minimum(rig: Any) -> None:
+    await bought(rig, EMIM, "10", "40", sleeve=Sleeve.CORE, at=NOW - timedelta(days=200))
+    parts = capital_parts(rig)
+    await parts.tax.catch_up()
+    view = await funding_view(parts)
+    short = await parts.planner.plan_funding(PAPER, view, D(5000), minimum=D(100))
+    assert short.sales == ()
+    assert short.refused is not None
+    assert short.refused.startswith("the reserve can sell 464.20 toward 5000.00")
+    small = await parts.planner.plan_funding(PAPER, view, D(50), minimum=D(100))
+    assert small.sales == ()
+    assert small.refused is not None
+    assert "not in sales of at least 100.00 each" in small.refused
+
+
+async def test_unreadable_tax_lots_leave_paper_holdings_out_of_the_funding_sale(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await bought(rig, EMIM, "100", "40", sleeve=Sleeve.CORE, at=NOW - timedelta(days=200))
+    parts = capital_parts(rig)
+    await parts.tax.catch_up()
+    view = await funding_view(parts)
+
+    async def broken() -> TaxHooks:
+        raise TaxError("the lots are corrupt")
+
+    monkeypatch.setattr(parts.tax, "hooks", broken)
+    funding = await parts.planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert funding.sales == ()
+    assert funding.refused is not None
+    assert "the two-month rule is unchecked" in funding.refused
+    assert "EMIM: its tax lots do not account for it" in funding.refused

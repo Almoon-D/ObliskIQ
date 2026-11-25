@@ -83,6 +83,8 @@ class Reason(StrEnum):
     OPTION_BUDGET = "option_budget"
     OPTION_FRICTION = "option_friction"
     HELD_BACK = "held_back"
+    NO_ISIN = "no_isin"
+    FUNDING = "funding"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,8 +110,12 @@ def screen(draft: ThesisDraft, *, today: date) -> list[Finding]:
     def fail(code: Reason, reason: str) -> None:
         found.append(Finding(code, reason, permanent=True))
 
-    if (draft.symbol is None) == (draft.candidate is None):
-        fail(Reason.INCOMPLETE, "name one instrument: a universe symbol or a stock candidate")
+    named = [n for n in (draft.symbol, draft.candidate, draft.listing) if n is not None]
+    if len(named) != 1:
+        fail(
+            Reason.INCOMPLETE,
+            "name one instrument: a universe symbol, a stock candidate or a listed US stock",
+        )
     if draft.candidate is not None and draft.isin is None:
         fail(
             Reason.INCOMPLETE,

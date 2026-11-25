@@ -478,7 +478,8 @@ def test_a_stale_mark_makes_the_look_not_evaluable_and_changes_nothing(
         retest=lambda _l, _m: None,
         at=AT,
     )
-    assert current_shares(store)[THESIS_BOOK] == shipped_settings.thesis.capital_share
+    explored = min(shipped_settings.thesis.capital_share, h13.step.share_ceiling)
+    assert current_shares(store)[THESIS_BOOK] == explored
     assert "exploration share" in changes.shares[0].reason
 
 
@@ -557,11 +558,15 @@ def test_a_step_and_a_return_to_shadow_drill_through_the_month_end_run(
 
     rules = load_any(Path("research") / "preregistrations" / "scoreboard.md")
     assert isinstance(rules, ScoreboardPrereg)
+    # An exploration share below H13's ceiling, so a step shows.
+    settings = shipped_settings.model_copy(
+        update={"thesis": shipped_settings.thesis.model_copy(update={"capital_share": D("0.10")})}
+    )
 
     def month(name: str) -> Decimal:
         run_month(
             store,
-            shipped_settings,
+            settings,
             rules.spec,
             [],
             month=name,
@@ -572,7 +577,7 @@ def test_a_step_and_a_return_to_shadow_drill_through_the_month_end_run(
         )
         return current_shares(store)[THESIS_BOOK]
 
-    exploration = shipped_settings.thesis.capital_share
+    exploration = settings.thesis.capital_share
     assert month("2027-05") == exploration
     record_h13_look(store, _look("live", "book", "2027-06", step=True))
     assert month("2027-06") == exploration + h13.step.share_step

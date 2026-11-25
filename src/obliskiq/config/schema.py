@@ -258,6 +258,11 @@ class ObliskConfig(FrozenModel):
             if mic not in known
         ]
         problems += [
+            f"sources.stocks.listings.ibkr_exchanges: {code} is not in ibkr_exchanges"
+            for code in sorted(set(self.sources.stocks.listings.ibkr_exchanges.values()))
+            if code not in self.ibkr_exchanges
+        ]
+        problems += [
             f"collectors.candidates.exchanges: {code} is not in ibkr_exchanges"
             for code in sorted(set(self.collectors.candidates.exchanges.values()))
             if code not in self.ibkr_exchanges
@@ -314,15 +319,10 @@ class ObliskConfig(FrozenModel):
         return problems
 
     def _thesis_problems(self) -> list[str]:
-        """The thesis book's share comes out of the equity satellite's budget, and a defensive
-        role is one the core declares."""
+        """A defensive role is one the core declares. The hunting share may be all of investable
+        capital (D185); the budget reader keeps the cash floor out of it."""
         thesis = self.thesis
         problems: list[str] = []
-        if thesis.capital_share > self.capital.budgets.equity_satellite:
-            problems.append(
-                f"thesis.capital_share: {thesis.capital_share} is above the equity satellite's "
-                f"budget {self.capital.budgets.equity_satellite}"
-            )
         problems += [
             f"thesis.defensive_roles: {role} is not a role the core declares"
             for role in sorted(set(thesis.defensive_roles) - set(self.core.roles))

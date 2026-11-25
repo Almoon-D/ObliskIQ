@@ -8,10 +8,13 @@ recorded as ``left_listing`` with both dates; no row is ever deleted. A snapshot
 than ``min_kept_share`` of the previous one's names is refused and records nothing: a truncated
 download is not thousands of departures.
 
-Then the companies of the newest snapshot whose submissions were never read get their SIC, at
-most ``sic_per_run`` a run (``data.sec.gov/submissions/CIK##########.json``, field ``sic``; an
-empty one is stored as none). Every request carries ``SEC_USER_AGENT`` and keeps to the SEC's
-fair-access pace (``insiders.request_spacing_seconds``).
+Then the companies of the newest snapshot whose submissions were never read get their SIC and
+their state or country of incorporation, at most ``sic_per_run`` a run
+(``data.sec.gov/submissions/CIK##########.json``, fields ``sic`` and ``stateOfIncorporation``, an
+EDGAR code; an empty one is stored as none). The incorporation gives a listed stock's issuer
+country where it is a home state (``home_incorporations``), for its transaction tax (D195).
+Every request carries ``SEC_USER_AGENT`` and keeps to the SEC's fair-access pace
+(``insiders.request_spacing_seconds``).
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -86,6 +89,15 @@ def parse_sic(body: Any) -> int | None:
     if not text.isdigit():
         raise UpstreamError(f"the company's SIC {text!r} is not a number")
     return int(text)
+
+
+def parse_incorporation(body: Any) -> str | None:
+    """A company's EDGAR incorporation code from its submissions; ``None`` where the SEC states
+    none or states one outside EDGAR's two-character codes."""
+    if not isinstance(body, dict):
+        raise UpstreamError("the company's submissions are not an object")
+    text = str(body.get("stateOfIncorporation") or "").strip().upper()
+    return text if re.fullmatch(r"[A-Z0-9]{2}", text) else None
 
 
 class ListingsCollector:
@@ -167,11 +179,14 @@ class ListingsCollector:
                 response = await self._get(self._config.submissions_url_template.format(cik=cik))
                 if response.status_code != HTTP_OK:
                     raise UpstreamError(f"answered HTTP {response.status_code}")
-                sic = parse_sic(response.json())
+                body = response.json()
+                sic, incorporated = parse_sic(body), parse_incorporation(body)
             except Exception as exc:  # one company never stops the others
                 failed.append(f"CIK {cik}: {failure_text(exc)}")
                 continue
-            await self._worker.run(stocks_repo.save_company, cik, sic, known_at=now)
+            await self._worker.run(
+                stocks_repo.save_company, cik, sic, known_at=now, incorporated=incorporated
+            )
             read += 1
         if not ciks:
             return

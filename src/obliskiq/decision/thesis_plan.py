@@ -10,6 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from ..capital.managed import CapitalView
+from ..capital.planner import FundingPlan
 from ..domain.options import OptionPosition, ThesisOption
 from ..domain.orders import ExecutionMode, Fill, OrderIntent
 from ..domain.thesis import Thesis
@@ -27,12 +28,13 @@ ZERO = Decimal(0)
 ACTOR = "thesis book"
 #: The reason an entry intent gives.
 ENTRY_REASON = "thesis"
-#: What the plan does with one thesis.
-RESOLVE, REFUSE, EXPIRE, WAIT, ENTER, HOLD, EXIT, CLOSE = (
+#: What the plan does with one thesis. ``fund``: it is approved and the reserve sells for it.
+RESOLVE, REFUSE, EXPIRE, WAIT, FUND, ENTER, HOLD, EXIT, CLOSE = (
     "resolve",
     "refuse",
     "expire",
     "wait",
+    "fund",
     "enter",
     "hold",
     "exit",
@@ -68,6 +70,8 @@ class ThesisDecision:
     underlying: Decimal | None = None
     review: OptionRisk | None = None
     detected_loss: Decimal | None = None
+    #: The reserve's sales that fund a thesis approved without the cash for it (``fund``).
+    funding: FundingPlan | None = None
 
     @property
     def conid(self) -> int | None:
@@ -104,6 +108,10 @@ class ThesisPlan:
     entries_reduced: str | None = None
     #: The twins of option theses that reached one of their thesis's exits this cycle.
     twins: list[TwinClose] = field(default_factory=list)
+    #: What the reserve's funding sales still working will bring, not yet counted toward an
+    #: approved thesis this survey; and whether this survey already funds one (one a cycle).
+    funding_credit: Decimal = ZERO
+    funded: bool = False
 
     @property
     def trades(self) -> list[ThesisDecision]:

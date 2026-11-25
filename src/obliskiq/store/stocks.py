@@ -1,5 +1,6 @@
 """The stock screen's records: the SEC's listing snapshots and the names that left them, each
-company's SIC, the XBRL frame values as read, and Yahoo's daily bars (``019_stocks``).
+company's SIC and incorporation, the XBRL frame values as read, and Yahoo's daily bars
+(``019_stocks``, ``020_stock_incorporations``).
 
 Every read of what was collected takes a keyword-only ``as_of`` and sees the rows whose
 ``known_at`` falls before its end. The collector's own bookkeeping (what is held already, which
@@ -196,23 +197,50 @@ def symbol_ciks(store: Store, *, as_of: date) -> dict[str, int]:
 
 
 def ciks_without_sic(store: Store, *, limit: int) -> tuple[int, ...]:
-    """Companies of the newest snapshot whose submissions were never read, at most ``limit``."""
+    """Companies of the newest snapshot whose submissions were never read for their SIC or their
+    incorporation, at most ``limit``."""
     rows = store.execute(
-        "SELECT DISTINCT m.cik FROM stock_members m LEFT JOIN stock_companies c ON c.cik = m.cik "
+        "SELECT DISTINCT m.cik FROM stock_members m "
+        "LEFT JOIN stock_companies c ON c.cik = m.cik "
+        "LEFT JOIN stock_incorporations i ON i.cik = m.cik "
         "WHERE m.snapshot_id = (SELECT MAX(snapshot_id) FROM stock_snapshots) "
-        "AND c.cik IS NULL ORDER BY m.cik LIMIT ?",
+        "AND (c.cik IS NULL OR i.cik IS NULL) ORDER BY m.cik LIMIT ?",
         (limit,),
     ).fetchall()
     return tuple(row["cik"] for row in rows)
 
 
-def save_company(store: Store, cik: int, sic: int | None, *, known_at: datetime) -> None:
+def save_company(
+    store: Store,
+    cik: int,
+    sic: int | None,
+    *,
+    known_at: datetime,
+    incorporated: str | None = None,
+) -> None:
+    """A company's SIC and EDGAR incorporation code as its submissions state them; what is
+    already held is kept."""
     with store.transaction():
         store.execute(
             "INSERT INTO stock_companies (cik, sic, known_at) VALUES (?, ?, ?) "
             "ON CONFLICT (cik) DO NOTHING",
             (cik, sic, stamp_text(known_at)),
         )
+        store.execute(
+            "INSERT INTO stock_incorporations (cik, code, known_at) VALUES (?, ?, ?) "
+            "ON CONFLICT (cik) DO NOTHING",
+            (cik, incorporated, stamp_text(known_at)),
+        )
+
+
+def incorporation(store: Store, cik: int, *, as_of: date) -> str | None:
+    """A company's EDGAR incorporation code known by the end of ``as_of``; ``None`` when the SEC
+    states none or it was not read by then."""
+    row = store.execute(
+        "SELECT code FROM stock_incorporations WHERE cik = ? AND known_at < ?",
+        (cik, cutoff_text(as_of)),
+    ).fetchone()
+    return None if row is None else row["code"]
 
 
 def company_sics(store: Store, *, as_of: date) -> dict[int, int | None]:

@@ -2,13 +2,13 @@
 §5.5, §5.11; DECISIONS D156, D159).
 
 The book works on its share of investable capital (``capital/budgets.py``: ``thesis.capital_share``
-in shadow and paper, nothing on the live account until the capital allocation rule gives it one),
-in the satellite sleeve. With no idea it holds nothing and a cycle places nothing. At each
-decision cycle, for the theses still open, in order of arrival:
+in shadow and paper, the capital allocation rule's on the live account), in the satellite sleeve.
+With no idea it holds nothing and a cycle places nothing. At each decision cycle, for the theses
+still open, in order of arrival:
 
-1. a **stock candidate** not pinned yet is resolved through IBKR's contract search
-   (``ibkr/identity.py``), pinned for its thesis and described to the order path's directory; one
-   that does not resolve is refused;
+1. a **share outside the universe file** not pinned yet (a stock candidate, or a stock on the
+   SEC's listings) is resolved through IBKR's contract search (``ibkr/identity.py``), pinned for
+   its thesis and described to the order path's directory; one that does not resolve is refused;
 2. a **candidate** is judged by the gate (``engines/thesis/gate.py``) on what was read this cycle:
    the mandate's prohibited products, the jurisdiction's eligibility, a conid another book holds,
    a fresh quote, the stored liquidity, the caps, the gain-to-loss ratio and a free slot. A
@@ -24,6 +24,14 @@ A thesis may be held as a long option instead of its instrument (``thesis_option
 that says ``option``, or whose levels describe a fall, is a long call or put when the options
 sleeve's gates pass and nothing otherwise; one that says ``auto`` is the option when they pass
 and its instrument when they do not.
+
+**Funding.** The book's capital is its hunting share of investable capital
+(``thesis.capital_share``, D185); what it has not committed waits in the reserve. A thesis the
+gate passes with too little free cash is approved and the reserve sells for it (``fund``,
+``capital/planner.py``): pro rata, one thesis a cycle, nothing when the sales cannot raise it all
+(the two-month rule, the minimum trade), and it is entered once the proceeds are in. On paper
+and live a share outside the universe file reaches no broker without its ISIN (``no_isin``;
+``obliskiq idea isin``, D195).
 
 Entries and exits are intents priced by ``IntentMaker`` and carried by the executor through the
 pre-trade gate, a funding conversion first for a foreign currency, as the core's are. An entry
@@ -46,6 +54,7 @@ from decimal import Decimal
 from ..calendars.service import Calendars
 from ..capital.allocation import allocation_now
 from ..capital.managed import CapitalReader, book_fills
+from ..capital.planner import ReservationPlanner
 from ..config.schema import ObliskConfig
 from ..data.candidates import resolve_candidate
 from ..domain.instrument import TradedInstrument
@@ -96,7 +105,8 @@ from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
 from .breakers import Breakers
-from .thesis_intake import find_candidate
+from .rebalance_core import minimum_trade
+from .thesis_intake import stock_candidate
 from .thesis_options import ThesisOptions
 from .thesis_plan import (
     ACTOR,
@@ -105,6 +115,7 @@ from .thesis_plan import (
     ENTRY_REASON,
     EXIT,
     EXPIRE,
+    FUND,
     HOLD,
     REFUSE,
     RESOLVE,
@@ -140,9 +151,11 @@ class ThesisRebalancer:
         eligibility: EligibilityPolicy,
         secdef: Secdef,
         breakers: Breakers,
+        funding: ReservationPlanner | None = None,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._settings = settings
+        self._funding = funding
         self._capital = capital
         self._directory = directory
         self._calendars = calendars
@@ -219,6 +232,8 @@ class ThesisRebalancer:
             plan.entries_reduced = breakers.brake.reason
         allocation = await allocation_now(self._worker, self._settings, view.investable, mode)
         plan.capital = allocation.thesis_book
+        if self._funding is not None:
+            plan.funding_credit = await self._funding.funding_pending(mode, view)
         busy, _ = await self._cash.pending(mode)
         conids = [t.instrument.conid for t in theses if t.instrument.conid is not None]
         read = BookRead(
@@ -248,7 +263,7 @@ class ThesisRebalancer:
             others = tuple(slot for owner, slot in slots.items() if owner != thesis.thesis_id)
             decision = await self._decide(thesis, read, others, spent, plan)
             plan.decisions.append(decision)
-            if decision.action == ENTER and decision.size_base is not None:
+            if decision.action in (ENTER, FUND) and decision.size_base is not None:
                 spent += decision.size_base
                 slots[thesis.thesis_id] = _slot(thesis, decision.size_base)
         plan.twins = await self._options.twins(read, plan)
@@ -360,6 +375,7 @@ class ThesisRebalancer:
                 return self._not_an_option(thesis, option)
             note = f"not held as an option: {describe(option)}"
         decision = self._enter(thesis, described, reference, value.rate, read, slots, spent, plan)
+        decision = await self._funded(decision, read, spent, plan)
         if note is None:
             return decision
         if decision.action == WAIT:
@@ -439,6 +455,9 @@ class ThesisRebalancer:
         waits = list(judged.findings)
         if plan.entries_blocked is not None:
             waits.append(Finding(Reason.ENTRIES_BLOCKED, plan.entries_blocked))
+        missing = _missing_isin(thesis, plan.mode)
+        if missing is not None:
+            waits.append(Finding(Reason.NO_ISIN, missing))
         try:
             venue = self._calendars.venue_for_ibkr(described.listing_exchange)
             status = self._calendars.tradability(venue, read.at, conid=conid)
@@ -461,13 +480,69 @@ class ThesisRebalancer:
                 )
             )
         if waits or size is None or judged.quantity is None:
-            return ThesisDecision(thesis, WAIT, describe(waits), tuple(waits))
+            return ThesisDecision(
+                thesis,
+                WAIT,
+                describe(waits),
+                tuple(waits),
+                quantity=judged.quantity or ZERO,
+                size_base=size,
+            )
         return ThesisDecision(
             thesis,
             ENTER,
             f"the gate passed: {judged.quantity} at about {reference}",
             quantity=judged.quantity,
             size_base=size,
+        )
+
+    async def _funded(
+        self, decision: ThesisDecision, read: BookRead, spent: Decimal, plan: ThesisPlan
+    ) -> ThesisDecision:
+        """A thesis that waits for cash alone: counted against the reserve's funding sales still
+        working, or funded by a new one (``fund``), or left waiting with why it cannot be."""
+        size = decision.size_base
+        codes = [finding.code for finding in decision.findings]
+        if decision.action != WAIT or codes != [Reason.NO_CASH] or size is None:
+            return decision
+        if self._funding is None:
+            return decision
+
+        def waits(code: Reason, reason: str) -> ThesisDecision:
+            found = (Finding(code, reason),)
+            return replace(decision, reason=describe(found), findings=found)
+
+        short = size - max(ZERO, read.spendable - spent)
+        if plan.funding_credit >= short:
+            plan.funding_credit -= short
+            return waits(
+                Reason.FUNDING,
+                f"the reserve's funding sale still works: {short:.2f} of its proceeds are for it",
+            )
+        if plan.funded:
+            return waits(
+                Reason.NO_CASH,
+                f"{decision.findings[0].reason}; the reserve funds one thesis a cycle, an earlier "
+                "one now",
+            )
+        need = short - plan.funding_credit
+        minimum = minimum_trade(self._settings.trading, read.view.managed)
+        funding = await self._funding.plan_funding(plan.mode, read.view, need, minimum=minimum)
+        if funding.refused is not None:
+            return waits(
+                Reason.NO_CASH,
+                f"{decision.findings[0].reason}; the reserve cannot fund it: {funding.refused}",
+            )
+        plan.funded = True
+        plan.funding_credit = ZERO
+        sales = ", ".join(f"{sale.units} {sale.symbol}" for sale in funding.sales)
+        return ThesisDecision(
+            decision.thesis,
+            FUND,
+            f"the gate passed; the reserve sells {sales} to raise {funding.raised:.2f} for it",
+            quantity=decision.quantity,
+            size_base=size,
+            funding=funding,
         )
 
     def _held_elsewhere(
@@ -515,6 +590,8 @@ class ThesisRebalancer:
                 await self._options.close(thesis, decision)
             elif decision.action == CLOSE:
                 await self._close(thesis, decision)
+            elif decision.action == FUND:
+                made += await self._fund(thesis, decision, plan)
             elif decision.action in (ENTER, EXIT):
                 intent = await self._trade(thesis, decision, plan)
                 if intent is not None:
@@ -539,23 +616,19 @@ class ThesisRebalancer:
         await self._worker.run(write)
 
     async def _resolve(self, thesis: Thesis) -> None:
-        """Pin a stock candidate through IBKR's contract search, or refuse its thesis."""
-        key = thesis.instrument.candidate_key or ""
+        """Pin a share outside the universe file through IBKR's contract search, or refuse its
+        thesis: a stock candidate on its holdings listings, a listed US stock on its SEC ticker."""
         today = self._now().date()
         found = await self._worker.run(
-            lambda store: find_candidate(self._settings, store, key, as_of=today)
+            lambda store: stock_candidate(self._settings, store, thesis.instrument, as_of=today)
         )
-        if found is None:
-            await self._move(
-                thesis,
-                ThesisState.REFUSED,
-                f"{Reason.UNRESOLVED.value}: no stock candidate {key!r} any more",
-            )
+        if isinstance(found, str):
+            await self._move(thesis, ThesisState.REFUSED, f"{Reason.UNRESOLVED.value}: {found}")
             return
         # A broker that cannot be read blocks the survey before this; a search that answers
         # and finds no one contract is final.
         resolution = await resolve_candidate(
-            self._secdef, found[0], at=self._now(), pinned_for=thesis.ref
+            self._secdef, found, at=self._now(), pinned_for=thesis.ref
         )
         await self._worker.run(universe_repo.record_resolution, resolution)
         conid, symbol = resolution.conid, resolution.symbol
@@ -579,6 +652,37 @@ class ThesisRebalancer:
         )
         await describe_pinned(self._directory, self._worker)
 
+    async def _fund(
+        self, thesis: Thesis, decision: ThesisDecision, plan: ThesisPlan
+    ) -> list[OrderIntent]:
+        """Approve a thesis the reserve funds, then make the reserve's sales; its entry follows
+        once their proceeds are in."""
+        funding = decision.funding
+        assert funding is not None  # a fund decision carries its sales
+        assert self._funding is not None  # and is made only with the planner at hand
+        assert decision.size_base is not None
+        if thesis.state is ThesisState.CANDIDATE:
+            await self._worker.run(
+                thesis_repo.approve,
+                thesis.thesis_id,
+                mode=plan.mode,
+                size_base=decision.size_base,
+                at=self._now(),
+                actor=ACTOR,
+                detail=f"approved at {decision.size_base:.2f}: {decision.reason}",
+            )
+        made, waiting = await self._funding.sell(funding, plan.mode, plan.at)
+        if made:
+            await self._note(
+                thesis,
+                LogKind.ORDER,
+                "the reserve's funding sale: "
+                + ", ".join(f"intent {intent.intent_id}" for intent in made),
+            )
+        if waiting:
+            await self._note(thesis, LogKind.WITHHELD, "funding sales wait: " + "; ".join(waiting))
+        return made
+
     def _stop(self, thesis: Thesis) -> Callable[[float | None], ProtectiveSpec]:
         """The protective stop an entry's fills get: a stop-limit at the invalidation, its limit
         offset from the quote's volatility (``execution/protective.py``)."""
@@ -598,6 +702,10 @@ class ThesisRebalancer:
         assert conid is not None  # only a pinned thesis trades
         entering = decision.action == ENTER
         as_option = decision.option is not None
+        missing = _missing_isin(thesis, plan.mode) if entering else None
+        if missing is not None:  # the plan waits for it; an entry made anyway fails closed
+            await self._note(thesis, LogKind.WITHHELD, f"{Reason.NO_ISIN.value}: {missing}")
+            return None
         if entering and thesis.state is ThesisState.CANDIDATE and as_option:
             thesis = await self._options.approve(decision, plan)
         elif entering and thesis.state is ThesisState.CANDIDATE:
@@ -660,6 +768,18 @@ class ThesisRebalancer:
         if decision.rate is not None:
             gain = (graded.exit_price - graded.entry_price) * graded.quantity * decision.rate
             await self._options.repay(decision, gain)
+
+
+def _missing_isin(thesis: Thesis, mode: ExecutionMode) -> str | None:
+    """Why a share outside the universe file may not reach the broker yet: the tax lots are kept
+    by ISIN (D161), so on paper and live it waits for one (D195); in shadow it trades simulated."""
+    instrument = thesis.instrument
+    if mode is ExecutionMode.SHADOW or instrument.candidate_key is None or instrument.isin:
+        return None
+    return (
+        f"{instrument.symbol} reaches no broker without its ISIN, which keeps its tax lots: "
+        f"obliskiq idea isin {thesis.ref} <ISIN>"
+    )
 
 
 def _held_back(thesis: Thesis, read: BookRead) -> str | None:

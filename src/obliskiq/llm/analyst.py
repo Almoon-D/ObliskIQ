@@ -9,12 +9,12 @@ A run reads one fact sheet (``grid/facts.py``) and:
    the digest and ``idea show``;
 2. asks for **drafts**, at most what is left of ``max_drafts_per_week`` this ISO week. Each draft
    is checked on its own and **dropped** (with the reason, logged and stored by the caller) when
-   it lacks or mis-states a field, names an instrument the sheet does not list or one an open
-   thesis (or an earlier draft of the answer) already holds, cites no fact line, cites a line the
-   sheet does not hold or one dated after the sheet, names an instrument without a close on the
-   sheet or levels that do not bracket it (the gate judges the gain-to-loss ratio at the price it
-   would enter at), sets a horizon outside ``(as_of, as_of + max_horizon_days]``, or comes beyond
-   the week's remaining number. What
+   it lacks or mis-states a field, names an instrument (or a stock of the screen, as its section
+   says) the sheet does not list or one an open thesis (or an earlier draft of the answer)
+   already holds, cites no fact line, cites a line the sheet does not hold or one dated after the
+   sheet, names an instrument without a close on the sheet or levels that do not bracket it (the
+   gate judges the gain-to-loss ratio at the price it would enter at), sets a horizon outside
+   ``(as_of, as_of + max_horizon_days]``, or comes beyond the week's remaining number. What
    survives is a :class:`Proposal` the service hands to the thesis book's intake as source
    ``analyst``; its gate decides. Nothing here sizes, orders or gates: ``llm`` imports nothing
    from ``decision`` or ``execution``.
@@ -53,6 +53,7 @@ from ..util.http import RetryPolicy
 from .analyst_prompts import (
     DRAFTS_SYSTEM,
     OPINION_SYSTEM,
+    STOCK_SECTION,
     DraftAnswer,
     DraftsAnswer,
     OpinionAnswer,
@@ -116,12 +117,15 @@ class Proposal:
         answer = self.answer
         if answer is None:
             raise ValueError(f"draft {self.seq} was dropped: {self.dropped}")
+        stock = answer.section == STOCK_SECTION
         return ThesisDraft(
             source=ThesisSource.ANALYST,
             view=answer.view,
-            # The sleeve's rules decide whether the idea is held as an option, never the model.
-            expression=Expression.AUTO,
-            symbol=answer.symbol,
+            # The sleeve's rules decide whether the idea is held as an option, never the model;
+            # a listed stock has no collected option chain and is held as itself.
+            expression=Expression.SHARES if stock else Expression.AUTO,
+            symbol=None if stock else answer.symbol,
+            listing=answer.symbol if stock else None,
             expectation=answer.expectation,
             target=answer.level("target"),
             invalidation=answer.level("invalidation"),
@@ -153,15 +157,20 @@ def check_draft(
     except ValidationError as exc:
         return drop(f"a field is missing or wrong: {problems(exc)}")
     symbol = answer.symbol.strip().upper()
-    if symbol not in sheet.instruments:
-        return drop(f"names {answer.symbol}, which is not an instrument the fact sheet lists")
+    stock = answer.section == STOCK_SECTION
+    names, closes = (
+        (sheet.stocks, sheet.stock_closes) if stock else (sheet.instruments, sheet.closes)
+    )
+    if symbol not in names:
+        what = "a stock the fact sheet's screen" if stock else "an instrument the fact sheet"
+        return drop(f"names {answer.symbol}, which is not {what} lists")
     if taken and symbol in taken:
         return drop(f"names {symbol}, which {taken[symbol]} already holds")
     try:
         facts = cited_lines(answer.facts, sheet)
     except ValueError as exc:
         return drop(str(exc))
-    close = sheet.closes.get(symbol)
+    close = closes.get(symbol)
     if close is None:
         return drop(f"{symbol} has no close on the fact sheet: its levels rest on no price", facts)
     if not answer.invalidation < close < answer.target:

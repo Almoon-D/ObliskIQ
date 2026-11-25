@@ -29,6 +29,21 @@ def _isin(value: str) -> str:
 
 
 type Isin = Annotated[str, AfterValidator(_isin)]
+
+
+def isin_check_digit_holds(isin: str) -> bool:
+    """Whether a twelve-character ISIN's last digit is the check digit of the eleven before it
+    (ISO 6166: letters as numbers from 10, then the Luhn sum)."""
+    if not _ISIN_RE.fullmatch(isin):
+        return False
+    digits = "".join(str(int(char, 36)) for char in isin[:-1])
+    total = 0
+    for position, char in enumerate(reversed(digits)):
+        value = int(char) * (2 if position % 2 == 0 else 1)
+        total += value - 9 if value > 9 else value
+    return (10 - total % 10) % 10 == int(isin[-1])
+
+
 #: Amounts: a domain model refuses NaN and the infinities, so each is finite.
 type Money = Decimal
 type Magnitude = Annotated[Decimal, Field(ge=0)]

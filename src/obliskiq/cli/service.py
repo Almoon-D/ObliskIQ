@@ -41,13 +41,14 @@ from ..env import Environment
 from ..errors import ObliskError
 from ..execution.killswitch import file_flag_on
 from ..execution.modes import forced_shadow_on
-from ..jurisdiction import JurisdictionProfile
+from ..jurisdiction import TAX_POLICIES, JurisdictionProfile
 from ..orchestration.assemble import build_notifier, build_reporter, open_service
 from ..orchestration.clock import SystemClock
 from ..orchestration.health import read_heartbeat
 from ..orchestration.lock import ServiceLock, ServiceLockedError
 from ..orchestration.runlog import exit_code
 from ..orchestration.settings_watch import SettingsWatch, audit_unrecorded
+from ..reporting.bar import hunt_reading
 from ..reporting.digest import breaker_lines
 from ..reporting.summary import CycleSummary, format_cycle
 from ..store import nav as nav_repo
@@ -223,10 +224,19 @@ def _status(loaded: Loaded, out: TextIO) -> int:
         if forced:
             mode = ExecutionMode.SHADOW
         breakers = stored_report(store, settings, book_of(mode), at=now)
+        hunt = hunt_reading(
+            store,
+            settings,
+            mode,
+            as_of=now.date(),
+            policy=TAX_POLICIES.resolve(loaded.profile, settings),
+        )
     kill_on = file_flag_on(data_dir) or (kill is not None and kill.on)
     held = " (held by the FORCED_SHADOW file)" if forced else ""
     print(f"mode {mode.value}{held} · kill switch {'ON' if kill_on else 'off'}", file=out)
     for line in breaker_lines(breakers):
+        print(line, file=out)
+    for line in hunt.lines():
         print(line, file=out)
     beat, facts = read_heartbeat(data_dir / settings.paths.heartbeat_file)
     if beat is None:
