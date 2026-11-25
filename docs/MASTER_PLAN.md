@@ -33,21 +33,22 @@ A global, autonomous portfolio manager for one IBKR account that:
 1. **Survives first.** A mandate that cannot blow up the account: no leverage, no short
    premium, no shorting, nothing the owner's jurisdiction forbids, and breakers that freeze
    new risk and stand the bot down (§5.11).
-2. **Hunts second.** The Hunter is the return engine: a diversified, rule-based, long-only
-   book of stocks of any size, selected by signals with a documented mechanism — cheapness
-   with quality, informed buying, forced selling, momentum, earnings drift — and held with low
-   turnover (§5.5, DECISIONS D148, D153). Each signal is tested by size tier, from the
-   companies too small for institutional capital to the largest. A tested signal may be
-   expressed with long options when the sleeve's own test allows (§5.6). The Hunter takes
-   capital only on a test it passed, up to half of the account, and the rest by a live rule
-   (§5.19). Beside that book the Hunter keeps a thesis book: a few concentrated positions on
-   ideas from the LLM analyst and, when he has one, from the owner. Every idea is written
-   down before it trades and graded afterwards, and the book's capital follows that forward
-   record (§5.5, DECISIONS D156).
+2. **Hunts second.** The Hunter is the return engine, and its working book is the thesis
+   book (DECISIONS D185): a few concentrated positions, each a written idea about a company,
+   a sector or the economy, from the LLM analyst and, when he has one, from the owner. Every
+   idea is written down before it trades and graded afterwards, the ones that find no slot
+   included (D187). Its levers are concentration, long options, events with a documented
+   mechanism and company text read by a strong model (D186, D188, D189); by the owner's ruling it
+   may hold all investable capital, while its forward record stays above its boundary
+   (§5.19). The systematic
+   stock book, a rule-based book of stocks tested by size tier, is designed in §5.5 and stays
+   unbuilt while no test of it can reach a sufficient outcome (D162, D180).
 3. **Keeps the rest at work.** Capital the Hunter does not hold is the reserve: global
    equities with a slow, tax-aware trend brake that steps partly aside in a fall under way
    while its embedded gain is small; after years of gains it is equities bought and held
-   (§5.4, DECISIONS D147).
+   (§5.4, DECISIONS D147). It is where capital without a thesis waits: it sells pro rata to
+   fund an approved thesis, and a hedge is a thesis on a defensive instrument or a long put
+   (D185).
 4. **Measures itself.** Every hypothesis is pre-registered and tested on point-in-time
    history with a decision rule that says sufficient, insufficient, inconclusive or not
    evaluable (§5.9); every proposal, from a detector, a pattern or an LLM, is logged and
@@ -62,7 +63,9 @@ sold and their tax paid. Research reports each candidate's drawdowns beside its 
 references are scored under the same
 rule, in the base currency: a global accumulating UCITS equity ETF bought and held,
 and a global 60/40. They are yardsticks and a possible outcome, not the destination. The owner's
-aspiration is 50 % a year or more (D153): a distance every report shows, never a forecast. No
+bar is 50 % a year (D153, D185): every report shows the year's growth beside it and a year
+below it is reported as a miss. It is not a forecast and no design makes it a floor: no
+unlevered record sustains that figure on a whole account. No
 system knows with high certainty what markets will do: returns come from documented premia
 and from a selection edge that must be shown on data before it is funded, with costs and
 taxes treated as costs.
@@ -341,8 +344,11 @@ cycles. All of these live in config with a source per value.
 
 ### 5.5 The Hunter
 
-**The stock book** is the return engine (DECISIONS D148). In configuration and code its sleeve
-is `satellite`.
+The Hunter has two books. The thesis book is the one at work and the return engine (DECISIONS
+D185); the stock book is a design that waits for a test it can pass.
+
+**The stock book** (DECISIONS D148). In configuration and code its sleeve is `satellite`.
+Unbuilt: no test of it reaches a probability of a sufficient outcome of 0.5 (D162, D180).
 
 - **Hunting ground.** Stocks of any size on venues the account may trade, in markets with a
   price history that keeps delisted companies (the United States first; another market joins
@@ -392,7 +398,8 @@ A judgement about the economy, a sector or a company has no history to replay, s
 honest test is forward: the book exists to produce that record and to trade on it.
 
 - **Sources.** The LLM analyst, which proposes theses on its own from a point-in-time fact
-  sheet (the macro board, the grid, events, positioning; §5.7, §5.10); the owner, through
+  sheet (the macro board, the grid, events, positioning, the stock screen; §5.7, §5.10) and
+  from a company's own filings (below); the owner, through
   `obliskiq idea add` and later the cockpit; a detector or pattern once its test is
   sufficient. The engine runs without the owner.
 - **The stock screen** (DECISIONS D180). Today's listed US common stocks that pass the
@@ -402,6 +409,21 @@ honest test is forward: the book exists to produce that record and to trade on i
   analyst may write theses from it, as a segment of its own; the screen sizes nothing, has
   no weight in any gate and no performance record of its own. A collection that fails or is
   throttled is a status, never a delisting.
+- **Events and text** (DECISIONS D189). Earnings dates and results, 8-K items, IPO filings
+  with their pricing and lock-up dates, spin-off registrations and index changes, collected
+  forward from free sources and stored with the time they were known; each is a dated line
+  on the sheet and a tag on the calls made from it. For a candidate, the sections of its
+  latest reports and its recent 8-Ks are fetched and stored as read: the dossier.
+- **The analyst's passes** (DECISIONS D188). A daily scan on a low-cost model names
+  candidates; a dossier pass on a strong model writes each candidate's thesis; a weekly
+  review on the strongest model re-reads the open theses. Each model and prompt is a
+  segment, several run side by side in shadow, and the segment that fills the slots is the
+  one its record favours.
+- **The idea ledger** (DECISIONS D187). Every draft that passes the gate's checks other than
+  the free slot and the size is stored as a call and graded forward at its own levels,
+  whether or not it trades, under H14's pre-registration. The ledger compares segments,
+  event types and stated probabilities; it moves no capital. Once a segment's calibration
+  passes H14's minimum, its calibrated rank orders the slots; until then, order of arrival.
 - **A thesis** names the instrument, what is expected and why, a target, a horizon and what
   would prove it wrong, all fixed before the first order (the lifecycle of item 5 below). An
   idea that lacks one of them is not traded.
@@ -412,8 +434,8 @@ honest test is forward: the book exists to produce that record and to trade on i
   has no calendar, is refused.
 - **Direction.** Long only (§2). A bearish view is a thesis on what holds or gains in a fall
   (a cash fund, government bonds, gold) or a long put; the book never shorts and holds no
-  inverse product. A slot without a thesis holds nothing: in shadow and paper its capital is
-  cash, and how it is held on the live account is the allocation rule's (DECISIONS D159).
+  inverse product. A slot without a thesis holds nothing of its own: its capital stays in
+  the reserve, which sells pro rata to fund an approved thesis (DECISIONS D159, D185).
 - **Options.** A thesis may be held as a long call or a long put when the options sleeve's
   gates pass (§5.6). Premiums are paid from the book's own capital, never above the option
   budget, and each option is graded beside the same thesis held in its underlying
@@ -431,7 +453,9 @@ honest test is forward: the book exists to produce that record and to trade on i
   ideas that pass. The caps per sector, country and currency keep them from being one bet. Exits are the thesis's
   own: the target, the invalidation, the horizon's end, a protective stop.
 - **Capital** follows the forward record (§5.19): shadow and paper first; on the live account
-  an exploration share the owner sets; more only as the graded record earns it, by source.
+  the hunting share the owner sets (H13's exploration share; `thesis.capital_share`, all
+  investable capital by his ruling, D185), kept while the graded record stays above its
+  boundary, by source.
 - **Expectation.** Nothing shows that such a book earns 50 % a year, and most lose to the
   index. An edge that large shows in about two years of graded calls; a small or absent one
   keeps the book at its exploration share or returns it to shadow.
@@ -1136,13 +1160,19 @@ subset and inserts an `Na` prompt for the remainder.
 | 19 | Cockpit, settings and deployment | MCP cockpit, Telegram, settings flow, dashboard, Docker, machine, backups, updates |
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 |
 | 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own (D180) |
+| 31 | Any listed stock, and where idle capital waits | a stock from the screen or an event becomes a thesis through a contract and ISIN route; the reserve's funding sale for an approved thesis; the owner's hunting share in config (D185) |
+| 32 | Idea ledger | H14's pre-registration first; every draft that passes the gate graded forward as a call, calibration per segment, the calibrated rank that may order the slots (D187) |
+| 33 | Analyst registry and passes | providers and models in a registry, segments side by side in shadow, the daily scan, the dossier pass and the weekly review, one budget (D188) |
+| 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors stored forward; event lines and tags; the dossier's filing sections (D189) |
 
 They run in that order (DECISIONS D150, D156); 27, 28 and 29 follow 22 at once and beside 23
 and 24, because the thesis book's evidence is forward only and a week it does not run is a week of
 record lost. Session 26 starts only after the reserve's paper cycle
 is recorded, and builds only what Session 24 left sufficient or inconclusive-positive; if it
 left nothing, the next research batch runs in its place. Session 24 is not run (D168) and
-returns only on D180's conditions; Session 30 follows 20 and needs no bought data. Built on a condition, not in sequence:
+returns only on D180's conditions; Session 30 follows 20 and needs no bought data. Sessions 31
+to 34 give the thesis book its means (D185): 31, 32 and 33 in any order, 34 after 33. Built on
+a condition, not in sequence:
 
 | # | Session | Runs when |
 |---|---|---|
@@ -1163,7 +1193,7 @@ on L2.
 | # | Question | Decision |
 |---|---|---|
 | 1 | Account size, minimum ticket, core lines | Any size. `trading.min_trade` supports an absolute amount, a % of managed capital, or both combined; never below the commission floor. Core granularity follows capital. |
-| 2 | Capital budgets | The Hunter takes up to 50 % on a sufficient test and steps to 100 % by the live rule of §5.19, with no owner command (D149); the reserve holds the rest, less a cash floor of 5 %. Until a test passes the reserve holds 95, since an inactive sleeve's share stays in it. Option premium at most 5 once the sleeve's activation condition holds, with lite's penalty balance. |
+| 2 | Capital budgets | The thesis book may hold all investable capital while its forward record stays above its boundary; capital without a thesis waits in the reserve (D185). The systematic stock book, if a test ever funds it, takes up to 50 % on a sufficient test and steps to 100 % by the live rule of §5.19, with no owner command (D149); the reserve holds the rest, less a cash floor of 5 %. Until a test passes the reserve holds 95, since an inactive sleeve's share stays in it. Option premium at most 5 once the sleeve's activation condition holds, with lite's penalty balance. |
 | 3 | Autonomy | Fully autonomous: selection, allocation and execution. The owner's command moves the bot to the live account and works the kill switch and `flatten`. He may hand the engine an idea; it never waits for one (row 22). |
 | 4 | LLM providers | Modular registry; expected a low-cost provider with a monthly budget and free Gemini as backup. |
 | 5 | Machine | Free tiers being sought; deployment is provider-agnostic. |
@@ -1175,15 +1205,16 @@ on L2.
 | 11 | Base currency | Selectable; EUR today; other currencies held as working balances. |
 | 12 | Withdrawals | Planned as soon as announced; the bot asks before cutting protected positions. |
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
-| 14 | Objective (DECISIONS D60, D147, D153) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. Aspiration: 50 % a year or more, not a promise or a gate. The horizon is very long; the owner does not need the money now. |
+| 14 | Objective (DECISIONS D60, D147, D153, D185) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. The bar: 50 % a year, shown beside every year's growth; not a forecast, a gate or a floor. The horizon is very long; the owner does not need the money now. |
 | 15 | Scale (D66, D150) | Capabilities that pay only at larger capital are built in Session 19a, when capital reaches them, and run by computed activation conditions. |
 | 16 | Drawdown (D147) | No limit. The owner accepts falls as deep as global equities' and deeper while the Hunter holds capital; the reserve runs D50. The peak for the breakers and the digest is taken once a day at the last cycle's managed NAV (unmanaged holdings do not count). |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89, D150) | A rule that times or reshapes the reserve joins it only after a pre-registered test with power of at least 0.5 finds it sufficient. Total-risk scaling was tested (Session 4e: none sufficient, D95). |
 | 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
-| 20 | The return engine (D148, D153) | The Hunter: a systematic, diversified book of stocks of any size, each signal tested by size tier; long options when the sleeve's test allows; and the thesis book beside it (row 22). The event sleeve's components and the rest of the LLM layer wait for evidence. |
+| 20 | The return engine (D148, D153, D185) | The Hunter's thesis book (row 22). Its systematic stock book, each signal tested by size tier, stays unbuilt while no test of it can be sufficient (D162). The event sleeve's components and the rest of the LLM layer wait for evidence. |
 | 21 | Cadence (D151) | Four cycles a day at the venues' sessions; no cycle rebuilds the book; no intraday strategy. |
-| 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. Any eligible instrument, a long call or put included (D157); bearish only through a defensive instrument or a put. At most eight positions, more as capital grows. Capital: an exploration share on the live account (a tenth by default, the owner's to set), then by the forward record. |
+| 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. Any eligible instrument, a long call or put included (D157); bearish only through a defensive instrument or a put. At most eight positions, more as capital grows. Capital: the hunting share on the live account (the owner's key: all investable capital, D185), kept while the forward record stays above its boundary. |
+| 23 | A wealth manager, not a fund of ETFs (D185, D186) | The thesis book is the return engine and gets any listed stock, a ledger of every idea, models chosen by their record, events and company text. All of the account hunts; capital without a thesis waits in the reserve, and a hedge is a thesis on a safer asset or a long put. The mandate is not widened to reach a figure: no margin, no leveraged product, no certificate. |
 
 Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which

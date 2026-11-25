@@ -4069,3 +4069,114 @@ floor; buying a history (D168 stands).
 - **Floors** are the thesis book's, at `stocks.screen.position_usd`: the sheet reads no account.
 - **The analyst still names only the sheet's instruments** (D165); a screen name as a thesis
   needs an ISIN and a contract route outside the universe file: a follow-up, a money path.
+
+## Owner ruling (2026-11-25): the thesis book is the return engine
+
+### D185 · A wealth manager that hunts with the whole account; the thesis book is the return engine (§1, §5.5, §5.19, §11; amends D148, D156, D159; affirms D154, D162)
+
+The owner's ruling: the aim is not a manager of ETFs. It is a machine that manages the whole
+wealth with judgement and foresees probable moves of markets and companies; 50 % a year is the
+least he asks of it, not a hope; all of the account hunts; safer assets (metals, commodities,
+funds) serve as a hedge and as a place to wait. A read of v1.1.1 found the drift was by rule,
+not by accident: every systematic stock test fails D154's floor (D162), so 85 % of capital fell
+to the reserve, while the one book that could reach the aim held a tenth of capital, the
+cheapest model, 5 USD a month and a universe of 104 ETFs and 12 stocks, and could not name a
+stock its own screen showed (D183).
+
+- **The whole account hunts.** The hunting share (`thesis.capital_share`, H13's exploration
+  share, the owner's to set) is 1: the thesis book may hold all investable capital. The
+  architect recommended a quarter and is recorded as dissenting: eight concentrated positions
+  on an ungraded analyst can lose half the account in a bad year.
+- **50 % is the bar, and no design makes it a floor.** Every report shows the year's growth
+  beside 50 %, and a year below it is reported as a miss. No unlevered record sustains the
+  figure on a whole account (the best long-only records are near 30 %); the plan says so and
+  works to close the distance.
+- **The thesis book is the return engine.** The systematic stock book stays unbuilt while D162's
+  table stands. Sessions from here give the thesis book what it lacks: any listed stock (Session
+  31), a record of every idea and not of eight (D187), models chosen by their record (D188),
+  events and company text (D189).
+- **"Relative certainty" is calibration.** No lever picks winners with certainty. Each idea
+  carries a probability; the ledger grades it, and a probability counts only once its segment's
+  calibration passes a registered minimum.
+- **The reserve is where capital waits.** Capital without a thesis stays in the reserve, which
+  keeps its tested brake, and the reserve sells pro rata to fund an approved thesis: a funding
+  sale, not a view (D159 amended). A hedge is a thesis like any other: a defensive instrument
+  or a long put, written down and graded. No rule that times the reserve is added without a
+  test (D147, D95).
+- **What still stands between a bad analyst and the money:** shadow and paper before the live
+  account, the promotion ladder and the owner's command (§5.19), the book breakers (D163), and
+  H13's looks, which send a record below its boundary back to shadow.
+- **Unchanged:** the mandate (§2), the gates and caps, D154's run rule, H13's lock.
+
+Rejected: a floor on returns as a design property (nothing can deliver one); a hedge held
+without a thesis (insurance has a negative expected return); idle capital in a bank balance
+(the wait would earn nothing); widening the mandate to reach the figure (D186).
+
+### D186 · The levers, in and out (§2, §5.5, §5.6; D153, D157, D185)
+
+What can lift a long-only, unlevered book far above the market, and what is refused.
+
+- **In.** Concentration (eight positions, conviction sizes). Convexity bought, never sold: long
+  calls and puts, long-dated ones included, inside the option budget. Events with a documented
+  mechanism (D189). Company text read by a strong model. Stocks too small for institutions,
+  inside the liquidity floor. An IPO subscription where IBKR offers one to the account: a
+  thesis at the offer price, queued as a live check, never assumed.
+- **Out.** Margin and any negative balance; leveraged and inverse ETPs (their daily reset
+  decays, and §2 excludes them); written options, futures, CFDs; turbos, warrants and other
+  issuer certificates (issuer risk and knock-outs for a convexity a listed option gives
+  cleanly); shares of private companies before an IPO (no route at IBKR, no exit); buying on
+  the first day of trading as if it were the offer (the allocation's gain is already taken);
+  intraday trading (D148).
+
+Rejected: widening the mandate to reach the figure. Leverage raises the mean and the chance of
+ruin together, and the owner asked for wealth managed with judgement.
+
+### D187 · Every idea is graded, not only the eight that trade: the idea ledger (§5.5, §5.19; D128, D156, D165, D169)
+
+Eight slots give a few dozen closed positions in two years: too few to tell a model, a prompt
+or an event type from luck. The analyst's drafts that fail only for want of a slot were lost.
+
+- **The ledger.** Every draft that passes the gate's checks other than the free slot and the
+  size is stored as a call with its target, invalidation, horizon and probability, and graded
+  forward at its own levels against the equity reference, in the scoreboard's weekly cohorts.
+- **Registered first.** H14, in its own pull request before the code that grades: the measure,
+  the cohorts, the minimum sample in effective observations, the calibration test, and the rule
+  by which a segment's calibrated rank may order the slots. Until that minimum, slots fill in
+  order of arrival (D161).
+- **Capital is still H13's.** The ledger chooses among segments, event types and models; it
+  moves no capital, and H13 and its lock are not edited.
+
+Rejected: grading a call by its direction alone (a thesis is its levels); a larger book to gain
+sample (more positions than ideas worth holding); ranking by an ungraded probability (D156).
+
+### D188 · The analyst's models are chosen by their record (§5.10, §11; D70, D128, D166; amends Session 16's scope)
+
+The analyst is the centre of the return engine and ran on the cheapest model at 5 USD a month.
+
+- **A registry of providers and models**, the owner's Anthropic key beside Gemini's. Each model
+  and prompt is a segment (D128), and several segments run side by side in shadow.
+- **Two passes.** A daily scan on a low-cost model names candidates from the sheet, the screen
+  and the events; a dossier pass on a strong model writes the thesis for each candidate from
+  the company's own filings. A weekly review on the strongest model re-reads the open theses.
+- **The record chooses.** The ledger (D187) compares segments; the segment that fills the slots
+  is the best calibrated one past the registered minimum. The monthly budget is the owner's key.
+
+Rejected: fixing the strongest model without a record (cost with no evidence of gain); one
+segment at a time (years to compare two); Session 16's six roles now (D150).
+
+### D189 · Events and company text reach the analyst, collected forward (§5.5, §5.7, §5.18; D154, D180, D183)
+
+To foresee a move the analyst must know what is about to happen to a company and read what the
+company says. The sheet carried neither.
+
+- **Events,** from free sources, stored with `known_at`: earnings dates and results, 8-K items,
+  IPO filings with their pricing and lock-up dates, spin-off registrations, index changes,
+  insider clusters (built). Each is a dated line on the sheet and a tag on the calls made from
+  it, so the ledger grades each event type apart.
+- **Text,** fetched on demand for a candidate's dossier and stored as read: the latest annual
+  and quarterly reports' sections and recent 8-Ks. Untrusted data inside the prompt (D165).
+- **No backtest.** An event rule that history can test goes through Session 21 under D154. Here
+  the events inform theses, graded forward.
+
+Rejected: paid calendars and transcripts before the ledger shows a use; a detector with weight
+for any event (untested); a survivor-only event study (D180).

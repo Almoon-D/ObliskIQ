@@ -247,11 +247,16 @@ records it.
 | 20 | Red-team and cleanup | Fable 5.1 (else Opus 5.5) | xhigh | Custom | — |
 | 20a | Mutation pass, the remainder | Opus 5.5 | xhigh | Custom | — |
 | 30 | Stock screen for the thesis book | Sonnet 5.5 | high | **Full** | — |
+| 31 | Any listed stock, and the reserve's funding sale | Opus 5.5 | xhigh | Custom | the owner's command list |
+| 32 | Idea ledger | Opus 5.5 | xhigh | Custom | — |
+| 33 | Analyst registry and passes | Sonnet 5.5 | high | **Full** | — |
+| 34 | Events and company text | Sonnet 5.5 | high | **Full** | — |
 
 Run in that order; 22 and 23 can run side by side, 27, then 28 and 29, follow 22 beside 23 and
 24 (the thesis book's evidence is forward only, DECISIONS D156), and 25 runs beside 24. Session 24 is
 not run and Session 26 waits (DECISIONS D168, D180: each prompt's precondition says when it
-returns); Session 30 runs after 20 and needs neither. On a condition, not in
+returns); Session 30 runs after 20 and needs neither. Sessions 31 to 34 give the thesis book its
+means (DECISIONS D185): 31 and 32 in either order, then 33, then 34. On a condition, not in
 sequence (MASTER_PLAN §10):
 
 | # | Session | Runs when | Model | Effort | Network |
@@ -272,7 +277,9 @@ no Session 14: the core's backtest and verdict are Session 4c (DECISIONS D61).
 Only Session 1 needs attachments. Fable goes where a subtle mistake costs money; Opus on
 architecture and statistics; Sonnet on well-specified ports. Effort is `high` by default and
 `xhigh` where a session touches a money path or produces a research verdict; `max` is not used
-(DECISIONS D152).
+(DECISIONS D152). A model above Opus is for a session that redirects the plan (a design
+session, a review of the ledger's first looks), never for a build session: a prompt that needs
+one to be built is rewritten until Opus or Sonnet can follow it.
 
 ## D. Custom network allowlist
 
@@ -2300,6 +2307,10 @@ Finish with the end-of-session protocol in AGENTS.md.
 
 **Launcher:** `Execute Session 16 exactly as specified in docs/SESSION_PROMPTS.md on main.`
 
+Session 33 builds the provider registry, the budget across models and the analyst's passes
+(DECISIONS D188). This session extends that registry and builds what remains: the evaluation
+set, failover and the other roles.
+
 ```
 You are building ObliskIQ, session 16. AGENTS.md is your operating manual; MASTER_PLAN.md
 the design (read §5.10 and DECISIONS D66, D70 carefully). Tests use fakes; with any configured key, run the live
@@ -2896,6 +2907,262 @@ a name dropped from the listings stays readable at an earlier `as_of` (test); a 
 and an unresolved symbol produce their statuses and no `left_listing` (tests); an immature or
 failed screen puts a status line and no names on the sheet (test); the sheet with and without
 the section gives different segment hashes (test); `make check` green.
+```
+
+---
+
+## Session 31 — Any listed stock, and the reserve's funding sale
+
+**Launcher:** `Execute Session 31 exactly as specified in docs/SESSION_PROMPTS.md on main.` (model: Opus 5.5, effort xhigh; network: Custom)
+
+```
+You are building ObliskIQ, session 31. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §1, §2, §5.4, §5.5 "The thesis book", §5.15, §5.19 and DECISIONS D140, D159,
+D161, D165, D183, D185, D186). No IBKR call. Finish with the end-of-session protocol. Decide
+what this prompt leaves open by the rule that costs least machinery and record it in
+DECISIONS; nobody is available to ask. This session touches money paths: failure branches
+are tested, and anything unknown about the broker fails closed and is queued VERIFY-LIVE.
+
+PRECONDITION: Session 30 merged and DECISIONS holds D185. Otherwise STOP.
+
+GOAL: a US common stock that the screen names can be a thesis in shadow today and on paper
+once the broker has confirmed its identity, the whole account can hunt, and capital without a
+thesis waits in the reserve, which sells to fund an approved thesis.
+
+READ FIRST, in the code: engines/thesis/ (gate, book, exits), the thesis intake and the
+budget reader that gives the book its capital (D159), data/candidates.py and data/stocks,
+grid/stock_screen.py, llm/analyst.py and analyst_prompts.py (how a draft names an
+instrument, D165), the reservation planner and the cash-flow ledger in capital/ (how a dated
+withdrawal is funded from the core), engines/core (the rebalancer and its parity test with
+the simulator), ROADMAP's live verification queue row on `/iserver/contract/{conid}/info`.
+
+DELIVERABLES
+1. The stock route. A name on the latest `stock_listings` snapshot enters the thesis book
+   without a holdings-file line: its identity is the SEC's (CIK, ticker, exchange). In
+   shadow its fills are simulated under that identity. An order to the broker is refused
+   with its own reason code until the contract is resolved by the existing contract search
+   AND an ISIN is held for it, read from the broker's contract info or given by the owner
+   (`obliskiq idea isin`): tax lots stay keyed by ISIN (D161). Write the owner's command
+   list that reads the contract info for three screen names on the machine (RUNBOOK).
+2. The analyst may name a stock from the sheet's screen section as well as an instrument
+   from its instrument section; the draft says which. The prompt's hash changes, so these
+   theses are a new segment (D128). A name on neither is dropped, as today.
+3. The hunting share. `thesis.capital_share` becomes the owner's key in config/owner.yaml,
+   set to 1 (D185). The book's capital is that share of investable capital; the reserve's
+   budget is investable capital less what the thesis book holds or has approved, in shadow,
+   paper and live alike (D159 amended). The cash floor is kept. Base size, conviction and
+   the caps keep their keys (D161).
+4. The funding sale. When an approved thesis needs more cash than is free, the reserve
+   sells pro rata across its holdings through the path that funds a dated withdrawal;
+   write no second seller. With no thesis to fund, the core's orders and the simulator's
+   are unchanged (the parity test still passes untouched). A sale the two-month rule or
+   the minimum trade forbids is not made and the thesis waits, inside its entry window.
+5. The digest and `status`: the hunting share, capital held in theses, capital waiting in
+   the reserve, and the year's after-tax growth beside the 50 % bar with the words "bar,
+   not forecast" (D185). No account identifier leaves the machine.
+6. ROADMAP (the queue row, the session log), DECISIONS (real decisions only), CHANGELOG,
+   version (minor). Session 26's and 17's prompts: fix only facts this session changed.
+
+DO NOT BUILD: a rule that times the reserve or the thesis book; stocks outside the SEC
+listings; a route that trades without an ISIN; any change to the option sleeve, the
+breakers, H13 or its lock; the idea ledger (32); a model registry (33); event data (34).
+
+ACCEPTANCE: a screen stock goes from an analyst draft to a shadow fill and an exit (an
+integration test); the same thesis on paper is refused with the reason code while no ISIN
+is held, and accepted once one is (tests); an approved thesis with too little free cash
+produces the reserve's sell intents and then its own entry (test), and none when the
+two-month rule blocks the sale (test); the core's parity test is unedited and green; no
+negative cash in any currency at any step (property test); `make check` green.
+```
+
+---
+
+## Session 32 — Idea ledger
+
+**Launcher:** `Execute Session 32 exactly as specified in docs/SESSION_PROMPTS.md on main.` (model: Opus 5.5, effort xhigh; network: Custom)
+
+```
+You are building ObliskIQ, session 32. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.9, §5.19 and DECISIONS D62, D128, D156, D165, D169,
+D185, D187; research/preregistrations/thesis-book.md and scoreboard.md whole). No IBKR call,
+no LLM call. Finish with the end-of-session protocol. Decide what this prompt leaves open by
+the rule that costs least machinery and record it in DECISIONS.
+
+PRECONDITION: Session 28 and 18a merged and DECISIONS holds D187. Otherwise STOP.
+
+GOAL: every idea the analyst or the owner writes is graded forward whether or not it trades,
+so that within months the record says which model, prompt and kind of event is right more
+often than chance, and how far a stated probability can be trusted.
+
+READ FIRST, in the code: scoreboard/grading.py, calibration.py, rules.py and h13.py (weekly
+cohorts, Newey-West, effective observations, Brier, the verdict), engines/thesis/gate.py
+and grading.py, llm/analyst.py (where a draft is dropped or sent to the intake), research/
+prereg.py (the lock). Extend these; write no second grader.
+
+STEP 1, in its own pull request, merged before Step 2 (AGENTS.md workflow, no version
+change): research/preregistrations/idea-ledger.md from the template, with its lock, H14 in
+the pattern registry. It fixes, before any call is graded:
+- The population: every draft and owner idea that passes the gate's checks other than the
+  free slot and the size; one call per instrument and segment while an earlier one is open.
+- A call's outcome at its own levels on daily closes: target first, invalidation first, or
+  the close at the horizon; its return from the first close after it was written, less the
+  equity reference's over the same span, after the cost model's spread and commission.
+- The statistic: the mean excess return per weekly cohort with Newey-West, the verdict by
+  D62 from scoreboard.md's minimum of cohorts and effective observations, per segment,
+  per source and per event tag, every group a test in the adjustment.
+- Calibration: the Brier score of the stated probability of reaching the target against
+  the segment's own base rate, a reliability table, and the minimum sample before either is
+  read.
+- The rank rule: once a segment passes the calibration minimum, slots are offered to its
+  calls in order of calibrated probability times the target's gain less the complement
+  times the invalidation's loss; before that, order of arrival (D161). Say whether this
+  touches H13's registered mechanism; if it does, STOP and report, do not edit H13.
+- What the ledger never does: size a position, move capital, or override the gate.
+
+STEP 2
+1. A draft carries the model's probability of reaching the target before the invalidation
+   or the horizon (a schema change: a new segment). Calls are stored with segment, source,
+   event tags (empty until Session 34) and `known_at`; reads are bounded by `as_of`.
+2. Grading runs with the scoreboard after the digest; a call without a close for its
+   instrument is `not evaluable`, never marked at a stale price.
+3. The slot order reads the rank rule only for a segment whose calibration status is
+   `passed`; any other status is order of arrival.
+4. `obliskiq scoreboard ledger` and the weekly report: per segment, calls open and
+   resolved, the mean excess with its interval, Brier against base rate, the verdict or
+   "too few", in plain words a non-specialist reads.
+5. A config key caps the drafts stored per run and per segment.
+
+DO NOT BUILD: any path from the ledger to capital or size; a backtest of past drafts; a
+change to H13, its lock or the thesis gate's checks; new models or prompts (33); events (34).
+
+ACCEPTANCE: the pre-registration and lock are on main before the code; a draft with no free
+slot becomes a graded call (integration test); target-first, invalidation-first and horizon
+outcomes each graded (tests); perturbing prices after `as_of` changes nothing (test); a
+segment below the minimum never orders the slots (test); `make check` green.
+```
+
+---
+
+## Session 33 — Analyst registry and passes
+
+**Launcher:** `Execute Session 33 exactly as specified in docs/SESSION_PROMPTS.md on main.` (model: Sonnet 5.5, effort high; network: Full)
+
+```
+You are building ObliskIQ, session 33. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.10 and DECISIONS D70, D128, D165, D166, D174, D185,
+D187, D188). Network is open for the providers' documentation and, with a key in the
+environment, one live call per provider. No IBKR call. Finish with the end-of-session
+protocol. Decide what this prompt leaves open by the rule that costs least machinery and
+record it in DECISIONS.
+
+PRECONDITION: Sessions 31 and 32 merged. Otherwise STOP.
+
+GOAL: the analyst runs on several models side by side, each a segment the ledger grades, with
+a cheap daily scan, a dossier pass that writes the theses and a weekly review, inside one
+monthly budget the owner sets.
+
+READ FIRST, in the code: llm/transport.py, analyst.py, analyst_prompts.py, panel.py and
+prompts.py, config/llm.yaml and its schema, grid/facts.py, the service's `analyst` job, the
+budget ledger. Read each provider's current model ids, prices and protocol in its own
+documentation and date them in config; never from memory.
+
+DELIVERABLES
+1. The registry in config/llm.yaml: providers (protocol, base URL, the key's environment
+   variable) and models (id, context, prices, dated). Anthropic is added beside Gemini,
+   through the existing transport where its compatible endpoint allows and a second
+   protocol behind the same interface where it does not. A provider without a key is the
+   status `no_key`; nothing falls back to another model unlabelled.
+2. Segments: `analyst.segments`, each naming a scan model, a dossier model, a prompt
+   version and a share of the budget. Every segment runs in shadow and writes to the
+   ledger. `analyst.trading_segment` names the one whose calls may take slots; changing it
+   is an owner setting, audited (D177). Shipped: one segment on the low-cost model alone,
+   one with a mid model for dossiers, one with the strongest model for dossiers.
+3. The passes. Scan (daily): from the sheet, at most `scan.max_candidates` instruments or
+   screen stocks, each with one line of reason and the fact references it rests on. Dossier
+   (per candidate): the thesis as today's draft plus its probability, written from the
+   sheet's lines for that candidate; proposing none is valid. Review (weekly, the segment's
+   dossier model): a critique and a probability for each open thesis and open call,
+   logged and graded like a second opinion; it changes no thesis and triggers no exit.
+4. Budget: one monthly budget, split by the segments' shares; a call whose worst-case cost
+   would pass its segment's share is not made and the segment's status is `budget`. The
+   digest shows spend per segment and what one resolved call has cost.
+5. Every prompt keeps the rules in force: facts and ideas are escaped untrusted data, no
+   account identifier or balance, structured answers validated with one retry, then closed.
+6. docs/RUNBOOK.md: the owner's steps for the keys and the budget key. docs/knowledge: what
+   each provider answered, dated. ROADMAP, DECISIONS, CHANGELOG, version (minor).
+
+DO NOT BUILD: Session 16's evaluation set, failover or other roles; any import of
+`decision/` or `execution/` from `llm/`; a path by which a model sizes, orders, exits or
+overrides a gate; an automatic choice of the trading segment; filing text or events (34).
+
+ACCEPTANCE: fakes for every provider in tests, no network; two segments on one sheet give
+two sets of calls with distinct hashes (test); a missing key and an exhausted share give
+their statuses and no call (tests); a review changes no thesis (test); the secret scan and
+the import contract pass; `make check` green.
+```
+
+---
+
+## Session 34 — Events and company text
+
+**Launcher:** `Execute Session 34 exactly as specified in docs/SESSION_PROMPTS.md on main.` (model: Sonnet 5.5, effort high; network: Full)
+
+```
+You are building ObliskIQ, session 34. AGENTS.md is your operating manual; MASTER_PLAN.md the
+design (read §5.5 "The thesis book", §5.7, §5.18 and DECISIONS D154, D165, D180, D183, D187,
+D188, D189; docs/knowledge/research-sources.md). Network is open, to audit sources and
+record fixtures. No IBKR call, no bought data. Finish with the end-of-session protocol.
+Decide what this prompt leaves open by the rule that costs least machinery and record it in
+DECISIONS.
+
+PRECONDITION: Session 33 merged. Otherwise STOP.
+
+GOAL: the analyst knows what is about to happen to a company and reads what the company
+itself has filed, every item collected forward and dated, so that each call carries the kind
+of event behind it and the ledger grades each kind apart.
+
+READ FIRST, in the code: data/events and data/insiders (the SEC's pacing and User-Agent),
+data/stocks and data/runner.py (statuses and run records), llm/extractor.py, grid/facts.py
+and the analyst's dossier pass, the ledger's event tags (Session 32).
+
+STEP 1 — Source audit, written to docs/knowledge/research-sources.md before any collector:
+for each event below, the free source that states it, what it answered today, how late it
+is and what it omits. An event with no free source that states it is the status `no_source`
+and is not built; it is never inferred from prices or estimated.
+
+DELIVERABLES
+1. Collectors under data/events, each with its status and run record, every row stamped
+   `known_at`, every read bounded by `as_of`:
+   a. Filings from the SEC's indexes for the listed names: 8-K with its item numbers
+      (results, agreements, departures, guidance where an item states it), registration and
+      pricing prospectuses of an IPO, spin-off registrations, Form 4 as already built.
+   b. Results dates: the date a company has announced, from the source the audit found;
+      the day results were filed, from the 8-K. An expected date nobody stated is absent.
+   c. IPO terms read from the pricing prospectus: offer price, shares, and the lock-up's
+      length where the text states one, marked `stated`, with the day it ends.
+   d. Index changes, where the audit found a source that states them.
+2. The sheet gains an `events` section: for the next and the last `events.window_days`,
+   one dated line per event of a listed name that passes the screen's floors, each with
+   its kind. The section list is in the segment hash, so these theses are a new segment.
+3. Event tags: a draft names the event lines it rests on and its call carries their kinds;
+   the ledger groups by them (H14 already registers the tag as a group).
+4. The dossier's text: for a candidate, the business, risk and management-discussion
+   sections of its latest annual and quarterly reports and its 8-Ks of the last
+   `dossier.lookback_days`, each cut to a configured length, stored as read with its
+   accession number, escaped as untrusted data in the prompt. A filing that cannot be
+   fetched or parsed is a status line in the dossier, never an empty section.
+5. The digest: one line per collector's status and the count of events ahead.
+6. ROADMAP, DECISIONS (real decisions only), CHANGELOG, version (minor).
+
+DO NOT BUILD: a detector, score or weight for any event; a backtest or event study (a rule
+history can test goes through Session 21 under D154); a paid calendar, transcripts or
+estimates; events outside the SEC's listed names; any order, size or gate change.
+
+ACCEPTANCE: fixtures recorded live with sidecar notes, no network in tests; perturbing a row
+with `known_at` after `as_of` changes neither the sheet nor a dossier (test); a lock-up the
+prospectus does not state yields no date (test); a failed fetch yields its status (test); a
+call written from an event line carries its kind into the ledger (integration test);
+`make check` green.
 ```
 
 ---
