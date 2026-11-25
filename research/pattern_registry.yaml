@@ -227,6 +227,7 @@ patterns:
     title: Every written idea graded forward at its own levels, whether or not it trades
     status: pre-registered
     preregistration: research/preregistrations/idea-ledger.md
+    lock: research/preregistrations/idea-ledger.lock
   - id: options-for-theses
     hypothesis: H8
     title: A long option against the same thesis held in its underlying
