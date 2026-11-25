@@ -31,7 +31,9 @@ vehicles:
     same_index: true
 
 core:
-  # The reserve: what the core engine holds with the capital the Hunter does not. D50 is global
-  # equity with a slow, tax-aware trend brake. Your ruling of 2026-11-09 (DECISIONS D147); the
-  # expert default stays A, the static risk balance.
-  variant: D50
+  # The reserve: what the core engine holds with the capital the Hunter does not. A is the
+  # static risk balance: government bonds, inflation-linked bonds, gold, commodities and
+  # equities, each by its risk. Your ruling of 2026-11-25 (DECISIONS D194): capital that waits
+  # for a thesis waits in safer assets. D50, global equity with a trend brake, was your ruling
+  # of 2026-11-09 (D147), when the reserve held most of the account.
+  variant: A

@@ -115,10 +115,10 @@ def test_every_registered_portfolio_is_a_variant_with_its_constants(
 
 
 def test_the_core_runs_the_owners_choice(shipped_settings: ObliskConfig) -> None:
-    # DECISIONS D147: the reserve runs D50, global equity with the trend tilt as an overlay to cash.
-    assert shipped_settings.core.variant == "D50"
+    # DECISIONS D194: the reserve runs A, the static risk balance with no trend tilt.
+    assert shipped_settings.core.variant == "A"
     variant = build_variant(shipped_settings)
-    assert (variant.name, variant.tilts, variant.buy_and_hold) == ("D50", True, False)
+    assert (variant.name, variant.tilts, variant.buy_and_hold) == ("A", False, False)
 
 
 @pytest.mark.parametrize("name", ["A", "C"])

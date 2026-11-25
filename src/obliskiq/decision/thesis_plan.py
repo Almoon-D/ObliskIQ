@@ -100,6 +100,8 @@ class ThesisPlan:
     decisions: list[ThesisDecision] = field(default_factory=list)
     blocked: str | None = None
     entries_blocked: str | None = None
+    #: Why new theses are entered below their size (the loss brake), when they are.
+    entries_reduced: str | None = None
     #: The twins of option theses that reached one of their thesis's exits this cycle.
     twins: list[TwinClose] = field(default_factory=list)
 
@@ -115,6 +117,8 @@ class ThesisPlan:
             lines.append(f"  nothing is decided: {self.blocked}")
         if self.entries_blocked is not None:
             lines.append(f"  no entry now: {self.entries_blocked}")
+        if self.entries_reduced is not None:
+            lines.append(f"  smaller entries now: {self.entries_reduced}")
         if not self.decisions and self.blocked is None:
             lines.append("  no open thesis: the book holds nothing")
         for d in self.decisions:
@@ -151,3 +155,5 @@ class BookRead:
     #: analyst thesis's segment.
     holdbacks: Holdbacks | None = None
     segments: Mapping[int, str] = field(default_factory=dict)
+    #: The share of its size a new thesis is entered at (the loss brake's, D193).
+    entry_size: Decimal = Decimal(1)

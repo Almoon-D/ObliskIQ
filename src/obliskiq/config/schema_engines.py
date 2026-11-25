@@ -6,6 +6,7 @@ engine's stops and rules, the FX engine and the commodity engine (lite's ``optio
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+import itertools
 from decimal import Decimal
 from typing import Annotated, Literal, Self
 
@@ -90,6 +91,26 @@ class EquityRiskConfig(FrozenModel):
     pre_earnings_range_decile_trigger: Share
 
 
+class LossBrakeStep(FrozenModel):
+    """From a fall of ``fall`` on, a new thesis is entered at ``entry_size`` of its size."""
+
+    fall: QuotedFraction
+    entry_size: Annotated[Decimal, Field(ge=0, lt=1, allow_inf_nan=False)]
+
+
+class LossBrakeConfig(FrozenModel):
+    """The loss brake's steps, each deeper and smaller than the one before (DECISIONS D193)."""
+
+    steps: Annotated[tuple[LossBrakeStep, ...], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def _steps_deepen(self) -> Self:
+        for before, after in itertools.pairwise(self.steps):
+            if after.fall <= before.fall or after.entry_size >= before.entry_size:
+                raise ValueError("each step has a deeper fall and a smaller entry_size")
+        return self
+
+
 class PortfolioCircuitBreakerConfig(FrozenModel):
     """lite's ``portfolio_circuit_breaker`` keys, the hard breaker's threshold and what both
     are measured with (MASTER_PLAN §5.11)."""
@@ -101,6 +122,7 @@ class PortfolioCircuitBreakerConfig(FrozenModel):
     hard_drawdown_pct: QuotedFraction
     close_cycle: Identifier
     max_close_age_days: PositiveInt
+    loss_brake: LossBrakeConfig
     equity_reference_conid: PositiveInt
 
     @model_validator(mode="after")

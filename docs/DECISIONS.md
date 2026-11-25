@@ -4237,3 +4237,37 @@ is the owner's checklist, not its design; D185 chose the right engine and left t
   what can be traded of a listing is its dated events (D189).
 
 Rejected: recording either ruling for the owner; a brake that raises risk to recover a miss.
+
+### D193 · A loss brake in absolute terms, and the bar read over three years (§1, §5.11, §11; amends D147, D163, D185)
+
+The owner's ruling of 2026-11-25, on D192's first question: yes, at 10 % and 20 %.
+
+- **The bar.** 50 % a year is read as the compound after-tax growth of the last three years,
+  shown beside the current year's. A year below it is no miss to recover: nothing in the
+  machine raises risk because a year fell short.
+- **The brake.** The managed book's own fall from its highest daily close since the last
+  reset, flows neutralised, nothing excused by the equity reference. From 10 % a new thesis is
+  entered at half its size; from 20 % none is entered until the book recovers above that step
+  (`portfolio_circuit_breaker.loss_brake.steps`). No latch and no owner command: it eases as
+  the book recovers. It sells nothing, and the reserve's buys and every exit are untouched.
+- D147's "no drawdown limit" stands for what is held; the brake limits what is added. D163's
+  breakers are unchanged and still read first.
+- **Not braked:** an option's premium, which the option budget sizes; the stop at the second
+  step holds it back like any entry.
+
+Rejected: a brake net of the market (2008 would trip nothing); selling to de-risk (tax and the
+bottom); a latch that needs the owner (a brake that must work when nobody is watching).
+
+### D194 · The reserve runs A, the static risk balance (§1, §5.4, §11; amends D147)
+
+The owner's ruling of 2026-11-25, on D192's second question: capital without a thesis waits
+in safer assets. `core.variant` is A in `config/owner.yaml`.
+
+- Session 4c: A's median after-tax growth was 3.22 % a year with a largest fall of 11 % on the
+  historical path; D50's was 6.49 % with 20 %, and a fall of 30 % on 58.5 % of 20-year paths
+  against 0.1 % for A. D147 took D50 when the reserve held most of the account. Its job is now
+  to hold what the next thesis spends, and that is worth most after a fall.
+- A holds bonds, and bonds fell with equities in 2022: safer, not safe.
+- The price is about three points a year on capital that waits. It is the owner's to pay.
+
+Rejected: a reserve that turns defensive only after a fall (a timing rule with no test, D95).

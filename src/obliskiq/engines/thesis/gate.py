@@ -215,6 +215,9 @@ class GateFacts:
     #: The conviction an unapproved thesis is sized at when it is not its own (``normal`` while
     #: H13 holds its level back); ``None``: its own.
     sized_as: Conviction | None = None
+    #: The share of its size an unapproved thesis is entered at: below one while the loss brake
+    #: is on (``decision/breakers.py``; DECISIONS D193).
+    entry_size: Decimal = ONE
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,7 +344,9 @@ class ThesisGate:
             if facts.capital <= ZERO:
                 found.append(Finding(Reason.NO_CAPITAL, "the book has no capital in this mode"))
                 return Verdict(tuple(found))
-            size = position_size(facts.capital, facts.sized_as or thesis.conviction, self._thesis)
+            size = facts.entry_size * position_size(
+                facts.capital, facts.sized_as or thesis.conviction, self._thesis
+            )
             self._book(found, instrument, size, facts)
         if facts.rate is None:
             found.append(Finding(Reason.NO_QUOTE, f"{instrument.currency} has no rate to the base"))

@@ -21,6 +21,11 @@ readings to trip.
   forced to shadow and the trip is latched in the store until ``obliskiq breakers reset``; a
   latched book buys nothing in any mode.
 
+* **Loss brake** (DECISIONS D193). The same closes as the hard breaker, the book's fall alone:
+  nothing is excused by the reference, so a year in which everything falls is braked too. At each
+  of ``loss_brake.steps`` a new thesis is entered at that step's share of its size, and at a
+  share of zero none is entered. It has no latch: the brake eases as the book recovers.
+
 **Honest states.** Fewer than ``min_observations`` closes in scope: ``n/a``, never "fine" and
 never a freeze (a book that has just started has no fall to measure). The managed value not
 readable now, the flows not valuable, or a last close older than ``max_close_age_days``:
@@ -37,7 +42,7 @@ from decimal import Decimal
 from ..capital.managed import CapitalReader, CapitalView, is_shadow_family
 from ..capital.twr import ExternalFlow, FlowTiming, Reading, reached_on, time_weighted_return
 from ..config.schema import ObliskConfig
-from ..config.schema_engines import PortfolioCircuitBreakerConfig
+from ..config.schema_engines import LossBrakeStep, PortfolioCircuitBreakerConfig
 from ..domain.capital import Deposit, Withdrawal
 from ..domain.orders import ExecutionMode
 from ..errors import ObliskError
@@ -56,6 +61,7 @@ ONE = Decimal(1)
 #: The breakers' names, as the digest, the status and the run log show them.
 ROLLING = "rolling-month"
 HARD = "hard"
+LOSS_BRAKE = "loss brake"
 #: A breaker's states.
 OK = "ok"
 TRIPPED_STATE = "tripped"
@@ -100,6 +106,49 @@ class BreakerState:
 
 
 @dataclass(frozen=True, slots=True)
+class LossBrake:
+    """The loss brake now: the share of its size a new thesis is entered at, and why.
+    ``fall`` is the book's own fall from the close of ``since``, its worst in scope."""
+
+    status: str
+    entry_size: Decimal
+    reason: str
+    fall: Decimal | None = None
+    since: date | None = None
+
+    @property
+    def braking(self) -> bool:
+        return self.entry_size < ONE
+
+    def line(self) -> str:
+        return f"{LOSS_BRAKE}: {self.status} ({self.reason})"
+
+
+def loss_brake(
+    steps: Sequence[LossBrakeStep], scope: Sequence[tuple[ManagedReading, Decimal]], index: Decimal
+) -> LossBrake:
+    """The brake over the closes of ``scope`` (each with its flow-neutral index), measured on
+    ``index``."""
+    since, peak = max(scope, key=lambda found: (found[1], found[0].as_of))
+    fall = max(ZERO, ONE - index / peak)
+    size = ONE
+    for step in steps:
+        if fall >= step.fall:
+            size = step.entry_size
+    what = f"the book fell {_percent(fall)} from its highest close, of {since.as_of.isoformat()}"
+    if size == ONE:
+        return LossBrake(
+            OK, ONE, f"{what}; it brakes from {_percent(steps[0].fall)}", fall, since.as_of
+        )
+    effect = (
+        "no new thesis is entered until it recovers"
+        if size == ZERO
+        else f"a new thesis is entered at {_percent(size)} of its size"
+    )
+    return LossBrake(TRIPPED_STATE, size, f"{what}: {effect}", fall, since.as_of)
+
+
+@dataclass(frozen=True, slots=True)
 class BreakerReport:
     """Both breakers of one book. ``live``: measured on a value read now; otherwise on the last
     stored reading (``measured_at``)."""
@@ -114,6 +163,21 @@ class BreakerReport:
     measured_at: datetime | None = None
     #: The trips latched on the other books: the mode stood down from one of them.
     elsewhere: tuple[BreakerEvent, ...] = ()
+    #: The loss brake; ``None`` where nothing was measured (it then brakes nothing, and the
+    #: breakers' own state says whether a buy is refused).
+    brake: LossBrake | None = None
+
+    @property
+    def entry_size(self) -> Decimal:
+        """The share of its size a new thesis is entered at."""
+        return ONE if self.brake is None else self.brake.entry_size
+
+    @property
+    def entries_stopped(self) -> str | None:
+        """Why no new thesis is entered now; ``None`` when one may be."""
+        if self.brake is None or self.brake.entry_size > ZERO:
+            return None
+        return f"the {LOSS_BRAKE} is on ({self.brake.reason})"
 
     @property
     def buys_refused(self) -> str | None:
@@ -143,7 +207,12 @@ class BreakerReport:
             f"({event.detail}); it holds until `obliskiq breakers reset`"
             for event in self.elsewhere
         ]
-        return [self.rolling.line(), self.hard.line(), *other, *measured]
+        brake = (
+            [self.brake.line()]
+            if self.brake is not None
+            else [f"{LOSS_BRAKE}: {self.hard.status} ({self.hard.reason})"]
+        )
+        return [self.rolling.line(), self.hard.line(), *brake, *other, *measured]
 
 
 def book_of(mode: ExecutionMode) -> Book:
@@ -274,16 +343,24 @@ def judge(
         minimum=config.min_observations,
         span=f"in the last {config.window_days} days",
     )
+    since_reset = [
+        (close, then) for close, then in indexed if reset is None or close.recorded_at > reset.at
+    ]
     hard = _state(
         HARD,
         config.hard_drawdown_pct,
-        [(close, then) for close, then in indexed if reset is None or close.recorded_at > reset.at],
+        since_reset,
         current,
         index,
         minimum=config.min_observations,
         span="since the last reset" if reset is not None else "so far",
     )
-    return _report(config, book, at, rolling, hard, latched, live, current)
+    brake = (
+        loss_brake(config.loss_brake.steps, since_reset, index)
+        if len(since_reset) >= config.min_observations
+        else None
+    )
+    return replace(_report(config, book, at, rolling, hard, latched, live, current), brake=brake)
 
 
 def _both(

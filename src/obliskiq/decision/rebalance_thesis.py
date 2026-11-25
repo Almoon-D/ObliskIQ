@@ -211,9 +211,12 @@ class ThesisRebalancer:
         )
         if frozen_risk is not None:
             plan.entries_blocked = frozen_risk
-        frozen = (await self._breakers.read(mode, view, cash)).buys_refused
+        breakers = await self._breakers.read(mode, view, cash)
+        frozen = breakers.buys_refused or breakers.entries_stopped
         if frozen is not None:
             plan.entries_blocked = frozen
+        elif breakers.brake is not None and breakers.brake.braking:
+            plan.entries_reduced = breakers.brake.reason
         allocation = await allocation_now(self._worker, self._settings, view.investable, mode)
         plan.capital = allocation.thesis_book
         busy, _ = await self._cash.pending(mode)
@@ -236,6 +239,8 @@ class ThesisRebalancer:
             at=at,
             holdbacks=await self._worker.run(h13_repo.holdbacks) if mode in _LIVE else None,
             segments=await self._worker.run(analyst_repo.thesis_segments),
+            # A stopped brake blocks the entry above; the gate then sizes as it would unbraked.
+            entry_size=breakers.entry_size if breakers.entry_size > ZERO else Decimal(1),
         )
         slots = {t.thesis_id: _slot(t) for t in theses if t.state in SLOT_STATES}
         spent = ZERO
@@ -425,6 +430,7 @@ class ThesisRebalancer:
             slots=slots,
             minimum=read.minimum,
             sized_as=_sized_as(thesis, read),
+            entry_size=read.entry_size,
         )
         judged = self._gate.evaluate(thesis, facts)
         if judged.permanent:

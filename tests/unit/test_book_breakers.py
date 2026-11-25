@@ -212,6 +212,115 @@ def test_a_missing_reference_does_not_matter_while_the_book_is_inside_its_limits
     assert (report.rolling.status, report.hard.status) == (OK, OK)
 
 
+# ── the loss brake ──
+
+
+def test_the_loss_brake_s_steps_are_the_owner_s_ruling(shipped_settings: ObliskConfig) -> None:
+    steps = shipped_settings.portfolio_circuit_breaker.loss_brake.steps
+    assert [(step.fall, step.entry_size) for step in steps] == [
+        (Decimal("0.10"), Decimal("0.5")),
+        (Decimal("0.20"), Decimal(0)),
+    ]
+
+
+def test_a_small_fall_brakes_nothing(shipped_settings: ObliskConfig) -> None:
+    report = judged(shipped_settings, closes("100", "104"), live("95"))
+    assert report.brake is not None
+    assert (report.brake.status, report.entry_size, report.entries_stopped) == (OK, 1, None)
+    assert report.brake.fall == 1 - Decimal(95) / Decimal(104)
+    assert not report.brake.braking
+    assert "loss brake: ok" in report.lines()[2]
+
+
+def test_the_brake_halves_new_entries_in_a_fall_the_market_shares(
+    shipped_settings: ObliskConfig,
+) -> None:
+    """The breakers excuse the market's fall; the brake does not (D193)."""
+    history = closes(("100", "100"), ("100", "100"))
+    report = judged(shipped_settings, history, live("88", "70"))
+    assert (report.rolling.status, report.hard.status) == (OK, OK)
+    assert report.buys_refused is None
+    assert report.brake is not None
+    assert report.brake.braking
+    assert (report.entry_size, report.entries_stopped) == (Decimal("0.5"), None)
+    assert "50.0% of its size" in report.brake.line()
+
+
+def test_the_brake_starts_exactly_at_its_step(shipped_settings: ObliskConfig) -> None:
+    history = closes("100", "100")
+    assert judged(shipped_settings, history, live("90")).entry_size == Decimal("0.5")
+    assert judged(shipped_settings, history, live("90.01")).entry_size == 1
+
+
+def test_at_the_second_step_no_new_thesis_is_entered_and_nothing_else_is_refused(
+    shipped_settings: ObliskConfig,
+) -> None:
+    history = closes(("100", "100"), ("100", "100"))
+    report = judged(shipped_settings, history, live("80", "75"))
+    assert report.buys_refused is None  # the reserve's buys are not the brake's
+    assert report.entry_size == 0
+    assert "the loss brake is on" in str(report.entries_stopped)
+    assert "until it recovers" in str(report.entries_stopped)
+    assert not report.newly_tripped  # it latches nothing and forces no mode
+
+
+def test_the_brake_measures_from_the_highest_close_and_eases_as_the_book_recovers(
+    shipped_settings: ObliskConfig,
+) -> None:
+    history = closes("100", "120", "90")
+    fallen = judged(shipped_settings, history, live("95"))
+    assert fallen.brake is not None
+    assert fallen.brake.since == DAY - timedelta(days=2)  # the close at 120
+    assert fallen.entry_size == 0  # 20.8 % below it
+    assert judged(shipped_settings, history, live("100")).entry_size == Decimal("0.5")
+    assert judged(shipped_settings, history, live("110")).entry_size == 1
+    # A value inside the day never raises the peak the next reading is measured from.
+    assert judged(shipped_settings, closes("100", "100"), live("130")).entry_size == 1
+
+
+def test_a_withdrawal_is_no_fall_to_the_brake(shipped_settings: ObliskConfig) -> None:
+    flows = [ExternalFlow(DAY, Decimal(-30))]
+    report = judged(shipped_settings, closes("100", "100"), live("70"), flows=flows)
+    assert report.entry_size == 1
+
+
+def test_an_unmeasured_or_unreadable_book_has_no_brake_reading(
+    shipped_settings: ObliskConfig,
+) -> None:
+    young = judged(shipped_settings, closes("100"), live("50"))
+    assert (young.brake, young.entry_size, young.entries_stopped) == (None, 1, None)
+    assert young.lines()[2].startswith("loss brake: n/a")
+    unreadable = judged(shipped_settings, closes("100", "100"), "the account cannot be read")
+    assert unreadable.brake is None
+    assert unreadable.buys_refused is not None  # the breakers refuse the buy themselves
+    assert unreadable.lines()[2].startswith("loss brake: unreadable")
+
+
+def test_after_a_reset_the_brake_measures_from_the_closes_that_follow(
+    shipped_settings: ObliskConfig,
+) -> None:
+    history = closes("130", "130", "100", "100")
+    reset = BreakerEvent(
+        history[1].recorded_at + timedelta(hours=1), "broker", "reset", "owner", "reviewed"
+    )
+    assert judged(shipped_settings, history, live("99")).entry_size == 0
+    assert judged(shipped_settings, history, live("99"), reset=reset).entry_size == 1
+
+
+def test_brake_steps_that_do_not_deepen_are_refused(shipped_settings: ObliskConfig) -> None:
+    brake = shipped_settings.portfolio_circuit_breaker.loss_brake
+    first, second = brake.steps
+    for steps in (
+        (second, first),
+        (first, first),
+        (first, second.model_copy(update={"entry_size": Decimal("0.5")})),
+    ):
+        with pytest.raises(ValidationError, match="deeper fall and a smaller entry_size"):
+            type(brake)(steps=steps)
+    with pytest.raises(ValidationError):
+        type(brake)(steps=())
+
+
 def test_the_fall_is_measured_from_every_close_not_only_the_highest(
     shipped_settings: ObliskConfig,
 ) -> None:

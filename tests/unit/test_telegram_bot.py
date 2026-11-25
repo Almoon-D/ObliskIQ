@@ -130,7 +130,7 @@ async def test_reads_answer_in_plain_words(
     assert "0 open thesis(es)" in await bot.handle("/theses")
     assert await bot.handle("/questions") == "no question waits for you"
     settings = await bot.handle("/settings")
-    assert "core.variant: D50" in settings
+    assert "core.variant: A" in settings
     assert "thesis.caps.position = 0.25 (only lower)" in settings
     assert "between 0 and 0.05" in settings
     assert "The service runs on other settings" in settings

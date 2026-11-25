@@ -1,6 +1,6 @@
 # AGENTS.md — ObliskIQ
 
-A global, autonomous wealth manager for one IBKR account: the Hunter, whose working book is the thesis book (written ideas about companies, sectors and the economy from the LLM analyst and the owner, every one graded forward, traded as shares or long options; it may hold all investable capital while its record allows, MASTER_PLAN §5.5, DECISIONS D185) and whose systematic stock book stays unbuilt while no test of it can pass; a reserve where capital without a thesis waits (global equity with a trend brake, §5.4); and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
+A global, autonomous wealth manager for one IBKR account: the Hunter, whose working book is the thesis book (written ideas about companies, sectors and the economy from the LLM analyst and the owner, every one graded forward, traded as shares or long options; it may hold all investable capital while its record allows, MASTER_PLAN §5.5, DECISIONS D185) and whose systematic stock book stays unbuilt while no test of it can pass; a reserve where capital without a thesis waits (a static risk balance of bonds, gold, commodities and equities, §5.4, D194); and a hard decision, risk and execution layer. Python 3.14, Pydantic v2, IBKR Client Portal Web API (the Client Portal Gateway for paper, OAuth 1.0a for live; DECISIONS D42).
 
 ## Read first — your slice, not whole files
 

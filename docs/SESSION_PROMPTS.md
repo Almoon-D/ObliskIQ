@@ -2959,8 +2959,10 @@ DELIVERABLES
    are unchanged (the parity test still passes untouched). A sale the two-month rule or
    the minimum trade forbids is not made and the thesis waits, inside its entry window.
 5. The digest and `status`: the hunting share, capital held in theses, capital waiting in
-   the reserve, and the year's after-tax growth beside the 50 % bar with the words "bar,
-   not forecast" (D185). No account identifier leaves the machine.
+   the reserve, and beside the 50 % bar the compound after-tax growth a year of the last
+   three years (of the record so far while it is shorter, with its length said) and the
+   current year's, with the words "bar, not forecast" (D185, D193). No account identifier
+   leaves the machine.
 6. ROADMAP (the queue row, the session log), DECISIONS (real decisions only), CHANGELOG,
    version (minor). Session 26's and 17's prompts: fix only facts this session changed.
 

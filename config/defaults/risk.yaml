@@ -50,6 +50,15 @@ portfolio_circuit_breaker:
   # new buys are refused until a close is recorded. A judgement: a long weekend passes, a week
   # without a close does not.
   max_close_age_days: 5
+  # The loss brake (DECISIONS D193, the owner's ruling of 2026-11-25): the book's own fall from
+  # its highest daily close since the last reset, with nothing excused by the market's fall. At
+  # each step's fall and beyond, a new thesis is entered at `entry_size` of its size; at "0"
+  # none is entered until the book recovers above that step. Steps deepen in order. It sells
+  # nothing and never raises a size. QUOTED.
+  loss_brake:
+    steps:
+      - {fall: "0.10", entry_size: "0.5"}
+      - {fall: "0.20", entry_size: "0"}
   # The equity reference: the universe instrument (config/universe.yaml) whose unit value is read
   # beside every managed NAV; XDWD, the MSCI World fund quoted in euros on Xetra. A judgement.
   equity_reference_conid: 163606916

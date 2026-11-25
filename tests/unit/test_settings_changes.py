@@ -284,7 +284,7 @@ def test_the_overrides_name_each_default(config_dir: Path) -> None:
     rows = {
         key: (default, value) for key, default, value in owner_overrides(load_config(config_dir))
     }
-    assert rows["core.variant"] == ("A", "D50")
+    assert rows["core.variant"] == ("A", "A")
     assert rows["jurisdiction"] == (None, "es")
 
 
@@ -359,7 +359,7 @@ def test_a_remote_rule_on_text_that_is_no_number_is_refused(config_dir: Path) ->
         {"tighten": [{"key": "core.variant", "tighter": "lower"}], "bounded": []}
     )
     with pytest.raises(SettingsRefusal, match="not a number"):
-        check_remote(propose(load_config(config_dir), "core.variant", "A"), rules)
+        check_remote(propose(load_config(config_dir), "core.variant", "B"), rules)
 
 
 def test_the_channels_are_named() -> None:

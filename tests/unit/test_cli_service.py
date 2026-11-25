@@ -100,9 +100,9 @@ def test_a_dry_run_on_fixtures_prints_a_sensible_plan_and_writes_nothing(
     assert status == EXIT_OK, out + err
     assert "rebalance plan (shadow)" in out
     assert "managed capital 1000.00 (cap: a book of 1000.00 (started at 1000))" in out
-    # The shipped variant (D50, DECISIONS D147) and the roles it holds.
-    assert "variant D50: start" in out
-    for role in ("role world_equity", "role cash"):
+    # The shipped variant (A, DECISIONS D194) and roles it holds.
+    assert "variant A: start" in out
+    for role in ("role world_equity", "role gold"):
         assert role in out
     assert "NAV: 100000" in out
     assert "dry run: nothing was written or sent" in out
