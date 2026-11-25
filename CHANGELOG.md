@@ -5,6 +5,21 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.1.2] - 2026-11-25
+
+Design session: the owner's ruling that ObliskIQ is a wealth manager that hunts with the whole
+account, not a manager of ETFs (DECISIONS D185 to D189). Documents only; no IBKR call.
+
+### Changed
+
+- The thesis book is the return engine and may hold all investable capital while its forward
+  record stays above its boundary; capital without a thesis waits in the reserve, which sells
+  to fund an approved thesis. 50 % a year is the bar every report shows, never a floor.
+- The levers in and out are written down; the mandate is not widened (D186).
+- Sessions 31 to 34 are specified, each with its model and effort: any listed stock and the
+  funding sale, the idea ledger (H14), the analyst on several models, events and company text.
+- `AGENTS.md`, `MASTER_PLAN.md` §1, §5.5, §10 and §11, and the roadmap's next steps say so.
+
 ## [1.1.1] - 2026-11-20
 
 Maintenance: dependencies, and one decision number corrected. No IBKR call.

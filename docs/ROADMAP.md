@@ -5,27 +5,36 @@ its section of `docs/SESSION_PROMPTS.md`; why things are as they are is `docs/DE
 
 ## What runs next
 
-The build is complete and nothing has filled an order yet. In order of value:
+The owner's ruling of 2026-11-25 (DECISIONS D185): this is a wealth manager that hunts with the
+whole account, not a manager of ETFs; the thesis book is the return engine and 50 % a year is
+the bar. Nothing has filled an order yet. In order:
 
 1. **Owner: the checklist below, steps 1 to 10.** The machine, the paper login, the order and
    execution tests, the reserve on paper, `serve`. Every other step is worth nothing until an
    order fills. Each paste is recorded by a short session (docs/RUNBOOK.md).
-2. **Owner: the analyst's key on the machine** (step 1). The thesis book is the only part
-   that can earn far more than the market, and its evidence is forward only: a week it does
-   not run is a week of record lost. Capital follows its graded record without a command.
-3. **Owner: start the stock screen once** (docs/RUNBOOK.md, "The stock screen"): `serve` then
-   collects it; it ranks nothing until twelve months of bars are held.
-4. **Session 20a** (mutation pass, the remainder): any time.
-5. **Session 21** with a new batch, only for a hypothesis to which `obliskiq research power`
-   gives 0.5 or more. None has it today; Sessions 24 and 26 wait on it (D180).
+2. **Owner: the analyst's key on the machine** (step 1) and the stock screen started once
+   (docs/RUNBOOK.md, "The stock screen"). The thesis book's evidence is forward only: a week
+   it does not run is a week of record lost.
+3. **Session 31** (Opus 5.5, xhigh): any listed stock as a thesis, the hunting share, the
+   reserve's funding sale.
+4. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first. Sessions 31
+   and 32 run in either order, and beside steps 1 and 2.
+5. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
+   side, the scan, the dossier and the weekly review. The owner adds an Anthropic key and sets
+   the monthly budget (the session writes the steps).
+6. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
+7. **A design review** (the strongest model available) when the ledger has its first verdict
+   or six months of calls, whichever comes first: keep, change or stop each segment.
 
-Not to do without a new decision: buy a price history, build a Hunter engine or a second one
-for free data, run Sessions 15, 16, 17 or 19a before their conditions.
+No build session needs a model above Opus 5.5 (SESSION_PROMPTS §C). Session 20a (mutation
+pass) waits until an order has filled. Not to do without a new decision: buy a price history,
+build a systematic stock book, run Sessions 15, 16, 17 or 19a before their conditions, widen
+the mandate (D186).
 
-**The 50 % aim, as the evidence stands.** The reserve earned about 6.5 % a year after tax in
-its test. No tested signal adds to it. Only the thesis book, a few concentrated ideas held as
-shares or long options, can reach 50 %, and nothing yet shows that it does: about two years
-of graded calls will (§5.5).
+**The 50 % bar, as the evidence stands.** The reserve earned about 6.5 % a year after tax in
+its test. No tested signal adds to it. Only the thesis book can reach 50 %, and nothing yet
+shows that it does; no unlevered record has sustained it on a whole account. The ledger
+(Session 32) is what shortens the answer from about two years to months.
 
 ## Sessions
 
@@ -64,6 +73,10 @@ of graded calls will (§5.5).
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | done (three silent failures fixed, docs/AUDIT.md; no IBKR call; the owner's checklist below is what remains) | v1.0.0 |
 | 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
 | 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; immature until twelve months of bars are held; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0 |
+| 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | next (D185) | |
+| 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | next, in either order with 31 (D187) | |
+| 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | after 31 and 32 (D188) | |
+| 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
 | 17 | Decision layer, the rest | expression selection, calibrated sizing, expected shortfall, stress | when a funded layer needs it | |
@@ -80,12 +93,30 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
+| Can the account reach the 50 % bar? | Unknown, and unlikely on the record of others: no unlevered whole-account record sustains it. Only the thesis book could; it holds all investable capital by the owner's ruling once promoted, and its record decides whether it keeps it (D185) | `docs/DECISIONS.md` |
 | Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule, the analyst's per segment; the analyst proposes from the service once its key is on the machine | `research/preregistrations/thesis-book.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run; the literature supports less than θ net of decay, costs and tax for every candidate | `research/reports/hunter-feasibility.md` |
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Design session: a wealth manager that hunts (2026-11-25, v1.1.2)
+
+- **Asked** (owner): a full challenge of the project, then its redesign. The aim is not a
+  manager of ETFs; 50 % a year is the least asked; all of the account hunts; safer assets are
+  a hedge and a place to wait; find the levers, data and products that reach the aim.
+- **Found:** the drift to ETFs was by rule (D154 and D162 leave the systematic book unbuilt and
+  85 % in the reserve) while the thesis book, the only engine that could reach the aim, had a
+  tenth of capital, the cheapest model, 5 USD a month and almost no stocks to name.
+- **Decided:** D185 (the whole account hunts through the thesis book; the reserve is where
+  capital waits and sells to fund a thesis; 50 % is a bar no design makes a floor; the
+  architect's dissent on the share is recorded), D186 (the levers in and out; the mandate is
+  not widened), D187 (the idea ledger, H14), D188 (models chosen by their record), D189
+  (events and company text).
+- **Prompts edited:** Sessions 31 to 34 added with their model and effort; Session 16's scope
+  note; §C's rule on models above Opus. Documents only: no code, no config value, no IBKR call.
+- **VERIFY-LIVE:** none new. **Deferred to Session 31:** `thesis.capital_share` in config.
 
 ### Maintenance (2026-11-20, v1.1.1)
 
