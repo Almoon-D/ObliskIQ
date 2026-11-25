@@ -891,3 +891,45 @@ async def test_unreadable_tax_lots_leave_paper_holdings_out_of_the_funding_sale(
     assert funding.refused is not None
     assert "the two-month rule is unchecked" in funding.refused
     assert "EMIM: its tax lots do not account for it" in funding.refused
+
+
+async def test_a_funding_sale_fails_closed_on_what_it_cannot_price_or_place(
+    rig: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await bought(rig, EMIM, "100", "40", sleeve=Sleeve.CORE, at=NOW - timedelta(days=200))
+    await bought(rig, IBGM, "30", "150", sleeve=Sleeve.SATELLITE, at=NOW - timedelta(days=200))
+    parts = capital_parts(rig)
+    await parts.tax.catch_up()
+    view = await funding_view(parts)
+    planner: Any = parts.planner
+
+    def unpriced(*_args: Any, **_kwargs: Any) -> Any:
+        raise TaxError("no lot for the date")
+
+    with monkeypatch.context() as patch:  # lots that cannot price the sale bar it
+        patch.setattr(TaxHooks, "wash_sale_conflict", unpriced)
+        barred = await planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert barred.sales == ()
+    assert "EMIM: its tax lots cannot price the sale" in str(barred.refused)
+    assert "IBGM" not in str(barred.refused)  # a satellite holding is never the reserve's
+    with monkeypatch.context() as patch:  # a cost that cannot be priced sells nothing
+        patch.setattr(planner, "_sale_cost", lambda *_a: None)
+        costless = await planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert "EMIM: the sale's cost cannot be priced" in str(costless.refused)
+
+    def no_calendar(_exchange: str) -> str:
+        raise CalendarError("no calendar")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(planner._calendars, "venue_for_ibkr", no_calendar)
+        uncalendared = await planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert "EMIM: its venue has no calendar" in str(uncalendared.refused)
+    funding = await planner.plan_funding(PAPER, view, D(1000), minimum=D(100))
+    assert funding.refused is None
+
+    async def closed(*_args: Any) -> str:
+        return "EMIM: AEB is not tradable now (closed)"
+
+    monkeypatch.setattr(planner, "_sell", closed)
+    made, waiting = await planner.sell(funding, PAPER, NOW)
+    assert (made, waiting) == ([], ["EMIM: AEB is not tradable now (closed)"])

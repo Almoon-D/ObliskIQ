@@ -1099,3 +1099,30 @@ async def test_an_approved_thesis_without_free_cash_is_funded_by_the_reserve_the
     assert only(plan).action == "enter", plan.render()
     # What the thesis took left the reserve's budget: the reserve does not buy it back.
     assert await core_buys() == before
+
+
+#: A second Xetra fund for a second idea in the same cycle (config/universe.yaml).
+EXV1 = 89005163
+CURRENCY.update({EXV1: "EUR"})
+
+
+async def test_the_reserve_funds_one_thesis_a_cycle_and_counts_its_working_sales(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, capital_share=D(1), cap_base=80000)
+    quote(s, EXV1, "45")
+    await seed_bars(s, EXV1, 45.0)
+    await cycle(s)
+    await work(s, 60)
+    await idea(s, conviction=Conviction.HIGH)
+    await idea(s, symbol="EXV1", conviction=Conviction.HIGH)
+    plan = await cycle(s)
+    first, second = plan.decisions
+    assert first.action == "fund", plan.render()
+    assert second.action == "wait", plan.render()
+    assert "the reserve funds one thesis a cycle" in second.reason
+    # The next cycle, its sales still working, counts their proceeds for the first idea.
+    plan = await cycle(s)
+    waiting = next(d for d in plan.decisions if d.thesis.thesis_id == first.thesis.thesis_id)
+    assert [f.code.value for f in waiting.findings] == ["funding"], plan.render()
+    assert "the reserve's funding sale still works" in waiting.reason

@@ -248,7 +248,9 @@ async def test_the_digest_says_when_the_breakers_cannot_be_read(
         raise sqlite3.OperationalError("disk I/O error")
 
     monkeypatch.setattr(digest_module, "stored_report", broken)
+    monkeypatch.setattr(digest_module, "hunt_reading", broken)
     await s.service.jobs.digest(MONDAY)
     body = s.notifier.digest()
     assert "Breakers: not read" in body
     assert "cannot read: the breakers cannot be read: OperationalError" in body
+    assert "the hunt cannot be measured: OperationalError" in body
