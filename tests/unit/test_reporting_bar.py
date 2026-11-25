@@ -78,8 +78,7 @@ def test_without_two_closes_the_growth_is_not_measured(
     assert (found.growth, found.in_reserve) == (None, None)
     assert found.lines() == [
         "hunting share 100%: 0.00 in theses, the reserve not measured yet",
-        "growth beside the 50% bar: not measured (fewer than two daily closes of the managed "
-        "book)",
+        "growth beside the 50% bar: not measured (fewer than two daily closes of the managed book)",
     ]
 
 
