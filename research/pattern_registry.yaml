@@ -222,6 +222,11 @@ patterns:
     status: pre-registered
     preregistration: research/preregistrations/thesis-book.md
     lock: research/preregistrations/thesis-book.lock
+  - id: idea-ledger
+    hypothesis: H14
+    title: Every written idea graded forward at its own levels, whether or not it trades
+    status: pre-registered
+    preregistration: research/preregistrations/idea-ledger.md
   - id: options-for-theses
     hypothesis: H8
     title: A long option against the same thesis held in its underlying
