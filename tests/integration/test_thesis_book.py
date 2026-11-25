@@ -21,7 +21,7 @@ from obliskiq.cli import idea as idea_cli
 from obliskiq.cli.app import EXIT_INVALID, EXIT_OK, run
 from obliskiq.config import ObliskConfig
 from obliskiq.data.candidates import parse_ishares
-from obliskiq.decision import rebalance_thesis
+from obliskiq.decision import rebalance_thesis, thesis_intake
 from obliskiq.decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
 from obliskiq.decision.thesis_intake import ThesisIntake
 from obliskiq.domain.enums import AssetClass, InstrumentRole
@@ -37,15 +37,19 @@ from obliskiq.domain.orders import (
     ReconcileStatus,
     Sleeve,
 )
-from obliskiq.domain.thesis import Thesis, ThesisState
+from obliskiq.domain.stocks import StockListing
+from obliskiq.domain.thesis import Conviction, Thesis, ThesisDraft, ThesisSource, ThesisState
 from obliskiq.errors import CalendarError, ObliskError
 from obliskiq.execution.instruments import UniverseDirectory, describe_pinned
+from obliskiq.llm.analyst import Proposal
+from obliskiq.llm.analyst_prompts import DraftAnswer
 from obliskiq.orchestration import jobs
 from obliskiq.orchestration.assemble import build_thesis_book
 from obliskiq.orchestration.parts import build_capital
 from obliskiq.store import breakers as breaker_repo
 from obliskiq.store import open_database, repos
 from obliskiq.store import orders as repo
+from obliskiq.store import stocks as stocks_repo
 from obliskiq.store import theses as thesis_repo
 from obliskiq.store import universe as universe_repo
 from obliskiq.store.breakers import ManagedReading
@@ -64,22 +68,36 @@ MONDAY = EUROPE.date()
 HORIZON = "2027-04-30"
 
 
-def sized(settings: ObliskConfig, **thesis: Any) -> ObliskConfig:
+def sized(settings: ObliskConfig, cap_base: int = 100000, **thesis: Any) -> ObliskConfig:
     """A book of 100,000 (the thesis book works on 10,000, 1,250 a normal idea)."""
-    capital = settings.capital.model_copy(update={"cap_base": D(100000)})
-    book = settings.thesis.model_copy(update=thesis)
+    capital = settings.capital.model_copy(update={"cap_base": D(cap_base)})
+    # The share these tests were sized at, below the owner's 1 (D195).
+    book = settings.thesis.model_copy(update={"capital_share": D("0.10"), **thesis})
     return settings.model_copy(update={"capital": capital, "thesis": book})
 
 
-async def seed_bars(s: ServiceRig, conid: int, close: float, volume: float | None = 100000) -> None:
+async def seed_bars(
+    s: ServiceRig,
+    conid: int,
+    close: float,
+    volume: float | None = 100000,
+    *,
+    listed: tuple[str, str, str] | None = None,
+) -> None:
     declared = s.path.settings.universe.pinned(conid)
+    if listed is None:
+        listed = (
+            (f"C{conid}", "TSEJ", "JPY")
+            if declared is None
+            else (declared.symbol, declared.listing_exchange, declared.currency)
+        )
     await s.rig.store(
         repos.upsert_instrument,
         Instrument(
             conid=conid,
-            symbol=f"C{conid}" if declared is None else declared.symbol,
-            listing_exchange="TSEJ" if declared is None else declared.listing_exchange,
-            currency="JPY" if declared is None else declared.currency,
+            symbol=listed[0],
+            listing_exchange=listed[1],
+            currency=listed[2],
             asset_class=AssetClass.STOCK,
             domicile=None,
             ucits=None,
@@ -642,7 +660,7 @@ async def test_a_candidate_that_left_the_holdings_or_ran_out_of_time_ends(
     thesis_book = book(s)
     plan = await thesis_book.survey(ExecutionMode.SHADOW)
     monkey = pytest.MonkeyPatch()
-    monkey.setattr(rebalance_thesis, "find_candidate", lambda *_a, **_k: None)
+    monkey.setattr(thesis_intake, "find_candidate", lambda *_a, **_k: None)
     await thesis_book.apply(plan)
     monkey.undo()
     assert (await log(s))[-1] == "state: unresolved: no stock candidate 'jp:toyota_motor' any more"
@@ -927,3 +945,184 @@ async def test_a_held_back_analyst_segment_is_refused_on_the_live_account(
     refused = await book(s).survey(ExecutionMode.LIVE)
     assert only(refused).action == "refuse"
     assert "analyst segment is no longer traded" in only(refused).reason
+
+
+# ── a stock on the SEC's listings (D195) ──
+
+#: A US common stock the screen names: not in the universe file, no holdings-file line.
+ACME_CIK, ACME_CONID, ACME_ISIN = 1234567, 765432, "US0378331005"
+
+
+async def listed_acme(s: ServiceRig, close: str = "50") -> None:
+    """ACME on the latest listings snapshot, found by IBKR's contract search, quoted, with bars."""
+    known = s.clock.now() - timedelta(days=1)
+    await s.rig.store(
+        stocks_repo.save_snapshot,
+        [
+            StockListing(
+                cik=ACME_CIK, ticker="ACME", name="ACME CORP", exchange="NYSE", venue="XNYS"
+            )
+        ],
+        known_at=known,
+        content_sha256="0" * 64,
+    )
+    # Incorporated in Delaware: a US issuer, whose shares carry no transaction tax.
+    await s.rig.store(stocks_repo.save_company, ACME_CIK, 3571, known_at=known, incorporated="DE")
+    s.broker.contracts[ACME_CONID] = ("ACME", "NYSE", "USD")
+    CURRENCY[ACME_CONID] = "USD"
+    quote(s, ACME_CONID, close)
+    await seed_bars(s, ACME_CONID, float(close), listed=("ACME", "NYSE", "USD"))
+
+
+def acme_draft(**changes: Any) -> ThesisDraft:
+    """The analyst's draft naming ACME from the sheet's stock screen."""
+    fields: dict[str, Any] = {
+        "section": "stock",
+        "symbol": "ACME",
+        "view": "bullish",
+        "expectation": "margins recover",
+        "target": 70.0,
+        "invalidation": 40.0,
+        "horizon": HORIZON,
+        "facts": ["F1"],
+    }
+    answer = DraftAnswer.model_validate({**fields, **changes})
+    return Proposal(1, "{}", (), answer, None).thesis_draft()
+
+
+async def acme_idea(s: ServiceRig) -> Thesis:
+    intake = ThesisIntake(s.path.settings, worker=s.rig.worker, now=s.clock.now)
+    stored = await intake.submit(acme_draft(), actor="analyst")
+    assert not isinstance(stored, list), stored
+    return stored
+
+
+async def test_a_screen_stock_goes_from_an_analyst_draft_to_a_shadow_fill_and_an_exit(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    s.clock.wall.now = NEW_YORK
+    await listed_acme(s)
+    stored = await acme_idea(s)
+    instrument = stored.instrument
+    assert (instrument.symbol, instrument.candidate_key, instrument.isin) == (
+        "ACME",
+        f"sec:{ACME_CIK}",
+        None,
+    )
+    assert (instrument.country, instrument.sector) == ("US", "SIC Manufacturing")
+    assert (stored.source, stored.expression.value) == (ThesisSource.ANALYST, "shares")
+    # Cycle one pins it by the contract search; cycle two enters it, in shadow without an ISIN.
+    plan = await cycle(s)
+    assert only(plan).action == "resolve", plan.render()
+    pinned = (await state(s)).instrument
+    assert (pinned.conid, pinned.listing_exchange, pinned.currency) == (ACME_CONID, "NYSE", "USD")
+    plan = await cycle(s)
+    assert only(plan).action == "enter", plan.render()
+    await work(s)
+    assert s.broker.placements == []  # shadow: nothing reached the broker
+    plan = await cycle(s)
+    assert only(plan).action == "hold", plan.render()
+    quote(s, ACME_CONID, "70.5")
+    plan = await cycle(s)
+    assert (only(plan).action, only(plan).reason) == ("exit", "target")
+    await work(s)
+    plan = await cycle(s)
+    assert (only(plan).action, only(plan).reason) == ("close", "target")
+    (graded,) = await s.rig.store(thesis_repo.grades, as_of=MONDAY)
+    assert graded.reached
+
+
+async def test_a_screen_stock_on_paper_waits_for_its_isin_then_enters(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, paper=True)
+    s.clock.wall.now = NEW_YORK
+    await listed_acme(s)
+    await acme_idea(s)
+    await cycle(s)  # pinned
+    plan = await cycle(s)
+    assert (only(plan).action, codes(plan)) == ("wait", ["no_isin"]), plan.render()
+    assert stock_orders(s, ACME_CONID) == []
+    assert (await state(s)).state is ThesisState.CANDIDATE
+    intake = ThesisIntake(s.path.settings, worker=s.rig.worker, now=s.clock.now)
+    refused = await intake.give_isin(1, "US0378331006", actor="owner")  # a bad check digit
+    assert isinstance(refused, str)
+    given = await intake.give_isin(1, ACME_ISIN, actor="owner")
+    assert not isinstance(given, str), given
+    assert given.instrument.isin == ACME_ISIN
+    plan = await cycle(s)
+    assert only(plan).action == "enter", plan.render()
+    (buy,) = stock_orders(s, ACME_CONID)
+    assert buy["side"] == "BUY"
+    # Once the idea is no longer a candidate its ISIN is fixed.
+    again = await intake.give_isin(1, ACME_ISIN, actor="owner")
+    assert isinstance(again, str)
+
+
+# ── the funding sale (D195) ──
+
+
+async def test_an_approved_thesis_without_free_cash_is_funded_by_the_reserve_then_entered(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    # A book of 80,000, so no order of the reserve's is above the per-order cap.
+    s = await started(make, shipped_settings, capital_share=D(1), cap_base=80000)
+    # The reserve deploys the cash while no thesis is open.
+    plan = await cycle(s)
+    assert plan.decisions == []
+    await work(s, 60)
+    await idea(s, conviction=Conviction.HIGH)
+    plan = await cycle(s)
+    funded = only(plan)
+    assert funded.action == "fund", plan.render()
+    assert funded.funding is not None
+    assert funded.funding.raised >= funded.funding.need
+    assert (await state(s)).state is ThesisState.APPROVED
+    sales = [
+        i
+        for i in await s.rig.store(repo.intents_in_states, list(IntentState))
+        if i.intent.reason == "funding"
+    ]
+    assert sales
+    assert {(i.intent.side, i.intent.sleeve) for i in sales} == {(OrderSide.SELL, Sleeve.CORE)}
+    await work(s, 60)
+
+    async def core_buys() -> int:
+        every = await s.rig.store(repo.intents_in_states, list(IntentState))
+        return sum(
+            1 for i in every if i.intent.sleeve is Sleeve.CORE and i.intent.side is OrderSide.BUY
+        )
+
+    before = await core_buys()
+    plan = await cycle(s)
+    assert only(plan).action == "enter", plan.render()
+    # What the thesis took left the reserve's budget: the reserve does not buy it back.
+    assert await core_buys() == before
+
+
+#: A second Xetra fund for a second idea in the same cycle (config/universe.yaml).
+EXV1 = 89005163
+CURRENCY.update({EXV1: "EUR"})
+
+
+async def test_the_reserve_funds_one_thesis_a_cycle_and_counts_its_working_sales(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, capital_share=D(1), cap_base=80000)
+    quote(s, EXV1, "45")
+    await seed_bars(s, EXV1, 45.0)
+    await cycle(s)
+    await work(s, 60)
+    await idea(s, conviction=Conviction.HIGH)
+    await idea(s, symbol="EXV1", conviction=Conviction.HIGH)
+    plan = await cycle(s)
+    first, second = plan.decisions
+    assert first.action == "fund", plan.render()
+    assert second.action == "wait", plan.render()
+    assert "the reserve funds one thesis a cycle" in second.reason
+    # The next cycle, its sales still working, counts their proceeds for the first idea.
+    plan = await cycle(s)
+    waiting = next(d for d in plan.decisions if d.thesis.thesis_id == first.thesis.thesis_id)
+    assert [f.code.value for f in waiting.findings] == ["funding"], plan.render()
+    assert "the reserve's funding sale still works" in waiting.reason

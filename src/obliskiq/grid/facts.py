@@ -105,6 +105,10 @@ class FactSheet:
     lines: tuple[FactLine, ...]
     instruments: tuple[str, ...] = field(default_factory=tuple)
     closes: Mapping[str, float] = field(default_factory=dict)
+    #: The stock screen's names on the sheet, by ticker, and each one's last close there: a
+    #: thesis may name one as well as an instrument (DECISIONS D195).
+    stocks: tuple[str, ...] = field(default_factory=tuple)
+    stock_closes: Mapping[str, float] = field(default_factory=dict)
 
     def text(self) -> str:
         return "\n".join(line.render() for line in self.lines)
@@ -157,6 +161,7 @@ class FactSheetBuilder:
         self._config = settings.llm.analyst.fact_sheet
         self._drafts: list[tuple[date, str, str, str]] = []
         self._closes: dict[str, float] = {}
+        self._stocks: dict[str, float] = {}
 
     def _add(self, day: date, status: str, section: str, text: str) -> None:
         self._drafts.append((day, status, section, text))
@@ -164,6 +169,7 @@ class FactSheetBuilder:
     def build(self, *, as_of: date) -> FactSheet:
         self._drafts = []
         self._closes = {}
+        self._stocks = {}
         instruments = nameable(self._settings)
         self._instruments(instruments, as_of)
         self._macro(as_of)
@@ -180,7 +186,9 @@ class FactSheetBuilder:
             for n, (day, status, section, text) in enumerate(self._drafts, start=1)
         )
         symbols = tuple(declared.symbol for declared in instruments)
-        return FactSheet(as_of, lines, symbols, dict(self._closes))
+        return FactSheet(
+            as_of, lines, symbols, dict(self._closes), tuple(self._stocks), dict(self._stocks)
+        )
 
     # ── the sections ──
 
@@ -473,6 +481,7 @@ class FactSheetBuilder:
             f"{head}; {screen.listed} names listed, {screen.passing} pass the floors{loaded}",
         )
         for line in screen.lines[: self._config.stock_screen_top]:
+            self._stocks[line.ticker] = line.close
             self._add(
                 line.session,
                 MeasurementStatus.OK.value,

@@ -37,3 +37,11 @@ core:
   # for a thesis waits in safer assets. D50, global equity with a trend brake, was your ruling
   # of 2026-11-09 (D147), when the reserve held most of the account.
   variant: A
+
+# Keep this section last: a test appends a key to it.
+thesis:
+  # The hunting share: the most of investable capital the thesis book, the return engine, may
+  # hold. 1 is all of it, your ruling of 2026-11-25 (DECISIONS D185). Capital no thesis holds
+  # waits in the reserve, which sells to fund each approved thesis. In shadow and paper this is
+  # the book's capital; on the live account H13's record sets the share it may reach.
+  capital_share: "1"

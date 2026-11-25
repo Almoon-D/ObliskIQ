@@ -87,11 +87,11 @@ async def started(make: Any, shipped_settings: ObliskConfig, **kw: Any) -> Servi
         if key in kw
     }
     chain = seed.pop("chain", True)
-    book_share = kw.pop("capital_share", None)
+    # The share these tests were sized at, below the owner's 1 (D195).
+    book_share = kw.pop("capital_share", "0.10")
     settings = sized(shipped_settings, **kw)
-    if book_share is not None:
-        thesis = settings.thesis.model_copy(update={"capital_share": D(book_share)})
-        settings = settings.model_copy(update={"thesis": thesis})
+    thesis = settings.thesis.model_copy(update={"capital_share": D(book_share)})
+    settings = settings.model_copy(update={"thesis": thesis})
     s: ServiceRig = await make(settings=settings)
     s.clock.wall.now = NEW_YORK
     s.broker.cash = {"EUR": (D(200000), None), "USD": (D(20000), D("0.86"))}

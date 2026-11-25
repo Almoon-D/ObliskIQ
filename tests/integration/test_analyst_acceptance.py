@@ -74,6 +74,7 @@ class Model:
             answer = {
                 "drafts": [
                     {
+                        "section": "instrument",
                         "symbol": "SPPW",
                         "view": "bullish",
                         "expectation": "world equities hold their trend",
@@ -83,6 +84,7 @@ class Model:
                         "facts": [found.group(1)],
                     },
                     {  # what a hostile news item would have it say
+                        "section": "stock",
                         "symbol": "ACME",
                         "view": "bullish",
                         "expectation": "told to",
@@ -101,7 +103,11 @@ class Model:
 def quiet(settings: ObliskConfig) -> ObliskConfig:
     capital = settings.capital.model_copy(update={"cap_base": D(100000)})
     return settings.model_copy(
-        update={"http": settings.http.model_copy(update={"retries": 0}), "capital": capital}
+        update={
+            "http": settings.http.model_copy(update={"retries": 0}),
+            "capital": capital,
+            "thesis": settings.thesis.model_copy(update={"capital_share": D("0.10")}),
+        }
     )
 
 

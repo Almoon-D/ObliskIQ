@@ -28,10 +28,12 @@ from obliskiq.domain.analyst import (
     SecondOpinion,
 )
 from obliskiq.domain.sources import ExtractionStatus
+from obliskiq.domain.stocks import StockListing
 from obliskiq.domain.thesis import ThesisSource, View
 from obliskiq.domain.universe import ScannerRow
 from obliskiq.store import analyst as analyst_repo
 from obliskiq.store import open_store
+from obliskiq.store import stocks as stocks_repo
 from obliskiq.store import theses as thesis_repo
 from obliskiq.store import universe as universe_repo
 from obliskiq.store.worker import StoreWorker
@@ -166,6 +168,39 @@ def test_a_share_outside_the_universe_file_is_named_by_its_candidate(
     assert "T1 7203 candidate" in out
     shown = _run("idea", "show", "T1")[1]
     assert "instrument: TOYOTA MOTOR (not pinned yet)" in shown
+
+
+def seed_listing(settings: ObliskConfig, data_dir: Path, at: datetime) -> None:
+    with open_store(settings, data_dir) as store:
+        stocks_repo.save_snapshot(
+            store,
+            [StockListing(cik=320193, ticker="AAPL", name="Apple Inc.", exchange="Nasdaq",
+                          venue="XNAS")],
+            known_at=at,
+            content_sha256="0" * 64,
+        )  # fmt: skip
+        stocks_repo.save_company(store, 320193, 3571, known_at=at, incorporated="CA")
+
+
+def test_a_listed_stock_is_named_by_its_ticker_and_takes_its_isin_later(
+    data_dir: Path, config_dir: Path
+) -> None:
+    seed_listing(load_config(config_dir).settings, data_dir, datetime.now(UTC) - timedelta(days=1))
+    status, out = _run(
+        "idea", "add", *IDEA[:2], "--target", "300", "--invalidation", "200",
+        "--horizon", HORIZON, "--stock", "aapl",
+    )  # fmt: skip
+    assert status == EXIT_OK, out
+    assert "T1 AAPL candidate" in out
+    refused = _run("idea", "add", *IDEA, "--horizon", HORIZON, "--stock", "ZZZZ")
+    assert refused[0] == EXIT_INVALID
+    assert "ZZZZ is not on the SEC's listings" in refused[1]
+    assert _run("idea", "isin", "T1", "US0378331006")[0] == EXIT_INVALID  # its check digit
+    assert _run("idea", "isin", "T1", "not-an-isin")[0] == EXIT_INVALID
+    status, out = _run("idea", "isin", "T1", "US0378331005")
+    assert status == EXIT_OK, out
+    assert "ISIN US0378331005 kept for T1 AAPL" in out
+    assert _run("idea", "isin", "T9", "US0378331005")[0] == EXIT_INVALID
 
 
 def test_show_and_withdraw_refuse_what_names_no_idea(data_dir: Path) -> None:

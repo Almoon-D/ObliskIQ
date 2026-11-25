@@ -46,6 +46,7 @@ from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
 from ..grid.stock_screen import screen_summary
+from ..jurisdiction.tax import TaxPolicy
 from ..store import analyst as analyst_repo
 from ..store import capital as capital_repo
 from ..store import nav as nav_repo
@@ -59,6 +60,7 @@ from ..store.nav import NavReading
 from ..store.orders import StoredIntent
 from ..store.runs import RunRow
 from ..store.worker import StoreWorker
+from .bar import HuntReading, hunt_reading
 
 #: A phase's badge (market-pulse-bot's PHASE_EMOJI).
 PHASE_BADGE = {
@@ -137,6 +139,8 @@ class Digest:
     opinion_scores: list[OpinionScore] = field(default_factory=list)
     #: The stock screen in one line (names listed, names left, its status).
     stock_screen: str | None = None
+    #: The hunting share, the capital in theses and in the reserve, and the bar (D185, D193).
+    hunt: HuntReading | None = None
     questions: list[OwnerQuestion] = field(default_factory=list)
     cash_events: list[CashEvent] = field(default_factory=list)
     intents: list[StoredIntent] = field(default_factory=list)
@@ -182,8 +186,10 @@ async def gather_digest(
     health: Sequence[str],
     alerts: dict[str, str],
     now: Callable[[], datetime],
+    policy: TaxPolicy | None = None,
 ) -> Digest:
-    """Read everything the digest shows, as of ``now``."""
+    """Read everything the digest shows, as of ``now``; ``policy`` prices the year's tax beside
+    the bar."""
     at = now()
     day = at.date()
     start = datetime.combine(day, time.min, tzinfo=UTC)
@@ -215,6 +221,13 @@ async def gather_digest(
             digest.theses = await thesis.survey(digest.mode)
         except ObliskError as exc:
             digest.problems.append(f"the thesis book cannot be surveyed: {exc}")
+    if digest.mode is not None:
+        try:
+            digest.hunt = await worker.run(
+                hunt_reading, settings, digest.mode, as_of=day, policy=policy
+            )
+        except Exception as exc:  # shown as unreadable, never left out
+            digest.problems.append(f"the hunt cannot be measured: {type(exc).__name__}")
     digest.ended = await worker.run(_ended_today, day, start)
     grades = await worker.run(thesis_repo.grades, as_of=day)
     digest.record = record(grades, await worker.run(analyst_repo.thesis_segments))
@@ -429,6 +442,8 @@ def thesis_lines(digest: Digest, rows: int) -> list[str]:
         lines.append("  not surveyed")
     else:
         lines += [f"  {line.strip()}" for line in plan.render().splitlines()[1:]]
+    if digest.hunt is not None:
+        lines += [f"  {line}" for line in digest.hunt.lines()]
     _more(
         lines,
         [

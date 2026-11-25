@@ -716,6 +716,7 @@ class Executor:
             currency=instrument.currency,
             at=self._now(),
             multiplier=instrument.multiplier,
+            issuer_country=instrument.issuer_country,
         )
         if intent.state is IntentState.STAGED:
             await self._book.advance(intent.intent_id, IntentState.SUBMITTED, "simulated in shadow")

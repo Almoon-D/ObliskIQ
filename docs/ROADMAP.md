@@ -20,10 +20,12 @@ the bar. Nothing has filled an order yet. In order:
 4. **Owner: the paper cycle's expectations changed with the reserve** (D194): part D of
    docs/RUNBOOK.md now shows `variant A` and nine roles, some below the minimum trade under a
    small cap.
-5. **Session 31** (Opus 5.5, xhigh): any listed stock as a thesis, the hunting share, the
-   reserve's funding sale.
-6. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first. Sessions 31
-   and 32 run in either order, and beside steps 1 to 4.
+5. **Owner: three screen names' contract info** (docs/RUNBOOK.md, "A listed stock's ISIN"),
+   once the paper login works: whether IBKR states the ISIN decides whether `idea isin` stays
+   the only route (D195). Until then a stock trades in shadow, and on paper once you give its
+   ISIN.
+6. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first, beside
+   steps 1 to 4.
 7. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
    side, the scan, the dossier and the weekly review. The owner adds an Anthropic key and sets
    the monthly budget (the session writes the steps).
@@ -82,7 +84,7 @@ months, and the replay's first reading to days.
 | 20 | Red-team and cleanup | failure-mode audit, mutation tests, `legacy/` deleted, docs truth pass, 1.0.0 | done (three silent failures fixed, docs/AUDIT.md; no IBKR call; the owner's checklist below is what remains) | v1.0.0 |
 | 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
 | 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; ranks after the first pass since v1.2.0, D190; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0, v1.2.0 |
-| 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | next (D185) | |
+| 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | done (paper and live wait for an owner-given ISIN; live keeps its ceilings) | v1.4.0 |
 | 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | next, in either order with 31 (D187) | |
 | 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | after 31 and 32 (D188) | |
 | 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
@@ -110,6 +112,22 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Session 31 — Any listed stock, and the reserve's funding sale (2026-11-25, v1.4.0)
+
+- **Landed:** a name on the SEC's latest listings is a thesis (`idea add --stock`, the analyst's
+  stock section), pinned by the contract search; shadow fills it, paper and live wait with
+  `no_isin` until `idea isin` (D195). `thesis.capital_share` is 1 for the owner; the reserve's
+  budget gives up what the book holds or approved; the thesis step runs before the reserve's;
+  the reservation planner's seller makes the funding sale (D196). The hunt beside the 50 % bar
+  in the digest and `status` (`reporting/bar.py`), after tax on the broker's book.
+- **Found:** shadow never filled a share (no issuer country reached the cost model's tax); a
+  listed stock now carries one from its SEC incorporation. The two-month check of a partial
+  sale is made at the sale's size.
+- **Deferred:** live keeps the satellite ceiling (0.20) and H13's (0.50): an owner ruling.
+  **VERIFY-LIVE:** contract info ISIN; IBKR exchange of SEC listings; `stateOfIncorporation`.
+- **Prompts edited:** Session 26's capital item names D196; Session 17's needed no fact fixed.
+  No IBKR call.
 
 ### Owner rulings: the loss brake and the reserve (2026-11-25, v1.3.0)
 
@@ -650,7 +668,8 @@ settles it.
 | Pins for TOPIX, BARN, LISN and JDEP (`obliskiq universe pin`), and resolved descriptions for the 47 pinned instruments without one (an instrument without one is never ordered) | 8 | the collectors' live round |
 | Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`); Stocks: United States, Australia and Germany were held on the paper account by accepted previews [CP ✓ 2026-10-21] (`docs/knowledge/ibkr-capabilities.md`) | 8 | the capability probe (below), then each venue's first order |
 | A stock candidate's holdings ticker and exchange name to IBKR's symbol and code, per venue (`collectors.candidates.exchanges`; resolution on demand) | 8 | the first candidate a thesis pins |
-| Whether `/iserver/contract/{conid}/info` or `/trsrv/secdef` tells a share from an ETF and carries the ISIN: until read, a share outside the universe file needs a holdings-file equity line and an owner-given ISIN (D159) | 27, 31 | the first candidate a thesis pins |
+| Whether `/iserver/contract/{conid}/info` or `/trsrv/secdef` tells a share from an ETF and carries the ISIN (`obliskiq universe contract` prints its fields for three screen names): until read, a listed stock reaches paper or live only with an owner-given ISIN (`idea isin`, D195) | 27, 31 | the first paper login |
+| IBKR's listing exchange for a SEC NYSE or Nasdaq listing (`sources.stocks.listings.ibkr_exchanges`), and the SEC submissions' `stateOfIncorporation` (the shadow issuer country; the fixtures are trimmed without it) | 31 | the first listed thesis pinned; the next `stock_listings` run |
 | The thesis book on the paper account: an entry with its stop resting at the invalidation, a funded entry in dollars, an exit beside its stop (`decision/rebalance_thesis.py`, fixtures only) | 27 | the first owner idea after the reserve's paper cycle |
 | The capability probe on the paper account (`obliskiq universe capabilities --probe`, whatif only): search, quote, contract rules, algos and a preview per check, on every venue `capabilities.yaml` lists, US and Eurex options included; then the readings recorded in `capabilities.yaml` and `docs/knowledge/ibkr-capabilities.md` by a reviewed change | 9 | the first command list after T1's order test |
 | Order types and algos per asset class, by name (T1 counted 12 types and 10 algos for SPY, 9 types for BHP, without names) | 9 | the capability probe |
@@ -675,6 +694,11 @@ settles it.
 
 ## Follow-ups
 
+- **Session 31:** live keeps `capital.satellite_ceiling` (0.20) and H13's locked share ceiling
+  (0.50) on the thesis book, so the hunting share of 1 holds in shadow and paper only; raising
+  them is an owner ruling and, for H13, a new pre-registration (D196). A listed stock whose
+  SEC incorporation is not a US state has no issuer country and is not filled in shadow; a
+  foreign-code map would price it (D195). A universe stock (FCX) has no issuer country either.
 - **Audit (Session 20):** `engines/risk` (volatility-scaled stops, the averaging-down and
   pre-earnings rules) has no reader until a stock book exists (D181). `cryptography` deprecates
   the finite-field Diffie-Hellman IBKR's OAuth handshake needs: the pin stays below 51 and the

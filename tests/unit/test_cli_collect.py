@@ -349,3 +349,49 @@ def test_load_universe_reads_the_largest_candidates_on_their_home_listing(
     assert "SAP.DE" in asked  # Germany's largest, on its home venue
     assert "AAPL" in asked  # IWDA's US lines are the US's
     assert "ROP.SW" not in asked  # Switzerland is no market of the grid
+
+
+def test_universe_contract_reads_a_listed_stock_s_contract_info(
+    broker: dict[str, Any], config_dir: Path, data_dir: Path
+) -> None:
+    from obliskiq.domain.stocks import StockListing
+    from obliskiq.store import stocks as stocks_repo
+
+    settings = load_config(config_dir).settings
+    with open_store(settings, data_dir) as store:
+        stocks_repo.save_snapshot(
+            store,
+            [
+                StockListing(cik=7, ticker="ACME", name="ACME", exchange="NYSE", venue="XNYS"),
+                StockListing(cik=8, ticker="GONE", name="GONE", exchange="NYSE", venue="XNYS"),
+            ],
+            known_at=datetime.now(UTC) - timedelta(days=1),
+            content_sha256="0" * 64,
+        )
+    broker["arrange"] = lambda market: market.contracts.update({765432: ("ACME", "NYSE", "USD")})
+    status, out = _run("universe", "contract", "ACME", "GONE", "ZZZZ")
+    assert status == EXIT_OK, out
+    assert "GONE: does not resolve: " in out
+    assert (
+        "ACME: conid 765432 (ACME on NYSE, USD); contract info fields: con_id, currency, symbol, "
+        "valid_exchanges"
+    ) in out
+    assert "ZZZZ: not on the SEC's listings with a mapped exchange" in out
+
+
+def test_universe_contract_refuses_without_credentials_and_says_why_it_stopped(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from obliskiq.cli import collect as collect_cli
+    from obliskiq.errors import ObliskError
+
+    status, out = _run("universe", "contract", "ACME")
+    assert status == EXIT_NO_CREDENTIALS, out
+
+    def stopped(*_args: object) -> list[str]:
+        raise ObliskError("the gateway is down")
+
+    monkeypatch.setattr(collect_cli, "_with_collection_path", stopped)
+    monkeypatch.setattr("obliskiq.cli.app._broker_refusal", lambda _env, _out: None)
+    status, out = _run("universe", "contract", "ACME")
+    assert (status, out.strip()) == (EXIT_INVALID, "contract stopped: the gateway is down")

@@ -163,6 +163,7 @@ def test_analyst_without_its_key_is_skipped_and_with_it_proposes(
     answer = {
         "drafts": [
             {
+                "section": "instrument",
                 "symbol": "ACME",
                 "view": "bullish",
                 "expectation": "x",

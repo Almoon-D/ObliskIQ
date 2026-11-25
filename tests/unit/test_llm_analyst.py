@@ -48,11 +48,19 @@ def sheet(*extra: FactLine) -> FactSheet:
         FactLine("F3", AS_OF, "raw", "news", f"fed_press (central_bank): {HOSTILE}"),
         *extra,
     )
-    return FactSheet(AS_OF, lines, ("EMIM", "SPPW", "IGLN"), {"EMIM": 46.42, "SPPW": 45.0})
+    return FactSheet(
+        AS_OF,
+        lines,
+        ("EMIM", "SPPW", "IGLN"),
+        {"EMIM": 46.42, "SPPW": 45.0},
+        ("ACME",),
+        {"ACME": 50.0},
+    )
 
 
 def draft(**changes: Any) -> dict[str, Any]:
     fields: dict[str, Any] = {
+        "section": "instrument",
         "symbol": "EMIM",
         "view": "bullish",
         "expectation": "emerging markets re-rate as the dollar weakens",
@@ -282,6 +290,24 @@ def test_an_opinion_must_cite_lines_of_the_sheet_by_its_date() -> None:
         parse_opinion(opinion(facts=["F4"]), sheet(future))
     with pytest.raises(ValueError, match="probability"):
         parse_opinion(opinion(probability=1.5), sheet())
+
+
+def test_a_stock_on_the_screen_becomes_a_listing_draft_held_as_shares() -> None:
+    proposal = check_draft(
+        1,
+        draft(section="stock", symbol="acme", target=70.0, invalidation=40.0),
+        sheet(),
+        wanted=1,
+        last_day=LAST_DAY,
+    )
+    assert proposal.dropped is None, proposal.dropped
+    made = proposal.thesis_draft()
+    assert (made.symbol, made.listing, made.expression.value) == (None, "ACME", "shares")
+    # A stock is read on the screen alone, and an instrument on the instrument section alone.
+    on_screen = check_draft(1, draft(section="stock"), sheet(), wanted=1, last_day=LAST_DAY)
+    assert on_screen.dropped == "names EMIM, which is not a stock the fact sheet's screen lists"
+    named = check_draft(1, draft(symbol="ACME", target=70.0), sheet(), wanted=1, last_day=LAST_DAY)
+    assert named.dropped == "names ACME, which is not an instrument the fact sheet lists"
 
 
 def test_check_draft_records_the_draft_as_written() -> None:

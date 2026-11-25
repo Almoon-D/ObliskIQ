@@ -64,7 +64,8 @@ def test_the_month_end_run(data_dir: Path) -> None:
     status, out = _run("scoreboard", "month", "--month", "2026-10")
     assert status == EXIT_OK
     assert "month end 2026-10" in out
-    assert "thesis_book -> 10.00%" in out
+    # The owner's share of 1, held to H13's live ceiling.
+    assert "thesis_book -> 50.00%" in out
     status, out = _run("scoreboard", "month", "--month", "2026-10")
     assert "nothing changed" in out
 

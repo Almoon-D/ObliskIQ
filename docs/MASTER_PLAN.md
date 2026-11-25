@@ -442,11 +442,12 @@ honest test is forward: the book exists to produce that record and to trade on i
   trades: a stock, a fund or ETF, an ETC on a commodity or a metal, bonds through a fund. An
   instrument outside the universe file is resolved through IBKR's contract search and joins
   the order path's directory before it trades; one that cannot be resolved, or whose venue
-  has no calendar, is refused.
+  has no calendar, is refused. A US stock on the SEC's listings enters under the SEC's
+  identity; it reaches a broker only with its ISIN, which the tax lots are kept by (D195).
 - **Direction.** Long only (§2). A bearish view is a thesis on what holds or gains in a fall
   (a cash fund, government bonds, gold) or a long put; the book never shorts and holds no
   inverse product. A slot without a thesis holds nothing of its own: its capital stays in
-  the reserve, which sells pro rata to fund an approved thesis (DECISIONS D159, D185).
+  the reserve, which sells pro rata to fund an approved thesis (DECISIONS D159, D185, D196).
 - **Options.** A thesis may be held as a long call or a long put when the options sleeve's
   gates pass (§5.6). Premiums are paid from the book's own capital, never above the option
   budget, and each option is graded beside the same thesis held in its underlying
@@ -466,7 +467,8 @@ honest test is forward: the book exists to produce that record and to trade on i
 - **Capital** follows the forward record (§5.19): shadow and paper first; on the live account
   the hunting share the owner sets (H13's exploration share; `thesis.capital_share`, all
   investable capital by his ruling, D185), kept while the graded record stays above its
-  boundary, by source.
+  boundary, by source; on the live account within the satellite ceiling and H13's locked
+  ceiling until a ruling changes them (D196).
 - **Expectation.** Nothing shows that such a book earns 50 % a year, and most lose to the
   index. An edge that large shows in about two years of graded calls; a small or absent one
   returns it to shadow at one of H13's looks.

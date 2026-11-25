@@ -127,7 +127,8 @@ class Valuer:
         )
         self._facts = universe_tax_facts(settings.universe)
         for share in thesis_repo.pinned_shares(store):
-            self._facts.setdefault(share.conid, TaxFacts(share.conid, share.isin, None, None))
+            if share.isin is not None:
+                self._facts.setdefault(share.conid, TaxFacts(share.conid, share.isin, None, None))
         self.multipliers: dict[str, Decimal] = {}
 
     def unit(self, security: str, on: date) -> Decimal | None:

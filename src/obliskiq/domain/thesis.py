@@ -103,11 +103,22 @@ class LogKind(StrEnum):
     REUNDERWRITE = "reunderwrite"
 
 
+#: What starts the key of a stock named by the SEC's listings (its CIK follows).
+SEC_KEY_PREFIX: Final = "sec:"
+
+
+def sec_key(cik: int) -> str:
+    """The candidate key of the company the SEC lists under ``cik``."""
+    return f"{SEC_KEY_PREFIX}{cik}"
+
+
 class ThesisInstrument(DomainModel):
     """What a thesis trades. A universe instrument is pinned and described when the idea is
-    handed in; a stock candidate outside the universe file (``candidate_key``) carries its ISIN
-    and is pinned (``conid``, listing venue and currency) when IBKR's contract search resolves
-    it. ``sector`` and ``country`` are ``None`` where nothing states them (a broad fund)."""
+    handed in. A share outside the universe file (``candidate_key``) is pinned (``conid``, listing
+    venue and currency) when IBKR's contract search resolves it: a stock candidate of a holdings
+    file carries its ISIN from the start; a stock the SEC lists (its key ``sec:<CIK>``, its
+    ``symbol`` the SEC's ticker) may lack one, and then reaches no broker until the owner gives it
+    (DECISIONS D195). ``sector`` and ``country`` are ``None`` where nothing states them."""
 
     symbol: NonEmptyText
     candidate_key: NonEmptyText | None
@@ -128,21 +139,31 @@ class ThesisInstrument(DomainModel):
             raise ValueError("a pinned instrument names its conid, listing venue and currency")
         if self.candidate_key is None and self.conid is None:
             raise ValueError("a universe instrument is pinned when the idea is handed in")
-        if self.candidate_key is not None and (
-            self.asset_class is not AssetClass.STOCK or self.isin is None
-        ):
-            raise ValueError("a stock candidate is a share and carries its ISIN")
+        if self.candidate_key is not None and self.asset_class is not AssetClass.STOCK:
+            raise ValueError("a share outside the universe file is a share")
+        if self.candidate_key is not None and self.isin is None and self.sec_cik is None:
+            raise ValueError("a stock candidate of a holdings file carries its ISIN")
         return self
 
     @property
     def pinned(self) -> bool:
         return self.conid is not None
 
+    @property
+    def sec_cik(self) -> int | None:
+        """The SEC's CIK of a stock named by its listings; ``None`` for any other instrument."""
+        key = self.candidate_key
+        if key is None or not key.startswith(SEC_KEY_PREFIX):
+            return None
+        digits = key.removeprefix(SEC_KEY_PREFIX)
+        return int(digits) if digits.isdecimal() else None
+
 
 class ThesisDraft(DomainModel):
-    """An idea as a source hands it in. Exactly one of ``symbol`` (a universe instrument) and
-    ``candidate`` (a stock candidate's key, with its ``isin``) names the instrument. A field left
-    out is ``None``: the intake refuses the draft and says which."""
+    """An idea as a source hands it in. Exactly one of ``symbol`` (a universe instrument),
+    ``candidate`` (a stock candidate's key, with its ``isin``) and ``listing`` (a ticker on the
+    SEC's latest listings, its ``isin`` optional) names the instrument. A field left out is
+    ``None``: the intake refuses the draft and says which."""
 
     source: ThesisSource
     conviction: Conviction = Conviction.NORMAL
@@ -150,6 +171,7 @@ class ThesisDraft(DomainModel):
     expression: Expression = Expression.SHARES
     symbol: NonEmptyText | None = None
     candidate: NonEmptyText | None = None
+    listing: NonEmptyText | None = None
     isin: Isin | None = None
     expectation: str | None = None
     target: Decimal | None = None

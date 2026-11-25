@@ -277,7 +277,8 @@ class TaxBook:
         """The engine as saved. The shares a thesis pinned outside the universe file are read
         first: their theses carry the ISIN the lots are kept by."""
         for share in await self._worker.run(thesis_repo.pinned_shares):
-            self._facts[share.conid] = TaxFacts(share.conid, share.isin, None, None)
+            if share.isin is not None:  # a listed stock without one trades in shadow alone
+                self._facts[share.conid] = TaxFacts(share.conid, share.isin, None, None)
         return self._engine_from(await self._worker.run(lots_repo.load_tax_state))
 
     async def hooks(self) -> TaxHooks:

@@ -367,6 +367,56 @@ def _universe_pin(loaded: Loaded, out: TextIO) -> int:
     return EXIT_INVALID if said.startswith("refused") else EXIT_OK
 
 
+def _universe_contract(loaded: Loaded, out: TextIO) -> int:
+    """Each listed stock's contract as IBKR answers it, read-only: what the contract search
+    resolves the SEC's ticker to, and every field its contract info carries, so the machine shows
+    whether the broker states an ISIN (DECISIONS D195; VERIFY-LIVE(contract info ISIN))."""
+    from ..decision.thesis_intake import find_listing, listing_candidate
+    from .app import _broker_refusal
+
+    refused = _broker_refusal(loaded.env, out)
+    if refused is not None:
+        return refused
+    settings = loaded.config.settings
+
+    async def read(path: OrderPath) -> list[str]:
+        today = utc_now().date()
+        lines: list[str] = []
+        for ticker in loaded.args.tickers:
+            listing = await path.worker.run(find_listing, as_of=today, ticker=ticker)
+            candidate = None if listing is None else listing_candidate(settings, listing)
+            if listing is None or candidate is None:
+                lines.append(f"{ticker}: not on the SEC's listings with a mapped exchange")
+                continue
+            resolution = await resolve_candidate(
+                path.client.secdef, candidate, at=utc_now(), pinned_for=None
+            )
+            if resolution.conid is None:
+                lines.append(f"{ticker}: does not resolve: {resolution.failure}")
+                continue
+            fields = await path.client.secdef.info_fields(resolution.conid)
+            lines.append(
+                f"{ticker}: conid {resolution.conid} ({resolution.symbol} on "
+                f"{resolution.listing_exchange}, {resolution.currency}); contract info fields: "
+                f"{', '.join(sorted(fields)) or 'none'}"
+            )
+            lines += [
+                f"  {key}: {value}"
+                for key, value in sorted(fields.items())
+                if "isin" in key.lower()
+            ]
+        return lines
+
+    try:
+        said = _with_collection_path(loaded, read)
+    except ObliskError as exc:
+        print(f"contract stopped: {exc}", file=out)
+        return EXIT_INVALID
+    for line in said:
+        print(line, file=out)
+    return EXIT_OK
+
+
 def add_collect_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     collect = commands.add_parser("collect", help="run a market-data collector by hand")
     collect.add_argument(
@@ -386,4 +436,9 @@ def add_collect_commands(commands: argparse._SubParsersAction[argparse.ArgumentP
     pin.add_argument("--candidate", help="a stock candidate's key (country:name)")
     pin.add_argument("--thesis", help="the thesis that needs the candidate")
     pin.set_defaults(handler=_universe_pin)
+    contract = actions.add_parser(
+        "contract", help="read a listed stock's IBKR contract and its fields (read-only)"
+    )
+    contract.add_argument("tickers", nargs="+", help="tickers on the SEC's listings")
+    contract.set_defaults(handler=_universe_contract)
     add_vehicle_commands(actions)

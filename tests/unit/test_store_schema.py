@@ -395,6 +395,8 @@ SHAPE = {
     "stock_bars": (
         "symbol:TEXT!*, session:TEXT!*, close:REAL!, volume:REAL, change:REAL, known_at:TEXT!"
     ),
+    # 020_stock_incorporations
+    "stock_incorporations": "cik:INTEGER*, code:TEXT, known_at:TEXT!",
 }
 
 INDEXES = {

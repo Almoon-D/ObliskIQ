@@ -27,9 +27,10 @@ from ..scoreboard.run import GradeBook, PerformanceView
 from ..scoreboard.tca import TcaReport
 from ..store.h13 import H13Look
 from ..store.scoreboard import AllocationEvent, Look
+from .bar import BAR_GROWTH
 
 #: The owner's aspiration, a year (DECISIONS D153): shown as a distance, never a forecast.
-ASPIRATION = Decimal("0.50")
+ASPIRATION = BAR_GROWTH
 #: Lines of the Telegram summary's record list before "and N more".
 SUMMARY_ROWS = 6
 

@@ -7,9 +7,10 @@ day's close at ``portfolio_circuit_breaker.close_cycle``, and the book's breaker
 hard breaker stands the mode down to shadow, latches and alerts, and the rest of the cycle runs
 in shadow), ``reserve`` (the owner questions whose deadline
 passed take their default, then the reservation planner's survey, questions and today's sales,
-``capital/planner.py``), ``rebalance`` (the core engine's target portfolio against the book, as
-intents, ``decision/rebalance_core.py``), ``thesis`` (the thesis book's entries and exits, as
-intents, ``decision/rebalance_thesis.py``) and ``execute`` (the executor's cycle: sync, settle
+``capital/planner.py``), ``thesis`` (the thesis book's entries, exits and funding sales, as
+intents, ``decision/rebalance_thesis.py``), ``rebalance`` (the core engine's target portfolio
+against the book, as intents, ``decision/rebalance_core.py``: after the thesis book, so what it
+approved has left the reserve's budget, D195) and ``execute`` (the executor's cycle: sync, settle
 exits, expire, follow fills, reprice, place with funding, protect, repatriate, reconcile). A dry
 run reads and plans, and writes nothing: no NAV row, no run record, no question, no intent, no
 order. The owner hears a run summary when a cycle did something or something failed, and every
@@ -79,7 +80,7 @@ from .scoreboard_jobs import ScoreboardJobs
 log = get_logger("orchestration.jobs")
 
 #: The run log's names for the steps of a cycle and of the digest.
-CYCLE_STEPS = ("nav", "breakers", "reserve", "rebalance", "thesis", "execute")
+CYCLE_STEPS = ("nav", "breakers", "reserve", "thesis", "rebalance", "execute")
 DIGEST_STEPS = ("digest", "dashboard")
 #: Alert sources: the job whose rounds raise and clear a condition.
 HEARTBEAT = "heartbeat"
@@ -197,16 +198,8 @@ class Jobs:
                 result.reservations, result.planner = reserved
                 self._reservation_alerts(*reserved)
 
-            async def rebalance() -> tuple[RebalancePlan, list[OrderIntent]]:
-                plan = await self._rebalancer.survey(mode, rehearsal=dry_run)
-                return plan, [] if dry_run else await self._rebalancer.apply(plan)
-
-            planned = await record.step(
-                "rebalance", rebalance, lambda done: _judge_plan(done, dry_run=dry_run)
-            )
-            if planned is not None:
-                result.plan, result.made = planned
-
+            # The thesis book decides before the reserve: an idea takes free cash first, and
+            # what it approves leaves the reserve's budget before the reserve deploys (D195).
             async def theses() -> tuple[ThesisPlan, list[OrderIntent]]:
                 plan = await self._thesis.survey(mode, rehearsal=dry_run)
                 return plan, [] if dry_run else await self._thesis.apply(plan)
@@ -216,7 +209,18 @@ class Jobs:
             )
             if booked is not None:
                 result.theses = booked[0]
-                result.made = [*result.made, *booked[1]]
+                result.made = list(booked[1])
+
+            async def rebalance() -> tuple[RebalancePlan, list[OrderIntent]]:
+                plan = await self._rebalancer.survey(mode, rehearsal=dry_run)
+                return plan, [] if dry_run else await self._rebalancer.apply(plan)
+
+            planned = await record.step(
+                "rebalance", rebalance, lambda done: _judge_plan(done, dry_run=dry_run)
+            )
+            if planned is not None:
+                result.plan = planned[0]
+                result.made = [*result.made, *planned[1]]
             if dry_run:
                 record.outcomes.append(StepOutcome("execute", SKIPPED, "dry run"))
             else:
@@ -611,6 +615,7 @@ class Jobs:
                 health=self.health_lines(),
                 alerts=self._reporter.book.active,
                 now=self._now,
+                policy=self._capital.tax.policy,
             )
             subject, body = render_digest(
                 digest,

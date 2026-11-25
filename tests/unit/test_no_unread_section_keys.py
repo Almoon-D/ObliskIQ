@@ -37,6 +37,7 @@ SECTION_FILES = {
             "markets",
             "tone_lexicon",
             "exchanges",
+            "ibkr_exchanges",
             "inputs",
         }
     ),

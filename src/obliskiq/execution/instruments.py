@@ -71,6 +71,7 @@ def share_instrument(share: PinnedShare) -> TradedInstrument:
         multiplier=UNIT_MULTIPLIER,
         underlying_conid=None,
         expiry=None,
+        issuer_country=share.country,
     )
 
 

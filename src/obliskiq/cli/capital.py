@@ -434,7 +434,11 @@ def _tax_report(loaded: Loaded, out: TextIO) -> int:
             str(conid): facts.isin for conid, facts in universe_tax_facts(settings.universe).items()
         }
         identities.update(
-            {str(s.conid): s.isin for s in await worker.run(thesis_repo.pinned_shares)}
+            {
+                str(s.conid): s.isin
+                for s in await worker.run(thesis_repo.pinned_shares)
+                if s.isin is not None
+            }
         )
         return annual_csv(
             year,

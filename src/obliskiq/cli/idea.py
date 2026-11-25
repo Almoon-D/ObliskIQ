@@ -1,8 +1,9 @@
-"""``obliskiq idea add|list|show|withdraw``: the owner's ideas for the thesis book (MASTER_PLAN
-§5.5).
+"""``obliskiq idea add|list|show|withdraw|isin``: the owner's ideas for the thesis book
+(MASTER_PLAN §5.5).
 
-``idea add`` hands the engine one idea: the instrument (a universe symbol, or ``--candidate`` with
-a stock candidate's key and its ``--isin``), what is expected, a target, an invalidation and a
+``idea add`` hands the engine one idea: the instrument (a universe symbol; ``--stock`` with a
+ticker on the SEC's listings, its ``--isin`` when known; or ``--candidate`` with a stock
+candidate's key and its ``--isin``), what is expected, a target, an invalidation and a
 horizon, with a conviction (normal, high or max) and what it may be held as (``--as shares``, the
 instrument; ``option``, a long call, or a long put when the target lies below the invalidation;
 ``auto``, the option when the options sleeve's gates pass, otherwise the instrument). An idea that
@@ -10,8 +11,9 @@ lacks one of them is refused with the reason and nothing is stored. A stored ide
 the service's next cycle judges it at the gate, trades it inside the book's rails and grades it.
 ``idea list`` shows the open ideas
 (``--all``: every one), ``idea show`` one idea with its log, what the analyst wrote of it and its
-grade, ``idea withdraw`` takes back an idea that has not filled. None opens a brokerage session,
-so all are safe beside a running service.
+grade, ``idea withdraw`` takes back an idea that has not filled, and ``idea isin`` gives a listed
+stock's ISIN, without which it reaches no broker on paper or live (DECISIONS D195). None opens a
+brokerage session, so all are safe beside a running service.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -115,6 +117,7 @@ def _add(loaded: Loaded, out: TextIO) -> int:
             expression=Expression(args.held_as),
             symbol=args.symbol,
             candidate=args.candidate,
+            listing=args.stock,
             isin=args.isin,
             expectation=args.expect,
             target=_price(args.target, "target"),
@@ -265,14 +268,35 @@ def _withdraw(loaded: Loaded, out: TextIO) -> int:
     return _run(loaded, work, out)
 
 
+def _isin(loaded: Loaded, out: TextIO) -> int:
+    async def work(worker: StoreWorker) -> int:
+        intake = ThesisIntake(loaded.config.settings, worker=worker, now=utc_now)
+        done = await intake.give_isin(_thesis_id(loaded), loaded.args.isin, actor=OWNER_ACTOR)
+        if isinstance(done, str):
+            print(f"refused: {done}", file=out)
+            return EXIT_INVALID
+        print(f"ISIN {done.instrument.isin} kept for {_line(done)}", file=out)
+        return EXIT_OK
+
+    try:
+        return _run(loaded, work, out)
+    except ValueError as exc:  # not an ISIN (its form or its check digit)
+        print(f"refused: {exc}", file=out)
+        return EXIT_INVALID
+
+
 def add_idea_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     idea = commands.add_parser("idea", help="your ideas for the thesis book")
     actions = idea.add_subparsers(dest="action", required=True, metavar="ACTION")
 
     add = actions.add_parser("add", help="hand the engine an idea")
     add.add_argument("symbol", nargs="?", help="a symbol of config/universe.yaml")
+    add.add_argument("--stock", help="a US common stock's ticker on the SEC's listings")
     add.add_argument("--candidate", help="a stock candidate's key, for a share outside it")
-    add.add_argument("--isin", help="that share's ISIN (the tax lots are kept by it)")
+    add.add_argument(
+        "--isin",
+        help="that share's ISIN (the tax lots are kept by it; a --stock may give it later)",
+    )
     add.add_argument("--expect", help="what you expect and why")
     add.add_argument("--target", help="the price the idea aims at")
     add.add_argument("--invalidation", help="the price that proves the idea wrong")
@@ -312,3 +336,8 @@ def add_idea_commands(commands: argparse._SubParsersAction[argparse.ArgumentPars
     withdraw = actions.add_parser("withdraw", help="take back an idea that has not filled")
     withdraw.add_argument("thesis", help="the idea, such as T3")
     withdraw.set_defaults(handler=_withdraw)
+
+    isin = actions.add_parser("isin", help="give a listed stock's ISIN, before it is approved")
+    isin.add_argument("thesis", help="the idea, such as T3")
+    isin.add_argument("isin", help="its ISIN, such as US0378331005")
+    isin.set_defaults(handler=_isin)

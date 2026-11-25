@@ -80,6 +80,9 @@ class TradedInstrument(DomainModel):
     multiplier: Annotated[Decimal, AfterValidator(_positive)]
     underlying_conid: Conid | None
     expiry: date | None
+    #: A share's issuer country, where it is stated: its transaction tax follows it
+    #: (``quant/costs.py``). ``None`` leaves a share's tax unpriced.
+    issuer_country: CountryCode | None = None
 
     @model_validator(mode="after")
     def _option_fields(self) -> Self:

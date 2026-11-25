@@ -14,7 +14,8 @@ every change audited; no step needs an owner command:
 * **The thesis book** takes the owner's exploration share while its paper record is not below
   H13's boundary, steps by H13's looks on its live record, and goes back to shadow below one.
 * **A twin breach** sends a layer back to shadow, and its share to zero.
-* **The reserve** (the core) holds whatever the layers do not, less the cash floor.
+* **The reserve** (the core) holds whatever the layers do not, less the cash floor; what the
+  thesis book holds or has approved is taken from it as it is committed (:func:`reserve_budget`).
 
 The rule's numbers are the pre-registrations', handed in as :class:`StepRule`: this module is read
 by the live decision path, which never reads research (DECISIONS D64).
@@ -22,17 +23,21 @@ by the live decision path, which never reads research (DECISIONS D64).
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from typing import Final
 
 from ..config.schema import ObliskConfig
 from ..domain.orders import ExecutionMode, Sleeve
+from ..domain.thesis import Thesis, ThesisState
 from ..store import scoreboard as repo
+from ..store import theses as thesis_repo
 from ..store.db import Store
 from ..store.worker import StoreWorker
 from .budgets import Allocation, SleeveBudgets, book_allocation
+from .managed import CapitalView
 
 ZERO = Decimal(0)
 ONE = Decimal(1)
@@ -195,7 +200,9 @@ def live_allocation(settings: ObliskConfig, investable: Decimal, shares: LiveSha
     room = ONE - budgets.cash_floor
     satellite = min(shares.satellite, settings.capital.satellite_ceiling, room)
     options = min(shares.options, budgets.option_premium, room - satellite)
-    core = room - satellite - options
+    # The thesis book's part of the satellite stays budgeted to the reserve until the book
+    # commits it (reserve_budget, D159 amended).
+    core = room - satellite - options + min(shares.thesis, satellite)
     return Allocation(
         investable=investable,
         core=investable * core,
@@ -215,6 +222,53 @@ async def allocation_now(
         return book_allocation(settings, investable, mode)
     shares = await worker.run(recorded_shares)
     return live_allocation(settings, investable, live_shares(shares))
+
+
+def thesis_commitment(view: CapitalView, approved: Sequence[Thesis]) -> Decimal:
+    """What the thesis book holds or has approved, in the base currency: its satellite and option
+    holdings at their value, and each approved thesis's size that no holding of its own carries
+    yet (``approved``: the theses approved and not filled, of the view's mode)."""
+    held = {
+        holding.conid: holding.value or ZERO
+        for holding in view.holdings
+        if holding.sleeve in (Sleeve.SATELLITE, Sleeve.OPTIONS)
+    }
+    waiting = ZERO
+    for thesis in approved:
+        size = thesis.size_base or ZERO
+        conid = thesis.instrument.conid
+        waiting += max(ZERO, size - (held.get(conid, ZERO) if conid is not None else ZERO))
+    return sum(held.values(), ZERO) + waiting
+
+
+async def reserve_budget(
+    worker: StoreWorker,
+    settings: ObliskConfig,
+    view: CapitalView,
+    mode: ExecutionMode,
+    *,
+    today: date,
+) -> Decimal:
+    """The reserve's budget now: its allocation in ``mode`` less what the thesis book holds or
+    has approved (D159 amended, D185). Capital no thesis has taken waits in the reserve; a
+    thesis approved without the cash for it is funded by the reserve's funding sale
+    (``capital/planner.py``)."""
+    allocation = await allocation_now(worker, settings, view.investable, mode)
+    return max(ZERO, allocation.core - await committed_now(worker, view, mode, today=today))
+
+
+async def committed_now(
+    worker: StoreWorker, view: CapitalView, mode: ExecutionMode, *, today: date
+) -> Decimal:
+    """What the thesis book holds or has approved in ``mode`` (:func:`thesis_commitment`)."""
+    approved = [
+        thesis
+        for thesis in await worker.run(
+            thesis_repo.theses, as_of=today, states=[ThesisState.APPROVED]
+        )
+        if thesis.mode is mode
+    ]
+    return thesis_commitment(view, approved)
 
 
 def sleeve_budget(settings: ObliskConfig, sleeve: Sleeve) -> Decimal:

@@ -182,6 +182,7 @@ def build_thesis_book(
         eligibility=ELIGIBILITY_POLICIES.resolve(path.profile, settings),
         secdef=path.client.secdef,
         breakers=parts.breakers,
+        funding=parts.planner,
         now=now,
     )
 

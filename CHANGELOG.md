@@ -5,6 +5,26 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.4.0] - 2026-11-25
+
+Session 31: any listed US stock as a thesis, the hunting share and the reserve's funding sale
+(DECISIONS D195, D196). No IBKR call.
+
+### Added
+
+- A stock on the SEC's listings becomes a thesis (`idea add --stock`, or the analyst naming one
+  from the sheet's screen); shadow fills it, paper and live wait for its ISIN (`idea isin`).
+- `obliskiq universe contract TICKER...` prints a listed stock's contract info fields.
+- The reserve's funding sale: an approved thesis without free cash is funded by pro-rata sales
+  of the reserve, never one the two-month rule would defer.
+- The hunt beside the 50 % bar in the digest and `status`: the share, capital in theses and in
+  the reserve, the growth a year after tax and this year's, "bar, not forecast".
+
+### Changed
+
+- `thesis.capital_share` is 1 in `config/owner.yaml`; the reserve's budget gives up what the
+  thesis book holds or has approved, and the thesis book decides first in each cycle.
+
 ## [1.3.0] - 2026-11-25
 
 The owner's two rulings on the challenge (DECISIONS D193, D194). No IBKR call.

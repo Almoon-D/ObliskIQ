@@ -37,6 +37,8 @@ def _restore_root_logging() -> Iterator[None]:
 
 
 def _append(path: Path, text: str) -> None:
+    """Text at the end of ``path``: owner.yaml ends in its ``thesis`` section, so an indented key
+    lands in it."""
     with path.open("a", encoding="utf-8") as handle:
         handle.write(text)
 
@@ -49,7 +51,7 @@ def test_the_watch_sees_no_change_until_the_panel_changes(config_dir: Path) -> N
     watch = SettingsWatch(owner, reload=lambda: load_config(config_dir))
     assert watch.owner_file == owner
     assert not watch.check().changed
-    _append(owner, "thesis:\n  max_positions: 6\n")
+    _append(owner, "  max_positions: 6\n")
     found = watch.check()
     assert found.changed
     assert found.problem is None
@@ -58,7 +60,7 @@ def test_the_watch_sees_no_change_until_the_panel_changes(config_dir: Path) -> N
 def test_an_invalid_change_is_reported_once_and_changes_nothing(config_dir: Path) -> None:
     owner = config_dir / "owner.yaml"
     watch = SettingsWatch(owner, reload=lambda: load_config(config_dir))
-    _append(owner, "thesis:\n  max_positions: -1\n")
+    _append(owner, "  max_positions: -1\n")
     first = watch.check()
     assert not first.changed
     assert first.problem is not None
@@ -83,7 +85,7 @@ def test_a_hand_edit_and_a_new_default_are_audited_by_their_source(
 ) -> None:
     audit = SettingsAuditLog(tmp_path / "audit.jsonl")
     audit_unrecorded(load_config(config_dir), tmp_path, audit, at=AT)
-    _append(config_dir / "owner.yaml", "thesis:\n  max_positions: 6\n")
+    _append(config_dir / "owner.yaml", "  max_positions: 6\n")
     defaults = config_dir / "defaults" / "reporting.yaml"
     defaults.write_text(
         defaults.read_text(encoding="utf-8").replace("digest_rows: 10", "digest_rows: 12"),
@@ -101,7 +103,7 @@ def test_a_hand_edit_and_a_new_default_are_audited_by_their_source(
 def test_a_change_a_command_audited_is_not_audited_twice(config_dir: Path, tmp_path: Path) -> None:
     audit = SettingsAuditLog(tmp_path / "audit.jsonl")
     audit_unrecorded(load_config(config_dir), tmp_path, audit, at=AT)
-    _append(config_dir / "owner.yaml", "thesis:\n  max_positions: 6\n")
+    _append(config_dir / "owner.yaml", "  max_positions: 6\n")
     audit.record(
         [SettingChange(key="thesis.max_positions", old=8, new=6)],
         actor="owner",
