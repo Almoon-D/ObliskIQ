@@ -160,8 +160,9 @@ base currency (`cost_trade_value`), as `config/defaults/costs.yaml` states them 
 
 A call is **not evaluable**, never marked at a stale price, when its instrument has no close
 within 7 days after it was written, when two consecutive closes of the instrument between `d₀`
-and `d₁` are more than 7 days apart (a level may have been crossed unseen), or when the reference
-has no mark on `d₀` or `d₁`. It is counted beside the record with its reason.
+and `d₁` are more than 7 days apart (a level may have been crossed unseen), when the reference
+has no mark on `d₀` or `d₁`, or when the cost model cannot price the round trip (no commission
+schedule or friction tier for the instrument). It is counted beside the record with its reason.
 
 The **stated probability** is the source's probability that the target comes first (before the
 invalidation and the horizon); its outcome is `o = 1` on target first and `o = 0` otherwise.
