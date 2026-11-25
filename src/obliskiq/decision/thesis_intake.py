@@ -45,6 +45,7 @@ from ..domain.thesis import (
     sec_key,
 )
 from ..engines.thesis.gate import Finding, Reason, screen, view_findings
+from ..store import ledger as ledger_repo
 from ..store import orders as repo
 from ..store import stocks as stocks_repo
 from ..store import theses as thesis_repo
@@ -338,7 +339,11 @@ class ThesisIntake:
             state=ThesisState.CANDIDATE,
             created_at=at,
         )
-        return thesis_repo.insert_thesis(store, thesis, actor=actor)
+        with store.transaction():  # the idea and the probability stated with it, together
+            stored = thesis_repo.insert_thesis(store, thesis, actor=actor)
+            if draft.probability is not None:
+                ledger_repo.record_probability(store, stored.thesis_id, draft.probability, at=at)
+        return stored
 
     async def submit(self, draft: ThesisDraft, *, actor: str) -> Thesis | list[Finding]:
         """The stored candidate, or every reason the draft is refused."""

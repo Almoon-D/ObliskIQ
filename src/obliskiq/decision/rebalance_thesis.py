@@ -76,7 +76,7 @@ from ..domain.thesis import (
     Thesis,
     ThesisState,
 )
-from ..engines.thesis.book import Slot
+from ..engines.thesis.book import Slot, rank_score
 from ..engines.thesis.exits import OVERRIDE, exit_due
 from ..engines.thesis.gate import Finding, GateFacts, Reason, ThesisGate, describe
 from ..engines.thesis.grading import grade
@@ -95,12 +95,14 @@ from ..jurisdiction.eligibility import EligibilityPolicy
 from ..logging_setup import get_logger
 from ..store import analyst as analyst_repo
 from ..store import h13 as h13_repo
+from ..store import ledger as ledger_repo
 from ..store import orders as repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store import universe as universe_repo
 from ..store.db import Store
 from ..store.h13 import BookCapital, record_book_capital
+from ..store.ledger import IdeaCall
 from ..store.worker import StoreWorker
 from ..util.timeutil import utc_now
 from .book_cash import BookCash
@@ -259,7 +261,7 @@ class ThesisRebalancer:
         )
         slots = {t.thesis_id: _slot(t) for t in theses if t.state in SLOT_STATES}
         spent = ZERO
-        for thesis in theses:
+        for thesis in await self._offer_order(theses, read):
             others = tuple(slot for owner, slot in slots.items() if owner != thesis.thesis_id)
             decision = await self._decide(thesis, read, others, spent, plan)
             plan.decisions.append(decision)
@@ -268,6 +270,46 @@ class ThesisRebalancer:
                 slots[thesis.thesis_id] = _slot(thesis, decision.size_base)
         plan.twins = await self._options.twins(read, plan)
         return plan
+
+    async def _offer_order(self, theses: Sequence[Thesis], read: BookRead) -> list[Thesis]:
+        """The order the book's free slots are offered in: arrival (D161), except that a
+        candidate of a segment whose calibration passed H14's, with a probability stated and a
+        positive expected gain at this cycle's price, is offered one first, highest first. The
+        positions and approved ideas keep their slots and come before both (D187)."""
+        states = await self._worker.run(ledger_repo.segment_states, as_of=read.today)
+        if not any(state.passed for state in states.values()):
+            return list(theses)
+        scores: dict[int, float] = {}
+        for thesis in theses:
+            conid = thesis.instrument.conid
+            state = states.get(read.segments.get(thesis.thesis_id, thesis.source.value))
+            if thesis.state is not ThesisState.CANDIDATE or conid is None or state is None:
+                continue
+            stated = await self._worker.run(ledger_repo.probability, thesis.thesis_id)
+            p_eff = None if stated is None else state.p_eff(stated)
+            described = self._directory.describe(conid)
+            value = await self._capital.valuer.unit(conid, read.cash)
+            if p_eff is None or described is None or value.unit is None or value.rate is None:
+                continue
+            score = rank_score(
+                p_eff,
+                rises=not thesis.falls,
+                target=thesis.target,
+                invalidation=thesis.invalidation,
+                price=value.unit / (described.multiplier * value.rate),
+            )
+            if score is not None and score > 0:
+                scores[thesis.thesis_id] = score
+        if not scores:
+            return list(theses)
+        held = [t for t in theses if t.state is not ThesisState.CANDIDATE]
+        ranked = sorted(
+            (t for t in theses if t.thesis_id in scores), key=lambda t: -scores[t.thesis_id]
+        )
+        waiting = [
+            t for t in theses if t.state is ThesisState.CANDIDATE and t.thesis_id not in scores
+        ]
+        return [*held, *ranked, *waiting]
 
     async def _idle_capital(self, mode: ExecutionMode) -> Decimal | None:
         """The book's capital when it has nothing to decide: read for H13's record (its capital
@@ -354,10 +396,32 @@ class ThesisRebalancer:
                 ),
             )
             return ThesisDecision(thesis, WAIT, describe(waits), waits)
+        own = self._facts(thesis, described, reference, value.rate, read, slots)
+        decision = await self._candidate(
+            thesis, described, reference, value.rate, read, slots, spent, plan
+        )
+        if thesis.state is ThesisState.CANDIDATE and not self._gate.market(thesis, own):
+            return replace(decision, ledger=True)
+        return decision
+
+    async def _candidate(
+        self,
+        thesis: Thesis,
+        described: TradedInstrument,
+        reference: Decimal | None,
+        rate: Decimal | None,
+        read: BookRead,
+        slots: tuple[Slot, ...],
+        spent: Decimal,
+        plan: ThesisPlan,
+    ) -> ThesisDecision:
+        """A thesis without a position or a working order: held as an option, or entered as its
+        instrument, through the gate and what stands between it and an order."""
+        conid = described.conid
         note = None
         if thesis.held_as is None and thesis.expression is not Expression.SHARES:
             option = await self._options.enter(
-                thesis, described, reference, value.rate, read, slots, spent, plan
+                thesis, described, reference, rate, read, slots, spent, plan
             )
             if isinstance(option, ThesisDecision):
                 return option
@@ -374,7 +438,7 @@ class ThesisRebalancer:
                 )
                 return self._not_an_option(thesis, option)
             note = f"not held as an option: {describe(option)}"
-        decision = self._enter(thesis, described, reference, value.rate, read, slots, spent, plan)
+        decision = self._enter(thesis, described, reference, rate, read, slots, spent, plan)
         decision = await self._funded(decision, read, spent, plan)
         if note is None:
             return decision
@@ -431,24 +495,9 @@ class ThesisRebalancer:
     ) -> ThesisDecision:
         """A thesis without a position: the gate, then what stands between it and an order."""
         conid = described.conid
-        verdict = self._eligibility.assess(described, underlying=None)
-        found = read.market.get(conid)
-        facts = GateFacts(
-            capital=read.capital,
-            base_currency=self._settings.account.base_currency,
-            prohibited=tuple(prohibited_reasons(described, None, self._settings)),
-            ineligible=None if verdict.eligible else verdict.reason,
-            held_elsewhere=self._held_elsewhere(thesis, read, slots),
-            reference=reference,
-            rate=rate,
-            daily_value=None if found is None else found.average_daily_value,
-            sessions=0 if found is None else found.sessions,
-            slots=slots,
-            minimum=read.minimum,
-            sized_as=_sized_as(thesis, read),
-            entry_size=read.entry_size,
+        judged = self._gate.evaluate(
+            thesis, self._facts(thesis, described, reference, rate, read, slots)
         )
-        judged = self._gate.evaluate(thesis, facts)
         if judged.permanent:
             action = REFUSE if thesis.state is ThesisState.CANDIDATE else EXPIRE
             return ThesisDecision(thesis, action, describe(judged.permanent), judged.permanent)
@@ -494,6 +543,34 @@ class ThesisRebalancer:
             f"the gate passed: {judged.quantity} at about {reference}",
             quantity=judged.quantity,
             size_base=size,
+        )
+
+    def _facts(
+        self,
+        thesis: Thesis,
+        described: TradedInstrument,
+        reference: Decimal | None,
+        rate: Decimal | None,
+        read: BookRead,
+        slots: tuple[Slot, ...],
+    ) -> GateFacts:
+        """What the gate judges ``thesis`` on, held as its instrument, this cycle."""
+        verdict = self._eligibility.assess(described, underlying=None)
+        found = read.market.get(described.conid)
+        return GateFacts(
+            capital=read.capital,
+            base_currency=self._settings.account.base_currency,
+            prohibited=tuple(prohibited_reasons(described, None, self._settings)),
+            ineligible=None if verdict.eligible else verdict.reason,
+            held_elsewhere=self._held_elsewhere(thesis, read, slots),
+            reference=reference,
+            rate=rate,
+            daily_value=None if found is None else found.average_daily_value,
+            sessions=0 if found is None else found.sessions,
+            slots=slots,
+            minimum=read.minimum,
+            sized_as=_sized_as(thesis, read),
+            entry_size=read.entry_size,
         )
 
     async def _funded(
@@ -573,6 +650,8 @@ class ThesisRebalancer:
         await self._options.close_twins(plan)
         for decision in plan.decisions:
             thesis = decision.thesis
+            if decision.ledger:
+                await self._worker.run(write_call, thesis, at=plan.at)
             await self._options.apply(decision)
             if decision.note is not None:
                 await self._note(thesis, LogKind.WITHHELD, decision.note)
@@ -803,6 +882,33 @@ def _sized_as(thesis: Thesis, read: BookRead) -> Conviction | None:
     if held is None or thesis.conviction.value not in held.convictions:
         return None
     return Conviction.NORMAL
+
+
+def write_call(store: Store, thesis: Thesis, *, at: datetime) -> IdeaCall | None:
+    """Write ``thesis`` into the idea ledger as a call at ``at``, unless it is there already
+    (H14: an idea is written at the first cycle its own checks pass)."""
+    conid = thesis.instrument.conid
+    if conid is None or thesis.thesis_id in ledger_repo.called_theses(store):
+        return None
+    # The analyst's segment is its model and prompt hash (D128); the owner's ideas are his own.
+    segment = analyst_repo.thesis_segments(store).get(thesis.thesis_id, thesis.source.value)
+    return ledger_repo.record_call(
+        store,
+        IdeaCall(
+            thesis_id=thesis.thesis_id,
+            conid=conid,
+            symbol=thesis.instrument.symbol,
+            source=thesis.source,
+            segment=segment,
+            event_tags=(),
+            rises=not thesis.falls,
+            target=thesis.target,
+            invalidation=thesis.invalidation,
+            horizon=thesis.horizon,
+            probability=ledger_repo.probability(store, thesis.thesis_id),
+            known_at=at,
+        ),
+    )
 
 
 def _slot(thesis: Thesis, size: Decimal | None = None) -> Slot:

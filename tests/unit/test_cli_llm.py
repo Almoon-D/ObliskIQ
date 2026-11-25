@@ -170,6 +170,7 @@ def test_analyst_without_its_key_is_skipped_and_with_it_proposes(
                 "target": 2.0,
                 "invalidation": 1.0,
                 "horizon": "2027-01-04",
+                "probability": 0.4,
                 "facts": ["F1"],
             }
         ]

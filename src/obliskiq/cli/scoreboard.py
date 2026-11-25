@@ -27,6 +27,7 @@ from ..jurisdiction import TAX_POLICIES
 from ..orchestration.assemble import build_notifier
 from ..orchestration.scoreboard_jobs import write_report
 from ..reporting import scoreboard as report
+from ..reporting.ledger import ledger_lines
 from ..research.patterns import REGISTRY_PATH
 from ..scoreboard.layers import layer_state, registry_layers
 from ..scoreboard.service import Scoreboard, previous_month
@@ -125,6 +126,17 @@ def _grade(loaded: Loaded, out: TextIO) -> int:
                 f"(shrink {state.shrink:.2f}): {state.reason}"
             )
         return "\n".join(lines)
+
+    print(_run(loaded, work), file=out)
+    return EXIT_OK
+
+
+def _ledger(loaded: Loaded, out: TextIO) -> int:
+    """The idea ledger in plain words (H14, D187)."""
+
+    async def work(board: Scoreboard, _: Modes, __: StoreWorker) -> str:
+        found = await board.ledger(utc_now().date())
+        return "\n".join(ledger_lines(found))
 
     print(_run(loaded, work), file=out)
     return EXIT_OK
@@ -246,6 +258,9 @@ def add_scoreboard_commands(commands: argparse._SubParsersAction[argparse.Argume
     scoreboard = commands.add_parser("scoreboard", help="forward records, reports, monitoring")
     actions = scoreboard.add_subparsers(dest="action", required=True, metavar="ACTION")
     actions.add_parser("grade", help="every layer's forward record").set_defaults(handler=_grade)
+    actions.add_parser(
+        "ledger", help="every idea graded at its own levels, per segment, source and event"
+    ).set_defaults(handler=_ledger)
     reporting = actions.add_parser("report", help="write the weekly or monthly report")
     reporting.add_argument("kind", choices=["weekly", "monthly"])
     reporting.add_argument("--send", action="store_true", help="send its summary to the owner")

@@ -48,6 +48,11 @@ record it produces: its after-tax log growth minus a reference's on the same cap
 pre-registered looks against one-sided boundaries (a step of capital, a return to shadow), the
 same per source and conviction level. The scoreboard computes the looks from it.
 
+The **idea ledger** (``kind: idea_ledger``, DECISIONS D187) grades every written idea that
+passes the gate's own checks at its own levels, traded or not, per segment, source and event tag;
+it fixes when a segment's stated probabilities are trusted and how a trusted segment's calls are
+offered the book's free slots.
+
 The **scoreboard's rules** (``kind: scoreboard``, DECISIONS D63, D65) are not a test: they fix
 how every forward record is graded, when a stated probability may size, how component weights
 and patterns move, the monitoring boundaries of each active layer and the steps of its capital.
@@ -1339,6 +1344,111 @@ class ScoreboardSpec(FrozenModel):
         return self
 
 
+# ── the idea ledger (kind: idea_ledger) ──
+
+
+class LedgerPopulationSpec(FrozenModel):
+    """Which ideas are calls: the gate's checks on the idea and the market, not the book's."""
+
+    sources: list[ThesisSource] = Field(min_length=1)
+    checks: list[Literal["screen", "view", "market"]] = Field(min_length=1)
+    not_checked: list[
+        Literal["slot", "caps", "liquidity", "capital", "size", "cash", "venue", "entries_blocked"]
+    ] = Field(min_length=1)
+    written_at: Literal["first_market_pass"]
+    one_open_call_per: list[Literal["instrument", "segment"]] = Field(min_length=1)
+
+
+class LedgerOutcomeSpec(FrozenModel):
+    """How a call resolves: at its own levels on daily closes, against the equity reference,
+    after the round trip's cost."""
+
+    start: Literal["first_close_after_written"]
+    path: Literal["daily_closes"]
+    resolution: list[Literal["target_first", "invalidation_first", "horizon_close"]] = Field(
+        min_length=3, max_length=3
+    )
+    currency: Literal["base"]
+    reference_role: Key
+    costs: Literal["cost_model_round_trip"]
+    cost_trade_value: Positive
+    max_mark_age_days: PositiveInt
+
+
+class LedgerStatisticSpec(FrozenModel):
+    """The record of a group of calls and its D62 verdict."""
+
+    outcome: Literal["excess_log_return_after_costs"]
+    cohort: Literal["iso_week_written"]
+    estimate: Literal["mean_of_cohort_means"]
+    newey_west_lags: Literal["mean_held_weeks"]
+    rho: Correlation
+    alpha: Rate
+    theta: Positive
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    groups: list[Literal["segment", "source", "event_tag"]] = Field(min_length=1)
+    adjustment: Literal["bonferroni_over_groups_past_minimum"]
+
+
+class LedgerCalibrationSpec(FrozenModel):
+    """When a segment's stated probabilities are trusted, and how far."""
+
+    probability: Literal["target_first"]
+    base_rate: Literal["segment_climatology"]
+    score: Literal["brier"]
+    reliability_bins: PositiveInt
+    min_cohorts: PositiveInt
+    min_effective: Positive
+    brier_skill_above: Annotated[Decimal, Field(ge=0, lt=1)]
+    shrink: Literal["slope_lower_bound"]
+    shrink_alpha: Rate
+
+
+class LedgerRankSpec(FrozenModel):
+    """The one thing the ledger changes: the order the free slots are offered in."""
+
+    reads: Literal["calibration_passed"]
+    score: Literal["expected_gain_at_reference"]
+    ranked_first: Literal["positive_score"]
+    otherwise: Literal["arrival"]
+    touches_h13: Literal[False]
+
+
+class LedgerPowerSpec(FrozenModel):
+    sd_per_call: Positive
+
+
+class IdeaLedgerSpec(FrozenModel):
+    """The idea ledger (``kind: idea_ledger``, DECISIONS D187): every written idea graded forward
+    at its own levels, whether or not it trades."""
+
+    id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]
+    title: NonEmptyText
+    kind: Literal["idea_ledger"]
+    hypothesis: Annotated[str, Field(pattern=r"^H[0-9]+$")]
+    mechanism: NonEmptyText
+    citation: NonEmptyText
+    universe: NonEmptyText
+    data_status: NonEmptyText
+    population: LedgerPopulationSpec
+    outcome: LedgerOutcomeSpec
+    statistic: LedgerStatisticSpec
+    calibration: LedgerCalibrationSpec
+    rank: LedgerRankSpec
+    never: list[Literal["size", "capital", "gate"]] = Field(min_length=3)
+    trial_budget: Literal[0]
+    power: LedgerPowerSpec
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Self:
+        if self.calibration.min_effective < self.statistic.min_effective:
+            raise ValueError("calibration needs at least the record's minimum")
+        if set(self.never) != {"size", "capital", "gate"}:
+            raise ValueError("the ledger never sizes, moves capital or overrides the gate")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class Prereg:
     path: Path
@@ -1379,11 +1489,24 @@ class ScoreboardPrereg:
     body: str
 
 
+@dataclass(frozen=True, slots=True)
+class IdeaLedgerPrereg:
+    path: Path
+    sha256: str
+    spec: IdeaLedgerSpec
+    body: str
+
+
 type AnyPrereg = (
-    Prereg | CrossSectionPrereg | ForwardTestPrereg | ForwardBookPrereg | ScoreboardPrereg
+    Prereg
+    | CrossSectionPrereg
+    | ForwardTestPrereg
+    | ForwardBookPrereg
+    | ScoreboardPrereg
+    | IdeaLedgerPrereg
 )
 #: The kinds whose evidence is produced live: the harness commands that read history refuse them.
-FORWARD_KINDS = (ForwardTestPrereg, ForwardBookPrereg, ScoreboardPrereg)
+FORWARD_KINDS = (ForwardTestPrereg, ForwardBookPrereg, ScoreboardPrereg, IdeaLedgerPrereg)
 
 
 def front_matter(text: str) -> tuple[Any, str]:
@@ -1444,6 +1567,9 @@ def load_any(path: Path) -> AnyPrereg:
     if isinstance(data, dict) and data.get("kind") == "scoreboard":
         rules = _validate(ScoreboardSpec, data, path)
         return ScoreboardPrereg(path=path, sha256=file_sha256(path), spec=rules, body=body)
+    if isinstance(data, dict) and data.get("kind") == "idea_ledger":
+        ledger = _validate(IdeaLedgerSpec, data, path)
+        return IdeaLedgerPrereg(path=path, sha256=file_sha256(path), spec=ledger, body=body)
     return Prereg(
         path=path, sha256=file_sha256(path), spec=_validate(PreregSpec, data, path), body=body
     )

@@ -82,6 +82,7 @@ class AnalystConfig(FrozenModel):
     retries_on_invalid: NonNegativeInt
     max_call_failures: PositiveInt
     max_drafts_per_week: NonNegativeInt
+    max_drafts_per_run: NonNegativeInt
     max_horizon_days: PositiveInt
     fact_sheet: FactSheetConfig
 

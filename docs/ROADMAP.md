@@ -24,17 +24,15 @@ the bar. Nothing has filled an order yet. In order:
    once the paper login works: whether IBKR states the ISIN decides whether `idea isin` stays
    the only route (D195). Until then a stock trades in shadow, and on paper once you give its
    ISIN.
-6. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first, beside
-   steps 1 to 4.
-7. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
+6. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
    side, the scan, the dossier and the weekly review. The owner adds an Anthropic key and sets
    the monthly budget (the session writes the steps).
-8. **Session 35** (Opus 5.5, xhigh), after 33: the replay after each model's training cutoff,
+7. **Session 35** (Opus 5.5, xhigh), after 33: the replay after each model's training cutoff,
    its pre-registration first (D191). It gives the first reading of which analyst is worth
-   running in days, where the forward ledger needs months.
-9. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
-10. **A design review** (the strongest model available) when the replay or the ledger has its
-    first verdict: keep, change or stop each segment.
+   running in days, where the forward ledger needs about two years a segment.
+8. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
+9. **A design review** (the strongest model available) when the replay or the ledger has its
+   first verdict: keep, change or stop each segment.
 
 No build session needs a model above Opus 5.5 (SESSION_PROMPTS §C). Session 20a (mutation
 pass) waits until an order has filled. Not to do without a new decision: buy a price history,
@@ -44,8 +42,8 @@ the mandate (D186).
 **The 50 % bar, as the evidence stands.** It is read over three years (D193). The reserve
 earned about 3 % a year after tax in its test. No tested signal adds to it. Only the thesis book can reach 50 %, and nothing yet
 shows that it does; no unlevered record has sustained it on a whole account. The ledger
-(Session 32) and the replay (Session 35) are what shorten the answer from about two years to
-months, and the replay's first reading to days.
+(Session 32) grades every idea, not only those that trade, yet needs about two years a segment
+for a verdict; the replay (Session 35) is what could give a first reading in days.
 
 ## Sessions
 
@@ -85,7 +83,7 @@ months, and the replay's first reading to days.
 | 20a | Mutation pass, the remainder | every surviving mutant of the six money-path packages killed by a test or written down as equivalent | after 20 (docs/AUDIT.md lists what is open) | |
 | 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; ranks after the first pass since v1.2.0, D190; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0, v1.2.0 |
 | 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | done (paper and live wait for an owner-given ISIN; live keeps its ceilings) | v1.4.0 |
-| 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | next, in either order with 31 (D187) | |
+| 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | done (H14 locked; no verdict before about two years a segment) | v1.5.0 |
 | 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | after 31 and 32 (D188) | |
 | 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
 | 35 | Replay after the cutoff | H15 pre-registered first; the segments' calls on point-in-time sheets after each model's training cutoff, graded at once, with a leak control | after 33, before 34 (D191) | |
@@ -106,12 +104,26 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
 | What does the reserve earn? | A, since D194: 3.22 % a year median after tax in Session 4c, largest fall 11 % (D50: 6.49 % and 20 %; equities held 7.13 %) | `research/reports/core-allocation.md` |
 | Can the account reach the 50 % bar? | Unknown, and unlikely on the record of others: no unlevered whole-account record sustains it. Only the thesis book could; it holds all investable capital by the owner's ruling once promoted, and its record decides whether it keeps it (D185) | `docs/DECISIONS.md` |
-| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule, the analyst's per segment; the analyst proposes from the service once its key is on the machine | `research/preregistrations/thesis-book.md` |
+| Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades what trades under H13's locked rule; the idea ledger grades every idea that passes its checks under H14, per segment, source and event, and needs about two years a segment for a verdict (`scoreboard ledger`) | `research/preregistrations/thesis-book.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run; the literature supports less than θ net of decay, costs and tax for every candidate | `research/reports/hunter-feasibility.md` |
 | Can the Hunter's test decide? | Not as registered: the literature supports −0.8 % to +0.8 % a year net for H12 against θ = 2 %, so a sufficient outcome has probability at most 0.009, and no later test reaches 0.05 | `research/reports/hunter-feasibility.md`, D162 |
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Session 32 — Idea ledger (2026-11-25, v1.5.0)
+
+- **Landed:** H14 registered and locked in their own pull requests, then the ledger: every idea
+  that passes the screen, view and market checks is written once (`idea_calls`), graded daily at
+  its own levels from the next session's close against the equity reference after costs, per
+  segment, source and event, Bonferroni over the groups past the minimum; each segment's
+  calibration is stored daily (`ledger_segments`) and a passed one offers free slots first (D197).
+  `scoreboard ledger` and the weekly report say it in plain words. The analyst states a
+  probability with each draft, at most three a run (a new prompt, so a new segment).
+- **Found:** decision may not import research, so the rank reads the stored segment row.
+- **Power:** at 13-week holds a segment adds about 16 effective observations a year: a verdict
+  takes about two years, calibration about three. The ledger orders nothing before then.
+- **Deferred:** none. **VERIFY-LIVE:** none new. No IBKR call.
 
 ### Session 31 — Any listed stock, and the reserve's funding sale (2026-11-25, v1.4.0)
 

@@ -76,6 +76,9 @@ class GradedCall:
     week: str
     excess: float | None
     reason: str | None
+    #: Whether the event its probability was stated for happened, where that event is not the
+    #: excess above zero (an idea's target reached first, H14).
+    hit: bool | None = None
 
     @property
     def graded(self) -> bool:
@@ -83,8 +86,11 @@ class GradedCall:
 
     @property
     def right(self) -> bool | None:
-        """Whether the call was right (its signed excess above zero)."""
-        return None if self.excess is None else self.excess > 0
+        """Whether the call was right: its stated event happened, else its signed excess above
+        zero."""
+        if self.excess is None:
+            return None
+        return self.excess > 0 if self.hit is None else self.hit
 
 
 PENDING = "pending: its horizon has not passed"
@@ -167,7 +173,12 @@ class Record:
 
 
 def _verdict(
-    estimate: MeanEstimate, rules: GradingRules, theta: float, cohorts_seen: int, effective: float
+    estimate: MeanEstimate,
+    rules: GradingRules,
+    theta: float,
+    cohorts_seen: int,
+    effective: float,
+    tests: int,
 ) -> Decision | None:
     if cohorts_seen < rules.min_cohorts or effective < rules.min_effective:
         return None
@@ -182,7 +193,7 @@ def _verdict(
     interval = estimate.ci
     se = estimate.se
     found_power = (
-        power(theta, se, alpha=rules.alpha, tests=1) if se is not None and se > 0 else None
+        power(theta, se, alpha=rules.alpha, tests=tests) if se is not None and se > 0 else None
     )
     return decide(
         interval=interval,
@@ -194,10 +205,16 @@ def _verdict(
 
 
 def record(
-    layer: str, graded: Sequence[GradedCall], rules: GradingRules, *, theta: float | None = None
+    layer: str,
+    graded: Sequence[GradedCall],
+    rules: GradingRules,
+    *,
+    theta: float | None = None,
+    tests: int = 1,
 ) -> Record:
     """The record of ``layer`` from its graded calls, judged against ``theta`` (the rules' θ
-    unless the layer's registration states its own)."""
+    unless the layer's registration states its own), its interval Bonferroni-adjusted over
+    ``tests``."""
     bound = rules.theta if theta is None else theta
     by_week = cohorts(graded)
     means = [sum(g.excess or 0.0 for g in items) / len(items) for items in by_week.values()]
@@ -205,7 +222,7 @@ def record(
         means,
         lags=rules.horizon_weeks,
         alpha=rules.alpha,
-        tests=1,
+        tests=tests,
         min_points=MIN_SERIES_POINTS,
     )
     effective = effective_observations(
@@ -224,7 +241,7 @@ def record(
         observed_rho=observed_rho(by_week),
         estimate=estimate,
         theta=bound,
-        decision=_verdict(estimate, rules, bound, len(by_week), effective),
+        decision=_verdict(estimate, rules, bound, len(by_week), effective, tests),
     )
 
 
@@ -391,6 +408,6 @@ def panel_record(
         baseline_ic=mean(baseline),
         incremental_ic=mean(increment),
         spread=mean(spread),
-        decision=_verdict(estimate, rules, rules.theta, graded_ic, effective),
+        decision=_verdict(estimate, rules, rules.theta, graded_ic, effective, 1),
         probabilities=probability_score([g for items in kept.values() for g in items], rules),
     )

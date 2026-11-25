@@ -4303,3 +4303,19 @@ stated issuer country priced as untaxed.
 
 Rejected: a second seller; counting candidates in the commitment (the reserve would sell for an
 idea the gate then refuses).
+
+### D197 · How the code reads H14 (§5.5, §5.19; D187)
+
+- **A call** is written once per thesis, at the first cycle where the idea is a candidate and
+  passes the screen, view and market checks; a full book, cash or a brake does not stop it.
+- **One open call per instrument and segment** is applied when grading, not when writing: a
+  later call is set beside the record (`overlapping`) if an earlier one was open on what was
+  known on its write day. The writer stays a plain append and the rule stays point in time.
+- **The path** starts at the first session close after the write day; a call with no close
+  within seven days, a longer gap, no reference mark or an unpriceable round trip is not
+  evaluable, with its reason.
+- **The rank** reads the stored `ledger_segments` row (the scoreboard grades daily) and scores in
+  `engines.thesis`: decision may not import research (import contract).
+- The analyst states a probability with each draft, at most `max_drafts_per_run` a run.
+
+Rejected: a rebalancer that grades the ledger itself (the import contract and point in time).

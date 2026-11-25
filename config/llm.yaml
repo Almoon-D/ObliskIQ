@@ -63,6 +63,10 @@ llm:
     # The most drafts handed to the thesis book's intake in an ISO week (Monday to Sunday). A
     # judgement: the book holds eight positions and a thesis runs for months.
     max_drafts_per_week: 3
+    # The most drafts asked for and stored in one run. A run asks one segment (one model and
+    # prompt), so this is also the cap per run and segment; the idea ledger grades every one of
+    # them (H14, D187). A judgement: within the week's number, one run may use it all.
+    max_drafts_per_run: 3
     # A draft's horizon is at most this many days after the fact sheet's date. A judgement: the
     # forward record is read every six months (H13), and a thesis longer than a year holds a slot
     # through two looks without an answer.

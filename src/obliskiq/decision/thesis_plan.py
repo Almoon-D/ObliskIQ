@@ -72,6 +72,9 @@ class ThesisDecision:
     detected_loss: Decimal | None = None
     #: The reserve's sales that fund a thesis approved without the cash for it (``fund``).
     funding: FundingPlan | None = None
+    #: A candidate whose own checks passed this cycle (the gate's but the slot and the size): it
+    #: is written into the idea ledger when the plan is applied, once (H14, D187).
+    ledger: bool = False
 
     @property
     def conid(self) -> int | None:

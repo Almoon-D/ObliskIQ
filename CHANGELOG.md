@@ -5,6 +5,22 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.5.0] - 2026-11-25
+
+Session 32: the idea ledger, every idea graded forward (H14, DECISIONS D187, D197). No IBKR call.
+
+### Added
+
+- Every idea that passes its own checks is written into the ledger, traded or not, and graded
+  daily at its own levels against the equity reference after costs, by segment, source and event.
+- `obliskiq scoreboard ledger` and a weekly-report section say, in plain words, each group's
+  record, its verdict or "too few", and how far each segment's stated probabilities can be trusted.
+- A segment whose calibration passed offers the book's free slots to its best ideas first.
+
+### Changed
+
+- The analyst states the probability its target comes first, at most three drafts a run.
+
 ## [1.4.0] - 2026-11-25
 
 Session 31: any listed US stock as a thesis, the hunting share and the reserve's funding sale
