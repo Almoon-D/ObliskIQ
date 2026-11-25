@@ -1,15 +1,16 @@
 # ObliskIQ
 
-An autonomous portfolio manager for one Interactive Brokers account.
+An autonomous wealth manager for one Interactive Brokers account.
 
-- **The Hunter** — the return engine: a systematic, diversified book of stocks of any size,
-  selected by signals that passed a pre-registered test after costs and tax, each tested by
-  size tier; long options when their own test allows. It holds nothing until a test passes.
-- **The thesis book** — a few concentrated positions on written ideas from an LLM analyst and,
-  when he has one, the owner. Every idea states its target, horizon and what would prove it
-  wrong before it trades, and is graded; the book's capital follows that record.
-- **The reserve** — everything the Hunter does not hold: global equities with a slow,
-  tax-aware trend brake.
+- **The thesis book** — the return engine: a few concentrated positions on written ideas about
+  companies, sectors and the economy from an LLM analyst and, when he has one, the owner, held
+  as shares or long options. Every idea states its target, horizon and what would prove it
+  wrong before it trades, and is graded; the book may hold all investable capital while that
+  record allows.
+- **The reserve** — where capital without a thesis waits: global equities with a slow,
+  tax-aware trend brake. It sells to fund an approved thesis.
+- **The systematic stock book** — a rule-based book of stocks, designed and not built: no test
+  of it can yet pass.
 - **Discipline** — a hard risk and execution layer; capital that moves by tested evidence,
   with no human in the loop. No leverage, no shorting, no written options, limit-capped
   orders only.

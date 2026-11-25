@@ -5,6 +5,16 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.1.3] - 2026-11-25
+
+Truth pass after the design session: no document describes the earlier direction. Documents only.
+
+### Changed
+
+- README, MASTER_PLAN §5.1, §5.2, §5.5, §5.10 and §5.19, the roadmap's follow-ups, the session
+  prompts' opening and the cockpit skill name the thesis book as the return engine and the
+  reserve as where capital waits (DECISIONS D185).
+
 ## [1.1.2] - 2026-11-25
 
 Design session: the owner's ruling that ObliskIQ is a wealth manager that hunts with the whole

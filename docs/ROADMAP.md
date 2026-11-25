@@ -117,6 +117,8 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 - **Prompts edited:** Sessions 31 to 34 added with their model and effort; Session 16's scope
   note; §C's rule on models above Opus. Documents only: no code, no config value, no IBKR call.
 - **VERIFY-LIVE:** none new. **Deferred to Session 31:** `thesis.capital_share` in config.
+- **Truth pass** (same day, v1.1.3): README, §5.1, §5.2, §5.5, §5.10 and §5.19 of the plan, this
+  file's follow-ups, the prompts' opening and the cockpit skill say what D185 decided.
 
 ### Maintenance (2026-11-20, v1.1.1)
 
@@ -609,7 +611,7 @@ settles it.
 | Pins for TOPIX, BARN, LISN and JDEP (`obliskiq universe pin`), and resolved descriptions for the 47 pinned instruments without one (an instrument without one is never ordered) | 8 | the collectors' live round |
 | Venue profiles: trading permissions, listing currencies and lot conventions (`venues.yaml`, `verify_live: true`); Stocks: United States, Australia and Germany were held on the paper account by accepted previews [CP ✓ 2026-10-21] (`docs/knowledge/ibkr-capabilities.md`) | 8 | the capability probe (below), then each venue's first order |
 | A stock candidate's holdings ticker and exchange name to IBKR's symbol and code, per venue (`collectors.candidates.exchanges`; resolution on demand) | 8 | the first candidate a thesis pins |
-| Whether `/iserver/contract/{conid}/info` or `/trsrv/secdef` tells a share from an ETF and carries the ISIN: until read, a share outside the universe file needs a holdings-file equity line and an owner-given ISIN (D159) | 27 | the first candidate a thesis pins |
+| Whether `/iserver/contract/{conid}/info` or `/trsrv/secdef` tells a share from an ETF and carries the ISIN: until read, a share outside the universe file needs a holdings-file equity line and an owner-given ISIN (D159) | 27, 31 | the first candidate a thesis pins |
 | The thesis book on the paper account: an entry with its stop resting at the invalidation, a funded entry in dollars, an exit beside its stop (`decision/rebalance_thesis.py`, fixtures only) | 27 | the first owner idea after the reserve's paper cycle |
 | The capability probe on the paper account (`obliskiq universe capabilities --probe`, whatif only): search, quote, contract rules, algos and a preview per check, on every venue `capabilities.yaml` lists, US and Eurex options included; then the readings recorded in `capabilities.yaml` and `docs/knowledge/ibkr-capabilities.md` by a reviewed change | 9 | the first command list after T1's order test |
 | Order types and algos per asset class, by name (T1 counted 12 types and 10 algos for SPY, 9 types for BHP, without names) | 9 | the capability probe |
@@ -663,7 +665,7 @@ settles it.
 - Session 30: the stock screen's snapshots are the only survivorship-free stock data the
   project will hold; a forward test on them is registered only if `research power` gives it
   0.5 (D154), and none does today.
-- Session 30 (D183): a route by which the analyst names a screen stock, so its theses reach the
+- Session 31 (D183, D185): a route by which the analyst names a screen stock, so its theses reach the
   book: the stock's ISIN and its contract through IBKR's search, for a share in neither the
   universe file nor a holdings file (a money path: does the search answer the ISIN?). Until
   then the screen informs drafts on the sheet's instruments and the owner's ideas.

@@ -2,8 +2,8 @@
 
 Committed by Session 1 as `docs/SESSION_PROMPTS.md`. One session is one PR (a pre-registration
 in a PR of its own), merged and released by the agent itself (protocol in `AGENTS.md`). Sessions
-1–13 are done; the run order from here is §C's: 22 to 26, then 18, 19 and 20, with 15, 16, 17,
-19a and 21 on the condition §C names for each (DECISIONS D150). There is no Session 14. The design lives in `docs/MASTER_PLAN.md`; this file says
+1–30 are done or closed; the run order from here is §C's: 31 to 34 (DECISIONS D185), with 15, 16,
+17, 19a, 21, 24 and 26 on the condition §C names for each (DECISIONS D150). There is no Session 14. The design lives in `docs/MASTER_PLAN.md`; this file says
 what each session does. Section F holds the templates for feature and maintenance sessions
 after the build.
 
