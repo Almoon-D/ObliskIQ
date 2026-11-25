@@ -5,6 +5,22 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.3.0] - 2026-11-25
+
+The owner's two rulings on the challenge (DECISIONS D193, D194). No IBKR call.
+
+### Added
+
+- The loss brake: from a fall of 10 % of the managed book from its highest daily close a new
+  thesis is entered at half its size, and from 20 % none is entered until the book recovers
+  (`portfolio_circuit_breaker.loss_brake.steps`). It excuses nothing for the market's own
+  fall, sells nothing and needs no command.
+
+### Changed
+
+- The reserve runs A, the static risk balance (`core.variant` in `config/owner.yaml`).
+- The 50 % bar is read as the compound growth of the last three years.
+
 ## [1.2.0] - 2026-11-25
 
 Challenge and redesign: the stock screen ranks days after it starts, not a year, and the

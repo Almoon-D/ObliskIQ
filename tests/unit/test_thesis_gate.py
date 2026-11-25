@@ -140,6 +140,16 @@ def test_an_idea_that_passes_is_sized_in_whole_units(gate: ThesisGate) -> None:
     assert (judged.size_base, judged.quantity) == (D(125), D(2))  # two units at 45
 
 
+def test_a_braked_entry_is_sized_at_the_brake_s_share_and_an_approved_one_keeps_its_size(
+    gate: ThesisGate,
+) -> None:
+    braked = gate.evaluate(thesis(conviction=Conviction.MAX), facts(entry_size=D("0.5")))
+    assert (braked.size_base, braked.quantity) == (D(125), D(2))  # half of 250, two units at 45
+    small = gate.evaluate(thesis(), facts(entry_size=D("0.5"), minimum=D(100)))
+    assert [(f.code.value, f.permanent) for f in small.findings] == [("too_small", False)]
+    assert gate.evaluate(approved(), facts(entry_size=D("0.5"))).size_base == D(125)
+
+
 @pytest.mark.parametrize(
     ("changes", "code", "permanent"),
     [

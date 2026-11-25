@@ -25,8 +25,8 @@ service works as it does is `docs/DECISIONS.md` D102–D105. Commands run from t
 
 Times follow each venue's own calendar, daylight saving and holidays included
 (`config/defaults/runtime.yaml`). The **core** runs the variant `core.variant` names
-(`config/owner.yaml` sets D50, global equity with the trend brake; the expert default in
-`config/defaults/core.yaml` is A, the static risk balance). Each role is held in the fund
+(`config/owner.yaml` sets A, the static risk balance of bonds, gold, commodities and equities,
+which is also the expert default in `config/defaults/core.yaml`; DECISIONS D194). Each role is held in the fund
 the vehicle selector ranks first (`uv run obliskiq universe vehicles <role>` shows the ranking).
 The core trades when it starts, when a role leaves its outer band (the only time it sells), and
 when the book holds cash beyond its targets of at least the minimum trade. A role without a
@@ -361,10 +361,12 @@ stop-limit (`ibkr.preflight.execution_test`).
    restart, the sale, and the position and the stop gone. Paste the report.
 10. `uv run obliskiq mode set shadow --reason "execution test done"`.
 
-### C. What the reserve's trend brake needs on the machine
+### C. What the reserve needs on the machine
 
-The reserve (`core.variant: D50`) scales its equity by a trend it reads from stored history.
-Without it a role says `untilted` and is held whole.
+The reserve runs `core.variant: A`, which has no trend tilt: the daily bars below matter only
+to a variant with one (B, C, D10 to D50), where a role without them says `untilted` and is
+held whole. The research store matters to every variant, and A fills nine roles, so run step
+13 for each role the plan names, not only the two shown.
 
 - **The market store's daily bars** (`engines/core/history.py`): 13 month-end closes of the
   equity vehicle and of the cash vehicle (`core.tilt`: 12-month momentum against the month
@@ -400,10 +402,9 @@ is allowed. Inside Xetra's order window (09:30 to 17:15 Madrid time), after a gr
     validate` passes.
 16. `uv run obliskiq mode set paper --reason "reserve paper cycle"`.
 17. `uv run obliskiq run-cycle --mode paper --dry-run`: the plan, nothing written or sent.
-    It shows `variant D50: start`, then each role with its fund, its target and why:
-    `world_equity` in SPPW, `cash` in XEON. No role says `IBKR did not confirm`, and
-    `world_equity` does not say `untilted` (if it does, part C is incomplete: the reason names
-    the months it has). Under an 800-euro cap the minimum trade is 50 euros, so the plan buys
+    It shows `variant A: start`, then each role with its fund, its target and why. No role
+    says `IBKR did not confirm`; a role that does needs its fund pinned first (the checklist's
+    step 5). Under an 800-euro cap the minimum trade is 50 euros, so the plan buys
     only the roles whose target is worth at least that and at least one unit, and says why for
     each of the others. Paste the plan.
 18. Ten minutes later, `uv run obliskiq run-cycle --mode paper`: the buys, in euros, so no

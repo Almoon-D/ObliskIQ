@@ -43,12 +43,11 @@ A global, autonomous portfolio manager for one IBKR account that:
    (§5.19). The systematic
    stock book, a rule-based book of stocks tested by size tier, is designed in §5.5 and stays
    unbuilt while no test of it can reach a sufficient outcome (D162, D180).
-3. **Keeps the rest at work.** Capital the Hunter does not hold is the reserve: global
-   equities with a slow, tax-aware trend brake that steps partly aside in a fall under way
-   while its embedded gain is small; after years of gains it is equities bought and held
-   (§5.4, DECISIONS D147). It is where capital without a thesis waits: it sells pro rata to
-   fund an approved thesis, and a hedge is a thesis on a defensive instrument or a long put
-   (D185).
+3. **Keeps the rest safe while it waits.** Capital the Hunter does not hold is the reserve: a
+   static risk balance of government bonds, inflation-linked bonds, gold, commodities and
+   equities (§5.4, DECISIONS D194). It is where capital without a thesis waits: it sells pro
+   rata to fund an approved thesis, and a hedge is a thesis on a defensive instrument or a
+   long put (D185).
 4. **Measures itself.** Every hypothesis is pre-registered and tested on point-in-time
    history with a decision rule that says sufficient, insufficient, inconclusive or not
    evaluable (§5.9); every proposal, from a detector, a pattern or an LLM, is logged and
@@ -57,15 +56,18 @@ A global, autonomous portfolio manager for one IBKR account that:
 
 **Objective.** Maximise the long-run growth of after-tax wealth: the annualised log growth of
 the account's liquidation value, net of costs (DECISIONS D60). The owner sets no drawdown limit
-and accepts falls as deep as global equities' and deeper (§11, D147). Tax is simulated as it arises — realised gains through the lot engine, each
+on what is held and accepts falls as deep as global equities' and deeper (§11, D147); what
+is added is limited by the loss brake (D193). Tax is simulated as it arises — realised gains through the lot engine, each
 year's tax paid at the profile's payment date — and at the horizon the remaining positions are
 sold and their tax paid. Research reports each candidate's drawdowns beside its growth. Two
 references are scored under the same
 rule, in the base currency: a global accumulating UCITS equity ETF bought and held,
 and a global 60/40. They are yardsticks and a possible outcome, not the destination. The owner's
-bar is 50 % a year (D153, D185): every report shows the year's growth beside it and a year
-below it is reported as a miss. It is not a forecast and no design makes it a floor: no
-unlevered record sustains that figure on a whole account. No
+bar is 50 % a year, read as the compound growth of the last three years (D153, D185, D193):
+every report shows it beside the bar, with the current year's. It is not a forecast and no
+design makes it a floor: no unlevered record sustains that figure on a whole account, and
+nothing raises risk because a year fell short. A loss brake does the opposite: new theses
+enter smaller, then not at all, as the account falls from its peak (§5.11). No
 system knows with high certainty what markets will do: returns come from documented premia
 and from a selection edge that must be shown on data before it is funded, with costs and
 taxes treated as costs.
@@ -182,7 +184,7 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
 | "With high certainty about the future, investing is easy." | Edge = calibrated probability × asymmetric payoff. | Certainty is not available; overstated edges are what ruin a Kelly-sized account. |
 | Simons as microstructure trading: market making, intraday arbitrage, order micro-blocks, multi-asset option baskets. | Rejected. Simons here is statistical discipline: validation before trust, cost-aware execution, evidence-based sizing, a hard risk engine, the scoreboard. | Not achievable on a REST API at retail size; the atomic unit of an option position at this size is one contract. |
 | A daily macro regime model setting the allocation. | Rejected. The core is regime-agnostic; its dynamic element is trend following. | The legacy classifier was wrong for a decade; trend has the stronger evidence. |
-| A core that only follows bands, no trend. | Kept as a registered variant (A). The reserve runs D50, global equity with the trend brake (D147). | Bands alone give no crash protection; an unlevered risk-balanced core with long-duration bonds fell sharply in 2022, when stocks and bonds dropped together. The after-tax backtest decides (§5.4). |
+| A core that only follows bands, no trend. | Kept as a registered variant (A), which the reserve runs since the owner's ruling of 2026-11-25 (D194): capital that waits for a thesis is not asked for growth. | Bands alone give no crash protection; an unlevered risk-balanced core with long-duration bonds fell sharply in 2022, when stocks and bonds dropped together. The after-tax backtest decides (§5.4). |
 | Trend as an on/off switch at the 200-day average. | Rejected. Trend is a partial, slow, hysteretic tilt with tax-aware execution. | Whipsaw and realised gains are costly, especially in Spain, where ETF switches are taxable. |
 | Adding to long options after the move confirms. | Rejected. Options are bought in one block when implied vol is cheap; exits are scaled. Pyramiding applies to shares only. | Adding later pays a higher premium for the same convexity. |
 | Kelly with probabilities shrunk toward 0.5. | Rejected. Probabilities shrink toward the **base rate** (market-implied or random-walk), and until a layer is calibrated it sizes by a fixed risk budget (§5.11). | A 3:1 target is rarely a coin flip; anchoring at 0.5 overstates the edge, while anchoring at the base rate with no evidence gives Kelly ≈ 0 and would freeze the satellite. |
@@ -196,13 +198,13 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
 | Mining many patterns. | Rejected. Hypotheses come with an economic mechanism, are pre-registered, tested point-in-time out of sample with multiple-testing control, then shadow-graded live before receiving weight (§5.9). | The factor zoo (Harvey, Liu & Zhu 2016); published anomalies decay (McLean & Pontiff 2016). |
 | Social-media sentiment. | Dropped. Market-implied sentiment, positioning and graded LLM event extraction instead; VADER only as an offline fallback. | Paid or restricted APIs, noise. |
 | "The AI chooses sectors, then companies, then decides." | "LLM nominates, data disposes": the LLM may nominate; deterministic corroboration and scoring decide; rules size and gate. | Keeps the owner's original idea without letting the LLM own risk. |
-| A risk-balanced core chosen for its Sharpe ratio. | Rejected. The variants were scored after tax by the objective (§1); the owner's ruling for growth picks the equity-dominant D50 as the reserve (§5.4, DECISIONS D60, D147). | Without leverage, risk balance weights by risk rather than growth (two assets of 16 % and 5 % volatility at equal risk hold about 24 % equity); a variant can beat a 60/40 on Sharpe and still compound less than the equity reference. |
+| A risk-balanced core chosen for its Sharpe ratio. | Rejected. The variants were scored after tax by the objective (§1); the reserve runs A for what it must keep, not for its Sharpe ratio or its growth (§5.4, DECISIONS D60, D194). | Without leverage, risk balance weights by risk rather than growth (two assets of 16 % and 5 % volatility at equal risk hold about 24 % equity); a variant can beat a 60/40 on Sharpe and still compound less than the equity reference. |
 | Live returns as the proof of skill ("capital follows demonstrated skill"). | Rejected. Capital follows pre-registered research outcomes; live results are monitored against them through a twin (§5.19, D65). | t ≈ IR·√years: a live record confirms a moderate edge only after a decade or more, but it can flag decay or an implementation fault much sooner. |
 | Testing each component alone before any combination. | Rejected. A few combinations with a stated mechanism are pre-registered and tested beside their components, every trial counted (§5.9, D63). | An edge may exist only conditionally; an unregistered search for combinations would multiply false discoveries. |
 | A market order to escalate a protective exit after a gap. | Rejected. Sizing by gap-adjusted loss, a stop spec that follows volatility and gaps, and a triggered stop repriced through the gate (§5.11, §5.12, D67). | AGENTS.md forbids plain market orders; a stop-limit's loss at the stop is not a maximum loss. |
 | Capabilities gated by account size. | Rejected. Each runs when a computed activation condition holds (§2); what pays only at larger capital is built in Session 19a (D66). | No magic NAV threshold; one codebase serves a small account and a large one. |
 | "Buffett made 50 % a year on small sums and Medallion more, so the system can." | The figure is the owner's bar (D185), not a forecast. What transfers is Buffett's hunting ground, companies too small for institutions, and Simons's validation before trust (D148). | Buffett picked tiny companies by hand; Medallion uses leverage, short horizons and infrastructure the mandate excludes, and is closed to outside money. Neither is evidence about this system. |
-| Holding equities only when no fall is expected. | The reserve's trend brake reacts to a fall under way; a rule that forecasts one earns weight only by passing a test (D147, D150). | Session 4e found no risk-timing rule sufficient; a forecast nobody has tested is a guess with a cost in tax and missed recoveries. |
+| Holding equities only when no fall is expected. | The loss brake reacts to a fall that has happened and only limits what is added (D193); a rule that forecasts a fall earns weight only by passing a test (D147, D150). | Session 4e found no risk-timing rule sufficient; a forecast nobody has tested is a guess with a cost in tax and missed recoveries. |
 | Building every engine, then testing what it trades. | An engine is built for a hypothesis its test left sufficient or inconclusive-positive, as the mechanism the test ran (D150). | Thirteen build sessions produced no filled order and no sufficient signal. |
 | Rebuilding the book at every cycle. | A cycle works pending intents, exits and cash flows; selection changes on registered rebalance dates (D151). | Turnover and realised gains are costs; a change of mind six hours later is noise. |
 
@@ -224,8 +226,8 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
    views: equity grid · macro board · option surface · correlations · fx · curves
           ▼                                   ▼
  RESERVE (the core engine)             HUNTER (the return engine)
- global equity with a slow,            the thesis book: the analyst's and the owner's
- tax-aware trend brake; where          written ideas → one gate → up to eight positions,
+ a static risk balance of bonds,       the thesis book: the analyst's and the owner's
+ gold, commodities, equities; where    written ideas → one gate → up to eight positions,
  capital without a thesis waits;       shares or long options → the thesis's own exits;
  sells to fund an approved thesis      every idea graded in the ledger
           └──────────────┬────────────────────┘
@@ -248,8 +250,8 @@ this file, `DECISIONS.md`, a short `ROADMAP.md` session log, knowledge files (D1
 |---|---|---|
 | **Company-level inefficiency** (Graham and Schloss; the early Buffett partnerships; Greenblatt) | The Hunter. Its thesis book: written ideas on single companies, from their filings, their events and the screen, graded forward (D185). Its stock book, designed and unbuilt: a diversified book of stocks of any size that are cheap for their quality, bought by their insiders, sold by forced sellers or drifting after news. | Mispricing is expected to last longest in small companies, where institutions cannot deploy and a small account can; costs are also highest there. The test reports each size tier after costs and tax, and the book goes where it passed (§5.9, D153). |
 | **Statistical discipline** (Simons; Thorp) | Validation before trust, multiple-testing control, cost-aware execution, sizing bounded by evidence, the scoreboard. | Not a strategy here; the reason the others can be trusted. |
-| **Trend following** (the CTA tradition: Dennis and the Turtles, Seykota, Harding) | The reserve's brake: a slow, tax-aware reduction of equities in a fall under way. | The most robust systematic effect documented across a century of markets (Moskowitz, Ooi & Pedersen 2012; Hurst, Ooi & Pedersen 2017), and the cheapest crisis protection. |
-| **Measured diversification** (Dalio) | Whole-book risk: concentration, correlation clusters and stress scenarios measured on the book, never assumed (§5.11). The risk-balanced variants stay registered. | Small caps across markets fall together in a liquidity shock; the book must know its own exposure. |
+| **Trend following** (the CTA tradition: Dennis and the Turtles, Seykota, Harding) | The trend tilt of the registered variants B to D, which the reserve does not run (D194). | The most robust systematic effect documented across a century of markets (Moskowitz, Ooi & Pedersen 2012; Hurst, Ooi & Pedersen 2017), and the cheapest crisis protection. |
+| **Measured diversification** (Dalio) | The reserve: a static risk balance (variant A, D194). Whole-book risk: concentration, correlation clusters and stress scenarios measured on the book, never assumed (§5.11). | Small caps across markets fall together in a liquidity shock; the book must know its own exposure. |
 | **Reflexivity** (Soros) | The event sleeve: dislocations, crowded positioning, policy breaks, expressed with capped loss. Deferred (§5.5). | The least systematic source, with few independent events to test; it waits for a test that can conclude. |
 
 Not pillars: permanent tail hedging (systematic put buying bleeds the variance risk premium;
@@ -294,10 +296,11 @@ cycles. All of these live in config with a source per value.
   foreign role may be filled by a currency-hedged share class, if the owner rules that a
   hedge inside a UCITS fund fits the mandate (§11).
 - **The reserve.** The core engine holds the capital the Hunter does not (§5.19). It runs
-  `core.variant`, which the owner set to **D50**: global developed equity with the trend tilt
-  as an overlay to cash (DECISIONS D147). Session 4c measured D50's median after-tax growth
-  at 6.49 % a year against 7.13 % for equities bought and held, a difference the test cannot
-  tell from zero, with a 50 % fall on 5.8 % of 20-year paths against 13.4 %.
+  `core.variant`, which the owner set to **A**: the static risk balance with wide bands
+  (DECISIONS D194). Session 4c measured A's median after-tax growth at 3.22 % a year with a
+  largest fall of 11 %, against 6.49 % and 20 % for D50, the equity book with a trend brake
+  the reserve ran while it held most of the account (D147). A holds bonds, which fell with
+  equities in 2022.
 - **Variants.** The engine builds every variant Session 4c registered: A static risk balance
   with wide bands; B A + the trend tilt; C a growth-tilted risk budget + the tilt; D an
   equity-dominant book with the tilt as an overlay to cash, at five equity shares (D10 to
@@ -652,6 +655,11 @@ the layer on its stored series. A role runs in shadow within its cost share of N
 decision only when its activation condition holds (§2).
 
 ### 5.11 Decision layer
+
+- **The loss brake** (DECISIONS D193). The managed book's own fall from its highest daily
+  close, with nothing excused by the market: from the first configured step a new thesis is
+  entered at half its size, from the second none is entered until the book recovers. It
+  sells nothing, needs no command and eases by itself; the breakers below are read first.
 
 - **Expression selector.** A long option when the options sleeve is active (§5.6), IV
   percentile is at or below threshold, the chain is liquid, the tenor window is satisfiable, the payoff at the named target meets the
@@ -1219,9 +1227,9 @@ on L2.
 | 11 | Base currency | Selectable; EUR today; other currencies held as working balances. |
 | 12 | Withdrawals | Planned as soon as announced; the bot asks before cutting protected positions. |
 | 13 | Releases | Automatic on every version change; 1.0.0 at the end of the build. |
-| 14 | Objective (DECISIONS D60, D147, D153, D185) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. The bar: 50 % a year, shown beside every year's growth; not a forecast, a gate or a floor. The horizon is very long; the owner does not need the money now. |
+| 14 | Objective (DECISIONS D60, D147, D153, D185) | After-tax log growth of liquidation value, tax simulated as it arises; references scored under the same rule. The bar: 50 % a year, read as the compound growth of the last three years and shown beside it; not a forecast, a gate or a floor (D193). The horizon is very long; the owner does not need the money now. |
 | 15 | Scale (D66, D150) | Capabilities that pay only at larger capital are built in Session 19a, when capital reaches them, and run by computed activation conditions. |
-| 16 | Drawdown (D147) | No limit. The owner accepts falls as deep as global equities' and deeper while the Hunter holds capital; the reserve runs D50. The peak for the breakers and the digest is taken once a day at the last cycle's managed NAV (unmanaged holdings do not count). |
+| 16 | Drawdown (D147, D193, D194) | No limit on what is held. A loss brake on what is added: from a fall of 10 % of the managed book from its highest close a new thesis enters at half size, from 20 % none enters until it recovers. The reserve runs A. The peak for the breakers and the digest is taken once a day at the last cycle's managed NAV (unmanaged holdings do not count). |
 | 17 | Exposure caps by asset class (D88) | None set; optional configuration keys, read on look-through over the whole book. The mandate (§2) is unchanged. |
 | 18 | Adaptation (D89, D150) | A rule that times or reshapes the reserve joins it only after a pre-registered test with power of at least 0.5 finds it sufficient. Total-risk scaling was tested (Session 4e: none sufficient, D95). |
 | 19 | Swap partners on the same index (D123) | Allowed: a swap partner may track the same index as the vehicle it replaces when it comes from another issuer, which is what Spain's law requires (RIRPF art. 8); set in `config/owner.yaml`, the expert default stays a different index. |
@@ -1230,8 +1238,7 @@ on L2.
 | 22 | Ideas and the thesis book (D156) | The LLM analyst proposes theses on its own; the owner adds one when he has it, marked normal, high or max. All are written before they trade, pass the same gate and are graded. Any eligible instrument, a long call or put included (D157); bearish only through a defensive instrument or a put. At most eight positions, more as capital grows. Capital: the hunting share on the live account (the owner's key: all investable capital, D185), kept while the forward record stays above its boundary. |
 | 23 | A wealth manager, not a fund of ETFs (D185, D186) | The thesis book is the return engine and gets any listed stock, a ledger of every idea, models chosen by their record, events and company text. All of the account hunts; capital without a thesis waits in the reserve, and a hedge is a thesis on a safer asset or a long put. The mandate is not widened to reach a figure: no margin, no leveraged product, no certificate. |
 
-Open: the reading of the 50 % bar and a loss brake in absolute terms, and whether the reserve
-becomes a defensive place to wait (both put to the owner on 2026-11-25, D192); the LLM
+Open: the LLM
 provider and budget (Session 10's minimal extractor waits for a key); the machine (T1); which
 holdings to release; the paper managed-capital cap; buying the price history Session 23
 recommends; whether

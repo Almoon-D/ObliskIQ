@@ -17,9 +17,9 @@ the bar. Nothing has filled an order yet. In order:
    until an order fills. Each paste is recorded by a short session (docs/RUNBOOK.md).
 3. **Owner: the analyst's key on the machine** (step 1). The forward record counts calendar
    time: a week the analyst does not run is a week of record lost.
-4. **Owner: two rulings** (D192): how the 50 % bar is read and whether a loss brake in
-   absolute terms joins the breakers; whether the reserve becomes a defensive place to wait.
-   A session builds what he rules.
+4. **Owner: the paper cycle's expectations changed with the reserve** (D194): part D of
+   docs/RUNBOOK.md now shows `variant A` and nine roles, some below the minimum trade under a
+   small cap.
 5. **Session 31** (Opus 5.5, xhigh): any listed stock as a thesis, the hunting share, the
    reserve's funding sale.
 6. **Session 32** (Opus 5.5, xhigh): the idea ledger, its pre-registration first. Sessions 31
@@ -39,8 +39,8 @@ pass) waits until an order has filled. Not to do without a new decision: buy a p
 build a systematic stock book, run Sessions 15, 16, 17 or 19a before their conditions, widen
 the mandate (D186).
 
-**The 50 % bar, as the evidence stands.** The reserve earned about 6.5 % a year after tax in
-its test. No tested signal adds to it. Only the thesis book can reach 50 %, and nothing yet
+**The 50 % bar, as the evidence stands.** It is read over three years (D193). The reserve
+earned about 3 % a year after tax in its test. No tested signal adds to it. Only the thesis book can reach 50 %, and nothing yet
 shows that it does; no unlevered record has sustained it on a whole account. The ledger
 (Session 32) and the replay (Session 35) are what shorten the answer from about two years to
 months, and the replay's first reading to days.
@@ -102,7 +102,7 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 |---|---|---|
 | Has the bot filled an order? | No. Three live contacts, three faults the fixtures did not show | Session 22 |
 | Does any signal beat its benchmark after costs and tax? | None tested does: country momentum and its stop insufficient, no total-risk scaling sufficient | `research/pattern_registry.yaml` |
-| What does the reserve earn? | D50: 6.49 % a year median after tax in Session 4c, not distinguishable from equities held (7.13 %) | `research/reports/core-allocation.md` |
+| What does the reserve earn? | A, since D194: 3.22 % a year median after tax in Session 4c, largest fall 11 % (D50: 6.49 % and 20 %; equities held 7.13 %) | `research/reports/core-allocation.md` |
 | Can the account reach the 50 % bar? | Unknown, and unlikely on the record of others: no unlevered whole-account record sustains it. Only the thesis book could; it holds all investable capital by the owner's ruling once promoted, and its record decides whether it keeps it (D185) | `docs/DECISIONS.md` |
 | Do the analyst's or the owner's ideas beat the market? | Unknown: none has been graded. The thesis book grades them forward under H13's locked rule, the analyst's per segment; the analyst proposes from the service once its key is on the machine | `research/preregistrations/thesis-book.md` |
 | What would the Hunter earn? | Unknown: no stock-level test has run; the literature supports less than θ net of decay, costs and tax for every candidate | `research/reports/hunter-feasibility.md` |
@@ -110,6 +110,18 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Owner rulings: the loss brake and the reserve (2026-11-25, v1.3.0)
+
+- **Ruled** (owner, on D192's two questions): the bar is read over three years with a loss
+  brake at 10 % and 20 % (D193); the reserve runs A (D194).
+- **Built:** the loss brake in `decision/breakers.py`, read by the thesis rebalancer: half
+  size from the first step, no new thesis from the second, eased by recovery alone; its line
+  in the digest and `breakers status`. `core.variant: A` in `config/owner.yaml`.
+- **Prompts edited:** Session 31's deliverable 5 shows the three-year compound growth beside
+  the bar. RUNBOOK parts C and D follow variant A.
+- **Deferred:** the three-year figure in the digest (Session 31). The brake does not scale an
+  option's premium. **VERIFY-LIVE:** A's nine roles resolve to pinned funds on the paper cycle.
 
 ### Challenge and redesign (2026-11-25, v1.2.0)
 
@@ -537,7 +549,7 @@ it stopped, for every step that logs in (docs/RUNBOOK.md, "What runs").
    GTC stop listed the next day and readable by id), IBKR's reporting lag, from which
    `execution.reconcile.grace_seconds` is set.
 10. **The reserve on paper** (parts C and D), then **`serve` under the supervisor and the ten
-    shadow days** (part E): the trend brake's data, a whole cycle, the digest, the daily reset
+    shadow days** (part E): the reserve's nine roles, a whole cycle, the digest, the daily reset
     re-logged in unattended, the weekly report.
 11. **Kill drill, cash-flow drill and breaker drill, in paper** (docs/RUNBOOK.md, "The
     scoreboard, drills and the live levels" and "Money in and out"): the switch set, entries
@@ -659,6 +671,7 @@ settles it.
 | IBKR's daily reset as the session reports it on the machine: a `session_lost` then a `reauthenticated` in `session_events` on or the day before each trading day, so L1's re-login criterion passes (`VERIFY-LIVE(the daily reset in session_events)`, D172) | 18a | the first week of `serve` |
 | The weekly forecast panel's first live cohort: the model answers 40 ids a call inside the schema, the coverage reaches 60 %, and the cost per week against the budget (`VERIFY-LIVE(the panel's first cohort)`, D174) | 18a | the first week of `serve` with the analyst's key |
 | The stock bars' first pass: Yahoo answers a 400-day first read for 400 names a run inside the pacing, and the screen's status turns `ok` after the pass (`stocks.bars.first_read_days`, D190; Yahoo is not reachable from the cloud session that set it) | challenge of 2026-11-25 | the owner's first `sources run stock_bars` |
+| The reserve's paper cycle under variant A: each of the nine roles resolves to a pinned fund IBKR confirms, and the roles below the minimum trade under the cap say why (D194; RUNBOOK part D) | owner rulings of 2026-11-25 | the reserve's paper cycle |
 
 ## Follow-ups
 
@@ -781,7 +794,7 @@ settles it.
   probability of a sufficient outcome of 0.5 (D162); the owner bought nothing and Session 24
   is not run (D168). The Hunter has no tested signal (D87). Free data is not a substitute:
   it is used forward only (D180, Session 30).
-- **Owner:** the reserve runs D50 (D147). Open: an LLM provider key, or the minimal extractor
+- **Owner:** the reserve runs A (D194). Open: an LLM provider key, or the minimal extractor
   waits (D70); whether a hedge inside a UCITS share class fits the mandate (D69); a deep
   emergency limit for protective exits (off by default, D67); buying option-surface history for
   H8 (D71).

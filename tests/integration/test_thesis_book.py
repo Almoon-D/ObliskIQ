@@ -467,6 +467,42 @@ async def test_entries_wait_for_the_kill_switch_a_freeze_the_venue_and_cash(
     assert "no_cash" in [f.code.value for f in (await surveyed(s)).decisions[0].findings]
 
 
+async def closed_at(s: ServiceRig, managed: int, *days: int) -> None:
+    for back in days:
+        await s.rig.store(
+            breaker_repo.record_reading,
+            ManagedReading(
+                book="shadow",
+                as_of=MONDAY - timedelta(days=back),
+                managed=D(managed),
+                reference_conid=None,
+                reference_unit=None,
+                is_close=True,
+                recorded_at=EUROPE - timedelta(days=back),
+            ),
+        )
+
+
+async def test_the_loss_brake_halves_a_new_entry_then_stops_it(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    assert only(await surveyed(s)).size_base == D(1250)
+    # The book stands at 100,000: 10.7 % below a close of 112,000, inside both breakers.
+    await closed_at(s, 112000, 2, 1)
+    plan = await surveyed(s)
+    assert plan.entries_blocked is None
+    assert (only(plan).action, only(plan).size_base) == ("enter", D(625))
+    assert "smaller entries now: the book fell 10.7%" in plan.render()
+    # 20.6 % below a close of 126,000 six weeks ago: the breakers still pass, the brake stops.
+    await closed_at(s, 126000, 40, 39)
+    plan = await surveyed(s)
+    assert "the loss brake is on" in str(plan.entries_blocked)
+    assert (only(plan).action, codes(plan)) == ("wait", ["entries_blocked"])
+    assert plan.entries_reduced is None
+
+
 async def test_an_idea_expires_when_its_window_ends_or_its_levels_pass_first(
     make: Any, shipped_settings: ObliskConfig
 ) -> None:

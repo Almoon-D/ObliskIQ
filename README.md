@@ -7,8 +7,8 @@ An autonomous wealth manager for one Interactive Brokers account.
   as shares or long options. Every idea states its target, horizon and what would prove it
   wrong before it trades, and is graded; the book may hold all investable capital while that
   record allows.
-- **The reserve** — where capital without a thesis waits: global equities with a slow,
-  tax-aware trend brake. It sells to fund an approved thesis.
+- **The reserve** — where capital without a thesis waits: a risk balance of government bonds,
+  gold, commodities and equities. It sells to fund an approved thesis.
 - **The systematic stock book** — a rule-based book of stocks, designed and not built: no test
   of it can yet pass.
 - **Discipline** — a hard risk and execution layer; capital that moves by tested evidence,

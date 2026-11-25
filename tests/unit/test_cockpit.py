@@ -224,7 +224,7 @@ async def test_settings_show_the_panel_the_rules_and_whether_they_run(
     mcp: FastMCP, loaded: LoadedConfig, data_dir: Path
 ) -> None:
     found = await _call(mcp, "get_settings")
-    assert {"key": "core.variant", "default": "A", "value": "D50"} in found["owner_settings"]
+    assert {"key": "core.variant", "default": "A", "value": "A"} in found["owner_settings"]
     rule = next(r for r in found["remote_changeable"] if r["key"] == "thesis.caps.position")
     assert (rule["tighter"], rule["value"]) == ("lower", "0.25")
     assert found["service_runs_on_these"] is False
