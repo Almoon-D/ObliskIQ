@@ -86,8 +86,8 @@ async def test_cycle_one_fills_in_shadow_and_cycle_two_does_nothing(make: Any) -
         "nav",
         "breakers",
         "reserve",
-        "rebalance",
         "thesis",
+        "rebalance",
         "execute",
     ]
 

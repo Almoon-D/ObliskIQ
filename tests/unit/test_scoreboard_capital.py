@@ -183,11 +183,13 @@ def test_the_live_allocation_keeps_the_reserve_and_the_cash_floor(
     settings = shipped_settings.model_copy(update={"capital": capital})
     found = live_allocation(settings, D(1000), LiveShares(D("0.60"), D("0.0125"), D("0.10")))
     assert (found.satellite, found.options, found.cash_floor) == (D(600), D("12.5"), D(50))
-    assert found.core == D("337.5")
+    # The thesis book's share stays in the reserve's allocation: the reserve gives up what the
+    # book holds or has approved when it is committed (allocation.reserve_budget, D196).
+    assert found.core == D("437.5")
     assert found.thesis_book == D(100)
     capped = live_allocation(shipped_settings, D(1000), LiveShares(D("0.60"), D(0), D("0.10")))
     assert capped.satellite == D(200)
-    assert capped.core == D(750)
+    assert capped.core == D(850)
     nothing = live_allocation(shipped_settings, D(1000), LiveShares.none())
     assert (nothing.core, nothing.satellite) == (D(950), D(0))
     assert sleeve_budget(shipped_settings, Sleeve.OPTIONS) == D("0.05")
@@ -201,14 +203,14 @@ async def test_the_live_account_reads_the_recorded_shares(
 
     paper = await allocation_now(store_worker, shipped_settings, D(1000), ExecutionMode.PAPER)
     assert paper == book_allocation(shipped_settings, D(1000), ExecutionMode.PAPER)
-    assert paper.thesis_book == D(100)
+    assert paper.thesis_book == D(950)  # the owner's share of 1, less the cash floor
     live = await allocation_now(store_worker, shipped_settings, D(1000), ExecutionMode.LIVE)
     assert (live.core, live.satellite, live.thesis_book) == (D(950), D(0), D(0))
     await store_worker.run(
         repo.record_allocation, AllocationEvent(AT, THESIS_BOOK, D("0.10"), "allocation rule", "r")
     )
     live = await allocation_now(store_worker, shipped_settings, D(1000), ExecutionMode.LIVE_SMALL)
-    assert (live.core, live.satellite, live.thesis_book) == (D(850), D(100), D(100))
+    assert (live.core, live.satellite, live.thesis_book) == (D(950), D(100), D(100))
 
 
 # ── the registry's layers ──

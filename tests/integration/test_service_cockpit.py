@@ -102,7 +102,7 @@ async def test_a_valid_change_of_the_panel_stops_the_loop_at_the_boundary(
     owner = config_dir / "owner.yaml"
     watch = SettingsWatch(owner, reload=lambda: load_config(config_dir))
     with owner.open("a", encoding="utf-8") as handle:
-        handle.write("thesis:\n  max_positions: 6\n")
+        handle.write("  max_positions: 6\n")
     restart = await run_until(s, BEFORE_EUROPE, BEFORE_EUROPE + timedelta(minutes=20), watch)
     assert restart is True
     assert s.placed() == []
@@ -116,7 +116,7 @@ async def test_an_invalid_change_is_alerted_once_and_the_service_goes_on(
     owner = config_dir / "owner.yaml"
     watch = SettingsWatch(owner, reload=lambda: load_config(config_dir))
     with owner.open("a", encoding="utf-8") as handle:
-        handle.write("thesis:\n  max_positions: -1\n")
+        handle.write("  max_positions: -1\n")
     restart = await run_until(s, BEFORE_EUROPE, BEFORE_EUROPE + timedelta(minutes=20), watch)
     assert restart is False
     (alert,) = s.notifier.alerts("settings.invalid")

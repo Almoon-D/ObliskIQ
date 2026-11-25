@@ -313,7 +313,8 @@ def test_the_month_end_drill_records_looks_freezes_and_steps(
     assert [e.event for e in changes.events] == ["freeze"]
     key = layer_key(Sleeve.SATELLITE, "pat")
     shares = {e.layer: e.share for e in changes.shares}
-    assert shares == {key: D("0.50"), THESIS_BOOK: D("0.10")}
+    # The owner's share of 1, held to H13's live ceiling.
+    assert shares == {key: D("0.50"), THESIS_BOOK: h13.step.share_ceiling}
     repeat = run_month(
         store,
         shipped_settings,

@@ -107,7 +107,8 @@ async def test_every_registered_variant_produces_a_target_portfolio(
         assert portfolio is not None
         variant = rebalancer.variant
         assert (portfolio.variant, portfolio.trigger) == (name, Trigger.START)
-        assert portfolio.budget == Decimal(SIZES[size]) * Decimal("0.85")
+        # Every budget but the cash floor: the thesis book holds and has approved nothing (D196).
+        assert portfolio.budget == Decimal(SIZES[size]) * Decimal("0.95")
         assert (portfolio.trend_as_of is not None) == variant.tilts
         roles = {role.role: role for role in portfolio.roles}
         assert set(roles) == set(variant.roles)

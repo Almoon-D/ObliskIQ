@@ -133,8 +133,8 @@ def test_a_cycle_runs_and_records_itself(
         "nav",
         "breakers",
         "reserve",
-        "rebalance",
         "thesis",
+        "rebalance",
         "execute",
     ]
 

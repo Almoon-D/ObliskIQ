@@ -141,9 +141,9 @@ async def test_an_empty_book_buys_every_role_to_its_target(rig: Any) -> None:
     assert plan.capital is not None
     assert plan.capital.managed == Decimal(1000)
     assert plan.spendable == Decimal(975)  # the cap, less the cash floor of 25
-    # The core's budget is 850: its own 70 % with the options' share and what the thesis book
-    # leaves of the satellite's; the thesis book's 10 % and the cash floor of 5 % stay cash.
-    assert plan.core_capital == Decimal(850)
+    # The core's budget is 950: every budget but the cash floor of 5 %, less what the thesis
+    # book holds or has approved, which is nothing here (D196).
+    assert plan.core_capital == Decimal(950)
     assert plan.portfolio is not None
     assert (plan.portfolio.variant, plan.portfolio.trigger) == ("three funds", Trigger.START)
     roles = by_role(plan)

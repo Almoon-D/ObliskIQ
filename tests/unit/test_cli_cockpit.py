@@ -189,7 +189,7 @@ def test_serve_starts_again_on_changed_settings(
             runs.append(self.settings.thesis.max_positions)
             if len(runs) == 1:
                 with (config_dir / "owner.yaml").open("a", encoding="utf-8") as handle:
-                    handle.write("thesis:\n  max_positions: 6\n")
+                    handle.write("  max_positions: 6\n")
                 return True
             return False
 
