@@ -67,6 +67,7 @@ def draft(**changes: Any) -> dict[str, Any]:
         "target": 60.0,
         "invalidation": 40.0,
         "horizon": "2027-04-30",
+        "probability": 0.4,
         "facts": ["F1", "F2"],
     }
     fields.update(changes)
@@ -263,7 +264,7 @@ def test_drafts_beyond_the_week_s_remainder_are_dropped() -> None:
     found = parse_drafts(
         drafts(draft(), draft(symbol="SPPW")), sheet(), wanted=1, last_day=LAST_DAY
     )
-    assert [p.dropped for p in found] == [None, "beyond the 1 drafts left this week"]
+    assert [p.dropped for p in found] == [None, "beyond the 1 drafts asked for"]
 
 
 @pytest.mark.parametrize(
@@ -423,7 +424,9 @@ async def test_an_opinion_that_fails_is_asked_again_up_to_the_cap(
         assert (route.call_count, result.failed) == (1, 1)
     result, route = await run_with(settings, store_worker)
     assert route.call_count == 0  # two failures: no more tries
-    assert result.reason == "no draft asked: 0 of this week's 0 drafts were proposed"
+    assert (
+        result.reason == "no draft asked: 0 of this week's 0 drafts were proposed, at most 3 a run"
+    )
     assert analyst_repo.opinion_for(store, owner.thesis_id) is None
 
 
@@ -471,7 +474,9 @@ async def test_the_week_s_drafts_cap_the_ask(
     )  # fmt: skip
     result, route = await run_with(settings, store_worker)
     assert route.call_count == 0
-    assert result.reason == "no draft asked: 2 of this week's 2 drafts were proposed"
+    assert (
+        result.reason == "no draft asked: 2 of this week's 2 drafts were proposed, at most 3 a run"
+    )
 
 
 async def test_once_the_budget_is_spent_no_call_is_made(

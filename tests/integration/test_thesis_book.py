@@ -47,6 +47,7 @@ from obliskiq.orchestration import jobs
 from obliskiq.orchestration.assemble import build_thesis_book
 from obliskiq.orchestration.parts import build_capital
 from obliskiq.store import breakers as breaker_repo
+from obliskiq.store import ledger as ledger_repo
 from obliskiq.store import open_database, repos
 from obliskiq.store import orders as repo
 from obliskiq.store import stocks as stocks_repo
@@ -54,6 +55,7 @@ from obliskiq.store import theses as thesis_repo
 from obliskiq.store import universe as universe_repo
 from obliskiq.store.breakers import ManagedReading
 from obliskiq.store.h13 import H13Look, book_capital, record_h13_look
+from obliskiq.store.ledger import SegmentState
 from obliskiq.store.scoreboard import AllocationEvent, record_allocation
 from obliskiq.tax.book import identity_of
 
@@ -367,6 +369,64 @@ async def test_a_full_book_withholds_the_next_idea_in_order_of_arrival(
     assert (await log(s, 2))[-1].startswith("withheld: book_full: the book holds its 1 positions")
     await thesis_book.apply(await thesis_book.survey(ExecutionMode.SHADOW))
     assert len(await log(s, 2)) == 2  # the same reason is not logged again every cycle
+
+
+async def two_ideas_one_slot(
+    s: ServiceRig, *, passed: bool, probability: float = 0.7
+) -> ThesisPlan:
+    """SPPW then XEON for one slot; XEON states ``probability``, the owner's segment is graded."""
+    quote(s, XEON, "45")
+    await seed_bars(s, XEON, 45.0)
+    await idea(s)
+    await idea(s, symbol="XEON", probability=probability)
+    graded = SegmentState("owner", MONDAY - timedelta(days=1), passed, 0.5, 0.5, "graded")
+    await s.rig.store(ledger_repo.record_segment, graded, at=EUROPE - timedelta(days=1))
+    return await book(s).survey(ExecutionMode.SHADOW)
+
+
+async def test_a_trusted_segment_s_better_idea_is_offered_the_free_slot_first(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, max_positions=1)
+    plan = await two_ideas_one_slot(s, passed=True)
+    # XEON: believed 0.6 of a 15 gain against a 5 loss, at 45. It comes first; SPPW waits.
+    assert [(d.thesis.thesis_id, d.action) for d in plan.decisions] == [(2, "enter"), (1, "wait")]
+    thesis_book = book(s)
+    await thesis_book.apply(plan)
+    written = await s.rig.store(ledger_repo.calls, as_of=MONDAY)
+    assert [(c.thesis_id, c.segment, c.probability) for c in written] == [
+        (2, "owner", 0.7),
+        (1, "owner", None),
+    ]  # in the order they were judged, both: a full book is not a check the idea failed
+    await thesis_book.apply(await thesis_book.survey(ExecutionMode.SHADOW))
+    assert len(await s.rig.store(ledger_repo.calls, as_of=MONDAY)) == 2  # written once each
+
+
+async def test_a_segment_that_did_not_pass_leaves_the_order_of_arrival(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, max_positions=1)
+    plan = await two_ideas_one_slot(s, passed=False)
+    assert [(d.thesis.thesis_id, d.action) for d in plan.decisions] == [(1, "enter"), (2, "wait")]
+
+
+async def test_a_trusted_segment_s_idea_without_an_expected_gain_waits_its_turn(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings, max_positions=1)
+    # Believed 0.25 of a 15 gain against 0.75 of a 5 loss: nothing expected, arrival decides.
+    plan = await two_ideas_one_slot(s, passed=True, probability=0.0)
+    assert [(d.thesis.thesis_id, d.action) for d in plan.decisions] == [(1, "enter"), (2, "wait")]
+
+
+async def test_a_refused_idea_is_not_written_into_the_ledger(
+    make: Any, shipped_settings: ObliskConfig
+) -> None:
+    s = await started(make, shipped_settings)
+    await idea(s)
+    strict = book(s, eligibility=AllowlistEligibility([]))
+    await strict.apply(await strict.survey(ExecutionMode.SHADOW))
+    assert await s.rig.store(ledger_repo.calls, as_of=MONDAY) == []
 
 
 async def test_a_conid_another_book_or_thesis_holds_is_refused(
@@ -984,6 +1044,7 @@ def acme_draft(**changes: Any) -> ThesisDraft:
         "target": 70.0,
         "invalidation": 40.0,
         "horizon": HORIZON,
+        "probability": 0.4,
         "facts": ["F1"],
     }
     answer = DraftAnswer.model_validate({**fields, **changes})

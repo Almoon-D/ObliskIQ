@@ -36,8 +36,16 @@ from .layers import (
     no_retest,
     registry_layers,
 )
+from .ledger import LedgerBook, grade_ledger, record_segments
 from .promotion import Verdict, evaluate
-from .rules import H13_PATH, RULES_PATH, load_locked, load_locked_book
+from .rules import (
+    H13_PATH,
+    LEDGER_PATH,
+    RULES_PATH,
+    load_locked,
+    load_locked_book,
+    load_locked_ledger,
+)
 from .run import (
     Changes,
     GradeBook,
@@ -119,16 +127,35 @@ class Scoreboard:
             grade_book, self._settings, rules.scoreboard.spec, as_of=as_of
         )
 
+    async def ledger(self, as_of: date) -> LedgerBook | str:
+        """The idea ledger graded on ``as_of`` under H14's locked rules, or why it cannot be."""
+        if self._root is None:
+            return "no repository holds the research files (an installed wheel)"
+        try:
+            spec = load_locked_ledger(self._root / LEDGER_PATH).spec
+        except ObliskError as exc:
+            return str(exc)
+        return await self._worker.run(
+            grade_ledger, self._settings, spec, as_of=as_of, venue_of=self._venue
+        )
+
     async def daily(self, as_of: date) -> tuple[Changes | str, list[Alert]]:
-        """Grade every layer and promote the shadow entries whose rule is met."""
+        """Grade every layer and the idea ledger (each segment's calibration is stored for the
+        thesis book's slot order), and promote the shadow entries whose rule is met."""
+        at = self._now()
+        ledger = await self.ledger(as_of)
+        if isinstance(ledger, LedgerBook):
+            await self._worker.run(record_segments, ledger, at=at)
         rules = self.rules()
         if isinstance(rules, str):
             return rules, []
         spec = rules.scoreboard.spec
-        at = self._now()
         book = await self._worker.run(grade_book, self._settings, spec, as_of=as_of)
         changes = await self._worker.run(
             run_lifecycle, spec, self.layers(), book, activation=self._activation, at=at
+        )
+        changes.notes.append(
+            f"idea ledger not graded: {ledger}" if isinstance(ledger, str) else ledger.summary()
         )
         return changes, self._alerts(changes, at)
 
@@ -288,4 +315,5 @@ class Scoreboard:
             tax=await self._tax_summary(as_of.year) if monthly else None,
             notes=(),
             h13=h13,
+            ledger=await self.ledger(as_of),
         )

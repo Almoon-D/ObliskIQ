@@ -21,6 +21,7 @@ from ..domain.tax import TaxYearSummary
 from ..quant.inference import MeanEstimate
 from ..scoreboard.calibration import CalibrationState
 from ..scoreboard.grading import PanelRecord, Record
+from ..scoreboard.ledger import LedgerBook
 from ..scoreboard.performance import Series
 from ..scoreboard.promotion import Verdict
 from ..scoreboard.run import GradeBook, PerformanceView
@@ -28,6 +29,7 @@ from ..scoreboard.tca import TcaReport
 from ..store.h13 import H13Look
 from ..store.scoreboard import AllocationEvent, Look
 from .bar import BAR_GROWTH
+from .ledger import ledger_lines
 
 #: The owner's aspiration, a year (DECISIONS D153): shown as a distance, never a forecast.
 ASPIRATION = BAR_GROWTH
@@ -53,6 +55,8 @@ class ReportInputs:
     notes: Sequence[str]
     #: H13's looks taken this month (the thesis book's record against its twin).
     h13: Sequence[H13Look] = ()
+    #: The idea ledger (H14), or why it was not graded.
+    ledger: LedgerBook | str = "not read"
 
 
 def _pct(value: float | Decimal | None, places: int = 2) -> str:
@@ -274,6 +278,10 @@ def weekly(inputs: ReportInputs) -> str:
         *performance_lines(inputs.performance),
         "",
         *_grades(inputs),
+        "",
+        "## Idea ledger",
+        "",
+        *ledger_lines(inputs.ledger),
         "",
         "## Transaction costs",
         "",

@@ -105,10 +105,13 @@ sudo systemctl start obliskiq.service
 
 After the digest the service grades every layer's calls; the first digest of a week writes the
 weekly report (`<data dir>/reports/`) and sends its summary, the first digest of a month runs the
-month's monitoring looks and capital allocation and sends the monthly report. By hand:
+month's monitoring looks and capital allocation and sends the monthly report. The idea ledger
+is graded with the digest too: it says "too few" for each group until about two years of ideas.
+By hand:
 
 ```
 uv run obliskiq scoreboard grade                      # every layer's forward record
+uv run obliskiq scoreboard ledger                     # every idea's record, traded or not (H14)
 uv run obliskiq scoreboard report weekly --send       # or monthly
 uv run obliskiq promotion status                      # the next level's criteria
 uv run obliskiq promotion drill kill passed --detail "set, entries refused, cleared"

@@ -17,13 +17,21 @@ from pathlib import Path
 from typing import Final
 
 from ..errors import PreregistrationError
-from ..research.prereg import ForwardBookPrereg, ScoreboardPrereg, ScoreboardSpec, load_any
+from ..research.prereg import (
+    ForwardBookPrereg,
+    IdeaLedgerPrereg,
+    ScoreboardPrereg,
+    ScoreboardSpec,
+    load_any,
+)
 from ..research.registry import file_sha256, lock_path
 
 #: The scoreboard's pre-registration, relative to the repository root.
 RULES_PATH: Final = Path("research") / "preregistrations" / "scoreboard.md"
 #: The thesis book's pre-registration (H13), relative to the repository root.
 H13_PATH: Final = Path("research") / "preregistrations" / "thesis-book.md"
+#: The idea ledger's pre-registration (H14), relative to the repository root.
+LEDGER_PATH: Final = Path("research") / "preregistrations" / "idea-ledger.md"
 DAYS_PER_WEEK: Final = 7
 
 
@@ -56,6 +64,15 @@ def load_locked_book(path: Path) -> ForwardBookPrereg:
     prereg = load_any(path)
     if not isinstance(prereg, ForwardBookPrereg):
         raise PreregistrationError(f"{path.name} is not a forward book's pre-registration")
+    return prereg
+
+
+def load_locked_ledger(path: Path) -> IdeaLedgerPrereg:
+    """H14's pre-registration at ``path`` when its lock records exactly this text."""
+    _check_lock(path)
+    prereg = load_any(path)
+    if not isinstance(prereg, IdeaLedgerPrereg):
+        raise PreregistrationError(f"{path.name} is not the idea ledger's pre-registration")
     return prereg
 
 

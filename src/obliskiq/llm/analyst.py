@@ -7,17 +7,18 @@ A run reads one fact sheet (``grid/facts.py``) and:
    analyst.py: awaiting_opinion``): a critique and the probability it states that the target is
    reached. Logged and graded (Brier, when the thesis closes), never a veto: nothing reads it but
    the digest and ``idea show``;
-2. asks for **drafts**, at most what is left of ``max_drafts_per_week`` this ISO week. Each draft
-   is checked on its own and **dropped** (with the reason, logged and stored by the caller) when
-   it lacks or mis-states a field, names an instrument (or a stock of the screen, as its section
-   says) the sheet does not list or one an open thesis (or an earlier draft of the answer)
-   already holds, cites no fact line, cites a line the sheet does not hold or one dated after the
-   sheet, names an instrument without a close on the sheet or levels that do not bracket it (the
-   gate judges the gain-to-loss ratio at the price it would enter at), sets a horizon outside
-   ``(as_of, as_of + max_horizon_days]``, or comes beyond the week's remaining number. What
-   survives is a :class:`Proposal` the service hands to the thesis book's intake as source
-   ``analyst``; its gate decides. Nothing here sizes, orders or gates: ``llm`` imports nothing
-   from ``decision`` or ``execution``.
+2. asks for **drafts**, at most what is left of ``max_drafts_per_week`` this ISO week and at most
+   ``max_drafts_per_run`` in the run (its one segment), each with the probability that its target
+   comes first, which the idea ledger grades (H14). Each draft is checked on its own and **dropped**
+   (with the reason, logged and stored by the caller) when it lacks or mis-states a field, names an
+   instrument (or a stock of the screen, as its section says) the sheet does not list or one an open
+   thesis (or an earlier draft of the answer) already holds, cites no fact line, cites a line the
+   sheet does not hold or one dated after the sheet, names an instrument without a close on the
+   sheet or levels that do not bracket it (the gate judges the gain-to-loss ratio at the price it
+   would enter at), sets a horizon outside ``(as_of, as_of + max_horizon_days]``, or comes beyond
+   the number asked for. What survives is a :class:`Proposal` the service hands to the thesis book's
+   intake as source ``analyst``; its gate decides. Nothing here sizes, orders or gates: ``llm``
+   imports nothing from ``decision`` or ``execution``.
 
 Each call is temperature 0, asks for JSON matching a schema, and is asked once more with the
 validation error when its answer is not that JSON (``retries_on_invalid``); then it fails closed
@@ -130,6 +131,7 @@ class Proposal:
             target=answer.level("target"),
             invalidation=answer.level("invalidation"),
             horizon=answer.horizon,
+            probability=answer.probability,
         )
 
 
@@ -151,7 +153,7 @@ def check_draft(
         return Proposal(seq, text, facts, None, reason)
 
     if seq > wanted:
-        return drop(f"beyond the {wanted} drafts left this week")
+        return drop(f"beyond the {wanted} drafts asked for")
     try:
         answer = DraftAnswer.model_validate(raw)
     except ValidationError as exc:
@@ -335,12 +337,12 @@ class Analyst:
         handed = await self._worker.run(
             analyst_repo.drafts_handed, first=monday, last=monday + timedelta(days=WEEK_DAYS - 1)
         )
-        wanted = self._config.max_drafts_per_week - handed
+        wanted = min(self._config.max_drafts_per_week - handed, self._config.max_drafts_per_run)
         if wanted <= 0:
             return self._result(
                 "ok",
                 f"no draft asked: {handed} of this week's {self._config.max_drafts_per_week} "
-                "drafts were proposed",
+                f"drafts were proposed, at most {self._config.max_drafts_per_run} a run",
                 tally,
             )
         last_day = sheet.as_of + timedelta(days=self._config.max_horizon_days)

@@ -397,9 +397,22 @@ SHAPE = {
     ),
     # 020_stock_incorporations
     "stock_incorporations": "cik:INTEGER*, code:TEXT, known_at:TEXT!",
+    # 021_idea_ledger
+    "thesis_probabilities": "thesis_id:INTEGER*, probability:REAL!, known_at:TEXT!",
+    "idea_calls": (
+        "call_id:INTEGER*, thesis_id:INTEGER!, conid:INTEGER!, symbol:TEXT!, source:TEXT!, "
+        "segment:TEXT!, event_tags:TEXT!, rises:INTEGER!, target:TEXT!, invalidation:TEXT!, "
+        "horizon:TEXT!, probability:REAL, known_at:TEXT!"
+    ),
+    "ledger_segments": (
+        "segment:TEXT!*, as_of:TEXT!*, passed:INTEGER!, shrink:REAL!, base_rate:REAL, "
+        "reason:TEXT!, known_at:TEXT!"
+    ),
 }
 
 INDEXES = {
+    # 021_idea_ledger
+    "ix_idea_calls_known",
     # 019_stocks
     "ix_stock_bars_session",
     # 018_scoreboard_remainder

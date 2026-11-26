@@ -179,6 +179,9 @@ class ThesisDraft(DomainModel):
     horizon: date | None = None
     entry_max: Decimal | None = None
     enter_by: date | None = None
+    #: The probability its source states that the target comes first (H14); none where the source
+    #: states none (the owner's ideas).
+    probability: Annotated[float, Field(ge=0, le=1)] | None = None
 
 
 class Thesis(DomainModel):

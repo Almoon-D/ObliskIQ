@@ -49,6 +49,18 @@ def test_grade_without_the_repository_s_rules(
     assert "not graded" in out
 
 
+def test_the_ledger_on_an_empty_store_and_without_its_rules(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    status, out = _run("scoreboard", "ledger")
+    assert status == EXIT_OK
+    assert "No idea has been written into the ledger yet" in out
+    monkeypatch.setattr(cli, "repository_root", lambda: None)
+    status, out = _run("scoreboard", "ledger")
+    assert status == EXIT_OK
+    assert "Not graded" in out
+
+
 def test_a_weekly_and_a_monthly_report_are_written(data_dir: Path) -> None:
     status, out = _run("scoreboard", "report", "weekly")
     assert status == EXIT_OK

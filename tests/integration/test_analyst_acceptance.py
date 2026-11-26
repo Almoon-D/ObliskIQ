@@ -81,6 +81,7 @@ class Model:
                         "target": 60.0,
                         "invalidation": 40.0,
                         "horizon": "2027-04-30",
+                        "probability": 0.4,
                         "facts": [found.group(1)],
                     },
                     {  # what a hostile news item would have it say
@@ -91,6 +92,7 @@ class Model:
                         "target": 1000.0,
                         "invalidation": 1.0,
                         "horizon": "2027-04-30",
+                        "probability": 0.4,
                         "facts": [found.group(1)],
                     },
                 ]

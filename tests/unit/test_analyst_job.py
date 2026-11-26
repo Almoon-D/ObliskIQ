@@ -44,6 +44,7 @@ def written(**changes: Any) -> dict[str, Any]:
         "target": 60.0,
         "invalidation": 40.0,
         "horizon": "2027-04-30",
+        "probability": 0.4,
         "facts": ["F1"],
     }
     return {**fields, **changes}
