@@ -1,5 +1,6 @@
-"""The LLM analyst in the store (015_analyst): its calls, its drafts and its second opinions, all
-append-only, and the month's spend on the LLM, which the extractor and the analyst share.
+"""The LLM analyst in the store (015_analyst, 022_analyst_segments): its calls, its drafts, its
+second opinions and its reviews, all append-only, and the month's spend on the LLM, which every
+role shares, with each analyst segment's own.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -14,6 +15,7 @@ from ..domain.analyst import (
     DraftOutcome,
     DraftRecord,
     SecondOpinion,
+    ThesisReview,
     segment_label,
 )
 from ..domain.sources import ExtractionStatus
@@ -28,7 +30,7 @@ from .sources import extraction_spend
 _CALL_COLUMNS = (
     "call_id, kind, thesis_id, as_of, sheet_hash, produced_at, provider, model_id, "
     "prompt_version, prompt_hash, status, attempts, output, error, input_tokens, output_tokens, "
-    "cost_usd"
+    "cost_usd, segment"
 )
 
 
@@ -61,6 +63,7 @@ def _call(row: sqlite3.Row) -> AnalystCall:
             input_tokens=row["input_tokens"],
             output_tokens=row["output_tokens"],
             cost_usd=row["cost_usd"],
+            segment=row["segment"],
         ),
     )
 
@@ -70,7 +73,7 @@ def record_call(store: Store, call: AnalystCall) -> AnalystCall:
     with store.transaction():
         cursor = store.execute(
             f"INSERT INTO analyst_calls ({_CALL_COLUMNS.removeprefix('call_id, ')}) VALUES "
-            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 call.kind.value,
                 call.thesis_id,
@@ -88,6 +91,7 @@ def record_call(store: Store, call: AnalystCall) -> AnalystCall:
                 call.input_tokens,
                 call.output_tokens,
                 call.cost_usd,
+                call.segment,
             ),
         )
     return call.model_copy(update={"call_id": cursor.lastrowid})
@@ -116,6 +120,31 @@ def analyst_spend(store: Store, since: datetime) -> float:
         (stamp_text(since),),
     ).fetchone()
     return float(row["spent"])
+
+
+def segment_spend(store: Store, segment: str, since: datetime) -> float:
+    """What one analyst segment's calls produced since ``since`` cost."""
+    row = store.execute(
+        "SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM analyst_calls "
+        "WHERE segment = ? AND produced_at >= ?",
+        (segment, stamp_text(since)),
+    ).fetchone()
+    return float(row["spent"])
+
+
+def label_spend(store: Store, *, as_of: date) -> dict[str, float]:
+    """What each segment (as the record names it) spent on the calls it produced by the end of
+    ``as_of``, every pass counted."""
+    rows = store.execute(
+        "SELECT segment, prompt_hash, SUM(cost_usd) AS spent FROM analyst_calls "
+        "WHERE segment IS NOT NULL AND produced_at < ? GROUP BY segment, prompt_hash",
+        (cutoff_text(as_of),),
+    ).fetchall()
+    found: dict[str, float] = {}
+    for row in rows:
+        label = segment_label(row["segment"], row["prompt_hash"])
+        found[label] = found.get(label, 0.0) + float(row["spent"])
+    return found
 
 
 def llm_spend(store: Store, since: datetime) -> float:
@@ -163,13 +192,14 @@ def drafts_of(store: Store, call_id: int) -> list[DraftRecord]:
     return [_draft(row) for row in rows]
 
 
-def drafts_handed(store: Store, *, first: date, last: date) -> int:
+def drafts_handed(store: Store, *, first: date, last: date, segment: str | None = None) -> int:
     """The drafts handed to the intake (accepted or refused there) by calls whose fact sheet is
-    dated between ``first`` and ``last``, both included."""
+    dated between ``first`` and ``last``, both included; by one segment's calls, when named."""
     row = store.execute(
         "SELECT COUNT(*) FROM analyst_drafts d JOIN analyst_calls c ON c.call_id = d.call_id "
-        "WHERE d.outcome IN ('accepted', 'refused') AND c.as_of >= ? AND c.as_of <= ?",
-        (date_text(first), date_text(last)),
+        "WHERE d.outcome IN ('accepted', 'refused') AND c.as_of >= ? AND c.as_of <= ? "
+        "AND (? IS NULL OR c.segment = ?)",
+        (date_text(first), date_text(last), segment, segment),
     ).fetchone()
     return int(row[0])
 
@@ -187,14 +217,25 @@ def draft_for_thesis(store: Store, thesis_id: int) -> tuple[DraftRecord, Analyst
 
 
 def thesis_segments(store: Store) -> dict[int, str]:
-    """The segment (model and prompt hash) each analyst thesis was proposed in."""
+    """The segment (its name, or before segments its model, and its prompt hash) each analyst
+    thesis was proposed in."""
     rows = store.execute(
-        "SELECT d.thesis_id, c.model_id, c.prompt_hash FROM analyst_drafts d "
+        "SELECT d.thesis_id, c.model_id, c.prompt_hash, c.segment FROM analyst_drafts d "
         "JOIN analyst_calls c ON c.call_id = d.call_id WHERE d.thesis_id IS NOT NULL"
     ).fetchall()
     return {
-        int(row["thesis_id"]): segment_label(row["model_id"], row["prompt_hash"]) for row in rows
+        int(row["thesis_id"]): segment_label(row["segment"] or row["model_id"], row["prompt_hash"])
+        for row in rows
     }
+
+
+def thesis_segment_names(store: Store) -> dict[int, str | None]:
+    """The configured segment that proposed each analyst thesis (``None`` before segments)."""
+    rows = store.execute(
+        "SELECT d.thesis_id, c.segment FROM analyst_drafts d "
+        "JOIN analyst_calls c ON c.call_id = d.call_id WHERE d.thesis_id IS NOT NULL"
+    ).fetchall()
+    return {int(row["thesis_id"]): row["segment"] for row in rows}
 
 
 # ── second opinions ──
@@ -256,6 +297,57 @@ def opinion_for(store: Store, thesis_id: int) -> tuple[SecondOpinion, AnalystCal
     return opinion, call
 
 
+# ── reviews ──
+
+
+def record_review(store: Store, review: ThesisReview) -> None:
+    with store.transaction():
+        store.execute(
+            "INSERT INTO thesis_reviews (call_id, thesis_id, probability, critique, facts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (review.call_id, review.thesis_id, review.probability, review.critique, review.facts),
+        )
+
+
+def _review(row: sqlite3.Row) -> ThesisReview:
+    return _read(
+        "thesis_reviews",
+        row,
+        lambda: ThesisReview(
+            call_id=row["call_id"],
+            thesis_id=row["thesis_id"],
+            probability=row["probability"],
+            critique=row["critique"],
+            facts=row["facts"],
+        ),
+    )
+
+
+def reviews(store: Store, *, as_of: date) -> list[tuple[ThesisReview, AnalystCall]]:
+    """Every review produced by the end of ``as_of``, with its call, in order."""
+    found = []
+    for call in calls(store, as_of=as_of):
+        if call.kind is not CallKind.REVIEW or call.status is not ExtractionStatus.OK:
+            continue
+        row = store.execute(
+            "SELECT * FROM thesis_reviews WHERE call_id = ?", (call.call_id,)
+        ).fetchone()
+        if row is not None:
+            found.append((_review(row), call))
+    return found
+
+
+def reviewed(store: Store, *, segment: str, first: date, last: date) -> set[int]:
+    """The theses ``segment`` asked a review of (whatever came of it) on a sheet dated between
+    ``first`` and ``last``, both included."""
+    rows = store.execute(
+        "SELECT DISTINCT thesis_id FROM analyst_calls WHERE kind = 'review' AND segment = ? "
+        "AND as_of >= ? AND as_of <= ?",
+        (segment, date_text(first), date_text(last)),
+    ).fetchall()
+    return {int(row["thesis_id"]) for row in rows}
+
+
 def awaiting_opinion(store: Store, *, as_of: date, max_failures: int) -> list[Thesis]:
     """The owner's open theses the analyst owes an opinion: none written, no call that failed
     closed (``invalid``), and fewer than ``max_failures`` calls that failed outright."""
@@ -275,3 +367,24 @@ def awaiting_opinion(store: Store, *, as_of: date, max_failures: int) -> list[Th
             continue
         owed.append(thesis)
     return owed
+
+
+def review_targets(store: Store, *, segment: str, as_of: date) -> list[Thesis]:
+    """What ``segment`` reviews: the owner's open theses, then its own theses that are open or
+    whose idea-ledger call has not reached its horizon (an open call), newest first."""
+    own = {thesis_id for thesis_id, name in thesis_segment_names(store).items() if name == segment}
+    calling = {
+        int(row["thesis_id"])
+        for row in store.execute(
+            "SELECT thesis_id FROM idea_calls WHERE horizon >= ? AND known_at < ?",
+            (date_text(as_of), cutoff_text(as_of)),
+        ).fetchall()
+    }
+    known = thesis_repo.theses(store, as_of=as_of)
+    owner = [t for t in known if t.source is ThesisSource.OWNER and t.state in OPEN_STATES]
+    mine = [
+        t
+        for t in reversed(known)
+        if t.thesis_id in own and (t.state in OPEN_STATES or t.thesis_id in calling)
+    ]
+    return [*owner, *mine]

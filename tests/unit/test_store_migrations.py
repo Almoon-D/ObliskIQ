@@ -423,3 +423,42 @@ def test_rows_in_the_shipped_schema_survive_a_later_migration(
     )
     assert migrate(connection, directory) == ["002_macro_note.sql"]
     assert connection.execute("SELECT value, note FROM macro").fetchall() == [(1.5, None)]
+
+
+def test_022_keeps_the_analyst_s_earlier_calls_and_their_drafts(
+    connection: sqlite3.Connection, tmp_path: Path
+) -> None:
+    directory = tmp_path / "shipped"
+    directory.mkdir()
+    shipped = available_migrations()
+    segments = next(path for path in shipped if path.name == "022_analyst_segments.sql")
+    for path in shipped:
+        if path.name < segments.name:
+            (directory / path.name).write_bytes(path.read_bytes())
+    migrate(connection, directory)
+    connection.execute(
+        "INSERT INTO analyst_calls (kind, thesis_id, as_of, sheet_hash, produced_at, provider, "
+        "model_id, prompt_version, prompt_hash, status, attempts, output, error, input_tokens, "
+        "output_tokens, cost_usd) VALUES ('drafts', NULL, '2026-11-20', ?, "
+        "'2026-11-20T21:30:00Z', 'gemini', 'gemini-3.1-flash-lite', 3, ?, 'ok', 1, '{}', NULL, "
+        "10, 5, 0.001)",
+        ("a" * 64, "b" * 64),
+    )
+    connection.execute(
+        "INSERT INTO analyst_drafts (call_id, seq, draft, facts, outcome, reason, thesis_id) "
+        "VALUES (1, 1, '{}', '[]', 'dropped', 'no fact', NULL)"
+    )
+    (directory / segments.name).write_bytes(segments.read_bytes())
+    assert migrate(connection, directory) == [segments.name]
+    row = connection.execute("SELECT call_id, kind, segment FROM analyst_calls").fetchone()
+    assert row == (1, "drafts", None)
+    assert connection.execute("SELECT count(*) FROM analyst_drafts").fetchone() == (1,)
+    assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    with pytest.raises(sqlite3.IntegrityError):  # a review is always on a thesis
+        connection.execute(
+            "INSERT INTO analyst_calls (kind, thesis_id, as_of, sheet_hash, produced_at, "
+            "provider, model_id, prompt_version, prompt_hash, status, attempts, input_tokens, "
+            "output_tokens, cost_usd, segment) VALUES ('review', NULL, '2026-11-27', ?, "
+            "'2026-11-27T21:30:00Z', 'gemini', 'm', 1, ?, 'ok', 1, 1, 1, 0.0, 'lite')",
+            ("a" * 64, "b" * 64),
+        )

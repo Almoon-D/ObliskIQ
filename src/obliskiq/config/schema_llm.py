@@ -1,12 +1,15 @@
 """The LLM layer's configuration (``config/llm.yaml``, section ``llm``; MASTER_PLAN §5.10).
 
-One provider and one model serve two roles: the minimal EventExtractor (DECISIONS D70) and the
-Analyst with its fact sheet (D156); the registry grows in Session 16. A provider names the
-environment variable that holds its key, so a provider is added by an entry here and one variable.
+A registry of providers and models serves the minimal EventExtractor (DECISIONS D70), the weekly
+forecast panel and the Analyst (D156), which runs as several segments side by side, each a scan
+model, a dossier model, a prompt version and a share of the one monthly budget (D188). A provider
+names the protocol it speaks and the environment variable that holds its key, so a provider is
+added by an entry here and one variable; a model carries its prices and the day they were read.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal, Self
 
@@ -23,14 +26,25 @@ from ..domain.base import NonEmptyText
 from .base import FrozenModel, Identifier
 from .schema_sources import EnvName, Url
 
-#: The transports the layer speaks (Session 16 adds the native adapters).
-type LlmProtocol = Literal["openai_compatible"]
+#: The transports the layer speaks: the OpenAI-compatible chat completions, and Anthropic's
+#: Messages API (``llm/transport.py``).
+type LlmProtocol = Literal["openai_compatible", "anthropic"]
+#: How hard a model that takes an effort setting thinks (Anthropic's ``output_config.effort``).
+type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
 class LlmProviderConfig(FrozenModel):
     protocol: LlmProtocol
     base_url: Url
     key_env: EnvName
+    #: The API version a provider requires in its requests (Anthropic's ``anthropic-version``).
+    api_version: NonEmptyText | None = None
+
+    @model_validator(mode="after")
+    def _versioned(self) -> Self:
+        if (self.protocol == "anthropic") != (self.api_version is not None):
+            raise ValueError("an anthropic provider names its api_version, and only it does")
+        return self
 
 
 class LlmModelConfig(FrozenModel):
@@ -39,6 +53,10 @@ class LlmModelConfig(FrozenModel):
     context_window_tokens: PositiveInt
     input_usd_per_million: NonNegativeFloat
     output_usd_per_million: NonNegativeFloat
+    #: The day the prices were read in the provider's own documentation.
+    prices_read: date
+    #: The effort the model is asked to think at, where its protocol takes one.
+    effort: Effort | None = None
 
 
 class LlmBudgetConfig(FrozenModel):
@@ -71,13 +89,48 @@ class FactSheetConfig(FrozenModel):
     stock_screen_top: NonNegativeInt
 
 
-class AnalystConfig(FrozenModel):
-    """The Analyst role: theses of its own and second opinions (``llm/analyst.py``)."""
+class AnalystSegmentConfig(FrozenModel):
+    """One analyst segment: the model that scans the sheet, the model that writes the dossiers
+    and the reviews, the prompt's version and the share of the monthly budget it may spend."""
 
-    model: Identifier
+    scan_model: Identifier
+    dossier_model: Identifier
     prompt_version: PositiveInt
-    temperature: NonNegativeFloat
+    budget_share: Annotated[Decimal, Field(gt=0, le=1)]
+
+
+class ScanConfig(FrozenModel):
+    """The daily scan: the candidates one call may name."""
+
+    max_candidates: PositiveInt
     max_output_tokens: PositiveInt
+
+
+class DossierConfig(FrozenModel):
+    """The dossier per candidate: the sections every dossier reads beside the candidate's lines."""
+
+    max_output_tokens: PositiveInt
+    context_sections: list[NonEmptyText]
+
+
+class ReviewConfig(FrozenModel):
+    """The weekly review of each open thesis and open call."""
+
+    max_output_tokens: PositiveInt
+    max_theses_per_week: NonNegativeInt
+
+
+class AnalystConfig(FrozenModel):
+    """The Analyst role: theses of its own and second opinions, by segment (``llm/analyst.py``)."""
+
+    segments: dict[Identifier, AnalystSegmentConfig] = Field(min_length=1)
+    #: The segment whose drafts may take the book's slots; the others run in shadow and are
+    #: graded in the idea ledger. An owner setting (DECISIONS D177).
+    trading_segment: Identifier
+    scan: ScanConfig
+    dossier: DossierConfig
+    review: ReviewConfig
+    temperature: NonNegativeFloat
     request_timeout_seconds: PositiveInt
     retries_on_invalid: NonNegativeInt
     max_call_failures: PositiveInt
@@ -91,6 +144,7 @@ class PanelConfig(FrozenModel):
     """The weekly forecast panel (``llm/panel.py``): the analyst's model and budget; the
     pre-registration's horizon, mark age and minimums."""
 
+    model: Identifier
     prompt_version: PositiveInt
     temperature: NonNegativeFloat
     max_output_tokens: PositiveInt
@@ -137,11 +191,19 @@ class LlmConfig(FrozenModel):
     analyst: AnalystConfig
     panel: PanelConfig
 
-    def analyst_model(self) -> LlmModelConfig:
-        return self.models[self.analyst.model]
+    def provider_of(self, model: str) -> LlmProviderConfig:
+        return self.providers[self.models[model].provider]
 
-    def analyst_provider(self) -> LlmProviderConfig:
-        return self.providers[self.analyst_model().provider]
+    def segment_order(self) -> list[str]:
+        """The analyst's segments, the trading segment first."""
+        trading = self.analyst.trading_segment
+        return [trading, *(name for name in self.analyst.segments if name != trading)]
+
+    def panel_model(self) -> LlmModelConfig:
+        return self.models[self.panel.model]
+
+    def panel_provider(self) -> LlmProviderConfig:
+        return self.provider_of(self.panel.model)
 
     def extractor_model(self) -> LlmModelConfig:
         return self.models[self.extractor.model]
@@ -156,9 +218,24 @@ class LlmConfig(FrozenModel):
             for name, model in self.models.items()
             if model.provider not in self.providers
         ]
-        for role, name in (("extractor", self.extractor.model), ("analyst", self.analyst.model)):
-            if name not in self.models:
-                problems.append(f"{role}.model {name} is not a declared model")
+        roles = [("extractor.model", self.extractor.model), ("panel.model", self.panel.model)]
+        for name, segment in self.analyst.segments.items():
+            roles += [
+                (f"analyst.segments.{name}.scan_model", segment.scan_model),
+                (f"analyst.segments.{name}.dossier_model", segment.dossier_model),
+            ]
+        problems += [
+            f"{role} {model} is not a declared model"
+            for role, model in roles
+            if model not in self.models
+        ]
+        if self.analyst.trading_segment not in self.analyst.segments:
+            problems.append(
+                f"analyst.trading_segment {self.analyst.trading_segment} is not a declared segment"
+            )
+        shares = sum(segment.budget_share for segment in self.analyst.segments.values())
+        if shares > 1:
+            problems.append(f"the analyst segments' budget shares add up to {shares}, above 1")
         if problems:
             raise ValueError("; ".join(problems))
         return self

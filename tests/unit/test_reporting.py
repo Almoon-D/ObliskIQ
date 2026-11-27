@@ -558,11 +558,10 @@ def test_the_digest_shows_second_opinions_and_their_brier_score() -> None:
         at=AT,
         mode=ExecutionMode.SHADOW,
         opinions=[(idea, given, call)],
-        opinion_scores=[OpinionScore(segment=call.segment, graded=4, brier=0.1875)],
+        opinion_scores=[OpinionScore(segment=call.label, graded=4, brier=0.1875)],
     )
     body = render_digest(digest, rows=10, base_currency="EUR")[1]
-    assert (
-        f"  second opinion on T2 EMIM ({call.segment}): 30% that it reaches its target. thin."
-        in (body)
+    assert f"  second opinion on T2 EMIM ({call.label}): 30% that it reaches its target. thin." in (
+        body
     )
-    assert f"  second opinions graded, {call.segment}: 4, mean Brier score 0.188" in body
+    assert f"  second opinions graded, {call.label}: 4, mean Brier score 0.188" in body

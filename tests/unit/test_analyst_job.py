@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -60,12 +61,12 @@ class CannedAnalyst:
 
     async def run(self, sheet: FactSheet) -> AnalystRun:
         if not self._call:
-            return AnalystRun("skipped", "no key")
+            return AnalystRun("no_key", "no key", "lite")
         made = await self._worker.run(
             analyst_repo.record_call,
             AnalystCall(
                 call_id=UNSTORED_CALL,
-                kind=CallKind.DRAFTS,
+                kind=CallKind.DOSSIER,
                 thesis_id=None,
                 as_of=sheet.as_of,
                 sheet_hash=sheet.sheet_hash,
@@ -81,9 +82,11 @@ class CannedAnalyst:
                 input_tokens=1,
                 output_tokens=1,
                 cost_usd=0.0,
+                segment="lite",
             ),
         )
-        return AnalystRun("ok", "drafts", drafts_call=made, proposals=self._proposals)
+        proposals = tuple(replace(p, call_id=made.call_id) for p in self._proposals)
+        return AnalystRun("ok", "drafts", "lite", calls=(made,), proposals=proposals)
 
 
 def job(
@@ -99,7 +102,7 @@ def job(
         for n, d in enumerate(drafts, start=1)
     )
     canned = CannedAnalyst(worker, proposals, call=bool(drafts))
-    return AnalystJob(settings, analyst=canned, worker=worker, now=lambda: NOW)  # type: ignore[arg-type]
+    return AnalystJob(settings, analysts=[canned], worker=worker, now=lambda: NOW)  # type: ignore[list-item]
 
 
 async def test_each_draft_is_handed_to_the_intake_and_recorded(
@@ -117,12 +120,12 @@ async def test_each_draft_is_handed_to_the_intake_and_recorded(
         written(symbol="ACME"),
     )
     outcome = await ran.run(AS_OF)
-    assert (outcome.accepted, outcome.refused, outcome.dropped, outcome.lines) == ((1,), 1, 1, 1)
+    (segment,) = outcome.segments
+    assert (outcome.accepted, segment.refused, segment.dropped, outcome.lines) == ((1,), 1, 1, 1)
     (thesis,) = thesis_repo.theses(store, as_of=AS_OF)
     assert (thesis.source, thesis.instrument.symbol) == (ThesisSource.ANALYST, "SPPW")
     assert thesis_repo.log_entries(store, 1)[0].actor == "analyst"
-    call = outcome.run.drafts_call
-    assert call is not None
+    (call,) = outcome.segments[0].run.calls
     records = analyst_repo.drafts_of(store, call.call_id)
     assert [r.outcome for r in records] == [
         DraftOutcome.ACCEPTED,
@@ -135,7 +138,7 @@ async def test_each_draft_is_handed_to_the_intake_and_recorded(
     assert records[1].reason.startswith("bearish_not_defensive")
     judged = judge_analyst(outcome)
     assert judged.status == "ok"
-    assert judged.reason == "drafts; to the intake: 1 accepted, 1 refused, 1 dropped"
+    assert judged.reason == "lite (ok): drafts; to the intake: 1 accepted, 1 refused, 1 dropped"
 
 
 async def test_an_intake_that_fails_loses_no_record(
@@ -149,9 +152,8 @@ async def test_an_intake_that_fails_loses_no_record(
 
     monkeypatch.setattr(ThesisIntake, "submit", broken)
     outcome = await job(shipped_settings, store_worker, monkeypatch, written()).run(AS_OF)
-    assert (outcome.accepted, outcome.refused) == ((), 1)
-    call = outcome.run.drafts_call
-    assert call is not None
+    assert (outcome.accepted, outcome.segments[0].refused) == ((), 1)
+    (call,) = outcome.segments[0].run.calls
     (record,) = analyst_repo.drafts_of(store, call.call_id)
     assert record.reason == "the intake failed: database is locked"
     assert thesis_repo.theses(store, as_of=AS_OF) == []
@@ -164,6 +166,22 @@ async def test_a_run_without_a_drafts_call_records_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     outcome = await job(shipped_settings, store_worker, monkeypatch).run(AS_OF)
-    assert outcome.run.state == "skipped"
+    assert outcome.segments[0].run.state == "no_key"
     assert judge_analyst(outcome).status == "skipped"
     assert analyst_repo.calls(store, as_of=AS_OF) == []
+
+
+def test_a_segment_without_its_key_is_said_not_a_fault() -> None:
+    def runs(*states: str) -> job_module.AnalystOutcome:
+        return job_module.AnalystOutcome(
+            tuple(
+                job_module.SegmentOutcome(AnalystRun(state, "why", name))  # type: ignore[arg-type]
+                for name, state in zip(("lite", "strong"), states, strict=True)
+            ),
+            lines=3,
+        )
+
+    judged = judge_analyst(runs("ok", "no_key"))
+    assert (judged.status, judged.reason) == ("ok", "lite (ok): why; strong (no_key): why")
+    assert judge_analyst(runs("no_key", "no_key")).status == "skipped"
+    assert judge_analyst(runs("ok", "budget")).status == "degraded"

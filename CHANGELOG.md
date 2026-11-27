@@ -5,6 +5,19 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.6.0] - 2026-11-27
+
+Session 33: the analyst on several models side by side (DECISIONS D188, D198). No IBKR call.
+
+### Added
+
+- Three analyst segments, each a scan model, a dossier model and a share of one monthly budget;
+  only the trading segment's theses take slots, the others are graded in the idea ledger.
+- A daily scan names candidates, a dossier per candidate writes its thesis, and a weekly review
+  judges each open thesis and call; reviews are stored and graded and change nothing.
+- Anthropic's Messages API beside Gemini; a provider without its key is `no_key`, a spent share
+  is `budget`. `llm status`, the digest and the weekly report show each segment's spend.
+
 ## [1.5.0] - 2026-11-25
 
 Session 32: the idea ledger, every idea graded forward (H14, DECISIONS D187, D197). No IBKR call.
