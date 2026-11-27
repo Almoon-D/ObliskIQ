@@ -42,7 +42,7 @@ from .. import __version__
 from ..capital.planner import PlannerActions, ReservationPlan
 from ..config.changes import settings_fingerprint
 from ..config.schema import ObliskConfig
-from ..data.runner import source_health
+from ..data.health import source_health
 from ..decision.breakers import BREAKER_ACTOR, UNREADABLE, BreakerReport
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer

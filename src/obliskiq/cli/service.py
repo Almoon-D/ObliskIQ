@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, TextIO
 
 from ..config import LoadedConfig
 from ..config.audit import SettingsAuditLog
-from ..data.runner import source_health
+from ..data.health import source_health
 from ..decision.breakers import book_of, release, stored_report
 from ..domain.orders import (
     TERMINAL_STATES,

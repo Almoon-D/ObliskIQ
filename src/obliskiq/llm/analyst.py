@@ -44,7 +44,7 @@ import dataclasses
 import functools
 import json
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Literal
@@ -74,6 +74,7 @@ from ..store.worker import StoreWorker
 from ..util.http import RetryPolicy
 from .analyst_prompts import (
     DOSSIER_SYSTEM,
+    FILINGS_SYSTEM,
     OPINION_SYSTEM,
     REVIEW_SYSTEM,
     SCAN_SYSTEM,
@@ -86,7 +87,9 @@ from .analyst_prompts import (
     analyst_prompt_hash,
     describe_candidate,
     dossier_prompt,
+    filings_prompt,
     opinion_prompt,
+    reads_filings,
     scan_prompt,
     schema_of,
 )
@@ -96,6 +99,11 @@ from .transport import TRANSPORTS, Reply
 log = get_logger("llm.analyst")
 
 type RunState = Literal["ok", "no_key", "budget"]
+#: Reads a candidate's own filings for its dossier, as of a day: one line per section, or why
+#: there are none (``data/events/filing_text.py``).
+type Texts = Callable[[str, date], Awaitable[list[str]]]
+#: The line a dossier reads when its run has no reader of the filings.
+NO_READER = "not read: this run has no reader of the SEC's filings"
 #: Days in a week; a week starts on Monday (ISO).
 WEEK_DAYS = 7
 
@@ -416,6 +424,7 @@ class Analyst:
         now: Callable[[], datetime],
         sections: Sequence[str] = SECTIONS,
         record: CallRecord = FORWARD,
+        texts: Texts | None = None,
     ) -> None:
         llm = settings.llm
         config = llm.analyst
@@ -456,6 +465,9 @@ class Analyst:
         self.prompt_hash = analyst_prompt_hash(settings, segment, sections=sections)
         self.label = segment_label(segment, self.prompt_hash)
         self.record = record
+        #: A dossier reads its candidate's filings with the sheet's events (D200).
+        self._filings = reads_filings(sections)
+        self._texts = texts
 
     def _key(self, step: _Pass) -> str:
         key = self._keys.get(step.model.provider)
@@ -604,17 +616,24 @@ class Analyst:
         facts = lines_for(
             sheet, candidate.symbol, candidate.facts, self._config.dossier.context_sections
         )
-        messages = self._messages(
-            DOSSIER_SYSTEM,
-            dossier_prompt(
-                self._settings,
-                as_of=sheet.as_of,
-                last_day=last_day,
-                open_theses=open_theses,
-                candidate=describe_candidate(candidate.section, candidate.symbol, candidate.reason),
-                facts=facts.text(),
-            ),
+        system = DOSSIER_SYSTEM
+        user = dossier_prompt(
+            self._settings,
+            as_of=sheet.as_of,
+            last_day=last_day,
+            open_theses=open_theses,
+            candidate=describe_candidate(candidate.section, candidate.symbol, candidate.reason),
+            facts=facts.text(),
         )
+        if self._filings:
+            read = (
+                [NO_READER]
+                if self._texts is None
+                else await self._texts(candidate.symbol, sheet.as_of)
+            )
+            system = f"{DOSSIER_SYSTEM} {FILINGS_SYSTEM}"
+            user = f"{user}\n{filings_prompt(read)}"
+        messages = self._messages(system, user)
         asked = await self._ask(
             CallKind.DOSSIER,
             self._dossier,

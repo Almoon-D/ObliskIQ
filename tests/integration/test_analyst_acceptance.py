@@ -29,6 +29,7 @@ from obliskiq.domain.orders import ExecutionMode
 from obliskiq.domain.thesis import Thesis, ThesisSource, ThesisState
 from obliskiq.llm.analyst_prompts import (
     DOSSIER_SYSTEM,
+    FILINGS_SYSTEM,
     OPINION_SYSTEM,
     REVIEW_SYSTEM,
     SCAN_SYSTEM,
@@ -50,6 +51,9 @@ MONDAY = datetime(2026, 10, 26, tzinfo=UTC).date()
 TUESDAY_EUROPE = datetime(2026, 10, 27, 9, 0, tzinfo=UTC)
 GEMINI = "generativelanguage.googleapis.com"
 KEY = "test-key-not-a-secret"
+
+
+DOSSIER = f"{DOSSIER_SYSTEM} {FILINGS_SYSTEM}"
 
 
 class Model:
@@ -92,7 +96,10 @@ class Model:
                     ]
                 }
             else:
-                assert system == DOSSIER_SYSTEM
+                # The shipped sheet has its events, so the dossier reads the filings (D200).
+                assert system == DOSSIER
+                assert "<filings>" in user
+                assert "SPPW: no filings read" in user
                 answer = {
                     "drafts": [
                         {
@@ -225,8 +232,8 @@ async def test_one_scheduled_run_yields_drafts_that_become_shadow_theses(
         # Two Gemini segments ran (the Anthropic one has no key): the trading segment's opinion on
         # the owner's idea, each segment's scan, dossier and weekly review of that idea.
         assert model.systems == [
-            OPINION_SYSTEM, SCAN_SYSTEM, DOSSIER_SYSTEM, REVIEW_SYSTEM,
-            SCAN_SYSTEM, DOSSIER_SYSTEM, REVIEW_SYSTEM,
+            OPINION_SYSTEM, SCAN_SYSTEM, DOSSIER, REVIEW_SYSTEM,
+            SCAN_SYSTEM, DOSSIER, REVIEW_SYSTEM,
         ]  # fmt: skip
         assert model.asked[0]["temperature"] == 0
 

@@ -124,6 +124,19 @@ class FactSheetConfig(FrozenModel):
     max_market_lines: NonNegativeInt
     max_insider_lines: NonNegativeInt
     stock_screen_top: NonNegativeInt
+    events_window_days: PositiveInt
+    max_event_lines: NonNegativeInt
+
+
+class DossierTextConfig(FrozenModel):
+    """What a dossier reads of a listed candidate's own filings (``data/events/filing_text.py``)."""
+
+    annual_form: NonEmptyText
+    quarterly_form: NonEmptyText
+    current_form: NonEmptyText
+    lookback_days: PositiveInt
+    max_current_reports: NonNegativeInt
+    max_chars: PositiveInt
 
 
 class AnalystSegmentConfig(FrozenModel):
@@ -175,6 +188,7 @@ class AnalystConfig(FrozenModel):
     max_drafts_per_run: NonNegativeInt
     max_horizon_days: PositiveInt
     fact_sheet: FactSheetConfig
+    dossier_text: DossierTextConfig
 
 
 class PanelConfig(FrozenModel):

@@ -46,7 +46,8 @@ month by the book's capital before it (``scoreboard/h13.py``).
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-from collections.abc import Callable, Sequence
+import json
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -57,6 +58,7 @@ from ..capital.managed import CapitalReader, book_fills
 from ..capital.planner import ReservationPlanner
 from ..config.schema import ObliskConfig
 from ..data.candidates import resolve_candidate
+from ..domain.filings import event_tags
 from ..domain.instrument import TradedInstrument
 from ..domain.orders import (
     ExecutionMode,
@@ -157,6 +159,7 @@ class ThesisRebalancer:
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._settings = settings
+        self._event_kinds = tuple(settings.sources.filings.kinds())
         self._funding = funding
         self._capital = capital
         self._directory = directory
@@ -675,7 +678,7 @@ class ThesisRebalancer:
         for decision in plan.decisions:
             thesis = decision.thesis
             if decision.ledger:
-                await self._worker.run(write_call, thesis, at=plan.at)
+                await self._worker.run(write_call, thesis, at=plan.at, kinds=self._event_kinds)
             await self._options.apply(decision)
             if decision.note is not None:
                 await self._note(thesis, LogKind.WITHHELD, decision.note)
@@ -908,12 +911,17 @@ def _sized_as(thesis: Thesis, read: BookRead) -> Conviction | None:
     return Conviction.NORMAL
 
 
-def write_call(store: Store, thesis: Thesis, *, at: datetime) -> IdeaCall | None:
+def write_call(
+    store: Store, thesis: Thesis, *, at: datetime, kinds: Collection[str] = ()
+) -> IdeaCall | None:
     """Write ``thesis`` into the idea ledger as a call at ``at``, unless it is there already
-    (H14: an idea is written at the first cycle its own checks pass)."""
+    (H14: an idea is written at the first cycle its own checks pass). An analyst's call carries
+    the ``kinds`` of the event lines its draft cites (D189)."""
     conid = thesis.instrument.conid
     if conid is None or thesis.thesis_id in ledger_repo.called_theses(store):
         return None
+    drafted = analyst_repo.draft_for_thesis(store, thesis.thesis_id)
+    tags = () if drafted is None else event_tags(json.loads(drafted[0].facts), kinds)
     # The analyst's segment is its model and prompt hash (D128); the owner's ideas are his own.
     segment = analyst_repo.thesis_segments(store).get(thesis.thesis_id, thesis.source.value)
     return ledger_repo.record_call(
@@ -924,7 +932,7 @@ def write_call(store: Store, thesis: Thesis, *, at: datetime) -> IdeaCall | None
             symbol=thesis.instrument.symbol,
             source=thesis.source,
             segment=segment,
-            event_tags=(),
+            event_tags=tags,
             rises=not thesis.falls,
             target=thesis.target,
             invalidation=thesis.invalidation,

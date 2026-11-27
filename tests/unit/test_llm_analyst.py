@@ -787,7 +787,7 @@ async def test_the_strong_segment_dossiers_through_anthropic_s_messages_api(
     body = json.loads(sent.content)
     assert body["model"] == "claude-fable-5-2"
     assert "temperature" not in body
-    assert body["system"] == prompts.DOSSIER_SYSTEM
+    assert body["system"] == f"{prompts.DOSSIER_SYSTEM} {prompts.FILINGS_SYSTEM}"
     assert [m["role"] for m in body["messages"]] == ["user"]
     assert body["output_config"]["effort"] == "high"
     schema = json.dumps(body["output_config"]["format"]["schema"])

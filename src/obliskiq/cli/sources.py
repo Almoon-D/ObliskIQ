@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING, TextIO
 
 from ..data.events.catalysts import catalyst_calendar
 from ..data.events.earnings import yfinance_earnings
+from ..data.health import source_health
 from ..data.market.plumbing import Collection
-from ..data.runner import SourceRunner, client_for, source_health
+from ..data.runner import SourceRunner, client_for
 from ..env import secret_reader
 from ..errors import ObliskError
 from ..orchestration.runlog import exit_code, verdict

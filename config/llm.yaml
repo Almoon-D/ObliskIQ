@@ -168,6 +168,22 @@ llm:
       max_insider_lines: 15
       # The stock screen's first names the sheet carries, each labelled untested (D180).
       stock_screen_top: 20
+      # Events of listed names that pass the screen's floors, filed in this many days up to the
+      # sheet's date or ending (a lock-up) in this many after it, newest first, at most
+      # `max_event_lines`. Judgements.
+      events_window_days: 30
+      max_event_lines: 40
+    # What a dossier reads of a listed candidate's own filings (DECISIONS D189, D200): the
+    # sections of its latest annual and quarterly reports and its current reports of the last
+    # `lookback_days`, at most `max_current_reports`, each section cut to `max_chars`. Untrusted
+    # data in the prompt; read once and kept as read.
+    dossier_text:
+      annual_form: 10-K
+      quarterly_form: 10-Q
+      current_form: 8-K
+      lookback_days: 90
+      max_current_reports: 5
+      max_chars: 6000
   panel:
     # The weekly forecast panel (research/preregistrations/scoreboard.md "The weekly forecast
     # panel"; ported from Inversor-Inteligente's modules/analytics/forecast_panel.py with its

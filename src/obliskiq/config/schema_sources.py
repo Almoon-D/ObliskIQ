@@ -306,6 +306,41 @@ class InsidersConfig(FrozenModel):
     cluster_window_days: PositiveInt
 
 
+class FilingsConfig(FrozenModel):
+    """The events collector (``data/events/filings.py``): the forms kept and the kind of each."""
+
+    lookback_days: PositiveInt
+    item_forms: list[NonEmptyText] = Field(min_length=1)
+    items: dict[Annotated[str, Field(pattern=r"^\d\.\d{2}$")], Identifier] = Field(min_length=1)
+    registration_forms: dict[NonEmptyText, Identifier]
+    prospectus_forms: list[NonEmptyText] = Field(min_length=1)
+    prospectus_kind: Identifier
+    lockup_kind: Identifier
+    prospectus_reads_per_run: NonNegativeInt
+    prospectus_window_days: PositiveInt
+    cover_chars: PositiveInt
+    header_url_template: Annotated[
+        str, Field(pattern=r"^https://\S*\{cik\}\S*\{folder\}\S*\{accession\}\S*$")
+    ]
+    documents_url_template: Annotated[str, Field(pattern=r"^https://\S*\{cik\}\S*\{folder\}\S*$")]
+    document_url_template: Annotated[
+        str, Field(pattern=r"^https://\S*\{cik\}\S*\{folder\}\S*\{name\}\S*$")
+    ]
+    max_document_bytes: PositiveInt
+    no_source: dict[Identifier, NonEmptyText]
+
+    def kinds(self) -> list[str]:
+        """Every event kind the sheet can show."""
+        return sorted(
+            {
+                *self.items.values(),
+                *self.registration_forms.values(),
+                self.prospectus_kind,
+                self.lockup_kind,
+            }
+        )
+
+
 # ── stocks (the stock screen) ──
 
 #: A share inside (0, 1], quoted.
@@ -559,6 +594,7 @@ class SourcesConfig(FrozenModel):
     macro: MacroConfig
     positioning: PositioningConfig
     insiders: InsidersConfig
+    filings: FilingsConfig
     stocks: StocksConfig
     events: EventsConfig
     news: NewsConfig
@@ -604,6 +640,7 @@ class SourcesConfig(FrozenModel):
         for area, name in (
             ("positioning", "cftc"),
             ("insiders", "sec_edgar"),
+            ("events", "sec_filings"),
             ("stocks", "stock_listings"),
             ("stocks", "stock_fundamentals"),
             ("stocks", "stock_bars"),

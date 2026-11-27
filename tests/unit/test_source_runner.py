@@ -14,7 +14,8 @@ import pytest
 import respx
 
 from obliskiq.config import ObliskConfig
-from obliskiq.data.runner import SourceRunner, client_for, source_health
+from obliskiq.data.health import source_health
+from obliskiq.data.runner import SourceRunner, client_for
 from obliskiq.domain.sources import SourceRun, SourceState
 from obliskiq.errors import ConfigError
 from obliskiq.store import Store

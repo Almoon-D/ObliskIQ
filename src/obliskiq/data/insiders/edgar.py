@@ -63,6 +63,7 @@ class IndexLine:
     form: str
     cik: int
     path: str
+    company: str = ""
 
     @property
     def accession(self) -> str | None:
@@ -80,7 +81,9 @@ def parse_index(text: str) -> list[IndexLine]:
     for line in lines[start:]:
         match = _INDEX_LINE.match(line)
         if match is not None:
-            found.append(IndexLine(match["form"], int(match["cik"]), match["path"]))
+            found.append(
+                IndexLine(match["form"], int(match["cik"]), match["path"], match["company"].strip())
+            )
     return found
 
 

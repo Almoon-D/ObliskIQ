@@ -284,6 +284,26 @@ uv run obliskiq sources health      # stock_listings, stock_fundamentals, stock_
   run: nothing is recorded about them and the next run asks them first. One name answering
   nothing is `unresolved` in its run's detail, never a delisting.
 
+## The events (owner, once)
+
+What the SEC's filings say is happening to a listed name, dated, on the analyst's fact sheet
+(DECISIONS D189, D200). Same `SEC_USER_AGENT`, no broker; `serve` runs it after each New York
+close. Start it once by hand after the stock screen:
+
+```
+uv run obliskiq sources run sec_filings
+uv run obliskiq sources health      # sec_filings
+```
+
+- **What runs.** EDGAR's daily form index of every day since the last one read (ten days the
+  first time): listed names' 8-Ks with their items, every registration form and pricing
+  prospectus; then up to 20 new prospectuses of listed issuers, read for an IPO's price,
+  shares and shortest stated lock-up.
+- **What it shows.** The digest's `events` line; on the sheet, the events of names passing the
+  floors, newest first, and lock-ups ending in the next 30 days. Results dates and index
+  changes have no free source: one `no_source` line each. The dossier reads the candidate's
+  latest 10-K, 10-Q and recent 8-Ks. Nothing here sizes or gates anything.
+
 ## The analyst's models and budget (owner, on the machine)
 
 The analyst runs as segments side by side (`config/llm.yaml`, DECISIONS D188, D198): `lite`
