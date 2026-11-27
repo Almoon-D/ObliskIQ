@@ -18,6 +18,7 @@ from typing import Final
 
 from ..errors import PreregistrationError
 from ..research.prereg import (
+    AnalystReplayPrereg,
     ForwardBookPrereg,
     IdeaLedgerPrereg,
     ScoreboardPrereg,
@@ -32,6 +33,8 @@ RULES_PATH: Final = Path("research") / "preregistrations" / "scoreboard.md"
 H13_PATH: Final = Path("research") / "preregistrations" / "thesis-book.md"
 #: The idea ledger's pre-registration (H14), relative to the repository root.
 LEDGER_PATH: Final = Path("research") / "preregistrations" / "idea-ledger.md"
+#: The analyst's replay (H15), relative to the repository root.
+REPLAY_PATH: Final = Path("research") / "preregistrations" / "analyst-replay.md"
 DAYS_PER_WEEK: Final = 7
 
 
@@ -73,6 +76,15 @@ def load_locked_ledger(path: Path) -> IdeaLedgerPrereg:
     prereg = load_any(path)
     if not isinstance(prereg, IdeaLedgerPrereg):
         raise PreregistrationError(f"{path.name} is not the idea ledger's pre-registration")
+    return prereg
+
+
+def load_locked_replay(path: Path) -> AnalystReplayPrereg:
+    """H15's pre-registration at ``path`` when its lock records exactly this text."""
+    _check_lock(path)
+    prereg = load_any(path)
+    if not isinstance(prereg, AnalystReplayPrereg):
+        raise PreregistrationError(f"{path.name} is not the analyst replay's pre-registration")
     return prereg
 
 

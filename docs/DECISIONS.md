@@ -4336,3 +4336,18 @@ Rejected: a rebalancer that grades the ledger itself (the import contract and po
 
 Rejected: a trading segment chosen by code (D188); a fallback to another model when a key is
 missing.
+
+### D199 · How the code reads H15 (§5.5, §5.10; D191)
+
+- **Its own store** (`llm.replay.store_file`), the same schema; its calls carry the record
+  `replay` as well, and the forward reads (`label_spend`, `reviews`) take only `forward`.
+- **Point in time:** a row is known at the end of its publication day (UTC). Filers come from
+  the quarterly XBRL indexes; facts from the bulk company facts at each value's filing day;
+  tickers from today's SEC file, one a company (survivors keep theirs: a bias the report bears).
+- **A unit** is a segment on a sheet date. Calls stored without their unit were stopped
+  part-way: recorded `interrupted`, never asked again. A valid draft is stored refused with
+  "replayed: no intake (H15)".
+- **The cap** refuses any step whose spend plus worst case passes it; 0 as shipped.
+
+Rejected: the replay in the forward store; tickers as of each date (no free source keeps them).
+

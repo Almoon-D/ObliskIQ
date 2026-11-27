@@ -325,12 +325,13 @@ SHAPE = {
     "breaker_events": (
         "event_id:INTEGER*, at:TEXT!, book:TEXT!, event:TEXT!, actor:TEXT!, detail:TEXT!"
     ),
-    # 015_analyst, rebuilt by 022_analyst_segments
+    # 015_analyst, rebuilt by 022_analyst_segments, its record named by 023_analyst_replay
     "analyst_calls": (
         "call_id:INTEGER*, kind:TEXT!, thesis_id:INTEGER, as_of:TEXT!, sheet_hash:TEXT!, "
         "produced_at:TEXT!, provider:TEXT!, model_id:TEXT!, prompt_version:INTEGER!, "
         "prompt_hash:TEXT!, status:TEXT!, attempts:INTEGER!, output:TEXT, error:TEXT, "
-        "input_tokens:INTEGER!, output_tokens:INTEGER!, cost_usd:REAL!, segment:TEXT"
+        "input_tokens:INTEGER!, output_tokens:INTEGER!, cost_usd:REAL!, segment:TEXT, "
+        "record:TEXT!='forward'"
     ),
     # 022_analyst_segments
     "thesis_reviews": (
@@ -412,9 +413,28 @@ SHAPE = {
         "segment:TEXT!*, as_of:TEXT!*, passed:INTEGER!, shrink:REAL!, base_rate:REAL, "
         "reason:TEXT!, known_at:TEXT!"
     ),
+    # 023_analyst_replay
+    "replay_cohorts": (
+        "sheet_date:TEXT!*, start:TEXT!, end:TEXT!, universe:INTEGER!, evaluable:INTEGER!, "
+        "reasons:TEXT!, benchmark:REAL, computed_at:TEXT!"
+    ),
+    "replay_filings": "cik:INTEGER!*, form:TEXT!*, filed:TEXT!*, name:TEXT!, known_at:TEXT!",
+    "replay_names": "cik:INTEGER!*, ticker:TEXT, exchange:TEXT, read_at:TEXT!",
+    "replay_probes": (
+        "probe_id:INTEGER*, provider:TEXT!, model_id:TEXT!, quarter:TEXT!, seq:INTEGER!, "
+        "sheet_date:TEXT!, ticker:TEXT!, rose:INTEGER!, status:TEXT!, probability:REAL, "
+        "error:TEXT, input_tokens:INTEGER!, output_tokens:INTEGER!, cost_usd:REAL!, "
+        "produced_at:TEXT!, record:TEXT!"
+    ),
+    "replay_units": (
+        "label:TEXT!*, segment:TEXT!, sheet_date:TEXT!*, side:TEXT!, state:TEXT!, reason:TEXT!, "
+        "cost_usd:REAL!, finished_at:TEXT!, record:TEXT!"
+    ),
 }
 
 INDEXES = {
+    # 023_analyst_replay
+    "ix_replay_filings_filed",
     # 021_idea_ledger
     "ix_idea_calls_known",
     # 022_analyst_segments

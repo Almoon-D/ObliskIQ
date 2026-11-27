@@ -37,6 +37,7 @@ from ..store.scoreboard import DRILL_KINDS, Drill, LayerEvent
 from ..store.worker import StoreWorker
 from ..tax.book import TaxBook
 from ..util.timeutil import utc_now
+from .replay import replay_ledger
 
 if TYPE_CHECKING:
     from .app import Loaded
@@ -139,6 +140,8 @@ def _ledger(loaded: Loaded, out: TextIO) -> int:
         return "\n".join(ledger_lines(found))
 
     print(_run(loaded, work), file=out)
+    print("", file=out)
+    print("\n".join(replay_ledger(loaded)), file=out)
     return EXIT_OK
 
 

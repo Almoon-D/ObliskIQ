@@ -25,8 +25,9 @@ from ...errors import UpstreamError
 from ...store import stocks as stocks_repo
 from ...store.worker import StoreWorker
 from ...util.http import RetryPolicy
-from ..insiders.edgar import absent, sec_get
+from ..insiders.edgar import absent
 from ..market.plumbing import Collection, Sleep, failure_text
+from ..sec import sec_get
 
 STEP: Final = "stock_fundamentals"
 HTTP_OK: Final = 200

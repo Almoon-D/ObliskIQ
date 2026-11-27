@@ -233,6 +233,7 @@ patterns:
     title: The analyst's segments replayed on sheets dated after their models' training cutoff
     status: pre-registered
     preregistration: research/preregistrations/analyst-replay.md
+    lock: research/preregistrations/analyst-replay.lock
   - id: options-for-theses
     hypothesis: H8
     title: A long option against the same thesis held in its underlying

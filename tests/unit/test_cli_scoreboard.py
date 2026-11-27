@@ -55,10 +55,20 @@ def test_the_ledger_on_an_empty_store_and_without_its_rules(
     status, out = _run("scoreboard", "ledger")
     assert status == EXIT_OK
     assert "No idea has been written into the ledger yet" in out
+    assert "- no replay run (obliskiq research replay)." in out
     monkeypatch.setattr(cli, "repository_root", lambda: None)
     status, out = _run("scoreboard", "ledger")
     assert status == EXIT_OK
     assert "Not graded" in out
+
+
+def test_the_replay_refuses_to_run_without_its_keys(data_dir: Path) -> None:
+    status, out = _run("research", "replay", "run")
+    assert status == EXIT_INVALID
+    assert "refused: GEMINI_API_KEY unset: no segment is replayed" in out
+    status, out = _run("research", "replay", "probe")
+    assert status == EXIT_INVALID
+    assert "refused: GEMINI_API_KEY unset: the probe asks nothing" in out
 
 
 def test_a_weekly_and_a_monthly_report_are_written(data_dir: Path) -> None:

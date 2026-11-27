@@ -20,17 +20,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import asyncio
 import functools
 from collections.abc import Callable, Mapping, Sequence
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Final
 from zoneinfo import ZoneInfo
 
 from ...config.schema import ObliskConfig
-from ...domain.stocks import StockBar
-from ...research.data import YahooBar, YahooHistory, yahoo_sessions
+from ...research.data import YahooHistory, yahoo_sessions
 from ...store import sources as source_repo
 from ...store import stocks as stocks_repo
 from ...store.worker import StoreWorker
 from ..market.plumbing import Collection, Pacer, Sleep, failure_text
+from .parse import chain
 
 STEP: Final = "stock_bars"
 SOURCE: Final = "stock_bars"
@@ -38,32 +38,6 @@ SOURCE: Final = "stock_bars"
 TARGET_PREFIX: Final = "bars:"
 UNRESOLVED: Final = "unresolved"
 THROTTLED: Final = "throttled"
-
-
-def chain(
-    answer: Sequence[YahooBar], *, symbol: str, after: date | None, until: date, known_at: datetime
-) -> list[StockBar]:
-    """The sessions of an answer after ``after`` and up to ``until``, each with its change from
-    the answer's session before it."""
-    bars: list[StockBar] = []
-    previous: YahooBar | None = None
-    for bar in answer:
-        if bar.session > until:
-            break
-        if after is None or bar.session > after:
-            change = None if previous is None else bar.adj_close / previous.adj_close - 1
-            bars.append(
-                StockBar(
-                    symbol=symbol,
-                    session=bar.session,
-                    close=bar.close,
-                    volume=bar.volume,
-                    change=change,
-                    known_at=known_at,
-                )
-            )
-        previous = bar
-    return bars
 
 
 def read_order(symbols: Sequence[str], attempted: Mapping[str, datetime], limit: int) -> list[str]:

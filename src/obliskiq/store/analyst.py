@@ -10,8 +10,10 @@ from collections.abc import Callable, Sequence
 from datetime import date, datetime
 
 from ..domain.analyst import (
+    FORWARD,
     AnalystCall,
     CallKind,
+    CallRecord,
     DraftOutcome,
     DraftRecord,
     SecondOpinion,
@@ -30,7 +32,7 @@ from .sources import extraction_spend
 _CALL_COLUMNS = (
     "call_id, kind, thesis_id, as_of, sheet_hash, produced_at, provider, model_id, "
     "prompt_version, prompt_hash, status, attempts, output, error, input_tokens, output_tokens, "
-    "cost_usd, segment"
+    "cost_usd, segment, record"
 )
 
 
@@ -64,6 +66,7 @@ def _call(row: sqlite3.Row) -> AnalystCall:
             output_tokens=row["output_tokens"],
             cost_usd=row["cost_usd"],
             segment=row["segment"],
+            record=row["record"],
         ),
     )
 
@@ -73,7 +76,7 @@ def record_call(store: Store, call: AnalystCall) -> AnalystCall:
     with store.transaction():
         cursor = store.execute(
             f"INSERT INTO analyst_calls ({_CALL_COLUMNS.removeprefix('call_id, ')}) VALUES "
-            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 call.kind.value,
                 call.thesis_id,
@@ -92,6 +95,7 @@ def record_call(store: Store, call: AnalystCall) -> AnalystCall:
                 call.output_tokens,
                 call.cost_usd,
                 call.segment,
+                call.record,
             ),
         )
     return call.model_copy(update={"call_id": cursor.lastrowid})
@@ -132,13 +136,15 @@ def segment_spend(store: Store, segment: str, since: datetime) -> float:
     return float(row["spent"])
 
 
-def label_spend(store: Store, *, as_of: date) -> dict[str, float]:
+def label_spend(store: Store, *, as_of: date, record: CallRecord = FORWARD) -> dict[str, float]:
     """What each segment (as the record names it) spent on the calls it produced by the end of
-    ``as_of``, every pass counted."""
+    ``as_of``, every pass counted; ``record`` the record read (the forward one by default, never
+    both)."""
     rows = store.execute(
         "SELECT segment, prompt_hash, SUM(cost_usd) AS spent FROM analyst_calls "
-        "WHERE segment IS NOT NULL AND produced_at < ? GROUP BY segment, prompt_hash",
-        (cutoff_text(as_of),),
+        "WHERE segment IS NOT NULL AND produced_at < ? AND record = ? "
+        "GROUP BY segment, prompt_hash",
+        (cutoff_text(as_of), record),
     ).fetchall()
     found: dict[str, float] = {}
     for row in rows:
@@ -324,10 +330,13 @@ def _review(row: sqlite3.Row) -> ThesisReview:
 
 
 def reviews(store: Store, *, as_of: date) -> list[tuple[ThesisReview, AnalystCall]]:
-    """Every review produced by the end of ``as_of``, with its call, in order."""
+    """Every review of the forward record produced by the end of ``as_of``, with its call, in
+    order."""
     found = []
     for call in calls(store, as_of=as_of):
         if call.kind is not CallKind.REVIEW or call.status is not ExtractionStatus.OK:
+            continue
+        if call.record != FORWARD:
             continue
         row = store.execute(
             "SELECT * FROM thesis_reviews WHERE call_id = ?", (call.call_id,)

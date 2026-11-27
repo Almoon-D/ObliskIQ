@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from datetime import date
 from enum import StrEnum
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, NonNegativeFloat, NonNegativeInt, PositiveInt, model_validator
 
@@ -34,6 +34,11 @@ class CallKind(StrEnum):
     OPINION = "opinion"
     REVIEW = "review"
 
+
+#: The record a call belongs to: the forward one, or the replay after the cutoff (H15).
+type CallRecord = Literal["forward", "replay"]
+FORWARD: Final = "forward"
+REPLAY: Final = "replay"
 
 #: The calls that are on one thesis.
 ON_A_THESIS: Final = frozenset({CallKind.OPINION, CallKind.REVIEW})
@@ -68,6 +73,9 @@ class AnalystCall(DomainModel):
     cost_usd: NonNegativeFloat
     #: The configured segment that made it; ``None`` for a call made before segments.
     segment: NonEmptyText | None = None
+    #: The record it belongs to: ``forward`` (shadow, paper or live), or ``replay`` (H15), which
+    #: is never pooled with it.
+    record: CallRecord = "forward"
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:

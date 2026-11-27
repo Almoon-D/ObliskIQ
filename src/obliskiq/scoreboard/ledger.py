@@ -28,131 +28,53 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from decimal import ROUND_FLOOR, Decimal
-from typing import Final, Literal
+from datetime import date, datetime
+from typing import Final
 
 from ..config.schema import ObliskConfig
 from ..domain.analyst import AnalystCall, OpinionScore, ThesisReview, brier
-from ..domain.market import Bar
 from ..errors import PreregistrationError
 from ..quant.costs import CostBook
-from ..quant.costs import OrderTerms as CostTerms
 from ..research.prereg import CalibrationSpec, IdeaLedgerSpec
 from ..store import Store, repos
 from ..store import analyst as analyst_repo
 from ..store import ledger as ledger_repo
 from ..store import theses as thesis_repo
 from ..store.ledger import IdeaCall, SegmentState
-from ..store.scoreboard import Call
 from .calibration import CalibrationState, calibration_state
 from .grading import (
     RELIABILITY_BINS,
-    GradedCall,
     ProbabilityScore,
     Record,
-    iso_week,
     probability_score,
     record,
 )
 from .h13_run import VenueOf, market_value
+from .ledger_path import (
+    CallPath,
+    CostOf,
+    Graded,
+    Leg,
+    call_path,
+    grade,
+    round_trip,
+)
 from .rules import DAYS_PER_WEEK, GradingRules
 from .run import StoreMarks
 
-type Outcome = Literal["target", "invalidation", "horizon"]
-
-OPEN: Final = "open: neither level crossed and its horizon not passed"
 #: The group prefixes of a report.
 SEGMENT: Final = "segment:"
 SOURCE: Final = "source:"
 EVENT: Final = "event:"
-ZERO = Decimal(0)
-
-
-@dataclass(frozen=True, slots=True)
-class CallPath:
-    """Where a call's closes took it: ``outcome`` and the dates it started and resolved on, or why
-    it has neither (``reason``: open, or not evaluable)."""
-
-    outcome: Outcome | None
-    start: date | None
-    end: date | None
-    reason: str | None
-    start_close: Decimal | None = None
-    end_close: Decimal | None = None
-
-    @property
-    def open(self) -> bool:
-        return self.reason == OPEN
-
-
-def call_path(call: IdeaCall, bars: Sequence[Bar], *, as_of: date, max_age_days: int) -> CallPath:
-    """The closes after the day ``call`` was written, up to ``as_of`` and its horizon, read
-    against its own levels. ``bars`` are the instrument's, oldest first."""
-    written = call.known_at.date()
-    age = timedelta(days=max_age_days)
-    after = [bar for bar in bars if written < bar.session_date <= min(as_of, call.horizon)]
-    if not after:
-        if as_of < written + age and as_of < call.horizon:
-            return CallPath(None, None, None, OPEN)
-        return CallPath(
-            None, None, None, f"no close within {max_age_days} days after it was written"
-        )
-    first = after[0]
-    if first.session_date - written > age:
-        return CallPath(
-            None, None, None, f"no close within {max_age_days} days after it was written"
-        )
-    sign = Decimal(1) if call.rises else Decimal(-1)
-    start = Decimal(repr(first.close))
-    previous = first.session_date
-    for bar in after:
-        if bar.session_date - previous > age:
-            return CallPath(
-                None,
-                first.session_date,
-                None,
-                f"no close between {previous.isoformat()} and {bar.session_date.isoformat()}: "
-                "a level may have been crossed unseen",
-            )
-        previous = bar.session_date
-        close = Decimal(repr(bar.close))
-        crossed: Outcome | None = None
-        if sign * (close - call.target) >= 0:
-            crossed = "target"
-        elif sign * (close - call.invalidation) <= 0:
-            crossed = "invalidation"
-        if crossed is not None:
-            return CallPath(crossed, first.session_date, bar.session_date, None, start, close)
-    if call.horizon > as_of:
-        return CallPath(None, first.session_date, None, OPEN, start)
-    last = after[-1]
-    if call.horizon - last.session_date > age:
-        return CallPath(
-            None,
-            first.session_date,
-            None,
-            f"no close within {max_age_days} days before its horizon {call.horizon.isoformat()}",
-        )
-    return CallPath(
-        "horizon", first.session_date, last.session_date, None, start, Decimal(repr(last.close))
-    )
-
-
-# ── the round trip's cost ──
-
-
-type CostOf = Callable[[IdeaCall, CallPath], float | str]
 
 
 def cost_model(
     store: Store, settings: ObliskConfig, spec: IdeaLedgerSpec, venue_of: VenueOf
 ) -> CostOf:
-    """The round trip's cost of a call as a share of its trade: two legs of the cost model's
-    spread and slippage for the instrument's tier and of its commission, on a trade of the
-    registered value in the base currency at the first close; or why it cannot be priced."""
+    """The round trip's cost of a call as a share of its trade (:func:`round_trip`) at the first
+    and last close of its path; or why it cannot be priced."""
     costs = CostBook.from_config(settings)
     marks = StoreMarks(
         store,
@@ -176,105 +98,25 @@ def cost_model(
         if venue is None or rate is None:
             missing = "venue" if venue is None else f"{described.currency} rate"
             return f"{call.symbol} has no {missing} to price its round trip"
-        units = (spec.outcome.cost_trade_value / (found.start_close * rate)).to_integral_value(
-            rounding=ROUND_FLOOR
+        return round_trip(
+            costs,
+            symbol=call.symbol,
+            venue=venue,
+            asset_class=described.asset_class,
+            currency=described.currency,
+            trade_value=spec.outcome.cost_trade_value,
+            rate_to_base=rate,
+            buy=Leg(
+                found.start,
+                found.start_close,
+                market_value(store, call.conid, found.start, sessions),
+            ),
+            sell=Leg(
+                found.end, found.end_close, market_value(store, call.conid, found.end, sessions)
+            ),
         )
-        units = max(units, Decimal(1))
-        share = ZERO
-        for side, close, day in (
-            ("buy", found.start_close, found.start),
-            ("sell", found.end_close, found.end),
-        ):
-            leg = costs.leg_cost(
-                CostTerms(
-                    venue=venue,
-                    asset_class=described.asset_class,
-                    currency=described.currency,
-                    quantity=units,
-                    price=close,
-                ),
-                side="buy" if side == "buy" else "sell",
-                on=day,
-                average_daily_value=market_value(store, call.conid, day, sessions),
-            )
-            commission = leg.commission.amount
-            if (
-                leg.spread_cost is None
-                or leg.slippage_cost is None
-                or commission is None
-                or leg.notional is None
-                or leg.notional <= ZERO
-            ):
-                gaps = ", ".join(gap.value for gap in leg.gaps) or "a component without a price"
-                return f"the cost model cannot price {call.symbol}'s round trip ({gaps})"
-            share += (leg.spread_cost + leg.slippage_cost + commission) / leg.notional
-        return float(share)
 
     return cost
-
-
-# ── grading ──
-
-
-@dataclass(frozen=True, slots=True)
-class Graded:
-    """A call, where its closes took it, and its graded form (``excess`` ``None`` while open or
-    when not evaluable)."""
-
-    call: IdeaCall
-    path: CallPath
-    graded: GradedCall
-
-    @property
-    def resolved(self) -> bool:
-        return self.graded.graded
-
-    @property
-    def held_days(self) -> int | None:
-        if self.path.start is None or self.path.end is None:
-            return None
-        return (self.path.end - self.path.start).days
-
-
-def grade(
-    call: IdeaCall,
-    found: CallPath,
-    *,
-    price: Callable[[int, date], Decimal | None],
-    reference: int,
-    cost: CostOf,
-) -> Graded:
-    """``call`` graded from its path: the signed excess log return in the base currency less the
-    round trip's cost, and whether its target came first."""
-    as_call = Call(
-        layer=call.segment,
-        conid=call.conid,
-        direction="up" if call.rises else "down",
-        called_at=call.known_at,
-        detail=f"thesis {call.thesis_id}",
-        probability=call.probability,
-    )
-    week = iso_week(call.known_at)
-
-    def unresolved(reason: str) -> Graded:
-        return Graded(call, found, GradedCall(as_call, week, None, reason))
-
-    if found.outcome is None or found.start is None or found.end is None:
-        return unresolved(found.reason or OPEN)
-    p0, p1 = price(call.conid, found.start), price(call.conid, found.end)
-    r0, r1 = price(reference, found.start), price(reference, found.end)
-    if p0 is None or p1 is None:
-        return unresolved(f"{call.symbol} has no mark in the base currency")
-    if r0 is None or r1 is None:
-        return unresolved("no mark of the equity reference within the age allowed")
-    charged = cost(call, found)
-    if isinstance(charged, str):
-        return unresolved(charged)
-    sign = 1.0 if call.rises else -1.0
-    excess = sign * (math.log(p1 / p0) - math.log(r1 / r0)) - charged
-    return Graded(
-        call, found, GradedCall(as_call, week, excess, None, hit=found.outcome == "target")
-    )
 
 
 @dataclass(frozen=True, slots=True)

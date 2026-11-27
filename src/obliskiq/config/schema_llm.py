@@ -57,6 +57,43 @@ class LlmModelConfig(FrozenModel):
     prices_read: date
     #: The effort the model is asked to think at, where its protocol takes one.
     effort: Effort | None = None
+    #: The training cutoff its provider documents (``YYYY-MM``), where it documents one; a model
+    #: without one is ``no_cutoff`` and is never replayed (H15, D191).
+    training_cutoff: Annotated[str, Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")] | None = None
+    #: Whether that cutoff is stated for this model or inherited from the model its card names.
+    cutoff_source: Literal["stated", "inherited"] | None = None
+
+    @model_validator(mode="after")
+    def _cutoff_has_source(self) -> Self:
+        if (self.training_cutoff is None) != (self.cutoff_source is None):
+            raise ValueError("a training cutoff and its source are given together")
+        return self
+
+
+class ReplayConfig(FrozenModel):
+    """The analyst's replay after its models' cutoff (H15, DECISIONS D191)."""
+
+    #: The most the replay may spend in all, in the providers' price currency: the owner's.
+    max_usd: NonNegativeFloat
+    #: The replay's own store, in the data directory: its record never meets the forward one.
+    store_file: NonEmptyText
+    #: The SEC's quarterly index of XBRL filings, and its bulk file of every company's facts.
+    full_index_url_template: Annotated[
+        str, Field(pattern=r"^https://\S*\{year\}\S*\{quarter\}\S*$")
+    ]
+    companyfacts_zip_url: Annotated[str, Field(pattern=r"^https://\S+\.zip$")]
+    companyfacts_member_template: Annotated[str, Field(pattern=r"^\S*\{cik(:[0-9a-z]+)?\}\S*$")]
+    #: The venue whose sessions count a call's horizon.
+    session_venue: Annotated[str, Field(pattern=r"^[A-Z0-9]{4}$")]
+    #: The research dataset of reference rates a round trip's cost is converted with.
+    fx_dataset: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$")]
+    #: The forms that make a company a filer, and how far back a filing counts.
+    filer_forms: list[NonEmptyText] = Field(min_length=1)
+    filer_lookback_months: PositiveInt
+    #: Days of closes loaded before the first sheet: the screen's trend window and its slack.
+    history_days: PositiveInt
+    #: A probe's answer is one probability.
+    probe_max_output_tokens: PositiveInt
 
 
 class LlmBudgetConfig(FrozenModel):
@@ -190,6 +227,7 @@ class LlmConfig(FrozenModel):
     extractor: ExtractorConfig
     analyst: AnalystConfig
     panel: PanelConfig
+    replay: ReplayConfig
 
     def provider_of(self, model: str) -> LlmProviderConfig:
         return self.providers[self.models[model].provider]
