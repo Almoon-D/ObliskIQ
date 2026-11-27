@@ -33,7 +33,7 @@ import exchange_calendars as xc
 
 from ...domain.market import Bar
 from ...store.db import Store
-from ...store.replay import StoredCohort
+from ...store.replay import StoredCohort, stock_bar_rows
 from ...store.replay import names as replay_names
 from .sources import universe_at
 
@@ -122,10 +122,7 @@ def stock_histories(store: Store) -> dict[str, History]:
         if current is not None:
             found[current] = History(tuple(sessions), tuple(closes), tuple(changes))
 
-    cursor = store.execute(
-        "SELECT symbol, session, close, change FROM stock_bars ORDER BY symbol, session"
-    )
-    for symbol, session, close, change in cursor:
+    for symbol, session, close, change in stock_bar_rows(store):
         if symbol != current:
             keep()
             current, sessions, closes, changes = symbol, [], [], []

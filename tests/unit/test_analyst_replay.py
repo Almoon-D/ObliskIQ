@@ -699,9 +699,9 @@ async def test_the_load_fills_the_replay_store_once_and_resumes(
 
             with pytest.raises(UpstreamError, match="SEC_USER_AGENT is unset"):
                 await loader(None).load(span)
-            first = await loader("research test@example.invalid").load(span)
+            first = await loader("research test@example.com").load(span)
             indexes, sics = index.call_count, sic.call_count
-            second = await loader("research test@example.invalid").load(span)
+            second = await loader("research test@example.com").load(span)
     assert [step.step for step in first] == [
         "filings", "names", "sic", "facts", "bars", "instruments", "fx"
     ]  # fmt: skip
@@ -1031,7 +1031,7 @@ async def test_a_failing_company_or_name_never_stops_the_load_but_a_throttle_doe
                     client=client,
                     policy=dataclasses.replace(RetryPolicy.from_settings(settings.http), retries=0),
                     worker=replay_worker,
-                    user_agent="research test@example.invalid",
+                    user_agent="research test@example.com",
                     yahoo=history,
                     research=Sources(fetch, history, None),
                     download=download,

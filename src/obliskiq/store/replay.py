@@ -348,3 +348,11 @@ def listing_exchange(store: Store, symbol: str) -> str | None:
         (symbol,),
     ).fetchone()
     return None if row is None else str(row["exchange"])
+
+
+def stock_bar_rows(store: Store) -> Iterable[tuple[str, str, float, float | None]]:
+    """Every stored bar as (symbol, session, close, change), by symbol then session."""
+    for row in store.execute(
+        "SELECT symbol, session, close, change FROM stock_bars ORDER BY symbol, session"
+    ):
+        yield row["symbol"], row["session"], row["close"], row["change"]

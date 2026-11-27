@@ -132,7 +132,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, config_dir: Path, data_dir: Path) ->
     monkeypatch.setenv("OBLISK_DATA_DIR", str(data_dir))
     monkeypatch.setenv("OBLISK_CONFIG_DIR", str(config_dir))
     monkeypatch.setenv("OBLISK_IBKR_PROFILE", "paper")
-    monkeypatch.setenv("SEC_USER_AGENT", "research test@example.invalid")
+    monkeypatch.setenv("SEC_USER_AGENT", "research test@example.com")
     monkeypatch.setattr(cli, "utc_now", lambda: NOW)
     monkeypatch.setattr(cli, "yfinance_history", yahoo)
 
