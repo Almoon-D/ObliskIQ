@@ -5,6 +5,19 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.8.0] - 2026-11-27
+
+Session 34: events and company text (DECISIONS D189, D200). No IBKR call.
+
+### Added
+
+- Source `sec_filings`: listed names' 8-Ks with their items, every registration form and
+  pricing prospectus from EDGAR's daily index; a listed issuer's IPO terms and stated lock-up.
+- The fact sheet's `events` section: dated event lines of names passing the floors, lock-ups
+  ending in the next 30 days, `no_source` lines for results dates and index changes.
+- The ledger's calls carry the kinds of the event lines they cite; the dossier reads the
+  candidate's 10-K, 10-Q and recent 8-Ks; the digest has an `events` line.
+
 ## [1.7.0] - 2026-11-27
 
 Session 35: the analyst replayed after its models' training cutoff (H15, DECISIONS D191, D199).

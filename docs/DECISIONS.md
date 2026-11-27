@@ -4351,3 +4351,17 @@ missing.
 
 Rejected: the replay in the forward store; tickers as of each date (no free source keeps them).
 
+### D200 · How the code reads the events and the company text (§5.5; D189)
+
+- **One source,** `sec_filings`: EDGAR's daily form index. Kept: listed names' 8-Ks with the
+  items and acceptance their header states; every filer's registration forms and 424B4s (an
+  issuer is listed only after its offering). A listed issuer's 424B4 is read once: an IPO by its
+  cover; the lock-up the shortest day count of a sentence about one, counted from the
+  prospectus's date. A lock-up not stated has no date. A failed read is not kept, so retried.
+- **No free source** states results dates or index changes (Nasdaq and S&P did not answer the
+  cloud, Yahoo answers 403): one `no_source` line each, never inferred. No 8-K item is guidance.
+- **The sheet:** names passing the floors; a lock-up ending ahead is dated by its prospectus, a
+  fact known now. Event names join `sheet.stocks`. A call carries the kinds its facts cite.
+- **The dossier** reads filings only when the sheet has `events`, so the replay is unchanged;
+  fetched on the sheet's own day only, else what was kept by it.
+

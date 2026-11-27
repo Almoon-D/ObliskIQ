@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, TextIO
 
 import httpx
 
+from ..data.events.filing_text import company_texts
 from ..env import secret_reader
 from ..grid.facts import build_fact_sheet
 from ..llm.analyst import Analyst
@@ -180,6 +181,14 @@ def _llm_analyst(loaded: Loaded, out: TextIO) -> int:
         worker = StoreWorker(lambda: open_store(settings, data_dir))
         try:
             async with httpx.AsyncClient() as client:
+                texts = company_texts(
+                    settings,
+                    client=client,
+                    worker=worker,
+                    secrets=read,
+                    now=utc_now,
+                    sleep=asyncio.sleep,
+                )
                 analysts = [
                     Analyst(
                         settings,
@@ -188,6 +197,7 @@ def _llm_analyst(loaded: Loaded, out: TextIO) -> int:
                         worker=worker,
                         keys=keys,
                         now=utc_now,
+                        texts=texts,
                     )
                     for name in settings.llm.segment_order()
                 ]

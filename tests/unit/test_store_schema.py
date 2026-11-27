@@ -430,9 +430,26 @@ SHAPE = {
         "label:TEXT!*, segment:TEXT!, sheet_date:TEXT!*, side:TEXT!, state:TEXT!, reason:TEXT!, "
         "cost_usd:REAL!, finished_at:TEXT!, record:TEXT!"
     ),
+    # 024_sec_filings
+    "sec_filings": (
+        "accession:TEXT!*, cik:INTEGER!, company:TEXT!, form:TEXT!, filed:TEXT!, path:TEXT!, "
+        "items:TEXT, accepted_at:TEXT, known_at:TEXT!"
+    ),
+    "ipo_terms": (
+        "accession:TEXT!*, cik:INTEGER!, status:TEXT!, price:TEXT, shares:INTEGER, "
+        "lockup_days:INTEGER, prospectus_day:TEXT, lockup_ends:TEXT, detail:TEXT, known_at:TEXT!"
+    ),
+    "filing_texts": (
+        "accession:TEXT!*, section:TEXT!*, cik:INTEGER!, form:TEXT!, filed:TEXT!, status:TEXT!, "
+        "text:TEXT, detail:TEXT, known_at:TEXT!"
+    ),
 }
 
 INDEXES = {
+    # 024_sec_filings
+    "ix_sec_filings_filed",
+    "ix_sec_filings_cik",
+    "ix_filing_texts_cik",
     # 023_analyst_replay
     "ix_replay_filings_filed",
     # 021_idea_ledger

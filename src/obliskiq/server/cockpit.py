@@ -40,7 +40,7 @@ from ..config.changes import (
     settings_fingerprint,
 )
 from ..config.loader import LoadedConfig, load_config
-from ..data.runner import source_health
+from ..data.health import source_health
 from ..domain.capital import QuestionState
 from ..domain.orders import TERMINAL_STATES, IntentState, KillSwitchRecord
 from ..domain.thesis import OPEN_STATES

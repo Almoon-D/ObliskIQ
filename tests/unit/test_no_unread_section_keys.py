@@ -39,6 +39,9 @@ SECTION_FILES = {
             "exchanges",
             "ibkr_exchanges",
             "inputs",
+            "items",
+            "registration_forms",
+            "no_source",
         }
     ),
     "llm.yaml": frozenset({"providers", "models", "segments"}),

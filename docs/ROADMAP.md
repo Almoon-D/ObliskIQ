@@ -30,7 +30,7 @@ the bar. Nothing has filled an order yet. In order:
 7. **Owner: the replay** (docs/RUNBOOK.md, "The analyst's replay"): set `llm.replay.max_usd`,
    then `research replay load`, `probe`, `run`, `report`. It gives the first reading of which
    analyst is worth running in days, where the forward ledger needs about two years a segment.
-8. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
+8. **Owner: start the events** (docs/RUNBOOK.md, "The events"), after the stock screen.
 9. **A design review** (the strongest model available) when the replay or the ledger has its
    first verdict: keep, change or stop each segment.
 
@@ -85,7 +85,7 @@ for a verdict; the replay (Session 35) is what could give a first reading in day
 | 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | done (paper and live wait for an owner-given ISIN; live keeps its ceilings) | v1.4.0 |
 | 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | done (H14 locked; no verdict before about two years a segment) | v1.5.0 |
 | 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | done (three segments in shadow, `lite` trades; Anthropic waits on its key) | v1.6.0 |
-| 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
+| 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | done (the SEC's filings; results dates and index changes `no_source`; no IBKR call) | v1.8.0 |
 | 35 | Replay after the cutoff | H15 pre-registered first; the segments' calls on point-in-time sheets after each model's training cutoff, graded at once, with a leak control | done (built; the owner runs it on the machine) | v1.7.0 |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
@@ -110,6 +110,18 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Session 34 — Events and company text (2026-11-27, v1.8.0)
+
+- **Landed:** source `sec_filings` (EDGAR's daily form index, 8-K headers, 424B4 prospectuses)
+  kept with `known_at`; the sheet's `events` section (in the segment hash): listed names' 8-K
+  items, registrations, IPO terms and lock-ups ending ahead; event tags on the ledger's calls;
+  the dossier's `<filings>` block from the candidate's 10-K, 10-Q and recent 8-Ks; the digest's
+  `events` line (D200).
+- **Found:** Nasdaq's earnings calendar did not connect from the cloud and Yahoo answered 403: results dates and index changes are `no_source` lines. `source_health` moved to
+  `data/health.py` (the digest may not reach research through the runner).
+- **Deferred:** none. **VERIFY-LIVE:** the first `sources run sec_filings` on the machine, and
+  a free results-date source from it. No IBKR call.
 
 ### Session 35 — The analyst replayed after its cutoff (2026-11-27, v1.7.0)
 
@@ -730,6 +742,8 @@ settles it.
 | Gemini Flash (`gemini-3.8-flash`) as `mid`'s dossier model: a structured answer inside the schema (it answered 503 "high demand" on 2026-11-27) | 33 | the first analyst run on the machine |
 | The SEC's quarterly `xbrl.idx` (pipe rows after a dashed line) and the bulk `companyfacts.zip` (one `CIK##########.json` a company) as `research replay load` reads them (`VERIFY-LIVE(the SEC's bulk files)`, D199) | 35 | the owner's first `research replay load` |
 | The replay's cost: a replayed sheet's scan and dossiers against `unit_worst`, and the probe's answers inside `probe_max_output_tokens` (`VERIFY-LIVE(the replay's spend)`) | 35 | the owner's first `research replay run` |
+| `sec_filings` on the machine: the daily index's rows, an 8-K header's items and a 424B4's cover and lock-up read as the fixtures were, inside the SEC's pace (`VERIFY-LIVE(the SEC's filings in service)`, D200) | 34 | the owner's first `sources run sec_filings` |
+| A free results-date or index-change source reachable from the machine (Nasdaq's calendar, Yahoo's): until one is found both are `no_source` lines (`VERIFY-LIVE(a free results-date source)`) | 34 | a session after the events' first week |
 | The weekly forecast panel's first live cohort: the model answers 40 ids a call inside the schema, the coverage reaches 60 %, and the cost per week against the budget (`VERIFY-LIVE(the panel's first cohort)`, D174) | 18a | the first week of `serve` with the analyst's key |
 | The stock bars' first pass: Yahoo answers a 400-day first read for 400 names a run inside the pacing, and the screen's status turns `ok` after the pass (`stocks.bars.first_read_days`, D190; Yahoo is not reachable from the cloud session that set it) | challenge of 2026-11-25 | the owner's first `sources run stock_bars` |
 | The reserve's paper cycle under variant A: each of the nine roles resolves to a pinned fund IBKR confirms, and the roles below the minimum trade under the cap say why (D194; RUNBOOK part D) | owner rulings of 2026-11-25 | the reserve's paper cycle |

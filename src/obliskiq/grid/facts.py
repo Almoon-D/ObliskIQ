@@ -17,6 +17,9 @@ read. The sections, in order:
 * **pulse**: each GDELT query's newest day against its history;
 * **news**: the items collected in the lookback, newest first, with what the extractor read;
 * **insider**: issuers whose officers or directors bought in the open market in the cluster window;
+* **events**: the SEC's filings of listed names that pass the screen's floors (``grid/events.py``;
+  DECISIONS D189): a header, one ``no_source`` line per event no free source states, then at most
+  ``max_event_lines`` events, each opening with its kind; a name on one may be a thesis's stock;
 * **stock_screen**: the untested stock screen (``grid/stock_screen.py``; DECISIONS D180): a header
   that says it is no signal, then its first ``stock_screen_top`` names, each ending
   ``untested (D180)``, and the names it could not rank counted on one line; a screen that is
@@ -47,12 +50,14 @@ from ..config.schema_universe import UniverseInstrument
 from ..data.events.readings import event_reading, pulse_reading
 from ..data.insiders.clusters import cluster_inputs
 from ..data.positioning.readings import positioning_reading
+from ..domain.filings import EVENTS_SECTION
 from ..domain.measurement import EntityKind, Measurement, MeasurementStatus
 from ..domain.sources import ExtractionStatus, NewsItem
 from ..store import measurements as measurements_repo
 from ..store import repos
 from ..store import sources as sources_repo
 from ..store.db import Store
+from .events import NO_SOURCE, event_view
 from .rankings import Rankings
 from .stock_screen import ScreenStatus, stock_screen
 from .views import equity_grid, macro_board
@@ -74,6 +79,7 @@ SECTIONS: Final = (
     "pulse",
     "news",
     "insider",
+    EVENTS_SECTION,
     "stock_screen",
 )
 #: The section of the line that names the sections a sheet omits.
@@ -83,6 +89,8 @@ SCREEN: Final = "stock_screen"
 UNTESTED: Final = "untested (D180)"
 #: The status of a screen that could not be built.
 FAILED: Final = "failed"
+#: The section of the events (``grid/events.py``).
+EVENTS: Final = EVENTS_SECTION
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +204,7 @@ class FactSheetBuilder:
             "pulse": lambda: self._pulses(as_of),
             "news": lambda: self._news(as_of),
             "insider": lambda: self._insiders(as_of),
+            EVENTS: lambda: self._events(as_of),
             SCREEN: lambda: self._stock_screen(as_of),
         }
         for name in SECTIONS:
@@ -469,6 +478,40 @@ class FactSheetBuilder:
                 f"directors; {inputs.filings} filings; {number(inputs.shares)} shares, value "
                 f"{number(inputs.value)}; {inputs.unpriced_lines} lines unpriced)",
             )
+
+    def _events(self, as_of: date) -> None:
+        head = (
+            "events of listed US companies passing the account's floors, from their SEC filings: "
+            "dated facts, no signal and no weight in any gate (D189)"
+        )
+        try:
+            view = event_view(self._store, self._settings, as_of=as_of)
+        except Exception as exc:  # the sheet stands without the events; its status says why
+            self._add(as_of, FAILED, EVENTS, f"{head}; they cannot be built: {type(exc).__name__}")
+            return
+        window = self._config.events_window_days
+        if not view.names:
+            self._add(
+                as_of,
+                MeasurementStatus.NA.value,
+                EVENTS,
+                f"{head}; no listed name passes the floors",
+            )
+        else:
+            self._add(
+                as_of,
+                MeasurementStatus.OK.value,
+                EVENTS,
+                f"{head}; {view.names} names pass the floors, {len(view.lines)} events filed in "
+                f"the last {window} days or ending in the next {window}",
+            )
+        for kind, reason in self._settings.sources.filings.no_source.items():
+            self._add(as_of, NO_SOURCE, EVENTS, f"{kind}: {reason}")
+        for line in view.lines[: self._config.max_event_lines]:
+            close = view.closes.get(line.ticker)
+            if close is not None:
+                self._stocks.setdefault(line.ticker, close)
+            self._add(line.day, MeasurementStatus.OK.value, EVENTS, line.text)
 
     def _stock_screen(self, as_of: date) -> None:
         head = (

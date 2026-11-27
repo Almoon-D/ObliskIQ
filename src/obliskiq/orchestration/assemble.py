@@ -23,6 +23,7 @@ from pydantic import SecretStr
 from ..calendars.service import Calendars
 from ..config.schema import ObliskConfig
 from ..data.events.earnings import EarningsSource, yfinance_earnings
+from ..data.events.filing_text import company_texts
 from ..data.halts import HaltFeed
 from ..data.market.daily import MarketCollector
 from ..data.market.targets import collection_venues
@@ -294,6 +295,13 @@ def build_service(
     )
     read = secrets or _no_secret
     keys = {name: read(provider.key_env) for name, provider in settings.llm.providers.items()}
+    texts = (
+        company_texts(
+            settings, client=http, worker=path.worker, secrets=read, now=clock.now, sleep=sleep
+        )
+        if http is not None
+        else None
+    )
     analyst = (
         AnalystJob(
             settings,
@@ -305,6 +313,7 @@ def build_service(
                     worker=path.worker,
                     keys=keys,
                     now=clock.now,
+                    texts=texts,
                 )
                 for name in settings.llm.segment_order()
             ],

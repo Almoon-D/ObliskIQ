@@ -26,6 +26,8 @@ from ..calendars.status import BlockReason
 from ..capital.planner import ReservationPlan, ReservationPlanner
 from ..capital.twr import TwrResult, account_twr
 from ..config.schema import ObliskConfig
+from ..data.events.filings import SOURCE as EVENTS_SOURCE
+from ..data.health import source_health
 from ..decision.breakers import BreakerReport, book_of, stored_report
 from ..decision.rebalance_core import CoreRebalancer, RebalancePlan
 from ..decision.rebalance_thesis import ThesisPlan, ThesisRebalancer
@@ -45,6 +47,7 @@ from ..engines.thesis.grading import GroupRecord, PairRecord, opinion_record, pa
 from ..errors import CalendarError, ObliskError
 from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
+from ..grid.events import events_summary
 from ..grid.stock_screen import screen_summary
 from ..jurisdiction.tax import TaxPolicy
 from ..llm.extractor import month_start
@@ -54,6 +57,7 @@ from ..store import nav as nav_repo
 from ..store import options as options_repo
 from ..store import orders as repo
 from ..store import runs as run_repo
+from ..store import sources as source_repo
 from ..store import theses as thesis_repo
 from ..store import thesis_options as link_repo
 from ..store.db import Store
@@ -143,6 +147,9 @@ class Digest:
     llm_segments: list[str] = field(default_factory=list)
     #: The stock screen in one line (names listed, names left, its status).
     stock_screen: str | None = None
+    #: The events collector's status, then the sheet's events in one line (filed in the window,
+    #: lock-ups ahead, no source).
+    events: list[str] = field(default_factory=list)
     #: The hunting share, the capital in theses and in the reserve, and the bar (D185, D193).
     hunt: HuntReading | None = None
     questions: list[OwnerQuestion] = field(default_factory=list)
@@ -244,6 +251,17 @@ async def gather_digest(
         digest.stock_screen = await worker.run(screen_summary, settings, as_of=day)
     except Exception as exc:  # shown as unreadable, never left out
         digest.problems.append(f"the stock screen cannot be read: {type(exc).__name__}")
+    try:
+        runs = await worker.run(source_repo.source_runs)
+        sources = source_health(settings, runs, now=at)
+        digest.events = [
+            f"source {h.source}: {h.state.value}" + (f" ({h.reason})" if h.reason else "")
+            for h in sources
+            if h.source == EVENTS_SOURCE
+        ]
+        digest.events.append(await worker.run(events_summary, settings, as_of=day))
+    except Exception as exc:  # shown as unreadable, never left out
+        digest.problems.append(f"the events cannot be read: {type(exc).__name__}")
     digest.questions = await worker.run(
         lambda store: capital_repo.questions(store, states=[QuestionState.OPEN])
     )
@@ -502,6 +520,7 @@ def thesis_lines(digest: Digest, rows: int) -> list[str]:
     lines += digest.llm_segments
     if digest.stock_screen is not None:
         lines.append(f"  {digest.stock_screen}")
+    lines += [f"  {line}" for line in digest.events]
     return lines
 
 

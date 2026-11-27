@@ -363,6 +363,21 @@ def stock_screen(store: Store, settings: ObliskConfig, *, as_of: date) -> StockS
     return _Screen(store, settings, as_of).build()
 
 
+def floor_passing(
+    store: Store, settings: ObliskConfig, *, as_of: date
+) -> dict[int, tuple[StockListing, HeldBar]]:
+    """The companies of the newest snapshot by ``as_of`` that pass the screen's floors, each with
+    its most traded listing and that listing's last bar (the sheet's events read them)."""
+    snapshot = stocks_repo.snapshot_as_of(store, as_of=as_of)
+    if snapshot is None:
+        return {}
+    names = stocks_repo.listed(store, snapshot)
+    return {
+        listing.cik: (listing, last)
+        for listing, last, _ in _Screen(store, settings, as_of)._passing(names)
+    }
+
+
 def screen_summary(store: Store, settings: ObliskConfig, *, as_of: date) -> str:
     """One line: names listed, names that left since the first snapshot, the screen's status."""
     screen = stock_screen(store, settings, as_of=as_of)

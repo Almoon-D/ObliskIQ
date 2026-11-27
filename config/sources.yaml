@@ -34,7 +34,7 @@ sources:
       - catalyst_window
       - promoted_patterns
       - llm_nomination
-    views: [equity_grid, macro_board, option_surface, stock_screen]
+    views: [equity_grid, macro_board, option_surface, stock_screen, fact_sheet_events]
     safety: [instrument_halts]
 
   providers:
@@ -447,6 +447,24 @@ sources:
       bias_notes:
         - A feed lists only its latest items; anything published and withdrawn between two reads
           is never seen.
+
+    sec_filings:
+      name: SEC EDGAR daily form index, 8-K headers and pricing prospectuses (the sheet's events)
+      area: events
+      status: built
+      credential: SEC_USER_AGENT
+      consumers: [view:fact_sheet_events, component:llm_nomination]
+      activation: null
+      # A filing is known from the run that read it; the index dates it by day.
+      release_date_policy: as_collected
+      release_lag_days: 0
+      schedule: [{venue: XNYS, anchor: close, offset_minutes: 200}]
+      stale_after_hours: 100
+      bias_notes:
+        - Forward only, from the first run; a filing EDGAR posts after the run that read its day
+          is never seen.
+        - The SEC states events, not their kind; a kind is the 8-K's item number or the form,
+          and no item states guidance.
 
     # ── calendars ──
     earnings:
@@ -868,6 +886,50 @@ sources:
     # trailing window of filing dates.
     purchase_code: P
     cluster_window_days: 30
+
+  # ── filings (the fact sheet's events; MASTER_PLAN §5.5; DECISIONS D189, D200) ──
+  filings:
+    # Each run reads the daily form index of every day since the last one read (at most this
+    # many days back), through insiders' index template, archive, time zone and pace.
+    lookback_days: 10
+    # Forms whose header states item numbers, kept for the companies of the newest listing
+    # snapshot; each kept item is an event of its kind. An item not named here is not an event.
+    item_forms: ["8-K"]
+    items:
+      "1.01": agreement
+      "1.03": bankruptcy
+      "2.01": acquisition_completed
+      "2.02": results
+      "3.01": delisting_notice
+      "4.02": restatement
+      "5.02": departure
+    # Registration forms, kept for every filer (an issuer is listed only after its offering);
+    # the sheet shows those of listed names.
+    registration_forms:
+      "S-1": ipo_registration
+      "F-1": ipo_registration
+      "10-12B": spinoff_registration
+    # Pricing prospectuses: read once for a filer listed when the run reads them, at most this
+    # many a run, filed within the window.
+    prospectus_forms: ["424B4"]
+    prospectus_kind: ipo_priced
+    lockup_kind: lockup_end
+    prospectus_reads_per_run: 20
+    prospectus_window_days: 60
+    # An initial public offering says so on its cover: the text this long is read for it.
+    cover_chars: 6000
+    header_url_template: https://www.sec.gov/Archives/edgar/data/{cik}/{folder}/{accession}.hdr.sgml
+    documents_url_template: https://www.sec.gov/Archives/edgar/data/{cik}/{folder}/index.json
+    document_url_template: https://www.sec.gov/Archives/edgar/data/{cik}/{folder}/{name}
+    # A document larger than this is refused (the largest prospectus read was 14 MB).
+    max_document_bytes: 40000000
+    # Events no free source states (docs/knowledge/research-sources.md): a status line each on
+    # the sheet, never inferred from prices or estimated.
+    no_source:
+      results_announced: >-
+        no free source states the day a company announced for its results (Yahoo's dates may be
+        its own estimates; Nasdaq's calendar did not connect)
+      index_change: no free source states index additions and deletions
 
   # ── events ──
   events:

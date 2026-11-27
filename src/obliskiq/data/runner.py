@@ -5,22 +5,21 @@ service) through its collector, and records the run's verdict, rows and reason a
 health; a declared source is refused with the condition that would build it. Every request but
 SEC's carries ``sources.user_agent``; a credential a source names is read by that name.
 
-:func:`source_health` turns each source's last run into what the status reports: ``failing``
-when its last run failed outright, ``stale`` when it has not succeeded within its
-``stale_after_hours`` (or never has), ``ok`` otherwise.
+:func:`source_health` (``data/health.py``, without the network) turns each source's last run into
+what the status reports.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import functools
-from collections.abc import Callable, Mapping
-from datetime import date, datetime, timedelta
+from collections.abc import Callable
+from datetime import date, datetime
 
 import httpx
 from pydantic import TypeAdapter
 
 from ..config.schema import ObliskConfig
-from ..domain.sources import RunVerdict, SourceHealth, SourceRun, SourceState
+from ..domain.sources import RunVerdict
 from ..errors import ConfigError
 from ..orchestration.runlog import RunRecord, StepOutcome
 from ..research.data import YahooHistory, yfinance_history
@@ -28,6 +27,7 @@ from ..store import sources as source_repo
 from ..store.worker import StoreWorker
 from ..util.http import RetryPolicy
 from .events.earnings import EarningsCollector, EarningsSource
+from .events.filings import FilingsCollector
 from .events.gdelt import GdeltCollector
 from .events.markets import PredictionMarkets
 from .events.rss import NewsCollector
@@ -40,8 +40,6 @@ from .stocks.bars import BarsCollector
 from .stocks.fundamentals import FundamentalsCollector
 from .stocks.listings import ListingsCollector
 
-#: A run that failed outright.
-FAILED = "error"
 #: The source read by the service's heartbeat, not by a job.
 HEARTBEAT_SOURCES = frozenset({"nasdaq_trader"})
 _VERDICT: TypeAdapter[RunVerdict] = TypeAdapter(RunVerdict)
@@ -176,6 +174,17 @@ class SourceRunner:
                 worker=worker,
                 now=now,
             ).run(dry_run=dry_run)
+        if source == "sec_filings":
+            return await FilingsCollector(
+                settings,
+                client=client,
+                policy=policy,
+                pacer=self._pacer,
+                user_agent=self._secret(settings.sources.provider(source).credential),
+                sleep=self._sleep,
+                worker=worker,
+                now=now,
+            ).run(dry_run=dry_run)
         if area == "stocks":
             return await self._stocks(source, dry_run=dry_run)
         if source in ("polymarket", "kalshi"):
@@ -231,34 +240,3 @@ class SourceRunner:
             sleep=self._sleep,
             now=now,
         ).run(dry_run=dry_run)
-
-
-def source_health(
-    settings: ObliskConfig, runs: Mapping[str, SourceRun], *, now: datetime
-) -> list[SourceHealth]:
-    """The health of every built source, in the order config lists them."""
-    health: list[SourceHealth] = []
-    for name, provider in settings.sources.built().items():
-        run = runs.get(name)
-        window = timedelta(hours=provider.stale_after_hours or 0)
-        if run is None:
-            state, reason = SourceState.STALE, "never run"
-        elif run.last_status == FAILED:
-            state = SourceState.FAILING
-            reason = f"{run.consecutive_failures} failed runs in a row: {run.detail or 'no detail'}"
-        elif run.last_success_at is None or now - run.last_success_at > window:
-            state = SourceState.STALE
-            reason = f"no success within {provider.stale_after_hours} hours"
-        else:
-            state, reason = SourceState.OK, run.detail or ""
-        health.append(
-            SourceHealth(
-                source=name,
-                state=state,
-                last_attempt_at=None if run is None else run.last_attempt_at,
-                last_success_at=None if run is None else run.last_success_at,
-                rows=0 if run is None else run.last_rows,
-                reason=reason,
-            )
-        )
-    return health
