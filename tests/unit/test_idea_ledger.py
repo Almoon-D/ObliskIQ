@@ -25,7 +25,8 @@ from obliskiq.errors import PreregistrationError, StoreError
 from obliskiq.reporting.ledger import ledger_lines
 from obliskiq.research.prereg import IdeaLedgerPrereg, IdeaLedgerSpec, load_any
 from obliskiq.scoreboard import ledger
-from obliskiq.scoreboard.ledger import OPEN, call_path, grade_ledger, record_segments
+from obliskiq.scoreboard.ledger import call_path, grade_ledger, record_segments
+from obliskiq.scoreboard.ledger_path import OPEN
 from obliskiq.scoreboard.rules import LEDGER_PATH, load_locked_ledger
 from obliskiq.store import ledger as repo
 from obliskiq.store import theses as thesis_repo

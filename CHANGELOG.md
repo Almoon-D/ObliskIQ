@@ -5,6 +5,19 @@ All notable changes to ObliskIQ are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every version below 1.0.0 is a
 pre-release; the release workflow publishes each version's section as its release notes.
 
+## [1.7.0] - 2026-11-27
+
+Session 35: the analyst replayed after its models' training cutoff (H15, DECISIONS D191, D199).
+No IBKR call.
+
+### Added
+
+- `research replay load` rebuilds each registered Monday's sheet from the SEC and Yahoo as it
+  stood, in a store of its own; `probe` asks each model what it remembers first.
+- `research replay run` replays `lite` and `mid` on 172 sheets each, resumable, inside the
+  owner's cap `llm.replay.max_usd` (0 as shipped); `report` grades every call at once.
+- `scoreboard ledger` shows the replay's record beside the forward one, never summed with it.
+
 ## [1.6.0] - 2026-11-27
 
 Session 33: the analyst on several models side by side (DECISIONS D188, D198). No IBKR call.

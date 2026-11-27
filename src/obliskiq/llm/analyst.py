@@ -55,16 +55,18 @@ from pydantic import ValidationError
 from ..config.schema import ObliskConfig
 from ..config.schema_llm import LlmModelConfig, LlmProviderConfig
 from ..domain.analyst import (
+    FORWARD,
     UNSTORED_CALL,
     AnalystCall,
     CallKind,
+    CallRecord,
     SecondOpinion,
     ThesisReview,
     segment_label,
 )
 from ..domain.sources import ExtractionStatus
 from ..domain.thesis import OPEN_STATES, Expression, Thesis, ThesisDraft, ThesisSource
-from ..grid.facts import FactLine, FactSheet, number
+from ..grid.facts import SECTIONS, FactLine, FactSheet, number
 from ..logging_setup import get_logger
 from ..store import analyst as analyst_repo
 from ..store import theses as thesis_repo
@@ -412,6 +414,8 @@ class Analyst:
         worker: StoreWorker,
         keys: Mapping[str, str | None],
         now: Callable[[], datetime],
+        sections: Sequence[str] = SECTIONS,
+        record: CallRecord = FORWARD,
     ) -> None:
         llm = settings.llm
         config = llm.analyst
@@ -448,8 +452,10 @@ class Analyst:
             RetryPolicy.from_settings(settings.http),
             timeout_seconds=float(config.request_timeout_seconds),
         )
-        self.prompt_hash = analyst_prompt_hash(settings, segment)
+        #: The sheet's sections are in the hash: a replay segment is never the forward one (H15).
+        self.prompt_hash = analyst_prompt_hash(settings, segment, sections=sections)
         self.label = segment_label(segment, self.prompt_hash)
+        self.record = record
 
     def _key(self, step: _Pass) -> str:
         key = self._keys.get(step.model.provider)
@@ -784,6 +790,7 @@ class Analyst:
             output_tokens=used_out,
             cost_usd=self._cost(step.model, used_in, used_out),
             segment=self.segment,
+            record=self.record,
         )
         stored = await self._worker.run(analyst_repo.record_call, call)
         tally.add(stored)

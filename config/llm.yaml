@@ -32,6 +32,10 @@ llm:
       output_usd_per_million: 1.50
       prices_read: 2026-11-27
       effort: null
+      # Google's card names Gemini 3 Pro's for its training data, which states January 2025
+      # (read 2026-11-27): inherited, not stated for this model (H15, the owner's ruling).
+      training_cutoff: 2025-01
+      cutoff_source: inherited
     # Google's most capable Flash model. Its prices double on 2027-01-01 (3.75 → 7.50 output, the
     # pricing page of 2026-11-27): re-read them then.
     gemini_flash:
@@ -42,6 +46,9 @@ llm:
       output_usd_per_million: 3.75
       prices_read: 2026-11-27
       effort: null
+      # Its card's chain (3.7, 3.6, 3.5 and 3 Flash) ends at Gemini 3 Pro's January 2025.
+      training_cutoff: 2025-01
+      cutoff_source: inherited
     # Anthropic's most capable widely released model; it always thinks, at the effort given.
     claude_fable:
       provider: anthropic
@@ -51,6 +58,9 @@ llm:
       output_usd_per_million: 40.00
       prices_read: 2026-11-27
       effort: high
+      # Stated on Anthropic's model overview (read 2026-11-27); its id is a pinned snapshot.
+      training_cutoff: 2026-06
+      cutoff_source: stated
   budget:
     # Spend per calendar month (UTC), in the providers' price currency, over every role. A call
     # whose worst-case cost would pass it, or would pass its segment's share, is not made. The
@@ -195,3 +205,30 @@ llm:
     probability_bounds: ["0.02", "0.98"]
     max_abs_excess_pct: 50
     asked_excess_range_pct: 25
+  replay:
+    # The analyst replayed after its models' training cutoff (H15, DECISIONS D191). The most it
+    # may spend in all, in US dollars: the owner's setting. A run whose worst case (every call at
+    # its full output allowance, retried once) would pass it is refused; zero refuses every run.
+    # The command prints the worst case and what the calls made so far cost (docs/RUNBOOK.md).
+    max_usd: 0
+    # Its own store in the data directory: its record is never pooled with the forward one.
+    store_file: replay.sqlite3
+    # The SEC's quarterly index of the filings that carry XBRL (every 10-K and 10-Q since 2011),
+    # and its bulk file of every company's XBRL facts, each value with the day it was filed (what
+    # the screen's frames give without one); the file is read whole once, about 1.3 GB.
+    full_index_url_template: https://www.sec.gov/Archives/edgar/full-index/{year}/QTR{quarter}/xbrl.idx
+    companyfacts_zip_url: https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip
+    companyfacts_member_template: CIK{cik:010d}.json
+    # The venue whose sessions count a call's horizon: the US stocks' calendar.
+    session_venue: XNYS
+    # The ECB's reference rates (a research dataset): a round trip's cost in the base currency.
+    fx_dataset: ecb_fx
+    # A company is in a sheet's universe when it filed one of these in the months before it
+    # (H15: fifteen, a fiscal year and a late filing).
+    filer_forms: [10-K, 10-Q]
+    filer_lookback_months: 15
+    # Closes loaded before the first sheet: the screen's twelve-month trend, its skipped month and
+    # a month of slack.
+    history_days: 430
+    # A probe's answer is one probability and nothing else.
+    probe_max_output_tokens: 256

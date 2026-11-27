@@ -57,6 +57,7 @@ from ..store import open_research_store, open_store
 from ..store import universe as universe_repo
 from ..util.http import RetryPolicy
 from ..util.timeutil import utc_now
+from .replay import add_replay_commands
 
 if TYPE_CHECKING:
     from .app import Loaded
@@ -494,3 +495,5 @@ def add_research_commands(commands: argparse._SubParsersAction[argparse.Argument
     lock.add_argument("prereg", type=Path, help="the pre-registration file")
     lock.add_argument("--commit", required=True, help="the merge commit")
     lock.set_defaults(handler=_lock)
+
+    add_replay_commands(actions)

@@ -120,3 +120,7 @@ class SimulationError(ResearchError):
 
 class DataSourceError(ResearchError):
     """A research data source answered with something the loader cannot read as data."""
+
+
+class ReplayRefusedError(ResearchError):
+    """The analyst's replay refuses a model, a segment, a date or a run (H15): it makes no call."""

@@ -53,6 +53,9 @@ passes the gate's own checks at its own levels, traded or not, per segment, sour
 it fixes when a segment's stated probabilities are trusted and how a trusted segment's calls are
 offered the book's free slots.
 
+The **analyst's replay** (``kind: analyst_replay``, DECISIONS D191; ``prereg_replay.py``) grades
+the analyst's segments on fact sheets rebuilt as of dates after their models' training cutoff.
+
 The **scoreboard's rules** (``kind: scoreboard``, DECISIONS D63, D65) are not a test: they fix
 how every forward record is graded, when a stated probability may size, how component weights
 and patterns move, the monitoring boundaries of each active layer and the steps of its capital.
@@ -80,6 +83,7 @@ from ..domain.tax import Isin, SecurityKind
 from ..domain.thesis import Conviction, ThesisSource
 from ..errors import PreregistrationError
 from ..quant.covariance import EstimatorRule
+from .prereg_replay import AnalystReplaySpec
 from .registry import file_sha256
 
 #: The line that opens and closes the front matter.
@@ -1497,6 +1501,14 @@ class IdeaLedgerPrereg:
     body: str
 
 
+@dataclass(frozen=True, slots=True)
+class AnalystReplayPrereg:
+    path: Path
+    sha256: str
+    spec: AnalystReplaySpec
+    body: str
+
+
 type AnyPrereg = (
     Prereg
     | CrossSectionPrereg
@@ -1504,9 +1516,17 @@ type AnyPrereg = (
     | ForwardBookPrereg
     | ScoreboardPrereg
     | IdeaLedgerPrereg
+    | AnalystReplayPrereg
 )
-#: The kinds whose evidence is produced live: the harness commands that read history refuse them.
-FORWARD_KINDS = (ForwardTestPrereg, ForwardBookPrereg, ScoreboardPrereg, IdeaLedgerPrereg)
+#: The kinds the harness commands that read history refuse: evidence produced live, and the
+#: analyst's replay (``obliskiq research replay``).
+FORWARD_KINDS = (
+    ForwardTestPrereg,
+    ForwardBookPrereg,
+    ScoreboardPrereg,
+    IdeaLedgerPrereg,
+    AnalystReplayPrereg,
+)
 
 
 def front_matter(text: str) -> tuple[Any, str]:
@@ -1570,6 +1590,9 @@ def load_any(path: Path) -> AnyPrereg:
     if isinstance(data, dict) and data.get("kind") == "idea_ledger":
         ledger = _validate(IdeaLedgerSpec, data, path)
         return IdeaLedgerPrereg(path=path, sha256=file_sha256(path), spec=ledger, body=body)
+    if isinstance(data, dict) and data.get("kind") == "analyst_replay":
+        replay = _validate(AnalystReplaySpec, data, path)
+        return AnalystReplayPrereg(path=path, sha256=file_sha256(path), spec=replay, body=body)
     return Prereg(
         path=path, sha256=file_sha256(path), spec=_validate(PreregSpec, data, path), body=body
     )

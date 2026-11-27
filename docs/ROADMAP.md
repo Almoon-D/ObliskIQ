@@ -27,9 +27,9 @@ the bar. Nothing has filled an order yet. In order:
 6. **Owner: Anthropic's key and the monthly budget** (docs/RUNBOOK.md, "The analyst's models
    and budget"). Without the key the `strong` segment makes no call; at the shipped 5 US$ a
    month it would make very few.
-7. **Session 35** (Opus 5.5, xhigh), after 33: the replay after each model's training cutoff,
-   its pre-registration first (D191). It gives the first reading of which analyst is worth
-   running in days, where the forward ledger needs about two years a segment.
+7. **Owner: the replay** (docs/RUNBOOK.md, "The analyst's replay"): set `llm.replay.max_usd`,
+   then `research replay load`, `probe`, `run`, `report`. It gives the first reading of which
+   analyst is worth running in days, where the forward ledger needs about two years a segment.
 8. **Session 34** (Sonnet 5.5, high), after 33: events and company text.
 9. **A design review** (the strongest model available) when the replay or the ledger has its
    first verdict: keep, change or stop each segment.
@@ -86,7 +86,7 @@ for a verdict; the replay (Session 35) is what could give a first reading in day
 | 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | done (H14 locked; no verdict before about two years a segment) | v1.5.0 |
 | 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | done (three segments in shadow, `lite` trades; Anthropic waits on its key) | v1.6.0 |
 | 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
-| 35 | Replay after the cutoff | H15 pre-registered first; the segments' calls on point-in-time sheets after each model's training cutoff, graded at once, with a leak control | after 33, before 34 (D191) | |
+| 35 | Replay after the cutoff | H15 pre-registered first; the segments' calls on point-in-time sheets after each model's training cutoff, graded at once, with a leak control | done (built; the owner runs it on the machine) | v1.7.0 |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
 | 16 | LLM layer | provider and model registry, evaluation set, budget, structured outputs, six roles | when H7 or another LLM-derived signal is sufficient | |
 | 17 | Decision layer, the rest | expression selection, calibrated sizing, expected shortfall, stress | when a funded layer needs it | |
@@ -110,6 +110,19 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Session 35 — The analyst replayed after its cutoff (2026-11-27, v1.7.0)
+
+- **Landed:** H15 locked; `research replay load|probe|run|report` on a store of its own. The
+  SEC's quarterly indexes, today's tickers, SIC, bulk company facts and Yahoo's closes rebuild
+  each sheet as it stood (instrument and stock screen only); the memory probe first; `lite` and
+  `mid` on 172 sheets each, resumable inside `llm.replay.max_usd`; the ledger's grader against
+  each sheet's filing universe; the report and its lines beside `scoreboard ledger` (D199).
+- **Found:** the replay's grading read a name's closes as bars of contract 0 (refused by the
+  model) and a holiday at the span's end broke the calendar; both fixed before merge.
+- **Owner:** the cap is 0 as shipped; the worst case is about 150 to 190 US$.
+- **Deferred:** none. **VERIFY-LIVE:** the SEC's `xbrl.idx` and `companyfacts.zip` as served,
+  and the first replayed sheet's cost. No IBKR call.
 
 ### Session 33 — Analyst registry and passes (2026-11-27, v1.6.0)
 
@@ -715,6 +728,8 @@ settles it.
 | IBKR's daily reset as the session reports it on the machine: a `session_lost` then a `reauthenticated` in `session_events` on or the day before each trading day, so L1's re-login criterion passes (`VERIFY-LIVE(the daily reset in session_events)`, D172) | 18a | the first week of `serve` |
 | Anthropic's Messages API: the first structured answer of `claude-fable-5-2` (the schema with its unsupported keywords stripped, `output_config.effort`, no temperature) and its token counts against the budget's worst case (`VERIFY-LIVE(the Messages API's first structured answer)`, D198) | 33 | the first analyst run with the owner's Anthropic key |
 | Gemini Flash (`gemini-3.8-flash`) as `mid`'s dossier model: a structured answer inside the schema (it answered 503 "high demand" on 2026-11-27) | 33 | the first analyst run on the machine |
+| The SEC's quarterly `xbrl.idx` (pipe rows after a dashed line) and the bulk `companyfacts.zip` (one `CIK##########.json` a company) as `research replay load` reads them (`VERIFY-LIVE(the SEC's bulk files)`, D199) | 35 | the owner's first `research replay load` |
+| The replay's cost: a replayed sheet's scan and dossiers against `unit_worst`, and the probe's answers inside `probe_max_output_tokens` (`VERIFY-LIVE(the replay's spend)`) | 35 | the owner's first `research replay run` |
 | The weekly forecast panel's first live cohort: the model answers 40 ids a call inside the schema, the coverage reaches 60 %, and the cost per week against the budget (`VERIFY-LIVE(the panel's first cohort)`, D174) | 18a | the first week of `serve` with the analyst's key |
 | The stock bars' first pass: Yahoo answers a 400-day first read for 400 names a run inside the pacing, and the screen's status turns `ok` after the pass (`stocks.bars.first_read_days`, D190; Yahoo is not reachable from the cloud session that set it) | challenge of 2026-11-25 | the owner's first `sources run stock_bars` |
 | The reserve's paper cycle under variant A: each of the nine roles resolves to a pinned fund IBKR confirms, and the roles below the minimum trade under the cap say why (D194; RUNBOOK part D) | owner rulings of 2026-11-25 | the reserve's paper cycle |

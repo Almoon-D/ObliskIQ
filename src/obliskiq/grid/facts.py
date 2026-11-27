@@ -23,7 +23,8 @@ read. The sections, in order:
   immature or cannot be built is its status line and no name.
 
 The section list (:data:`SECTIONS`) is part of the analyst's segment (``analyst_prompt_hash``):
-theses written from a sheet with other sections are another group of the forward record.
+theses written from a sheet with other sections are another group of the record. A sheet built
+with fewer sections (the replay's, H15) opens with one line naming those it omits.
 
 What is not measured is said, never filled: a view with nothing built is one ``n/a`` line, and the
 cells without a measured leaf are counted on one. Every read is bounded by ``as_of``. The sheet
@@ -75,6 +76,8 @@ SECTIONS: Final = (
     "insider",
     "stock_screen",
 )
+#: The section of the line that names the sections a sheet omits.
+OMITTED: Final = "sheet"
 #: The section of the stock screen, and what ends each of its names' lines.
 SCREEN: Final = "stock_screen"
 UNTESTED: Final = "untested (D180)"
@@ -166,26 +169,45 @@ class FactSheetBuilder:
     def _add(self, day: date, status: str, section: str, text: str) -> None:
         self._drafts.append((day, status, section, text))
 
-    def build(self, *, as_of: date) -> FactSheet:
+    def build(self, *, as_of: date, sections: Sequence[str] = SECTIONS) -> FactSheet:
+        unknown = sorted(set(sections) - set(SECTIONS))
+        if unknown:
+            raise ValueError(f"the fact sheet has no section {', '.join(unknown)}")
         self._drafts = []
         self._closes = {}
         self._stocks = {}
+        omitted = [name for name in SECTIONS if name not in sections]
+        if omitted:
+            self._add(
+                as_of,
+                MeasurementStatus.NA.value,
+                OMITTED,
+                f"this sheet omits {', '.join(omitted)}: they cannot be rebuilt as they stood on "
+                "its date",
+            )
         instruments = nameable(self._settings)
-        self._instruments(instruments, as_of)
-        self._macro(as_of)
-        self._grid(as_of)
-        self._rankings(as_of)
-        self._positioning(as_of)
-        self._markets(as_of)
-        self._pulses(as_of)
-        self._news(as_of)
-        self._insiders(as_of)
-        self._stock_screen(as_of)
+        steps = {
+            "instrument": lambda: self._instruments(instruments, as_of),
+            "macro": lambda: self._macro(as_of),
+            "grid": lambda: self._grid(as_of),
+            "ranking": lambda: self._rankings(as_of),
+            "positioning": lambda: self._positioning(as_of),
+            "market": lambda: self._markets(as_of),
+            "pulse": lambda: self._pulses(as_of),
+            "news": lambda: self._news(as_of),
+            "insider": lambda: self._insiders(as_of),
+            SCREEN: lambda: self._stock_screen(as_of),
+        }
+        for name in SECTIONS:
+            if name in sections:
+                steps[name]()
         lines = tuple(
             FactLine(f"{REF_PREFIX}{n}", day, status, section, text)
             for n, (day, status, section, text) in enumerate(self._drafts, start=1)
         )
-        symbols = tuple(declared.symbol for declared in instruments)
+        symbols = (
+            tuple(declared.symbol for declared in instruments) if "instrument" in sections else ()
+        )
         return FactSheet(
             as_of, lines, symbols, dict(self._closes), tuple(self._stocks), dict(self._stocks)
         )
@@ -501,6 +523,8 @@ class FactSheetBuilder:
             )
 
 
-def build_fact_sheet(store: Store, settings: ObliskConfig, *, as_of: date) -> FactSheet:
-    """The fact sheet as of ``as_of`` (the store worker's entry point)."""
-    return FactSheetBuilder(store, settings).build(as_of=as_of)
+def build_fact_sheet(
+    store: Store, settings: ObliskConfig, *, as_of: date, sections: Sequence[str] = SECTIONS
+) -> FactSheet:
+    """The fact sheet as of ``as_of`` with ``sections`` (the store worker's entry point)."""
+    return FactSheetBuilder(store, settings).build(as_of=as_of, sections=sections)

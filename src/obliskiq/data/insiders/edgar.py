@@ -32,9 +32,10 @@ from ...errors import UpstreamError
 from ...store import sources as source_repo
 from ...store import universe as universe_repo
 from ...store.worker import StoreWorker
-from ...util.http import RetryPolicy, get_with_retry
+from ...util.http import RetryPolicy
 from ..market.plumbing import Collection, Pacer, failure_text
 from ..market.targets import venue_of
+from ..sec import sec_get
 from .form4 import parse_submission
 
 STEP = "sec_edgar"
@@ -118,24 +119,6 @@ def absent(response: httpx.Response) -> bool:
     if response.status_code == HTTP_NOT_FOUND:
         return True
     return response.status_code == HTTP_FORBIDDEN and STORAGE_DENIAL in response.text
-
-
-async def sec_get(
-    client: httpx.AsyncClient,
-    url: str,
-    *,
-    policy: RetryPolicy,
-    user_agent: str | None,
-    spacing: float,
-    sleep: Callable[[float], Any],
-) -> httpx.Response:
-    """One request to the SEC with the declared User-Agent, then the fair-access pause
-    (``insiders.request_spacing_seconds``). Without a User-Agent nothing is asked."""
-    if user_agent is None:
-        raise UpstreamError("SEC_USER_AGENT is unset; EDGAR refuses a request without one")
-    response = await get_with_retry(client, url, policy=policy, headers={"User-Agent": user_agent})
-    await sleep(spacing)
-    return response
 
 
 def index_url(template: str, day: date) -> str:

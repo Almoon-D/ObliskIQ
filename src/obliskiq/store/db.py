@@ -205,6 +205,20 @@ def open_research_store(
     )
 
 
+def open_replay_store(
+    settings: ObliskConfig, data_dir: Path, *, migrations_directory: Path | None = None
+) -> Store:
+    """The analyst replay's store (H15): ``llm.replay.store_file`` inside the data directory, the
+    same schema. Its record is never pooled with the forward one: nothing else opens it."""
+    store_settings = settings.store
+    return open_database(
+        data_dir / settings.llm.replay.store_file,
+        busy_timeout_ms=store_settings.busy_timeout_ms,
+        synchronous=store_settings.synchronous,
+        migrations_directory=migrations_directory,
+    )
+
+
 def _apply_pragmas(
     connection: sqlite3.Connection, target: str, busy_timeout_ms: int, synchronous: str
 ) -> None:

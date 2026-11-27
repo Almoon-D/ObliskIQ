@@ -20,84 +20,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import hashlib
-import re
 from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Final
+from typing import Final
 
 import httpx
 
 from ...config.schema import ObliskConfig
-from ...config.schema_sources import StockListingsConfig
-from ...domain.stocks import StockListing
 from ...errors import UpstreamError
 from ...store import stocks as stocks_repo
 from ...store.worker import StoreWorker
 from ...util.http import RetryPolicy
-from ..insiders.edgar import sec_get
 from ..market.plumbing import Collection, Sleep, failure_text
+from ..sec import sec_get
+from .parse import parse_incorporation, parse_listings, parse_sic
 
 STEP: Final = "stock_listings"
 HTTP_OK: Final = 200
-#: The fields the SEC's file names, in the order it serves them (2026-11-17).
-FIELDS: Final = ("cik", "name", "ticker", "exchange")
 SNAPSHOT: Final = "snapshot"
 #: How many failed companies a run names.
 SHOWN: Final = 3
 BACKLOG: Final = "more companies wait for their SIC"
-
-
-def parse_listings(body: Any, config: StockListingsConfig) -> list[StockListing]:
-    """The common stocks the file lists on the kept exchanges, in the file's order."""
-    if not isinstance(body, dict) or not isinstance(body.get("data"), list):
-        raise UpstreamError("the SEC's ticker file is not {fields, data}")
-    fields = body.get("fields")
-    if not isinstance(fields, list) or tuple(fields) != FIELDS:
-        raise UpstreamError(f"the SEC's ticker file names its fields {fields!r}, not {FIELDS}")
-    keep = re.compile(config.ticker_pattern)
-    drop = re.compile(config.excluded_pattern)
-    found: list[StockListing] = []
-    for row in body["data"]:
-        if not isinstance(row, list) or len(row) != len(FIELDS):
-            raise UpstreamError(f"the SEC's ticker file holds a row of another shape: {row!r}")
-        cik, name, ticker, exchange = row
-        venue = config.exchanges.get(exchange) if isinstance(exchange, str) else None
-        if venue is None or not isinstance(ticker, str) or not isinstance(cik, int):
-            continue
-        if not keep.fullmatch(ticker) or drop.search(ticker):
-            continue
-        found.append(
-            StockListing(
-                cik=cik,
-                ticker=ticker,
-                name=str(name).strip() or ticker,
-                exchange=exchange,
-                venue=venue,
-            )
-        )
-    return found
-
-
-def parse_sic(body: Any) -> int | None:
-    """A company's SIC from its submissions; ``None`` where the SEC states none."""
-    if not isinstance(body, dict) or "sic" not in body:
-        raise UpstreamError("the company's submissions carry no sic field")
-    text = str(body["sic"] or "").strip()
-    if not text:
-        return None
-    if not text.isdigit():
-        raise UpstreamError(f"the company's SIC {text!r} is not a number")
-    return int(text)
-
-
-def parse_incorporation(body: Any) -> str | None:
-    """A company's EDGAR incorporation code from its submissions; ``None`` where the SEC states
-    none or states one outside EDGAR's two-character codes."""
-    if not isinstance(body, dict):
-        raise UpstreamError("the company's submissions are not an object")
-    text = str(body.get("stateOfIncorporation") or "").strip().upper()
-    return text if re.fullmatch(r"[A-Z0-9]{2}", text) else None
 
 
 class ListingsCollector:

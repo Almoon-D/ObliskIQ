@@ -311,6 +311,36 @@ provider has no key makes no call and says so in the digest.
    `uv run obliskiq settings set llm.analyst.trading_segment <name> --reason "<why>"`, then
    `--confirm`. It is audited; nothing changes it on its own.
 
+## The analyst's replay (owner, on the machine)
+
+The replay (H15, `research/preregistrations/analyst-replay.md`, DECISIONS D191, D199) runs the
+`lite` and `mid` segments on 86 Monday sheets after their models' training cutoff and 86
+before it, rebuilt from the SEC and Yahoo as they stood on each date, and grades every call at
+once. It keeps its own store (`replay.sqlite3` in the data directory), never touches the
+forward record, the broker or a gate, and does not disturb `serve`. It needs `SEC_USER_AGENT`
+and `GEMINI_API_KEY` in `.env` (both already there for the stock screen and the analyst).
+
+1. **The cap**, in US dollars over the whole replay (0 as shipped, so nothing is asked until
+   you set it). The commands refuse a step whose worst case would pass it and say how much it
+   needs; the worst case is about 150 to 190, what it spends is far less (most scans name few
+   candidates):
+   `uv run obliskiq settings set llm.replay.max_usd 200 --reason "the analyst replay (H15)"`,
+   read the preview, then the same line with `--confirm`.
+2. **Load** (an hour or more; no cost): `uv run obliskiq research replay load`. It reads the
+   SEC's quarterly indexes, its ticker file, each company's SIC, the bulk company facts (over a
+   gigabyte, downloaded once into the data directory) and Yahoo's closes. Run it again if it
+   stops: every finished step is kept.
+3. **The memory probe** (paid, small): `uv run obliskiq research replay probe`. It asks each
+   model whether a stock rose after a date; a quarter it remembers is trimmed from the verdict.
+4. **The replay** (paid): `uv run obliskiq research replay run`. It can be stopped (Ctrl+C) and
+   started again; a sheet stopped half-way is recorded `interrupted` and never paid twice.
+5. **The report**: `uv run obliskiq research replay report` writes
+   `research/reports/analyst-replay.md` and prints it; `uv run obliskiq scoreboard ledger`
+   shows the replay beside the forward ledger. Paste both into a Claude session.
+
+The report proposes, it never changes: which segment trades, and which lose their budget share,
+stay the owner's command (`llm.analyst.trading_segment`, step 5 above).
+
 ## A listed stock's ISIN (owner, once, after the paper login works)
 
 Whether IBKR's contract info states a share's ISIN decides whether `idea isin` stays the only
