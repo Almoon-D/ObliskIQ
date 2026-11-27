@@ -35,12 +35,14 @@ from decimal import ROUND_FLOOR, Decimal
 from typing import Final, Literal
 
 from ..config.schema import ObliskConfig
+from ..domain.analyst import AnalystCall, OpinionScore, ThesisReview, brier
 from ..domain.market import Bar
 from ..errors import PreregistrationError
 from ..quant.costs import CostBook
 from ..quant.costs import OrderTerms as CostTerms
 from ..research.prereg import CalibrationSpec, IdeaLedgerSpec
 from ..store import Store, repos
+from ..store import analyst as analyst_repo
 from ..store import ledger as ledger_repo
 from ..store import theses as thesis_repo
 from ..store.ledger import IdeaCall, SegmentState
@@ -327,6 +329,10 @@ class LedgerBook:
     minimum: str = ""
     calibration_minimum: str = ""
     graded: list[Graded] = field(default_factory=list)
+    #: What each analyst segment spent on its calls in all (USD), every pass counted.
+    spend: dict[str, float] = field(default_factory=dict)
+    #: The segments' weekly reviews graded against the calls they reviewed (D188).
+    reviews: list[OpinionScore] = field(default_factory=list)
 
     def summary(self) -> str:
         trusted = sum(1 for found in self.calibration.values() if found.state.calibrated)
@@ -416,6 +422,29 @@ def _still_open(
     return False
 
 
+def review_record(
+    reviews: Sequence[tuple[ThesisReview, AnalystCall]], graded: Sequence[Graded]
+) -> list[OpinionScore]:
+    """The analyst's weekly reviews graded like its second opinions, per segment: the mean Brier
+    score of each review whose thesis's idea call resolved at a level or its horizon after the
+    review's sheet (a review of a call already resolved, or of an idea never written, is not
+    graded)."""
+    by_thesis = {item.call.thesis_id: item for item in graded}
+    scores: dict[str, list[float]] = {}
+    for review, call in reviews:
+        item = by_thesis.get(review.thesis_id)
+        if item is None or item.path.outcome is None or item.path.end is None:
+            continue
+        if item.path.end <= call.as_of:
+            continue
+        reached = item.path.outcome == "target"
+        scores.setdefault(call.label, []).append(brier(review.probability, reached))
+    return [
+        OpinionScore(segment=segment, graded=len(found), brier=sum(found) / len(found))
+        for segment, found in sorted(scores.items())
+    ]
+
+
 def grade_ledger(
     store: Store,
     settings: ObliskConfig,
@@ -483,6 +512,8 @@ def grade_ledger(
             f"{spec.calibration.min_cohorts} weeks and {spec.calibration.min_effective}"
         ),
         graded=graded,
+        spend=analyst_repo.label_spend(store, as_of=as_of),
+        reviews=review_record(analyst_repo.reviews(store, as_of=as_of), graded),
     )
 
 

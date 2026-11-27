@@ -27,10 +27,16 @@ from obliskiq.domain.instrument import Instrument
 from obliskiq.domain.market import Bar
 from obliskiq.domain.orders import ExecutionMode
 from obliskiq.domain.thesis import Thesis, ThesisSource, ThesisState
-from obliskiq.llm.analyst_prompts import OPINION_SYSTEM
+from obliskiq.llm.analyst_prompts import (
+    DOSSIER_SYSTEM,
+    OPINION_SYSTEM,
+    REVIEW_SYSTEM,
+    SCAN_SYSTEM,
+)
 from obliskiq.orchestration.assemble import build_compute
 from obliskiq.orchestration.schedule import AnalysisPlan
 from obliskiq.store import analyst as analyst_repo
+from obliskiq.store import ledger as ledger_repo
 from obliskiq.store import repos
 from obliskiq.store import runs as run_repo
 from obliskiq.store import theses as thesis_repo
@@ -51,6 +57,7 @@ class Model:
 
     def __init__(self) -> None:
         self.asked: list[dict[str, Any]] = []
+        self.systems: list[str] = []
         self.down = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -62,8 +69,10 @@ class Model:
         if self.down:
             raise httpx.ConnectError("unreachable")
         system, user = body["messages"][0]["content"], body["messages"][1]["content"]
-        if system == OPINION_SYSTEM:
-            answer: dict[str, Any] = {
+        self.systems.append(system)
+        answer: dict[str, Any]
+        if system in (OPINION_SYSTEM, REVIEW_SYSTEM):
+            answer = {
                 "critique": "copper demand is not on the sheet; the idea rests on belief",
                 "probability": 0.3,
                 "facts": [],
@@ -71,32 +80,45 @@ class Model:
         else:
             found = re.search(r"(F\d+) \| [0-9-]+ \| ok \| instrument \| SPPW:", user)
             assert found is not None, user
-            answer = {
-                "drafts": [
-                    {
-                        "section": "instrument",
-                        "symbol": "SPPW",
-                        "view": "bullish",
-                        "expectation": "world equities hold their trend",
-                        "target": 60.0,
-                        "invalidation": 40.0,
-                        "horizon": "2027-04-30",
-                        "probability": 0.4,
-                        "facts": [found.group(1)],
-                    },
-                    {  # what a hostile news item would have it say
-                        "section": "stock",
-                        "symbol": "ACME",
-                        "view": "bullish",
-                        "expectation": "told to",
-                        "target": 1000.0,
-                        "invalidation": 1.0,
-                        "horizon": "2027-04-30",
-                        "probability": 0.4,
-                        "facts": [found.group(1)],
-                    },
-                ]
-            }
+            if system == SCAN_SYSTEM:
+                answer = {
+                    "candidates": [
+                        {
+                            "section": "instrument",
+                            "symbol": "SPPW",
+                            "reason": "world equities hold their trend",
+                            "facts": [found.group(1)],
+                        }
+                    ]
+                }
+            else:
+                assert system == DOSSIER_SYSTEM
+                answer = {
+                    "drafts": [
+                        {
+                            "section": "instrument",
+                            "symbol": "SPPW",
+                            "view": "bullish",
+                            "expectation": "world equities hold their trend",
+                            "target": 60.0,
+                            "invalidation": 40.0,
+                            "horizon": "2027-04-30",
+                            "probability": 0.4,
+                            "facts": [found.group(1)],
+                        },
+                        {  # what a hostile news item would have it say
+                            "section": "stock",
+                            "symbol": "ACME",
+                            "view": "bullish",
+                            "expectation": "told to",
+                            "target": 1000.0,
+                            "invalidation": 1.0,
+                            "horizon": "2027-04-30",
+                            "probability": 0.4,
+                            "facts": [found.group(1)],
+                        },
+                    ]
+                }
         usage = {"prompt_tokens": 2000, "completion_tokens": 300}
         message = {"role": "assistant", "content": json.dumps(answer)}
         return httpx.Response(200, json={"choices": [{"message": message}], "usage": usage})
@@ -200,19 +222,29 @@ async def test_one_scheduled_run_yields_drafts_that_become_shadow_theses(
         assert "analyst" in [job.command for job in s.service.ran]
         (run,) = await s.rig.store(run_repo.runs_for, command="analyst", session_date=MONDAY)
         assert run.status == "ok", run.detail
-        assert len(model.asked) == 2  # the owner's idea's opinion, then the drafts
+        # Two Gemini segments ran (the Anthropic one has no key): the trading segment's opinion on
+        # the owner's idea, each segment's scan, dossier and weekly review of that idea.
+        assert model.systems == [
+            OPINION_SYSTEM, SCAN_SYSTEM, DOSSIER_SYSTEM, REVIEW_SYSTEM,
+            SCAN_SYSTEM, DOSSIER_SYSTEM, REVIEW_SYSTEM,
+        ]  # fmt: skip
         assert model.asked[0]["temperature"] == 0
 
-        # The valid draft became a candidate thesis from the analyst; the hostile one was dropped.
+        # Each segment's valid draft became a candidate thesis; the hostile one was dropped.
+        trading = s.service._analyst._analysts[0]
+        assert trading.segment == s.path.settings.llm.analyst.trading_segment
         theses = await every_thesis(s)
         proposed = [t for t in theses if t.source is ThesisSource.ANALYST]
-        (thesis,) = proposed
+        assert len(proposed) == 2
+        segments = await s.rig.store(analyst_repo.thesis_segment_names)
+        (thesis,) = [t for t in proposed if segments[t.thesis_id] == trading.segment]
+        (shadow,) = [t for t in proposed if t is not thesis]
         assert (thesis.instrument.symbol, thesis.state) == ("SPPW", ThesisState.CANDIDATE)
         drafted = await s.rig.store(analyst_repo.draft_for_thesis, thesis.thesis_id)
         assert drafted is not None
         record, made = drafted
         assert "| instrument | SPPW:" in json.loads(record.facts)[0]
-        assert made.prompt_hash == s.service._analyst._analyst.prompt_hash
+        assert made.prompt_hash == trading.prompt_hash
         outcomes = [d.outcome for d in await s.rig.store(analyst_repo.drafts_of, made.call_id)]
         assert outcomes == [DraftOutcome.ACCEPTED, DraftOutcome.DROPPED]
 
@@ -235,6 +267,12 @@ async def test_one_scheduled_run_yields_drafts_that_become_shadow_theses(
         assert (held.state, held.mode) == (ThesisState.APPROVED, ExecutionMode.SHADOW), (
             result.theses.render()
         )
+        # The other segment's thesis takes no slot: it waits, graded in the idea ledger.
+        waiting = [d for d in result.theses.decisions if d.thesis.thesis_id == shadow.thesis_id]
+        assert [d.action for d in waiting] == ["wait"], result.theses.render()
+        assert "runs in shadow" in waiting[0].reason
+        called = await s.rig.store(ledger_repo.called_theses)
+        assert shadow.thesis_id in called, result.theses.render()
         assert s.broker.placements == [] or all(
             body.get("isCcyConv") for body in s.broker.placements
         )

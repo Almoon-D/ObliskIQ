@@ -697,11 +697,12 @@ def test_the_sheet_with_and_without_the_screen_is_another_segment(
 
     without = tuple(section for section in SECTIONS if section != "stock_screen")
     assert "stock_screen" in SECTIONS
-    assert analyst_prompt_hash(shipped_settings) == analyst_prompt_hash(
-        shipped_settings, sections=SECTIONS
+    segment = shipped_settings.llm.analyst.trading_segment
+    assert analyst_prompt_hash(shipped_settings, segment) == analyst_prompt_hash(
+        shipped_settings, segment, sections=SECTIONS
     )
-    assert analyst_prompt_hash(shipped_settings, sections=without) != analyst_prompt_hash(
-        shipped_settings
+    assert analyst_prompt_hash(shipped_settings, segment, sections=without) != (
+        analyst_prompt_hash(shipped_settings, segment)
     )
 
 

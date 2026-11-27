@@ -1,10 +1,12 @@
 """What the LLM analyst leaves in the store (MASTER_PLAN §5.5, §5.10; DECISIONS D128, D156).
 
-A **call** is one exchange with the model, for drafts of its own or for a second opinion on one
-owner thesis, stamped with the provider, the model, the prompt's version and hash (its segment of
-the forward record), the fact sheet it read, its tokens and its cost. A **draft record** is one
-draft a call returned and what became of it. A **second opinion** is a critique and the stated
-probability that an owner's thesis reaches its target: logged and graded, never a veto.
+A **call** is one exchange with the model: a scan of the sheet for candidates, a dossier that
+writes one candidate's thesis, drafts of its own (the single pass before segments, D188), a second
+opinion on one owner thesis or a weekly review of one open thesis. Each is stamped with its
+segment (the configured name), the provider, the model, the prompt's version and hash, the fact
+sheet it read, its tokens and its cost. A **draft record** is one draft a call returned and what
+became of it. A **second opinion** and a **review** are a critique and the stated probability that
+a thesis reaches its target: logged and graded, never a veto, never a change to the thesis.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
@@ -25,13 +27,22 @@ SEGMENT_HASH_CHARS: Final = 12
 
 
 class CallKind(StrEnum):
+    SCAN = "scan"
+    DOSSIER = "dossier"
+    #: The single drafts pass of the analyst before segments: read, never written.
     DRAFTS = "drafts"
     OPINION = "opinion"
+    REVIEW = "review"
 
 
-def segment_label(model_id: str, prompt_hash: str) -> str:
-    """How a segment (one model, one prompt hash) is named to the owner."""
-    return f"{model_id} {prompt_hash[:SEGMENT_HASH_CHARS]}"
+#: The calls that are on one thesis.
+ON_A_THESIS: Final = frozenset({CallKind.OPINION, CallKind.REVIEW})
+
+
+def segment_label(name: str, prompt_hash: str) -> str:
+    """How a segment is named to the owner: its configured name (or, for a call made before
+    segments, its model id) and its prompt hash."""
+    return f"{name} {prompt_hash[:SEGMENT_HASH_CHARS]}"
 
 
 class AnalystCall(DomainModel):
@@ -39,7 +50,7 @@ class AnalystCall(DomainModel):
 
     call_id: Annotated[int, Field(ge=0)]
     kind: CallKind
-    #: The owner thesis a second opinion is on; ``None`` for drafts.
+    #: The thesis a second opinion or a review is on; ``None`` for the other kinds.
     thesis_id: PositiveInt | None
     as_of: date
     sheet_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -55,11 +66,13 @@ class AnalystCall(DomainModel):
     input_tokens: NonNegativeInt
     output_tokens: NonNegativeInt
     cost_usd: NonNegativeFloat
+    #: The configured segment that made it; ``None`` for a call made before segments.
+    segment: NonEmptyText | None = None
 
     @model_validator(mode="after")
     def _coherent(self) -> Self:
-        if (self.kind is CallKind.OPINION) != (self.thesis_id is not None):
-            raise ValueError("a second opinion names its thesis, and only it does")
+        if (self.kind in ON_A_THESIS) != (self.thesis_id is not None):
+            raise ValueError("a second opinion or a review names its thesis, and only they do")
         if (self.status is ExtractionStatus.OK) != (self.output is not None):
             raise ValueError("a call holds an output exactly when it is ok")
         if self.status is not ExtractionStatus.OK and not self.error:
@@ -67,8 +80,9 @@ class AnalystCall(DomainModel):
         return self
 
     @property
-    def segment(self) -> str:
-        return segment_label(self.model_id, self.prompt_hash)
+    def label(self) -> str:
+        """The segment as the record names it."""
+        return segment_label(self.segment or self.model_id, self.prompt_hash)
 
 
 class DraftOutcome(StrEnum):
@@ -108,6 +122,18 @@ class SecondOpinion(DomainModel):
 
     thesis_id: PositiveInt
     call_id: PositiveInt
+    probability: Probability
+    critique: NonEmptyText
+    #: The fact lines it cited, as they read on the sheet (JSON text).
+    facts: str
+
+
+class ThesisReview(DomainModel):
+    """A segment's weekly review of one open thesis or open call, from one ok call: its critique
+    and the probability it now states that the target comes first. Changes nothing."""
+
+    call_id: PositiveInt
+    thesis_id: PositiveInt
     probability: Probability
     critique: NonEmptyText
     #: The fact lines it cited, as they read on the sheet (JSON text).

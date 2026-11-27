@@ -22,7 +22,7 @@ from obliskiq.config.loader import load_config
 from obliskiq.domain.sources import NewsItem
 from obliskiq.llm.analyst import AnalystRun
 from obliskiq.llm.extractor import ExtractorRun
-from obliskiq.orchestration.analyst import AnalystOutcome, judge_analyst
+from obliskiq.orchestration.analyst import AnalystOutcome, SegmentOutcome, judge_analyst
 from obliskiq.orchestration.service import _judge_extraction
 from obliskiq.store import open_store
 from obliskiq.store import sources as source_repo
@@ -145,68 +145,66 @@ def test_facts_prints_the_sheet_and_calls_nothing(data_dir: Path) -> None:
     assert "| n/a | grid | no equity grid is built" in out
 
 
-def test_status_names_the_analyst_s_segment_and_the_week(data_dir: Path) -> None:
+def test_status_names_each_segment_and_the_week(data_dir: Path) -> None:
     status, out = _run("llm", "status")
     assert status == EXIT_OK
-    assert "analyst: model gemini-3.1-flash-lite (gemini); prompt hash " in out
-    assert "analyst calls of this prompt: none" in out
-    assert "drafts handed to the intake this week: 0 of 3" in out
+    assert (
+        "analyst segment lite (trading): scan gemini-3.1-flash-lite (gemini), dossier "
+        "gemini-3.1-flash-lite (gemini); prompt hash "
+    ) in out
+    assert "analyst segment strong (shadow): scan gemini-3.1-flash-lite (gemini), dossier " in out
+    assert "  calls of this prompt: none" in out
+    assert (
+        "drafts handed to the intake this week: 0 of 3; spent this month 0.0000 of its share" in out
+    )
 
 
-def test_analyst_without_its_key_is_skipped_and_with_it_proposes(
+def test_analyst_without_its_key_is_skipped_and_with_it_scans(
     data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     status, out = _run("llm", "analyst", "--as-of", "2026-10-23")
     assert status == 2
-    assert "analyst: skipped: GEMINI_API_KEY is unset: no call made" in out
+    assert "analyst: skipped" in out
+    assert "lite (no_key): GEMINI_API_KEY unset: segment lite makes no call" in out
     monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-a-secret")
-    answer = {
-        "drafts": [
-            {
-                "section": "instrument",
-                "symbol": "ACME",
-                "view": "bullish",
-                "expectation": "x",
-                "target": 2.0,
-                "invalidation": 1.0,
-                "horizon": "2027-01-04",
-                "probability": 0.4,
-                "facts": ["F1"],
-            }
-        ]
-    }
     reply = {
-        "choices": [{"message": {"content": json.dumps(answer)}}],
+        "choices": [{"message": {"content": json.dumps({"candidates": []})}}],
         "usage": {"prompt_tokens": 900, "completion_tokens": 80},
     }
     with respx.mock as router:
         router.post(COMPLETIONS).mock(return_value=Response(200, json=reply))
         status, out = _run("llm", "analyst", "--as-of", "2026-10-23")
     assert status == EXIT_OK
-    assert "analyst: ok: 0 second opinions written; 1 drafts returned, 0 valid" in out
-    assert "to the intake: 0 accepted, 0 refused, 1 dropped" in out
+    assert "analyst: ok" in out
+    assert (
+        "lite (ok): 0 second opinions written; 0 candidates scanned, 0 valid drafts written "
+        "(at most 3); 0 reviews written (0 of 10 this week)"
+    ) in out
+    assert "mid (ok): 0 candidates scanned" in out
+    assert "strong (no_key): ANTHROPIC_API_KEY unset: segment strong makes no call" in out
     assert "theses none" in out
-    assert "draft 1 dropped: names ACME, which is not an instrument the fact sheet lists" in out
     _, after = _run("llm", "status")
-    assert "analyst calls of this prompt: 1 drafts ok" in after
+    assert "  calls of this prompt: 1 scan ok" in after
 
 
 def _outcome(**run: Any) -> AnalystOutcome:
-    return AnalystOutcome(AnalystRun(**{"state": "ok", "reason": "r", **run}), lines=3)
+    found = AnalystRun(**{"state": "ok", "reason": "r", "segment": "lite", **run})
+    return AnalystOutcome((SegmentOutcome(found),), lines=3)
 
 
 @pytest.mark.parametrize(
     ("outcome", "verdict"),
     [
-        (_outcome(state="skipped"), "skipped"),
+        (_outcome(state="no_key"), "skipped"),
         (_outcome(), "ok"),
         (_outcome(failed=1), "degraded"),
         (_outcome(invalid=1), "degraded"),
-        (_outcome(state="budget_spent", cost_usd=0.1234567), "degraded"),
+        (_outcome(state="budget", cost_usd=0.1234567), "degraded"),
     ],
 )
 def test_the_service_judges_an_analyst_run(outcome: AnalystOutcome, verdict: str) -> None:
     judged = judge_analyst(outcome)
-    assert (judged.name, judged.status, judged.reason) == ("analyst", verdict, "r")
-    assert judged.detail["cost_usd"] == round(outcome.run.cost_usd, 6)
+    state = outcome.segments[0].run.state
+    assert (judged.name, judged.status, judged.reason) == ("analyst", verdict, f"lite ({state}): r")
+    assert judged.detail["cost_usd"] == round(outcome.cost_usd, 6)
     assert judged.detail["fact_lines"] == 3

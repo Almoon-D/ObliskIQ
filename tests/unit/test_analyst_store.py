@@ -122,7 +122,8 @@ def test_brier_and_segment_labels() -> None:
     assert brier(1.0, reached=False) == 1.0
     assert brier(0.5, reached=True) == 0.25
     assert segment_label("m", "0123456789abcdef") == "m 0123456789ab"
-    assert call().segment == f"gemini-3.1-flash-lite {'b' * 12}"
+    assert call().label == f"gemini-3.1-flash-lite {'b' * 12}"
+    assert call(segment="lite").label == f"lite {'b' * 12}"
 
 
 # ── the store ──
@@ -167,7 +168,7 @@ def test_drafts_count_by_their_sheet_s_week_and_link_to_theses(store: Store) -> 
     assert found is not None
     assert found[1] == made
     assert analyst_repo.draft_for_thesis(store, 99) is None
-    assert analyst_repo.thesis_segments(store) == {stored.thesis_id: made.segment}
+    assert analyst_repo.thesis_segments(store) == {stored.thesis_id: made.label}
     with pytest.raises(StoreError, match="append-only"), store.transaction():
         store.execute("DELETE FROM analyst_drafts")
 
@@ -246,9 +247,9 @@ def test_second_opinions_are_graded_by_segment_once_their_thesis_closed() -> Non
         grade(2, reached=False, source=ThesisSource.OWNER),
     ]
     scores = {s.segment: s for s in opinion_record(given, grades)}
-    assert scores[first.segment].graded == 1  # thesis 3 has not closed
-    assert scores[first.segment].brier == pytest.approx(0.04)
-    assert scores[other.segment].brier == pytest.approx(0.09)
+    assert scores[first.label].graded == 1  # thesis 3 has not closed
+    assert scores[first.label].brier == pytest.approx(0.04)
+    assert scores[other.label].brier == pytest.approx(0.09)
     assert opinion_record(given, []) == []
 
 

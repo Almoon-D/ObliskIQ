@@ -238,7 +238,7 @@ async def _analyst_lines(worker: StoreWorker, thesis_id: int, out: TextIO) -> No
     if drafted is not None:
         record, call = drafted
         print(
-            f"  proposed by the analyst ({call.segment}) on the facts of {call.as_of.isoformat()}:",
+            f"  proposed by the analyst ({call.label}) on the facts of {call.as_of.isoformat()}:",
             file=out,
         )
         for line in json.loads(record.facts):
@@ -247,7 +247,7 @@ async def _analyst_lines(worker: StoreWorker, thesis_id: int, out: TextIO) -> No
     if opinion is not None:
         given, call = opinion
         print(
-            f"  second opinion ({call.segment}, {call.produced_at.isoformat()}): "
+            f"  second opinion ({call.label}, {call.produced_at.isoformat()}): "
             f"{given.probability:.0%} that it reaches its target. {given.critique}",
             file=out,
         )

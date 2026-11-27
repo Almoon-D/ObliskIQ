@@ -292,16 +292,22 @@ def build_service(
         if http is not None
         else None
     )
+    read = secrets or _no_secret
+    keys = {name: read(provider.key_env) for name, provider in settings.llm.providers.items()}
     analyst = (
         AnalystJob(
             settings,
-            analyst=Analyst(
-                settings,
-                client=http,
-                worker=path.worker,
-                key=(secrets or _no_secret)(settings.llm.analyst_provider().key_env),
-                now=clock.now,
-            ),
+            analysts=[
+                Analyst(
+                    settings,
+                    segment=name,
+                    client=http,
+                    worker=path.worker,
+                    keys=keys,
+                    now=clock.now,
+                )
+                for name in settings.llm.segment_order()
+            ],
             worker=path.worker,
             now=clock.now,
             panel=ForecastPanel(
@@ -309,7 +315,7 @@ def build_service(
                 rules=panel_rules(repository_root()),
                 client=http,
                 worker=path.worker,
-                key=(secrets or _no_secret)(settings.llm.analyst_provider().key_env),
+                key=keys[settings.llm.panel_model().provider],
                 now=clock.now,
                 sleep=sleep,
             ),

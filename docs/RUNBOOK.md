@@ -284,6 +284,33 @@ uv run obliskiq sources health      # stock_listings, stock_fundamentals, stock_
   run: nothing is recorded about them and the next run asks them first. One name answering
   nothing is `unresolved` in its run's detail, never a delisting.
 
+## The analyst's models and budget (owner, on the machine)
+
+The analyst runs as segments side by side (`config/llm.yaml`, DECISIONS D188, D198): `lite`
+(Gemini Flash-Lite for both passes), `mid` (Flash-Lite scans, Gemini Flash writes the theses)
+and `strong` (Flash-Lite scans, Anthropic's Claude Fable writes them). Each is graded in the idea
+ledger; only the trading segment's theses may take a slot (`lite` as shipped). A segment whose
+provider has no key makes no call and says so in the digest.
+
+1. **Anthropic's key** (for `strong`). At console.anthropic.com, *API keys*, *Create key*. It is
+   billed apart from any Claude subscription. Add one line to `.env` at the checkout's root:
+   `ANTHROPIC_API_KEY=<the key>`. `GEMINI_API_KEY` serves `lite` and `mid`.
+2. **The monthly budget**, in US dollars over every model (5 as shipped). A call whose worst
+   case would pass the budget, or its segment's share of it (`lite` 20 %, `mid` 30 %, `strong`
+   40 %), is not made. With `strong` on, 30 is a reasonable start (one Fable dossier can cost
+   up to about 0.70):
+   `uv run obliskiq settings set llm.budget.monthly_usd 30 --reason "three analyst segments"`,
+   read the preview, then the same line with `--confirm`. From Telegram it may only be lowered
+   or restored up to 5.
+3. **Restart the service** so it reads the key: stop `serve` (Ctrl+C in its window, or
+   `sudo systemctl restart obliskiq.service` under the supervisor) and start it again.
+4. **Check**: `uv run obliskiq llm status` prints each segment's models, prompt hash, calls,
+   drafts this week and spend against its share; `uv run obliskiq llm analyst` runs every
+   segment once now.
+5. **The trading segment** changes only when the ledger says one has earned it:
+   `uv run obliskiq settings set llm.analyst.trading_segment <name> --reason "<why>"`, then
+   `--confirm`. It is audited; nothing changes it on its own.
+
 ## A listed stock's ISIN (owner, once, after the paper login works)
 
 Whether IBKR's contract info states a share's ISIN decides whether `idea isin` stays the only

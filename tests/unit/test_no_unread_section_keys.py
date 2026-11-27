@@ -41,7 +41,7 @@ SECTION_FILES = {
             "inputs",
         }
     ),
-    "llm.yaml": frozenset({"providers", "models"}),
+    "llm.yaml": frozenset({"providers", "models", "segments"}),
 }
 
 
@@ -83,7 +83,7 @@ def test_every_structural_key_of_the_universe_is_read() -> None:
     ("name", "identifiers"),
     [
         ("sources.yaml", {"cftc", "COT_GOLD", "fed_press", "bullish", "NASDAQ"}),
-        ("llm.yaml", {"gemini", "gemini_flash_lite"}),
+        ("llm.yaml", {"gemini", "gemini_flash_lite", "lite"}),
     ],
 )
 def test_every_structural_key_of_the_sources_and_llm_files_is_read(

@@ -24,9 +24,9 @@ the bar. Nothing has filled an order yet. In order:
    once the paper login works: whether IBKR states the ISIN decides whether `idea isin` stays
    the only route (D195). Until then a stock trades in shadow, and on paper once you give its
    ISIN.
-6. **Session 33** (Sonnet 5.5, high), after 31 and 32: the analyst on several models side by
-   side, the scan, the dossier and the weekly review. The owner adds an Anthropic key and sets
-   the monthly budget (the session writes the steps).
+6. **Owner: Anthropic's key and the monthly budget** (docs/RUNBOOK.md, "The analyst's models
+   and budget"). Without the key the `strong` segment makes no call; at the shipped 5 US$ a
+   month it would make very few.
 7. **Session 35** (Opus 5.5, xhigh), after 33: the replay after each model's training cutoff,
    its pre-registration first (D191). It gives the first reading of which analyst is worth
    running in days, where the forward ledger needs about two years a segment.
@@ -84,7 +84,7 @@ for a verdict; the replay (Session 35) is what could give a first reading in day
 | 30 | Stock screen for the thesis book | free US listings, SEC fundamentals and prices collected forward and kept; an untested screen on the analyst's fact sheet, its theses a segment of their own | done (fixtures recorded live from the SEC and Yahoo; ranks after the first pass since v1.2.0, D190; the analyst cannot yet name a screen stock, D183; no IBKR call) | v1.1.0, v1.2.0 |
 | 31 | Any listed stock, and the reserve's funding sale | a screen stock as a thesis through a contract and ISIN route; the hunting share in config; the reserve sells to fund an approved thesis | done (paper and live wait for an owner-given ISIN; live keeps its ceilings) | v1.4.0 |
 | 32 | Idea ledger | H14 pre-registered first; every idea graded forward whether or not it trades; calibration; the rank that may order the slots | done (H14 locked; no verdict before about two years a segment) | v1.5.0 |
-| 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | after 31 and 32 (D188) | |
+| 33 | Analyst registry and passes | several models side by side as segments; the scan, the dossier and the weekly review; one budget | done (three segments in shadow, `lite` trades; Anthropic waits on its key) | v1.6.0 |
 | 34 | Events and company text | earnings, 8-K, IPO and lock-up, spin-off and index-change collectors; event lines and tags; filing text for the dossier | after 33 (D189) | |
 | 35 | Replay after the cutoff | H15 pre-registered first; the segments' calls on point-in-time sheets after each model's training cutoff, graded at once, with a leak control | after 33, before 34 (D191) | |
 | 15 | Event sleeve (the Asymmetry Hunter) | components, measured independence, lifecycle, triggers | when a batch leaves one of its components sufficient or inconclusive-positive | |
@@ -110,6 +110,19 @@ Session 4c (D61). Entries before Session 13 are in `docs/archive/ROADMAP_LOG.md`
 | Would paid or free data let the Hunter run? | No. The constraint is the effect the literature supports, not the data; no free source keeps delisted names in the US, Japan, the UK or Germany, and a survivor-only test is never run. Free data is used forward only, as an untested screen for the thesis book | D180, `docs/knowledge/research-sources.md` |
 
 ## Session log
+
+### Session 33 — Analyst registry and passes (2026-11-27, v1.6.0)
+
+- **Landed:** a provider and model registry with dated prices; Anthropic's Messages API as a
+  second protocol (its compatible endpoint ignores the schema). Three segments side by side
+  (`lite`, `mid`, `strong`), each its own prompt hash and ledger group; only `trading_segment`
+  takes slots, the others wait and are graded. Passes: a daily scan, a dossier per candidate on
+  that candidate's lines, a weekly review per open thesis or call (stored, graded, changes
+  nothing). One monthly budget split by shares; `budget` and `no_key` statuses (D198).
+- **Found:** a shadow idea on an instrument another thesis holds was kept from the ledger by
+  the slot check; it no longer is.
+- **Live:** a scan on Gemini Flash-Lite answered inside the schema; Gemini Flash answered 503.
+- **Deferred:** none. **VERIFY-LIVE:** Anthropic's first answer, Gemini Flash's. No IBKR call.
 
 ### Session 32 — Idea ledger (2026-11-25, v1.5.0)
 
@@ -700,6 +713,8 @@ settles it.
 | `obliskiq compute all` on a store the collectors filled live: each family's reach and its dominant blocker against the fixture store's, the session solve on a route that prices chains without vols, the coverage floor, and the run's time on the machine | 11 | the first command list after the collectors' live round |
 | The equity reference's quote beside each managed NAV: that XDWD (IBIS2) returns a usable delayed or closing quote at every cycle, the Asian morning and New York's last hour included (`VERIFY-LIVE(the equity reference's quote outside its venue's hours)`); without one a fall is not excused | 25 | the first week of `serve` |
 | IBKR's daily reset as the session reports it on the machine: a `session_lost` then a `reauthenticated` in `session_events` on or the day before each trading day, so L1's re-login criterion passes (`VERIFY-LIVE(the daily reset in session_events)`, D172) | 18a | the first week of `serve` |
+| Anthropic's Messages API: the first structured answer of `claude-fable-5-2` (the schema with its unsupported keywords stripped, `output_config.effort`, no temperature) and its token counts against the budget's worst case (`VERIFY-LIVE(the Messages API's first structured answer)`, D198) | 33 | the first analyst run with the owner's Anthropic key |
+| Gemini Flash (`gemini-3.8-flash`) as `mid`'s dossier model: a structured answer inside the schema (it answered 503 "high demand" on 2026-11-27) | 33 | the first analyst run on the machine |
 | The weekly forecast panel's first live cohort: the model answers 40 ids a call inside the schema, the coverage reaches 60 %, and the cost per week against the budget (`VERIFY-LIVE(the panel's first cohort)`, D174) | 18a | the first week of `serve` with the analyst's key |
 | The stock bars' first pass: Yahoo answers a 400-day first read for 400 names a run inside the pacing, and the screen's status turns `ok` after the pass (`stocks.bars.first_read_days`, D190; Yahoo is not reachable from the cloud session that set it) | challenge of 2026-11-25 | the owner's first `sources run stock_bars` |
 | The reserve's paper cycle under variant A: each of the nine roles resolves to a pinned fund IBKR confirms, and the roles below the minimum trade under the cap say why (D194; RUNBOOK part D) | owner rulings of 2026-11-25 | the reserve's paper cycle |

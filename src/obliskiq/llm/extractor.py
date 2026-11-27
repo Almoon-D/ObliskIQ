@@ -246,6 +246,8 @@ class EventExtractor:
             max_tokens=self._config.max_output_tokens,
             policy=self._policy,
             worst_input_tokens=self._tokens(sum(len(m["content"]) for m in messages)),
+            api_version=self._provider.api_version,
+            effort=self._model.effort,
         )
 
     def _record(

@@ -166,5 +166,7 @@ class BookRead:
     #: analyst thesis's segment.
     holdbacks: Holdbacks | None = None
     segments: Mapping[int, str] = field(default_factory=dict)
+    #: The configured segment each analyst thesis came from (``None`` before segments).
+    segment_names: Mapping[int, str | None] = field(default_factory=dict)
     #: The share of its size a new thesis is entered at (the loss brake's, D193).
     entry_size: Decimal = Decimal(1)

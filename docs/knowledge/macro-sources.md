@@ -221,7 +221,7 @@ in `America/New_York` (FCX: 2026-10-27 08:00 EDT, the next one; reported EPS bes
 ones); it returned more rows than the limit asked. `LISN.SW` and `JDEP.AS` had none ("may be
 delisted") [Yahoo ✓ 2026-10-23]. Research-grade: an upcoming date is Yahoo's estimate.
 
-## The LLM provider
+## The LLM providers
 
 Gemini's OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai`,
 `/chat/completions`, bearer key, `response_format` of type `json_schema`) and
@@ -233,6 +233,25 @@ inlined objects, string enums, `format: date`, `exclusiveMinimum` and `additiona
 false` is accepted and followed at temperature 0, which repeated an answer word for word. With a
 `max_tokens` of 20 a five-token answer ended `finish_reason: length`; at 400 it ended `stop`
 [Gemini ✓ 2026-11-14]. An analyst call on a 112-line sheet read about 7,400 input tokens.
+
+Gemini's model list (`GET /v1beta/models`) and pricing page [DOC 2026-11-27]: `gemini-3.8-flash`
+costs US$0.75 input and US$3.75 output per million tokens, both doubling on 2027-01-01. A scan on
+a three-line sheet through `gemini-3.1-flash-lite` with the scan's schema (a list of objects with
+`minLength`, `maxLength` and `minItems`) read 361 input and 85 output tokens and named two
+candidates, each citing its line [Gemini ✓ 2026-11-27]; the same call to `gemini-3.8-flash`
+timed out twice, then answered HTTP 503 `UNAVAILABLE` ("high demand") [Gemini ✗ 2026-11-27]:
+its first live answer is queued (ROADMAP, live verification).
+
+Anthropic [DOC 2026-11-27]: the Messages API (`POST https://api.anthropic.com/v1/messages`,
+headers `x-api-key` and `anthropic-version`, current version `2026-10-21`). That version rejects
+`temperature`; a model's effort goes in `output_config.effort` and a structured answer in
+`output_config.format` of type `json_schema`, whose schema may not carry `minLength`,
+`maxLength`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`,
+`minItems`, `maxItems` or `pattern` (the code strips them and validates them itself).
+The answer is the text blocks of `content`; `stop_reason` `refusal` or `max_tokens` is no answer.
+Its OpenAI-compatible endpoint ignores `response_format`'s schema, so the code speaks the native
+API. `claude-fable-5-2` costs US$8 input and US$40 output per million tokens (Opus 5.5 4 and 20,
+Sonnet 5.5 2 and 10). No key was available: the first live answer is queued.
 
 ## Catalyst calendars
 

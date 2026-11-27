@@ -325,12 +325,16 @@ SHAPE = {
     "breaker_events": (
         "event_id:INTEGER*, at:TEXT!, book:TEXT!, event:TEXT!, actor:TEXT!, detail:TEXT!"
     ),
-    # 015_analyst
+    # 015_analyst, rebuilt by 022_analyst_segments
     "analyst_calls": (
         "call_id:INTEGER*, kind:TEXT!, thesis_id:INTEGER, as_of:TEXT!, sheet_hash:TEXT!, "
         "produced_at:TEXT!, provider:TEXT!, model_id:TEXT!, prompt_version:INTEGER!, "
         "prompt_hash:TEXT!, status:TEXT!, attempts:INTEGER!, output:TEXT, error:TEXT, "
-        "input_tokens:INTEGER!, output_tokens:INTEGER!, cost_usd:REAL!"
+        "input_tokens:INTEGER!, output_tokens:INTEGER!, cost_usd:REAL!, segment:TEXT"
+    ),
+    # 022_analyst_segments
+    "thesis_reviews": (
+        "call_id:INTEGER*, thesis_id:INTEGER!, probability:REAL!, critique:TEXT!, facts:TEXT!"
     ),
     "analyst_drafts": (
         "call_id:INTEGER!*, seq:INTEGER!*, draft:TEXT!, facts:TEXT!, outcome:TEXT!, "
@@ -413,6 +417,9 @@ SHAPE = {
 INDEXES = {
     # 021_idea_ledger
     "ix_idea_calls_known",
+    # 022_analyst_segments
+    "ix_analyst_calls_segment",
+    "ix_thesis_reviews_thesis",
     # 019_stocks
     "ix_stock_bars_session",
     # 018_scoreboard_remainder

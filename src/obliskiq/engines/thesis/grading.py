@@ -115,7 +115,7 @@ def opinion_record(
     scores: dict[str, list[float]] = {}
     for opinion, call in opinions:
         if opinion.thesis_id in reached:
-            scores.setdefault(call.segment, []).append(
+            scores.setdefault(call.label, []).append(
                 brier(opinion.probability, reached[opinion.thesis_id])
             )
     return [

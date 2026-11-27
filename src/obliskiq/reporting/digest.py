@@ -47,6 +47,7 @@ from ..execution.killswitch import KillSwitch
 from ..execution.modes import Modes
 from ..grid.stock_screen import screen_summary
 from ..jurisdiction.tax import TaxPolicy
+from ..llm.extractor import month_start
 from ..store import analyst as analyst_repo
 from ..store import capital as capital_repo
 from ..store import nav as nav_repo
@@ -137,6 +138,9 @@ class Digest:
     #: The analyst's second opinions on the owner's open theses, and their graded record.
     opinions: list[tuple[Thesis, SecondOpinion, AnalystCall]] = field(default_factory=list)
     opinion_scores: list[OpinionScore] = field(default_factory=list)
+    #: Each analyst segment's spend this month against its share of the budget, and in all
+    #: (the cost of one resolved idea is the weekly report's, where the ledger is graded).
+    llm_segments: list[str] = field(default_factory=list)
     #: The stock screen in one line (names listed, names left, its status).
     stock_screen: str | None = None
     #: The hunting share, the capital in theses and in the reserve, and the bar (D185, D193).
@@ -235,6 +239,7 @@ async def gather_digest(
     given = await worker.run(analyst_repo.opinions, as_of=day)
     digest.opinion_scores = opinion_record(given, grades)
     digest.opinions = await worker.run(_open_opinions, given, day)
+    digest.llm_segments = await worker.run(segment_lines, settings, at)
     try:
         digest.stock_screen = await worker.run(screen_summary, settings, as_of=day)
     except Exception as exc:  # shown as unreadable, never left out
@@ -255,6 +260,25 @@ async def gather_digest(
     ]
     digest.venues = [venue_line(calendars, mic, at) for mic in venues]
     return digest
+
+
+def segment_lines(store: Store, settings: ObliskConfig, at: datetime) -> list[str]:
+    """One line per analyst segment: its spend this month against its share, and in all."""
+    llm = settings.llm
+    spent_all: dict[str, float] = {}
+    for label, spent in analyst_repo.label_spend(store, as_of=at.date()).items():
+        name = label.split(" ", 1)[0]
+        spent_all[name] = spent_all.get(name, 0.0) + spent
+    lines = []
+    for name in llm.segment_order():
+        share = float(llm.analyst.segments[name].budget_share) * llm.budget.monthly_usd
+        month = analyst_repo.segment_spend(store, name, month_start(at))
+        role = "trading" if name == llm.analyst.trading_segment else "shadow"
+        lines.append(
+            f"  analyst segment {name} ({role}): {month:.2f} of its {share:.2f} USD this month, "
+            f"{spent_all.get(name, 0.0):.2f} USD in all"
+        )
+    return lines
 
 
 def _open_opinions(
@@ -464,7 +488,7 @@ def thesis_lines(digest: Digest, rows: int) -> list[str]:
     _more(
         lines,
         [
-            f"  second opinion on {thesis.ref} {thesis.instrument.symbol} ({call.segment}): "
+            f"  second opinion on {thesis.ref} {thesis.instrument.symbol} ({call.label}): "
             f"{opinion.probability:.0%} that it reaches its target. {opinion.critique}"
             for thesis, opinion, call in digest.opinions
         ],
@@ -475,6 +499,7 @@ def thesis_lines(digest: Digest, rows: int) -> list[str]:
         f"{score.brier:.3f} (0 is a certain, right call; 0.25 a coin's)"
         for score in digest.opinion_scores
     ]
+    lines += digest.llm_segments
     if digest.stock_screen is not None:
         lines.append(f"  {digest.stock_screen}")
     return lines

@@ -1,15 +1,18 @@
 """The idea ledger in plain words (H14; DECISIONS D187): for each segment, source and event tag,
 how many ideas are open and resolved and how they resolved, how much each earned over the equity
-reference after costs with its interval, and the verdict or "too few"; for each segment, how far
-its stated probabilities can be trusted. Shown by ``obliskiq scoreboard ledger`` and in the
+reference after costs with its interval, and the verdict or "too few"; for each analyst segment
+what its calls cost in all and one resolved idea, how far its stated probabilities can be trusted
+and how its weekly reviews scored. Shown by ``obliskiq scoreboard ledger`` and in the
 weekly report.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
+from collections.abc import Mapping
+
 from ..research.decide import Outcome
 from ..scoreboard.grading import Record
-from ..scoreboard.ledger import Calibration, Group, LedgerBook
+from ..scoreboard.ledger import SEGMENT, Calibration, Group, LedgerBook
 
 #: What each verdict means, for a reader who is not a statistician.
 MEANING = {
@@ -45,16 +48,30 @@ def _verdict(item: Record, rules: str) -> str:
     return f"{outcome.value}: {MEANING[outcome]} ({_pct(item.theta)} a call)"
 
 
-def group_lines(group: Group, *, minimum: str) -> list[str]:
+def cost_line(spent: float, resolved: int) -> str:
+    """What a segment's calls cost in all, and one resolved idea."""
+    each = (
+        "no idea resolved yet" if resolved == 0 else f"{spent / resolved:.2f} USD a resolved idea"
+    )
+    return f"  Its calls cost {spent:.2f} USD in all: {each}."
+
+
+def group_lines(
+    group: Group, *, minimum: str, spend: Mapping[str, float] | None = None
+) -> list[str]:
     resolved = sum(group.outcomes.values())
     record = group.record
-    return [
+    lines = [
         f"- **{group.name}**: {group.calls} ideas, {group.open} open, {resolved} resolved "
         f"({group.outcomes['target']} reached the target first, {group.outcomes['invalidation']} "
         f"the invalidation, {group.outcomes['horizon']} the horizon), {group.missing} not "
         f"evaluable; held about {group.held_weeks} weeks.",
         f"  Earned {_excess(record)}. Verdict: {_verdict(record, minimum)}.",
     ]
+    label = group.name.removeprefix(SEGMENT)
+    if spend is not None and group.name.startswith(SEGMENT) and label in spend:
+        lines.append(cost_line(spend[label], resolved))
+    return lines
 
 
 def calibration_lines(found: Calibration, *, minimum: str) -> list[str]:
@@ -107,10 +124,17 @@ def ledger_lines(book: LedgerBook | str) -> list[str]:
         "",
     ]
     for group in book.groups.values():
-        lines += group_lines(group, minimum=book.minimum)
+        lines += group_lines(group, minimum=book.minimum, spend=book.spend)
     lines += ["", "Stated probabilities, per segment:", ""]
     for found in book.calibration.values():
         lines += calibration_lines(found, minimum=book.calibration_minimum)
+    if book.reviews:
+        lines += ["", "Weekly reviews, graded against the ideas they reviewed:", ""]
+        lines += [
+            f"- **{score.segment}**: {score.graded} reviews graded, mean Brier score "
+            f"{score.brier:.3f} (0 is a certain, right call; 0.25 a coin's)."
+            for score in book.reviews
+        ]
     beside = [
         *(f"{count} not evaluable: {why}" for why, count in sorted(book.not_evaluable.items())),
         *(

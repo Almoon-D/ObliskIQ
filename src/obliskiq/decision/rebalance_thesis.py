@@ -256,6 +256,7 @@ class ThesisRebalancer:
             at=at,
             holdbacks=await self._worker.run(h13_repo.holdbacks) if mode in _LIVE else None,
             segments=await self._worker.run(analyst_repo.thesis_segments),
+            segment_names=await self._worker.run(analyst_repo.thesis_segment_names),
             # A stopped brake blocks the entry above; the gate then sizes as it would unbraked.
             entry_size=breakers.entry_size if breakers.entry_size > ZERO else Decimal(1),
         )
@@ -396,9 +397,18 @@ class ThesisRebalancer:
                 ),
             )
             return ThesisDecision(thesis, WAIT, describe(waits), waits)
-        own = self._facts(thesis, described, reference, value.rate, read, slots)
-        decision = await self._candidate(
-            thesis, described, reference, value.rate, read, slots, spent, plan
+        shadow = self._shadow_segment(thesis, read)
+        # A shadow segment's idea takes no slot, so another thesis's slot on its instrument does
+        # not keep it from the idea ledger, where calls are one per instrument and segment.
+        own = self._facts(
+            thesis, described, reference, value.rate, read, () if shadow is not None else slots
+        )
+        decision = (
+            ThesisDecision(thesis, WAIT, shadow)
+            if shadow is not None
+            else await self._candidate(
+                thesis, described, reference, value.rate, read, slots, spent, plan
+            )
         )
         if thesis.state is ThesisState.CANDIDATE and not self._gate.market(thesis, own):
             return replace(decision, ledger=True)
@@ -620,6 +630,20 @@ class ThesisRebalancer:
             quantity=decision.quantity,
             size_base=size,
             funding=funding,
+        )
+
+    def _shadow_segment(self, thesis: Thesis, read: BookRead) -> str | None:
+        """Why an analyst candidate takes no slot: its segment is not the trading segment (D188).
+        It is still written into the idea ledger when its own checks pass."""
+        if thesis.state is not ThesisState.CANDIDATE:
+            return None
+        name = read.segment_names.get(thesis.thesis_id)
+        trading = self._settings.llm.analyst.trading_segment
+        if name is None or name == trading:
+            return None
+        return (
+            f"its analyst segment {name} runs in shadow: graded in the idea ledger, never given a "
+            f"slot (the trading segment is {trading})"
         )
 
     def _held_elsewhere(

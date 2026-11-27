@@ -4319,3 +4319,20 @@ idea the gate then refuses).
 - The analyst states a probability with each draft, at most `max_drafts_per_run` a run.
 
 Rejected: a rebalancer that grades the ledger itself (the import contract and point in time).
+
+### D198 · How the code reads the analyst's segments (§5.5, §5.10; D188)
+
+- **Only the trading segment takes slots.** Every segment's drafts pass the intake as
+  candidates; another segment's wait in the rebalancer and enter the idea ledger, its slot
+  check blind to other theses' slots (a shadow idea holds none). Calls stored before segments
+  keep their slot rights, labelled by model id. Each segment avoids the owner's and its own
+  open theses; opinions on the owner's ideas come from the trading segment alone.
+- **The review** (the dossier model, weekly) covers the owner's open theses and the segment's
+  own open theses or open calls, at most `review.max_theses_per_week`, once per ISO week.
+- **The budget** refuses a call whose worst case passes the month's total or its share.
+  The digest shows each segment's spend; the cost per resolved idea is shown where the ledger
+  is graded, the weekly report and `scoreboard ledger`, not in the daily digest.
+- **Anthropic** is spoken over raw `httpx` like Gemini, not through its SDK (no new dependency).
+
+Rejected: a trading segment chosen by code (D188); a fallback to another model when a key is
+missing.

@@ -13,7 +13,7 @@ week, at its first run that keeps a cohort:
   volatility and its distance from the high. A name without a close at most the pre-registration's
   mark age old, or without enough history, is not forecast (never filled in); a feed whose newest
   close is older than that skips the week before any call;
-* **the model** is the analyst's, on the analyst's provider and within the one monthly LLM
+* **the model** is `llm.panel.model`, on its provider and within the one monthly LLM
   budget: per batch of names, the probability that each beats the equity reference over the
   horizon in the base currency and its expected excess return. An answer that is not the schema's
   JSON, or covers too few of its batch, is asked again once with the error, then fails closed;
@@ -325,7 +325,7 @@ def keep_cohort(store: Store, calls: Sequence[Call]) -> None:
 
 
 class ForecastPanel:
-    """Asks the analyst's model for the week's forecasts and keeps the cohort."""
+    """Asks the panel's model for the week's forecasts and keeps the cohort."""
 
     def __init__(
         self,
@@ -343,9 +343,9 @@ class ForecastPanel:
         self._rules = rules
         self._config = llm.panel
         self._budget = llm.budget
-        self._model = llm.analyst_model()
+        self._model = llm.panel_model()
         self._provider_name = self._model.provider
-        self._provider = llm.analyst_provider()
+        self._provider = llm.panel_provider()
         self._chat = TRANSPORTS[self._provider.protocol]
         self._client = client
         self._worker = worker
@@ -527,6 +527,8 @@ class ForecastPanel:
                     max_tokens=self._config.max_output_tokens,
                     policy=self._policy,
                     worst_input_tokens=self._input_tokens(messages),
+                    api_version=self._provider.api_version,
+                    effort=self._model.effort,
                 )
             except Exception as exc:  # the call failed: nothing of it is used
                 status, problem = "failed", f"{type(exc).__name__}: {exc}"
