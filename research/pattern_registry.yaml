@@ -228,6 +228,11 @@ patterns:
     status: pre-registered
     preregistration: research/preregistrations/idea-ledger.md
     lock: research/preregistrations/idea-ledger.lock
+  - id: analyst-replay
+    hypothesis: H15
+    title: The analyst's segments replayed on sheets dated after their models' training cutoff
+    status: pre-registered
+    preregistration: research/preregistrations/analyst-replay.md
   - id: options-for-theses
     hypothesis: H8
     title: A long option against the same thesis held in its underlying
