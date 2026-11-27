@@ -30,7 +30,7 @@ universe: >-
   name was chosen with its outcome known.
 data_status: >-
   Every row is stamped with the time its source published it and a sheet reads only rows
-  published by its date: filings by the SEC's acceptance time, fundamentals by the filing date
+  published by its date: filings by the SEC's filing date, fundamentals by the filing date
   the SEC's company facts give each value, macro series by ALFRED's real-time start, daily closes
   after their session. Prices are Yahoo's adjusted closes, read once for the whole span: a name
   Yahoo no longer serves (most that delisted) has none and is not evaluable, counted, so the
@@ -79,8 +79,8 @@ dates:
   before: {first: 2023-04-10, last: 2024-11-25, sheets: 86}
   inside_margin: refused
 sheet:
-  sections: [instrument, macro, insider, stock_screen]
-  omitted: [grid, ranking, positioning, market, pulse, news]
+  sections: [instrument, macro, stock_screen]
+  omitted: [grid, ranking, positioning, market, pulse, news, insider]
   record: replay
   shape_in_segment_hash: true
 call:
@@ -217,14 +217,14 @@ loaders and bounded by the sheet date, every row stamped with the time its sourc
 - **instrument**: the universe instruments' closes and returns, a close known after its session;
 - **macro**: the macro board's leaves from series dated by ALFRED's real-time start (the value
   as it was known), or by a documented publication lag where the source keeps no vintages;
-- **insider**: open-market purchases by officers and directors, dated by the SEC's acceptance
-  time of each Form 4;
 - **stock_screen**: the untested screen (D180), its fundamentals each dated by the filing the
   SEC's company facts give it, its closes after their session.
 
 Omitted, and the sheet says so on one line: **grid** and **ranking** (built by the compute step
 from stored measurements, not rebuilt as of a past date), **positioning**, **market**, **pulse**
-and **news** (stored only since first collected: no free source carries their past as it stood).
+and **news** (stored only since first collected: no free source carries their past as it stood),
+and **insider** (the SEC dates each Form 4, but rebuilding four years of them is every filing's
+document fetched at the SEC's fair-access pace, days of work for one section: least machinery).
 
 ## The universe and what is not evaluable
 
